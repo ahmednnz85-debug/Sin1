@@ -933,6 +933,69 @@ const blocked=(x,z)=>{if(palaceBlocked(x,z))return true;if(Math.abs(z)<GATE_HD+.
 const ease=t=>t*t*(3-2*t);
 const SKY_FADE_SECONDS=5.8,SKY_POST_GATE_DISTANCE=5.5;
 const skyTransition={gatePassed:false,started:false,elapsed:0,finished:false};
+    const bloodMoon={loadStarted:false,model:null,materials:[],cinematicStarted:false,cinematicActive:false,elapsed:0,fromPosition:new THREE.Vector3(),toPosition:new THREE.Vector3(),fromLook:new THREE.Vector3(),toLook:new THREE.Vector3(),savedYaw:0,savedPitch:0,savedDist:4.6};
+    const BLOOD_MOON_POSITION=new THREE.Vector3(0,250,520),BLOOD_MOON_SCALE=24;
+    const BLOOD_MOON_IN=1.6,BLOOD_MOON_HOLD=1.6,BLOOD_MOON_OUT=1.6,BLOOD_MOON_FADE=1.15;
+    const bloodMoonRaycaster=new THREE.Raycaster(),bloodMoonRayDirection=new THREE.Vector3();
+    function loadBloodMoonOnce(){
+      if(bloodMoon.loadStarted)return;
+      bloodMoon.loadStarted=true;
+      loadX('قمر دموي').then(g=>{
+        const root=g.scene;root.position.copy(BLOOD_MOON_POSITION);root.scale.setScalar(BLOOD_MOON_SCALE);root.rotation.y=.42;root.visible=false;
+        root.traverse(o=>{if(!o.isMesh)return;o.castShadow=false;o.receiveShadow=false;
+          const mats=Array.isArray(o.material)?o.material:[o.material];
+          mats.forEach(m=>{if(!m)return;const oldTransparent=m.transparent,oldDepthWrite=m.depthWrite;
+            m.transparent=true;m.opacity=0;m.depthWrite=false;
+            if(m.emissive){m.emissive.set(0x3a0303);m.emissiveIntensity=0;}
+            bloodMoon.materials.push({material:m,oldTransparent,oldDepthWrite,solid:false});
+          });
+        });
+        scene.add(root);bloodMoon.model=root;
+      }).catch(e=>{console.error('تعذّر تحميل assets/قمر دموي.glb',e);});
+    }
+    function setBloodMoonFade(progress){
+      const f=Math.max(0,Math.min(1,progress));
+      bloodMoon.materials.forEach(x=>{const m=x.material;m.opacity=f;if(m.emissive)m.emissiveIntensity=.28*f;
+        if(f>=1&&!x.solid){m.opacity=1;m.transparent=x.oldTransparent;m.depthWrite=x.oldDepthWrite;m.needsUpdate=true;x.solid=true;}
+      });
+    }
+    function safeBloodMoonCameraPoint(from,to){
+      const last=from.clone(),p=new THREE.Vector3(),steps=16;
+      for(let i=1;i<=steps;i++){p.lerpVectors(from,to,i/steps);
+        const floor=palGround(p.x,p.z,heroRoot.position.y);
+        if(blocked(p.x,p.z)||p.y<floor+.75)return last;
+        last.copy(p);
+      }
+      return last;
+    }
+    function clearBloodMoonLook(from,target){
+      const aim=target.clone();
+      for(let pass=0;pass<4;pass++){
+        bloodMoonRayDirection.subVectors(aim,from);const distance=bloodMoonRayDirection.length();bloodMoonRayDirection.normalize();
+        bloodMoonRaycaster.set(from,bloodMoonRayDirection);
+        let blockedView=palMeshes.length>0&&bloodMoonRaycaster.intersectObjects(palMeshes,false).some(h=>h.distance<distance-2);
+        if(!blockedView){
+          const dx=aim.x-from.x,dz=aim.z-from.z,d2=dx*dx+dz*dz;
+          if(d2>1e-6)for(const c of colliders){
+            const t=Math.max(0,Math.min(1,((c[0]-from.x)*dx+(c[1]-from.z)*dz)/d2));
+            const px=from.x+dx*t,pz=from.z+dz*t,rayY=from.y+(aim.y-from.y)*t,rr=c[2]+.35;
+            if((px-c[0])*(px-c[0])+(pz-c[1])*(pz-c[1])<rr*rr&&rayY<45){blockedView=true;break;}
+          }
+        }
+        if(!blockedView)return aim;
+        aim.y+=35;
+      }
+      return aim;
+    }
+    function beginBloodMoonCinematic(hx,hy,hz){
+      if(bloodMoon.cinematicStarted||!bloodMoon.model||!skyTransition.finished)return;
+      bloodMoon.cinematicStarted=true;bloodMoon.cinematicActive=true;bloodMoon.elapsed=0;bloodMoon.model.visible=true;
+      bloodMoon.savedYaw=yaw;bloodMoon.savedPitch=pitch;bloodMoon.savedDist=dist;
+      bloodMoon.fromPosition.copy(camera.position);bloodMoon.toPosition.set(hx+.35,hy+2.0,hz-5.2);
+      bloodMoon.toPosition.copy(safeBloodMoonCameraPoint(bloodMoon.fromPosition,bloodMoon.toPosition));
+      bloodMoon.fromLook.set(hx,hy,hz);bloodMoon.toLook.copy(clearBloodMoonLook(bloodMoon.fromPosition,bloodMoon.model.position));
+    }
+    
 const camStart=new THREE.Vector3(6,1.6,-56),gateTop=new THREE.Vector3(0,9,0),want=new THREE.Vector3(),look=new THREE.Vector3();
 // cinematic intro path: start at the head of the walkway, sweep across the market stalls, then rise to the Ishtar gate, then settle behind the hero
 const cP0=new THREE.Vector3(-4.2,1.7,-71),cP1=new THREE.Vector3(3.6,2.4,-60),cP2=new THREE.Vector3(0,3.6,-46),cL0=new THREE.Vector3(-10.5,2.6,-60),cL1=new THREE.Vector3(10.5,2.6,-50),tmpP=new THREE.Vector3(),tmpL=new THREE.Vector3(),hv=new THREE.Vector3();
@@ -943,12 +1006,14 @@ function loop(ts){requestAnimationFrame(loop);const t=ts/1000,dt=Math.min(.05,t-
   if(k.KeyW||k.ArrowUp)fw+=1;if(k.KeyS||k.ArrowDown)fw-=1;if(k.KeyD||k.ArrowRight)st+=1;if(k.KeyA||k.ArrowLeft)st-=1;if(k.ShiftLeft||k.ShiftRight)run=true;
   if(k.KeyQ)yaw+=dt*1.8;if(k.KeyE)yaw-=dt*1.8;
   if(state==='ready'&&introT<0){fw=st=0;run=false;} if(intro){fw=1;st=0;run=false;yaw=0;}
+  if(bloodMoon.cinematicActive){fw=0;st=0;run=false;yaw=bloodMoon.savedYaw;pitch=bloodMoon.savedPitch;dist=bloodMoon.savedDist;}
   const sy=Math.sin(yaw),cy=Math.cos(yaw);let mx=sy*fw-cy*st,mz=cy*fw+sy*st;const len=Math.hypot(mx,mz);const wantMove=len>.1,moving=wantMove&&!combat.locked();
   if(moving){if(len>1){mx/=len;mz/=len;}const sp=run?4.3:1.7,p=heroRoot.position;const nx=p.x+mx*sp*dt;if(!blocked(nx,p.z))p.x=nx;const nz=p.z+mz*sp*dt;if(!blocked(p.x,nz))p.z=nz;
     let d=Math.atan2(mx,mz)-heroYaw;d=Math.atan2(Math.sin(d),Math.cos(d));heroYaw+=d*Math.min(1,dt*10);}
   {const p_=heroRoot.position;p_.y+=(palGround(p_.x,p_.z,p_.y)-p_.y)*Math.min(1,dt*12);}
   {const p_=heroRoot.position;
     if(!skyTransition.gatePassed&&heroZBefore<=GATE_HD&&p_.z>GATE_HD&&Math.abs(p_.x)<=PASS+.2)skyTransition.gatePassed=true;
+    if(skyTransition.gatePassed&&!bloodMoon.loadStarted)loadBloodMoonOnce();
     if(skyTransition.gatePassed&&!skyTransition.started&&p_.z>=GATE_HD+SKY_POST_GATE_DISTANCE)skyTransition.started=true;
     if(skyTransition.started&&redSkyLoaded&&!skyTransition.finished){
       skyTransition.elapsed=Math.min(SKY_FADE_SECONDS,skyTransition.elapsed+dt);
@@ -962,6 +1027,7 @@ function loop(ts){requestAnimationFrame(loop);const t=ts/1000,dt=Math.min(.05,t-
         skyTransition.finished=true;
       }
     }
+    if(skyTransition.finished&&bloodMoon.model&&!bloodMoon.cinematicStarted){const p=heroRoot.position;beginBloodMoonCinematic(p.x,p.y+1.5,p.z);}
   }
   {const hz_=heroRoot.position.z,h_=$('hint');if(hz_>PL_FRONT-14){h_.style.display='';h_.style.opacity=.9;h_.textContent='القصر الملكي — المشهد الثالث قريباً…';}else if(hz_>60){h_.style.display='';h_.style.opacity=.9;h_.textContent='تابع المسير نحو القصر الملكي';}else if(introT>=INTRO+7)h_.style.opacity=0;}
   heroRoot.rotation.y=heroYaw;combat.step(dt,wantMove,run,introT>=INTRO);
@@ -971,11 +1037,26 @@ function loop(ts){requestAnimationFrame(loop);const t=ts/1000,dt=Math.min(.05,t-
   want.set(hx-Math.sin(yaw)*cp*dist,hy+Math.sin(pitch)*dist,hz-Math.cos(yaw)*cp*dist);
   if(Math.abs(want.z)<GATE_HD+.5&&want.y<GATE_H)want.x=Math.max(-PASS+.3,Math.min(PASS-.3,want.x));
   want.y=Math.max(.5,want.y);
-  if(intro){const tt=Math.min(1,introT/INTRO);hv.set(hx,hy,hz);
-    tmpP.lerpVectors(cP0,cP1,smx(0,.30,tt)).lerp(cP2,smx(.30,.58,tt)).lerp(want,smx(.58,1,tt));
-    tmpL.lerpVectors(cL0,cL1,smx(0,.30,tt)).lerp(gateTop,smx(.30,.58,tt)).lerp(hv,smx(.58,1,tt));
-    camera.position.copy(tmpP);camera.lookAt(tmpL);}
-  else{camera.position.lerp(want,introT>=0?1-Math.pow(.0008,dt):1);camera.lookAt(hx,hy,hz);}
+  if(bloodMoon.cinematicActive){
+        const total=BLOOD_MOON_IN+BLOOD_MOON_HOLD+BLOOD_MOON_OUT;
+        bloodMoon.elapsed=Math.min(total,bloodMoon.elapsed+dt);
+        const enter=ease(Math.min(1,bloodMoon.elapsed/BLOOD_MOON_IN));
+        setBloodMoonFade(ease(Math.min(1,bloodMoon.elapsed/BLOOD_MOON_FADE)));
+        if(bloodMoon.elapsed<=BLOOD_MOON_IN+BLOOD_MOON_HOLD){
+          camera.position.lerpVectors(bloodMoon.fromPosition,bloodMoon.toPosition,enter);
+          look.lerpVectors(bloodMoon.fromLook,bloodMoon.toLook,enter);
+        }else{
+          const leave=ease(Math.min(1,(bloodMoon.elapsed-BLOOD_MOON_IN-BLOOD_MOON_HOLD)/BLOOD_MOON_OUT));
+          camera.position.lerpVectors(bloodMoon.toPosition,bloodMoon.fromPosition,leave);
+          look.lerpVectors(bloodMoon.toLook,bloodMoon.fromLook,leave);
+        }
+        camera.lookAt(look);
+        if(bloodMoon.elapsed>=total){setBloodMoonFade(1);bloodMoon.cinematicActive=false;yaw=bloodMoon.savedYaw;pitch=bloodMoon.savedPitch;dist=bloodMoon.savedDist;}
+      }else if(intro){const tt=Math.min(1,introT/INTRO);hv.set(hx,hy,hz);
+        tmpP.lerpVectors(cP0,cP1,smx(0,.30,tt)).lerp(cP2,smx(.30,.58,tt)).lerp(want,smx(.58,1,tt));
+        tmpL.lerpVectors(cL0,cL1,smx(0,.30,tt)).lerp(gateTop,smx(.30,.58,tt)).lerp(hv,smx(.58,1,tt));
+        camera.position.copy(tmpP);camera.lookAt(tmpL);}
+      else{camera.position.lerp(want,introT>=0?1-Math.pow(.0008,dt):1);camera.lookAt(hx,hy,hz);}
   sky.position.copy(camera.position);updateSkyline();
   sun.position.copy(hp).addScaledVector(SUN,80);sun.target.position.copy(hp);sun.target.updateMatrixWorld();
   updateDust(tAcc);updateWater(tAcc);updateExtras();renderer.render(scene,camera);}
