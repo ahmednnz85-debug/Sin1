@@ -775,7 +775,7 @@ async function init(){
   try{await buildPalace(M.lam.scene);}catch(e){showErr(e);}
   // hero
   const hg=M.hero;const model=hg.scene;prep(model,{cast:true});const hs=1.85;model.scale.setScalar(hs);
-  model.position.set(-HERO_FOOT[0]*hs,0.5*hs,-HERO_FOOT[1]*hs);            // feet centred under heroRoot (collision point), soles on the ground
+  model.position.set(-HERO_FOOT[0]*hs,HERO_SOLE*hs,-HERO_FOOT[1]*hs);      // feet centred under heroRoot (collision point), soles on the ground
   heroRoot=new THREE.Group();heroRoot.add(model);heroRoot.position.set(0,0,-30);scene.add(heroRoot);
   mixer=new THREE.AnimationMixer(model);
   combat.attach(mixer,hg.animations);                                         // Animation State Machine (idle/walk/run + 2 combat moves)
@@ -819,16 +819,20 @@ let introT=-1,last=0,heroYaw=0,tAcc=0;const INTRO=12;
 $('go').addEventListener('click',()=>{$('ov').style.display='none';['run','hud','hint'].forEach(i=>$(i).style.display='');introT=0;setTimeout(()=>{$('hint').style.opacity=0;},7000);});
 $('skip').addEventListener('click',()=>{if(introT>=0&&introT<INTRO)introT=INTRO;});
 // ===================== HERO v2: Animation State Machine + combat button =====================
-// The new hero (assets/hero_new.glb) is loaded ONCE in init(); its 8 embedded clips are bound to its rig through one AnimationMixer.
-const HERO_FILE='hero_new';                 // assets/hero_new.glb
-const HERO_FOOT=[0.017,-0.088];             // centre of the new model's feet (model units, x/z): keeps the body centred on the collision point
+// Hero mesh is assets/سين_وقوف_ساكن_سينمائي.glb (Mixamo rig). Loaded once; locomotion clips are the ones embedded in THAT file.
+// Idle clip in the file is Sin_Idle_Cinematic (the only cinematic idle; there is no clip named exactly Idle_Cinematic).
+// walk_casual here is this file's clip, not the same-named clip inside hero_new.glb.
+// Run is sprint_loop_quaternius, the only sprint/run clip in this file; it targets this rig (not sprint_enter_quaternius from hero_new).
+const HERO_FILE='\u200e\u2068\u0633\u064a\u0646_\u0648\u0642\u0648\u0641_\u0633\u0627\u0643\u0646_\u0633\u064a\u0646\u0645\u0627\u064a\u0654\u064a\u2069';
+const HERO_FOOT=[0.0188,0.0503];            // idle-pose sole centre (model x/z) so the body stays on the collision point
+const HERO_SOLE=0.4885;                     // idle-pose lowest vertex (model Y); keeps the soles on the ground at scale hs
 const ANIM_CFG={
-  root:'spine',                             // root/hips bone of the new rig (the old rig used mixamorigHips)
-  // role -> clip name inside hero_new.glb.  NOT mapped on purpose (left inactive): walk_relaxed, Fast Thrust, Quick Stab
-  clips:{idle:'Still Pose',walk:'walk_casual',run:'sprint_enter_quaternius',counter:'riposte',airpunch:'aerial_punch_down'},
-  walkTS:1.5, runTS:1.9,                    // playback speed so the feet match the game's walk (1.7 m/s) and run (4.3 m/s) speeds as far as the clips allow
+  root:'Hips',                              // Mixamo hips of the replacement rig (hero_new used spine)
+  // combat clip names stay so the existing fallback can hide the fight button; this file has neither riposte nor aerial_punch_down
+  clips:{idle:'Sin_Idle_Cinematic',walk:'walk_casual',run:'sprint_loop_quaternius',counter:'riposte',airpunch:'aerial_punch_down'},
+  walkTS:1.5, runTS:0.6,                    // walk kept; run retimed so this clip's planted foot matches the existing 4.3 m/s (the old 1.9 suited sprint_enter only)
   tau:.075, runTau:.04,                     // blend time constants (s): ~0.25 s for a full cross-fade
-  runBlend:.3,                              // the run clip is a 0.87 s sprint start, so its loop is cross-faded over its last 0.3 s
+  runBlend:.3,                              // run clip does not loop closed, so the existing cross-fade into a second copy stays
   atk:{counter:{lock:.55,end:.86},airpunch:{lock:.55,end:.86}}   // lock = fraction of the clip during which movement is locked / a new attack is refused; end = fraction where we blend back to locomotion
 };
 const animKey=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_');
