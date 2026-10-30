@@ -1,0 +1,238 @@
+--- a/index.html
++++ b/index.html
+@@ -3,6 +3,7 @@
+ <head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
++<link rel="icon" href="data:,">
+ <title>سين: لعنة بابل — المشهد الأول</title>
+ <style>
+ :root{--ui-bg:rgba(24,16,8,.72);--ui-fg:#f6e8d0;--ui-accent:#e8a64f;--page:#0b0805}
+@@ -377,6 +378,7 @@
+ }catch(e){showErr(e);}   // the canals can never block the game from loading
+ function updateWater(t){if(waterT)waterT.offset.y=-t*0.04;}
+ let heroRoot,mixer,state='loading';
++let royalDoor={active:()=>false,open:()=>false,blocks:()=>false,update:()=>{},postAnimation:()=>{},updateCamera:()=>false,skip:()=>{}};
+ // ===================== EXTRAS: stalls & houses along the road =====================
+ const extras=[];
+ let marketEndZ=-Infinity;
+@@ -863,6 +865,8 @@
+   heroRoot=new THREE.Group();heroRoot.add(model);heroRoot.position.set(0,0,-30);scene.add(heroRoot);
+   mixer=new THREE.AnimationMixer(model);
+   combat.attach(mixer,hg.animations);                                         // Animation State Machine (idle/walk/run + 2 combat moves)
++  $('st').textContent='جارٍ تركيب الباب الملكي';
++  royalDoor=await buildRoyalDoor(await loadX('مجسم الباب'),model);
+   buildDust();
+   state='ready';$('st').textContent='جاهز';$('loading-pane').style.display='none';$('main-menu').style.display='block';$('bar').style.display='none';
+   camera.position.copy(cP0);camera.lookAt(cL0);
+@@ -915,7 +919,7 @@
+ // ---------- game loop ----------
+ let introT=-1,last=0,heroYaw=0,tAcc=0;const INTRO=12;
+ $('go').addEventListener('click',()=>{$('ov').style.display='none';document.body.classList.add('playing');['run','hud','hint'].forEach(i=>$(i).style.display='');introT=0;setTimeout(()=>{$('hint').style.opacity=0;},7000);});
+-$('skip').addEventListener('click',()=>{if(introT>=0&&introT<INTRO)introT=INTRO;});
++$('skip').addEventListener('click',()=>{if(introT>=0&&introT<INTRO)introT=INTRO;else royalDoor.skip();});
+ // ===================== HERO v2: Animation State Machine + combat button =====================
+ // Hero mesh is assets/سين_وقوف_ساكن_سينمائي.glb (Mixamo rig). Loaded once; locomotion clips are the ones embedded in THAT file.
+ // Idle clip in the file is Sin_Idle_Cinematic (the only cinematic idle; there is no clip named exactly Idle_Cinematic).
+@@ -1031,7 +1035,167 @@
+     state:()=>fsm?fsm.state():'loading'
+   };
+ })();
+-const blocked=(x,z)=>{if(palaceBlocked(x,z))return true;if(Math.abs(z)<GATE_HD+.4&&Math.abs(x)>PASS&&Math.abs(x)<GATE_HW+.3)return true;for(const c of colliders){const dx=x-c[0],dz=z-c[1];if(dx*dx+dz*dz<c[2]*c[2])return true;}return false;};
++// ---------- Royal palace door: measured fit + original GLB clip + procedural hero push ----------
++// Arch measurements were taken from palace.glb after its existing world transform (PAL.s/PAL.ry).
++// The supplied door has one animated leaf (Cube.004); its frame, materials and original clip are retained.
++async function buildRoyalDoor(gltf,heroModel){
++  const ARCH={x:1.0,y:3.86,z:183.85,width:4.42,height:8.18,depth:.38};
++  const root=new THREE.Group();root.name='RoyalDoorRig';scene.add(root);
++  const model=gltf.scene;prep(model,{cast:true});root.add(model);model.rotation.y=Math.PI; // original +90 deg clip now opens inward
++  const pivot=model.getObjectByName('Cube.004')||model.getObjectByName('Cube004');
++  if(!pivot||!gltf.animations.length)throw new Error('مجسم الباب لا يحتوي الضلفة أو أنيميشن الفتح الأصلي');
++  const doorMixer=new THREE.AnimationMixer(model),clip=gltf.animations[0],doorAction=doorMixer.clipAction(clip);
++  doorAction.setLoop(THREE.LoopOnce,1);doorAction.clampWhenFinished=true;doorAction.play();doorAction.paused=true;doorAction.time=0;doorMixer.update(0);
++  model.updateMatrixWorld(true);
++  const leafBox=new THREE.Box3().setFromObject(pivot),leafSize=leafBox.getSize(new THREE.Vector3());
++  model.scale.set(ARCH.width/leafSize.x,ARCH.height/leafSize.y,ARCH.depth/leafSize.z);model.updateMatrixWorld(true);
++  leafBox.setFromObject(pivot);const leafCenter=leafBox.getCenter(new THREE.Vector3());
++  model.position.x+=ARCH.x-leafCenter.x;model.position.y+=ARCH.y-leafBox.min.y;model.position.z+=ARCH.z-leafCenter.z;
++  root.updateMatrixWorld(true);leafBox.setFromObject(pivot);
++  const frontZ=leafBox.min.z,basePivotZ=pivot.position.z;
++
++  // Wrist anchors are attached to the animated hinge, so both hands follow the same original leaf.
++  const anchors=[];
++  for(const side of[-1,1]){
++    const a=new THREE.Object3D();pivot.add(a);
++    a.position.copy(pivot.worldToLocal(new THREE.Vector3(ARCH.x+side*.43,ARCH.y+1.27,frontZ-.09)));
++    anchors.push(a);
++  }
++  const bone=n=>heroModel.getObjectByName(n);
++  const arms=[
++    {upper:bone('LeftArm'),lower:bone('LeftForeArm'),hand:bone('LeftHand'),anchor:anchors[1],side:1},
++    {upper:bone('RightArm'),lower:bone('RightForeArm'),hand:bone('RightHand'),anchor:anchors[0],side:-1}
++  ];
++  const spine=bone('Spine'),spine1=bone('Spine1');
++  const legs=[{up:bone('LeftUpLeg'),low:bone('LeftLeg')},{up:bone('RightUpLeg'),low:bone('RightLeg')}];
++  heroModel.updateMatrixWorld(true);
++  const reach=arms[0].upper.getWorldPosition(new THREE.Vector3()).distanceTo(arms[0].hand.getWorldPosition(new THREE.Vector3()));
++  const standZ=frontZ-Math.max(.50,Math.min(.78,reach*.86)),triggerZ=standZ-1.85;
++
++  let phase='idle',elapsed=0,progress=0,armWeight=0,bodyWeight=0,audio=null,creak=null;
++  const PUSH_SECONDS=7.4,CONTACT_SECONDS=1.15,RECOVER_SECONDS=1.25;
++  const vA=new THREE.Vector3(),vB=new THREE.Vector3(),vC=new THREE.Vector3(),vT=new THREE.Vector3(),vD=new THREE.Vector3(),vE=new THREE.Vector3(),vP=new THREE.Vector3();
++  const qA=new THREE.Quaternion(),qB=new THREE.Quaternion(),qC=new THREE.Quaternion(),qD=new THREE.Quaternion();
++  const camWant=new THREE.Vector3(),camLook=new THREE.Vector3(),handTarget=new THREE.Vector3();
++  const worldX=new THREE.Vector3(1,0,0);
++
++  function rotateWorld(b,axis,angle,w){
++    if(!b||w<.0001)return;
++    b.updateWorldMatrix(true,false);b.parent.getWorldQuaternion(qA);b.getWorldQuaternion(qB);
++    qC.copy(qA).invert();qD.setFromAxisAngle(axis,angle);
++    qC.multiply(qD).multiply(qB);b.quaternion.slerp(qC,w);b.updateWorldMatrix(false,true);
++  }
++  function rotateTowards(b,delta,w){
++    b.parent.getWorldQuaternion(qA);b.getWorldQuaternion(qB);qC.copy(qA).invert().multiply(delta).multiply(qB);
++    b.quaternion.slerp(qC,w);b.updateWorldMatrix(false,true);
++  }
++  function solveArm(arm,target,w){
++    const {upper,lower,hand,side}=arm;if(!upper||!lower||!hand||w<.0001)return;
++    upper.updateWorldMatrix(true,true);
++    upper.getWorldPosition(vA);lower.getWorldPosition(vB);hand.getWorldPosition(vC);
++    const l1=vA.distanceTo(vB),l2=vB.distanceTo(vC);if(l1<1e-5||l2<1e-5)return;
++    vT.copy(target);vD.subVectors(vT,vA);let dist=vD.length();if(dist<1e-5)return;
++    dist=Math.max(Math.abs(l1-l2)+.002,Math.min(l1+l2-.002,dist));vD.normalize();vT.copy(vA).addScaledVector(vD,dist);
++    const along=(l1*l1+dist*dist-l2*l2)/(2*dist),height=Math.sqrt(Math.max(0,l1*l1-along*along));
++    vP.set(side*.72,-.34,-.22).add(vA).sub(vA); // outward/down/back elbow pole
++    vP.addScaledVector(vD,-vP.dot(vD));if(vP.lengthSq()<1e-6)vP.set(side,0,0);vP.normalize();
++    vE.copy(vA).addScaledVector(vD,along).addScaledVector(vP,height);
++    vB.sub(vA).normalize();vP.subVectors(vE,vA).normalize();qD.setFromUnitVectors(vB,vP);rotateTowards(upper,qD,w);
++    lower.updateWorldMatrix(true,true);lower.getWorldPosition(vB);hand.getWorldPosition(vC);
++    vC.sub(vB).normalize();vP.subVectors(vT,vB).normalize();qD.setFromUnitVectors(vC,vP);rotateTowards(lower,qD,w);
++    hand.updateWorldMatrix(true,false);
++  }
++  function thump(freq,volume){
++    if(!audio)return;const t=audio.currentTime,o=audio.createOscillator(),g=audio.createGain();
++    o.type='sine';o.frequency.setValueAtTime(freq,t);o.frequency.exponentialRampToValueAtTime(Math.max(25,freq*.45),t+.42);
++    g.gain.setValueAtTime(volume,t);g.gain.exponentialRampToValueAtTime(.0001,t+.48);o.connect(g).connect(audio.destination);o.start(t);o.stop(t+.5);
++  }
++  function startAudio(){
++    if(audio)return;const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
++    try{audio=new AC();audio.resume();}catch(_){audio=null;}
++  }
++  function startCreak(){
++    if(!audio||creak)return;const t=audio.currentTime,master=audio.createGain();master.gain.setValueAtTime(.0001,t);master.gain.linearRampToValueAtTime(.12,t+.5);master.connect(audio.destination);
++    const low=audio.createOscillator(),metal=audio.createOscillator(),lg=audio.createGain(),mg=audio.createGain();
++    low.type='sawtooth';low.frequency.value=58;metal.type='square';metal.frequency.value=117;lg.gain.value=.32;mg.gain.value=.035;
++    low.connect(lg).connect(master);metal.connect(mg).connect(master);low.start();metal.start();
++    const len=audio.sampleRate*2,buf=audio.createBuffer(1,len,audio.sampleRate),data=buf.getChannelData(0);let last=0;
++    for(let i=0;i<len;i++){last=(last+(rnd()*2-1)*.055)/1.055;data[i]=last;}
++    const noise=audio.createBufferSource(),filter=audio.createBiquadFilter(),ng=audio.createGain();noise.buffer=buf;noise.loop=true;filter.type='bandpass';filter.frequency.value=190;filter.Q.value=2.8;ng.gain.value=.42;
++    noise.connect(filter).connect(ng).connect(master);noise.start();creak={master,low,metal,noise,filter};
++  }
++  function stopCreak(){
++    if(!creak||!audio)return;const t=audio.currentTime,c=creak;creak=null;c.master.gain.cancelScheduledValues(t);c.master.gain.setTargetAtTime(.0001,t,.12);
++    for(const n of[c.low,c.metal,c.noise]){try{n.stop(t+.7);}catch(_){}}
++  }
++  function setDoor(p){
++    progress=Math.max(0,Math.min(1,p));doorAction.paused=false;doorAction.time=clip.duration*progress;doorMixer.update(0);doorAction.paused=true;
++    pivot.position.z=basePivotZ+(phase==='push'?Math.sin(elapsed*31)*.75*Math.sin(Math.PI*progress):0);root.updateMatrixWorld(true);
++  }
++  function begin(){
++    if(phase!=='idle')return;phase='approach';elapsed=0;startAudio();
++    $('hint').style.display='';$('hint').style.opacity=.95;
++  }
++  function update(dt,canTrigger){
++    if(phase==='done')return;
++    if(phase==='idle'){
++      if(canTrigger&&heroRoot.position.z>=triggerZ&&heroRoot.position.z<frontZ&&Math.abs(heroRoot.position.x-ARCH.x)<2.7)begin();
++      else return;
++    }
++    elapsed+=dt;
++    if(phase==='approach'){
++      const p=heroRoot.position,f=1-Math.exp(-dt*3.4);p.x+=(ARCH.x-p.x)*f;p.z+=(standZ-p.z)*f;
++      let d=-heroYaw;d=Math.atan2(Math.sin(d),Math.cos(d));heroYaw+=d*Math.min(1,dt*7);
++      $('hint').textContent='SÎN  /  الباب الملكي';
++      if(Math.hypot(p.x-ARCH.x,p.z-standZ)<.025){p.x=ARCH.x;p.z=standZ;heroYaw=0;phase='contact';elapsed=0;thump(72,.18);}
++    }else if(phase==='contact'){
++      armWeight=ease(Math.min(1,elapsed/CONTACT_SECONDS));bodyWeight=armWeight*.72;
++      $('hint').textContent='ثقل الباب يهتز تحت يديك';
++      if(elapsed>=CONTACT_SECONDS){phase='push';elapsed=0;armWeight=bodyWeight=1;startCreak();thump(48,.26);}
++    }else if(phase==='push'){
++      const p=Math.min(1,elapsed/PUSH_SECONDS);setDoor(ease(p));armWeight=bodyWeight=1;
++      // Follow the rotating leaf with short weight-bearing steps; arms never stretch to keep contact.
++      anchors[0].getWorldPosition(vA);anchors[1].getWorldPosition(vB);vC.addVectors(vA,vB).multiplyScalar(.5);
++      const follow=Math.max(vA.z,vB.z)-reach*.78,ff=1-Math.exp(-dt*5.5);heroRoot.position.x+=(vC.x-heroRoot.position.x)*ff;heroRoot.position.z+=(follow-heroRoot.position.z)*ff;
++      if(creak&&audio){const t=audio.currentTime;creak.low.frequency.setTargetAtTime(58-18*p+Math.sin(elapsed*4.1)*3,t,.05);creak.metal.frequency.setTargetAtTime(117-31*p,t,.07);creak.filter.frequency.setTargetAtTime(190-75*p,t,.08);}
++      $('hint').textContent='دفع الباب الملكي…';
++      if(p>=1){phase='recover';elapsed=0;stopCreak();thump(42,.22);}
++    }else if(phase==='recover'){
++      const p=Math.min(1,elapsed/RECOVER_SECONDS);armWeight=1-ease(p);bodyWeight=armWeight;
++      $('hint').textContent='الطريق إلى القصر أصبح مفتوحاً';
++      if(p>=1){phase='done';armWeight=bodyWeight=0;pivot.position.z=basePivotZ;$('hint').style.opacity=0;}
++    }
++  }
++  function postAnimation(){
++    if(phase==='idle'||phase==='done'||bodyWeight+armWeight<.0001)return;
++    rotateWorld(spine,worldX,.085,bodyWeight);rotateWorld(spine1,worldX,.075,bodyWeight);
++    for(const l of legs){rotateWorld(l.up,worldX,-.075,bodyWeight);rotateWorld(l.low,worldX,.14,bodyWeight);}
++    for(const arm of arms){arm.anchor.getWorldPosition(handTarget);solveArm(arm,handTarget,armWeight);}
++  }
++  function updateCamera(dt){
++    if(phase==='idle'||phase==='done')return false;
++    const hp=heroRoot.position,closing=phase==='push'?progress*.38:0;
++    camWant.set(hp.x-1.15-closing*.25,hp.y+2.05,hp.z-2.65+closing);
++    if(phase==='push'){camWant.x+=Math.sin(elapsed*23)*.012;camWant.y+=Math.sin(elapsed*29)*.009;}
++    camera.position.lerp(camWant,1-Math.exp(-dt*3.0));
++    camLook.set(hp.x,hp.y+1.35,hp.z+1.0);camera.lookAt(camLook);return true;
++  }
++  function blocks(x,z){
++    return phase!=='done'&&Math.abs(x-ARCH.x)<ARCH.width*.5+.24&&z>frontZ-.28&&z<frontZ+ARCH.depth+.45;
++  }
++  function skip(){
++    if(phase==='idle'||phase==='done')return;stopCreak();setDoor(1);phase='done';elapsed=0;armWeight=bodyWeight=0;pivot.position.z=basePivotZ;$('hint').style.opacity=0;
++  }
++  function probe(){
++    const handErrors=arms.map(a=>{const p=a.hand.getWorldPosition(new THREE.Vector3()),t=a.anchor.getWorldPosition(new THREE.Vector3());return p.distanceTo(t);});
++    const armPositions=arms.map(a=>({upper:a.upper.getWorldPosition(new THREE.Vector3()).toArray(),lower:a.lower.getWorldPosition(new THREE.Vector3()).toArray(),hand:a.hand.getWorldPosition(new THREE.Vector3()).toArray(),target:a.anchor.getWorldPosition(new THREE.Vector3()).toArray()}));
++    return{phase,progress,doorTime:doorAction.time,clipDuration:clip.duration,clipName:clip.name,hero:{x:heroRoot.position.x,y:heroRoot.position.y,z:heroRoot.position.z},door:{x:ARCH.x,y:ARCH.y,z:ARCH.z,width:ARCH.width,height:ARCH.height,frontZ},handErrors,armPositions,blockedAtDoor:blocks(ARCH.x,frontZ),active:phase!=='idle'&&phase!=='done'};
++  }
++  window.__royalDoorProbe=probe;
++  if(new URLSearchParams(location.search).has('royalDoorTest'))window.__royalDoorTest={place:()=>{introT=INTRO;heroRoot.position.set(ARCH.x,palGround(ARCH.x,triggerZ+.02,ARCH.y),triggerZ+.02);heroYaw=0;},advance:seconds=>{const n=Math.ceil(Math.max(0,seconds)*60);for(let i=0;i<n;i++){royalDoor.update(1/60,true);combat.step(1/60,false,false,false);royalDoor.postAnimation();royalDoor.updateCamera(1/60);}}};
++  return{update,postAnimation,updateCamera,blocks,skip,active:()=>phase!=='idle'&&phase!=='done',open:()=>phase==='done',probe};
++}
++const blocked=(x,z)=>{if(royalDoor.blocks(x,z))return true;if(palaceBlocked(x,z))return true;if(Math.abs(z)<GATE_HD+.4&&Math.abs(x)>PASS&&Math.abs(x)<GATE_HW+.3)return true;for(const c of colliders){const dx=x-c[0],dz=z-c[1];if(dx*dx+dz*dz<c[2]*c[2])return true;}return false;};
+ const ease=t=>t*t*(3-2*t);
+ const SKY_FADE_SECONDS=5.8,SKY_POST_GATE_DISTANCE=5.5;
+ const skyTransition={gatePassed:false,started:false,elapsed:0,finished:false};
+@@ -1041,11 +1205,12 @@
+ const smx=(a,b,t)=>ease(Math.max(0,Math.min(1,(t-a)/(b-a))));
+ function loop(ts){requestAnimationFrame(loop);const t=ts/1000,dt=Math.min(.05,t-last||.016);last=t;tAcc+=dt;const heroZBefore=heroRoot.position.z;
+   const intro=introT>=0&&introT<INTRO;if(introT>=0&&introT<INTRO)introT+=dt;
++  royalDoor.update(dt,introT>=INTRO);const doorCinematic=royalDoor.active();
+   let fw=inp.y,st=inp.x,run=inp.run;const k=inp.keys;
+   if(k.KeyW||k.ArrowUp)fw+=1;if(k.KeyS||k.ArrowDown)fw-=1;if(k.KeyD||k.ArrowRight)st+=1;if(k.KeyA||k.ArrowLeft)st-=1;if(k.ShiftLeft||k.ShiftRight)run=true;
+   if(k.KeyQ)yaw+=dt*1.8;if(k.KeyE)yaw-=dt*1.8;
+   if(state==='ready'&&introT<0){fw=st=0;run=false;} if(intro){fw=1;st=0;run=false;yaw=0;}
+-  const sy=Math.sin(yaw),cy=Math.cos(yaw);let mx=sy*fw-cy*st,mz=cy*fw+sy*st;const len=Math.hypot(mx,mz);const wantMove=len>.1,moving=wantMove&&!combat.locked();
++  const sy=Math.sin(yaw),cy=Math.cos(yaw);let mx=sy*fw-cy*st,mz=cy*fw+sy*st;const len=Math.hypot(mx,mz);const wantMove=len>.1,moving=wantMove&&!combat.locked()&&!doorCinematic;
+   if(moving){if(len>1){mx/=len;mz/=len;}const sp=run?4.3:1.7,p=heroRoot.position;const nx=p.x+mx*sp*dt;if(!blocked(nx,p.z))p.x=nx;const nz=p.z+mz*sp*dt;if(!blocked(p.x,nz))p.z=nz;
+     let d=Math.atan2(mx,mz)-heroYaw;d=Math.atan2(Math.sin(d),Math.cos(d));heroYaw+=d*Math.min(1,dt*10);}
+   {const p_=heroRoot.position;p_.y+=(palGround(p_.x,p_.z,p_.y)-p_.y)*Math.min(1,dt*12);}
+@@ -1065,8 +1230,8 @@
+       }
+     }
+   }
+-  {const hz_=heroRoot.position.z,h_=$('hint');if(hz_>PL_FRONT-14){h_.style.display='';h_.style.opacity=.9;h_.textContent='القصر الملكي — المشهد الثالث قريباً…';}else if(hz_>60){h_.style.display='';h_.style.opacity=.9;h_.textContent='تابع المسير نحو القصر الملكي';}else if(introT>=INTRO+7)h_.style.opacity=0;}
+-  heroRoot.rotation.y=heroYaw;combat.step(dt,wantMove,run,introT>=INTRO);
++  if(!doorCinematic){const hz_=heroRoot.position.z,h_=$('hint');if(hz_>PL_FRONT-14){h_.style.display='';h_.style.opacity=.9;h_.textContent=royalDoor.open()?'القصر الملكي — الطريق مفتوح':'القصر الملكي — الباب ينتظرك';}else if(hz_>60){h_.style.display='';h_.style.opacity=.9;h_.textContent='تابع المسير نحو القصر الملكي';}else if(introT>=INTRO+7)h_.style.opacity=0;}
++  heroRoot.rotation.y=heroYaw;combat.step(dt,doorCinematic?false:wantMove,run,introT>=INTRO&&!doorCinematic);royalDoor.postAnimation();
+   // camera
+   const hp=heroRoot.position,cp=Math.cos(pitch);
+   const hx=hp.x,hy=hp.y+1.5,hz=hp.z;
+@@ -1077,6 +1242,7 @@
+     tmpP.lerpVectors(cP0,cP1,smx(0,.30,tt)).lerp(cP2,smx(.30,.58,tt)).lerp(want,smx(.58,1,tt));
+     tmpL.lerpVectors(cL0,cL1,smx(0,.30,tt)).lerp(gateTop,smx(.30,.58,tt)).lerp(hv,smx(.58,1,tt));
+     camera.position.copy(tmpP);camera.lookAt(tmpL);}
++  else if(royalDoor.updateCamera(dt)){}
+   else{camera.position.lerp(want,introT>=0?1-Math.pow(.0008,dt):1);camera.lookAt(hx,hy,hz);}
+   sky.position.copy(camera.position);updateSkyline();
+   sun.position.copy(hp).addScaledVector(SUN,80);sun.target.position.copy(sun.target.position);updateDust(tAcc);updateWater(tAcc);updateExtras();renderer.render(scene,camera);} init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);}); })();
