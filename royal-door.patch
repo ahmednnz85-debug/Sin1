@@ -235,4 +235,4 @@
 +  else if(royalDoor.updateCamera(dt)){}
    else{camera.position.lerp(want,introT>=0?1-Math.pow(.0008,dt):1);camera.lookAt(hx,hy,hz);}
    sky.position.copy(camera.position);updateSkyline();
-   sun.position.copy(hp).addScaledVector(SUN,80);sun.target.position.copy(sun.target.position);updateDust(tAcc);updateWater(tAcc);updateExtras();renderer.render(scene,camera);} init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);}); })();
+   sun.position.copy(hp).addScaledVector(SUN,80);sun.target.position.copy(hp);sun.target.updateMatrixWorld();
