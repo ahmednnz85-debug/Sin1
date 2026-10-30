@@ -17,6 +17,13 @@
 - Ancient Clay Pots — Tiberiu Uncu: https://sketchfab.com/3d-models/ancient-clay-pots-6f40f39a1d694cb381f135a3e9f45206
 - Realistic Palm Tree Free — Next Spring: https://sketchfab.com/3d-models/realistic-palm-tree-free-39052ea764c945858449e699318efa53
 - Realistic Palm Tree 4 Free — Next Spring: https://sketchfab.com/3d-models/realistic-palm-tree-4-free-917c18d6b2d04d33950dea6e20bc074f
+- Medieval Door — HASSAN: https://sketchfab.com/3d-models/medieval-door-581dc6a53d2d4cafb5f781127f137c6f
+
+## مشهد الباب الملكي
+
+- يبدأ الباب مغلقًا، ويفتح تلقائيًا عند وصول Sîn إلى منطقة الاقتراب أعلى الدرج؛ لا يحتاج المشهد إلى زر تفاعل إضافي.
+- يستخدم المشهد مجسم `assets/مجسم الباب.glb` وخاماته ومقطع الفتح الأصلي، مع إعادة توقيت المقطع ببطء. الملف الأصلي يحتوي ضلفة واحدة متحركة.
+- حركة الدفع مولّدة على عظام الشخصية الحالية، وتبقى حركات الوقوف والمشي والركض الأصلية دون تعديل. بعد الفتح يعود التحكم ويمكن العبور، ولا يتكرر المشهد.
 
 ## البطل الجديد والقتال (v3)
 
