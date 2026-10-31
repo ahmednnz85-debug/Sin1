@@ -855,8 +855,11 @@ async function init(){
   const t4=[],t5=[];
   t4.forEach(([x,z,s])=>{place(M.t4.scene,{h:11,minY:-0.501,x,z,ry:rnd()*6.28,s});colliders.push([x,z,1.3*s]);});
   t5.forEach(([x,z,s])=>{place(M.t5.scene,{h:9.7,minY:-0.463,x,z,ry:rnd()*6.28,s});colliders.push([x,z,1.2*s]);});
-  try{await buildExtras([...t4,...t5]);}catch(e){showErr(e);}
-  try{await buildRoadsideArchitecture();}catch(e){showErr(e);}
+  const doorTest=new URLSearchParams(location.search).has('royalDoorTest');
+  if(!doorTest){
+    try{await buildExtras([...t4,...t5]);}catch(e){showErr(e);}
+    try{await buildRoadsideArchitecture();}catch(e){showErr(e);}
+  }
   try{await buildPalace(M.lam.scene);}catch(e){showErr(e);}
   // hero
   const hg=M.hero;const model=hg.scene;prep(model,{cast:true});const hs=1.85;model.scale.setScalar(hs);
@@ -921,7 +924,7 @@ $('go').addEventListener('click',()=>{$('ov').style.display='none';document.body
 $('skip').addEventListener('click',()=>{if(introT>=0&&introT<INTRO)introT=INTRO;else royalDoor.skip();});
 // ===================== HERO v2: Animation State Machine + combat button =====================
 // Hero mesh is assets/سين_وقوف_ساكن_سينمائي.glb (Mixamo rig). Loaded once; locomotion clips are the ones embedded in THAT file.
-// Idle clip in the file is Sin_Idle_Cinematic (the only cinematic idle; there is no clip named exactly Idle_Cinematic).
+// Standing loop in this file is idle_impatient (there is no clip named Sin_Idle_Cinematic).
 // walk_casual here is this file's clip, not the same-named clip inside hero_new.glb.
 // Run is sprint_loop_quaternius, the only sprint/run clip in this file; it targets this rig (not sprint_enter_quaternius from hero_new).
 const HERO_FILE='\u200e\u2068\u0633\u064a\u0646_\u0648\u0642\u0648\u0641_\u0633\u0627\u0643\u0646_\u0633\u064a\u0646\u0645\u0627\u064a\u0654\u064a\u2069';
@@ -929,11 +932,10 @@ const HERO_FOOT=[0.0188,0.0503];            // idle-pose sole centre (model x/z)
 const HERO_SOLE=0.4885;                     // idle-pose lowest vertex (model Y); keeps the soles on the ground at scale hs
 const ANIM_CFG={
   root:'Hips',                              // Mixamo hips of the replacement rig (hero_new used spine)
-  // combat clip names stay so the existing fallback can hide the fight button; this file has neither riposte nor aerial_punch_down
-  clips:{idle:'Sin_Idle_Cinematic',walk:'walk_casual',run:'sprint_loop_quaternius',counter:'riposte',airpunch:'aerial_punch_down'},
+  clips:{idle:'idle_impatient',walk:'walk_casual',run:'sprint_loop_quaternius',counter:'riposte',airpunch:'aerial_punch_down'},
   walkTS:1.5, runTS:0.6,                    // walk kept; run retimed so this clip's planted foot matches the existing 4.3 m/s (the old 1.9 suited sprint_enter only)
   tau:.075, runTau:.04,                     // blend time constants (s): ~0.25 s for a full cross-fade
-  runBlend:.3,                              // run clip does not loop closed, so the existing cross-fade into a second copy stays
+  runSeam:.18,                              // tail of the sprint blended back to its first pose so the loop does not pop
   atk:{counter:{lock:.55,end:.86},airpunch:{lock:.55,end:.86}}   // lock = fraction of the clip during which movement is locked / a new attack is refused; end = fraction where we blend back to locomotion
 };
 const animKey=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_');
@@ -950,6 +952,31 @@ function normalizeHeroRoot(clips,cfg){
     else{const dx=bx-v[0],dz=bz-v[2];for(let i=0;i<n;i++){v[i*3]+=dx;v[i*3+2]+=dz;}}
   }
 }
+// The sprint's last pose does not meet its first, and restarting a second copy mid-clip cut the stride.
+// Blend only the tail back onto the first pose, then let the one clip loop.
+function closeHeroLoop(clip,seam){
+  if(!clip)return;
+  for(const track of clip.tracks){
+    const size=track.getValueSize(),times=track.times,v=track.values,n=times.length;
+    if(n<3||!(seam>0))continue;
+    const dur=times[n-1];
+    for(let i=0;i<n;i++){
+      const k=Math.min(1,Math.max(0,(times[i]-(dur-seam))/seam));
+      if(k<=0)continue;
+      const s=k*k*(3-2*k);
+      if(size===4){
+        let ax=v[0],ay=v[1],az=v[2],aw=v[3];
+        const bx=v[i*4],by=v[i*4+1],bz=v[i*4+2],bw=v[i*4+3];
+        if(ax*bx+ay*by+az*bz+aw*bw<0){ax=-ax;ay=-ay;az=-az;aw=-aw;}
+        let x=bx+(ax-bx)*s,y=by+(ay-by)*s,z=bz+(az-bz)*s,w=bw+(aw-bw)*s;
+        const L=Math.hypot(x,y,z,w)||1;
+        v[i*4]=x/L;v[i*4+1]=y/L;v[i*4+2]=z/L;v[i*4+3]=w/L;
+      }else{
+        for(let c=0;c<size;c++)v[i*size+c]+=(v[c]-v[i*size+c])*s;
+      }
+    }
+  }
+}
 
 // Animation State Machine: states idle | walk | run | counter | airpunch.
 // Blending is done with explicit weights (always summing to 1), so any transition at any moment is smooth and nothing can fight.
@@ -960,12 +987,11 @@ function heroFSM(T,mixer,clips,cfg){
     a.enabled=true;a.setEffectiveWeight(0);a.play();A[key]=a;W[key]=0;return a;};
   mk('idle',clips.idle,true);
   mk('walk',clips.walk,true).setEffectiveTimeScale(cfg.walkTS);
-  mk('run',clips.run,false).setEffectiveTimeScale(cfg.runTS);
-  mk('run2',clips.run.clone(),false).setEffectiveTimeScale(cfg.runTS);
+  mk('run',clips.run,true).setEffectiveTimeScale(cfg.runTS);
   if(clips.counter)mk('counter',clips.counter,false);
   if(clips.airpunch)mk('airpunch',clips.airpunch,false);
   W.idle=1;A.idle.setEffectiveWeight(1);
-  let runCur='run',runAlt='run2',loco='idle',atk=null,can=false;
+  let loco='idle',atk=null,can=false;
   const dur=k=>A[k].getClip().duration;
   const restart=k=>{const a=A[k];a.reset();a.enabled=true;a.play();};
 
@@ -975,8 +1001,51 @@ function heroFSM(T,mixer,clips,cfg){
     else if(W[k]>.05)return false;               // the same move is still fading out: refuse (prevents a visible pop)
     atk={k,t:0,free:false};restart(k);return true;
   }
+  let pushAct=null,pushAlt=null,pushW=0,pushMode=null,pushMain=null,pushBlend=0;
+  function takeClip(clip){
+    const a=mixer.clipAction(clip);
+    a.setLoop(T.LoopOnce,1);a.clampWhenFinished=true;a.enabled=true;a.reset();a.setEffectiveWeight(0);a.paused=false;a.play();
+    return a;
+  }
+  function stopAct(a){if(!a)return;a.stop();a.enabled=false;}
+  function startPush(enterClip,clip){
+    if(!clip||pushMode)return false;
+    atk=null;pushMain=clip;
+    pushAct=takeClip(enterClip||clip);
+    pushAlt=null;pushW=0;pushBlend=0;pushMode=enterClip?'enter':'play';
+    return true;
+  }
+  function releasePush(){if(pushMode&&pushMode!=='out')pushMode='out';}
+  function pushState(){return pushAct?{mode:pushMode,time:pushAct.time,duration:pushAct.getClip().duration,weight:pushW,name:pushAct.getClip().name}:null;}
   function step(dt,wantMove,wantRun,canAct){
     can=!!canAct;
+    if(pushMode){
+      const f=1-Math.exp(-dt/(pushMode==='out'?.12:.16));
+      pushW+=((pushMode==='out'?0:1)-pushW)*f;
+      if(pushMode==='out'&&pushW<.001){
+        pushW=0;stopAct(pushAct);stopAct(pushAlt);pushAct=pushAlt=null;pushMode=null;
+      }else{
+        if(pushMode==='enter'&&pushAct.time>=pushAct.getClip().duration-.02){
+          pushAlt=pushAct;pushAlt.paused=true;
+          pushAct=takeClip(pushMain);pushBlend=1;pushMode='blend';
+        }else if(pushMode==='blend'){
+          pushBlend=Math.max(0,pushBlend-dt/.2);
+          if(pushBlend<=0){stopAct(pushAlt);pushAlt=null;pushMode='play';}
+        }else if(pushMode==='play'){
+          const d=pushAct.getClip().duration||1;
+          pushAct.setEffectiveTimeScale(pushAct.time/d>=.62?.4:1);
+        }else if(pushMode==='out'){pushAct.paused=true;if(pushAlt)pushAlt.paused=true;}
+        let sum=0;
+        for(const k in W){W[k]+=(0-W[k])*f;if(W[k]<.001)W[k]=0;sum+=W[k];}
+        const tot=sum+pushW,inv=tot>1e-6?1/tot:0;
+        for(const k in W)A[k].setEffectiveWeight(W[k]*inv);
+        const altS=pushMode==='blend'?pushBlend:0;
+        pushAct.setEffectiveWeight(pushW*inv*(1-altS));
+        if(pushAlt)pushAlt.setEffectiveWeight(pushW*inv*altS);
+        mixer.update(dt);
+        return;
+      }
+    }
     // 1) combat progress
     if(atk){
       atk.t+=dt;const c=cfg.atk[atk.k],d=dur(atk.k);
@@ -985,23 +1054,21 @@ function heroFSM(T,mixer,clips,cfg){
     }
     // 2) locomotion state from the player's input
     const want=wantMove?(wantRun?'run':'walk'):'idle';
-    if(want!==loco){loco=want;const k=want==='run'?runCur:want;if(W[k]<.05)restart(k);}
-    // 3) the 0.87 s run clip is looped by cross-fading into a second copy of itself
-    if(loco==='run'&&!atk&&A[runCur].time>=dur(runCur)-cfg.runBlend){restart(runAlt);const t=runCur;runCur=runAlt;runAlt=t;}
-    // 4) target weights -> smooth blend (sum stays 1)
-    const target=atk?atk.k:(loco==='run'?runCur:loco);
+    if(want!==loco){loco=want;if(W[want]<.05)restart(want);}
+    // 3) target weights -> smooth blend (sum stays 1). The sprint is one looping clip; it is not restarted mid-stride.
+    const target=atk?atk.k:loco;
     const fT=1-Math.exp(-dt/cfg.tau),fR=1-Math.exp(-dt/cfg.runTau);let sum=0;
-    for(const k in W){const goal=k===target?1:0,f=(k==='run'||k==='run2')?fR:fT;W[k]+=(goal-W[k])*f;if(goal===0&&W[k]<.001)W[k]=0;sum+=W[k];}
+    for(const k in W){const goal=k===target?1:0,f=k==='run'?fR:fT;W[k]+=(goal-W[k])*f;if(goal===0&&W[k]<.001)W[k]=0;sum+=W[k];}
     if(sum<1e-6){W[target]=1;sum=1;}
     for(const k in W){W[k]/=sum;A[k].setEffectiveWeight(W[k]);}
     mixer.update(dt);
   }
-  return{step,attack,locked:()=>!!atk&&!atk.free,busy:()=>!!atk,state:()=>atk?atk.k:loco,hasCombat:!!(clips.counter&&clips.airpunch),W,A};
+  return{step,attack,locked:()=>!!atk&&!atk.free,busy:()=>!!atk,state:()=>atk?atk.k:loco,hasCombat:!!(clips.counter&&clips.airpunch),W,A,startPush,releasePush,pushing:()=>!!pushMode,pushState,runSample:()=>{const a=A.run;return {time:a.time,dur:a.getClip().duration,loop:a.loop,w:W.run};}};
 }
 
 // hooks the state machine to the game: combat button + keyboard (J = counterattack, K = sword air punch)
 const combat=(function(){
-  let fsm=null,okCombat=false;
+  let fsm=null,okCombat=false,pushClip=null,enterClip=null;
   const fightB=$('fight'),menu=$('fmenu'),bC=$('f-counter'),bA=$('f-air');
   const menuOpen=()=>menu.style.display==='flex';
   const setOpen=v=>{menu.style.display=v?'flex':'none';fightB.classList.toggle('on',v);};
@@ -1018,7 +1085,11 @@ const combat=(function(){
       const clips={};for(const r in ANIM_CFG.clips)clips[r]=byKey[animKey(ANIM_CFG.clips[r])]||null;
       const miss=['idle','walk','run'].filter(r=>!clips[r]);
       if(miss.length)throw new Error('حركات ناقصة في assets/'+HERO_FILE+'.glb: '+miss.map(r=>ANIM_CFG.clips[r]).join(', ')+'\nالمتوفر: '+anims.map(c=>c.name).join(', '));
+      pushClip=anims.find(c=>c.name==='push_object')||null;
+      enterClip=anims.find(c=>c.name==='push_enter_quaternius')||null;
+      if(!pushClip)throw new Error('حركة push_object غير موجودة في ملف الشخصية. المتوفر: '+anims.map(c=>c.name).join(', '));
       normalizeHeroRoot(clips,ANIM_CFG);
+      closeHeroLoop(clips.run,ANIM_CFG.runSeam);
       fsm=heroFSM(THREE,mx,clips,ANIM_CFG);
       okCombat=fsm.hasCombat;
       if(!okCombat)console.warn('حركات القتال غير موجودة في الموديل — تم إخفاء زر القتال');
@@ -1031,12 +1102,18 @@ const combat=(function(){
       if(!canAct&&menuOpen())setOpen(false);
     },
     locked:()=>!!fsm&&fsm.locked(),
-    state:()=>fsm?fsm.state():'loading'
+    state:()=>fsm?fsm.state():'loading',
+    startPush(){return !!(fsm&&pushClip&&fsm.startPush(enterClip,pushClip));},
+    releasePush(){if(fsm)fsm.releasePush();},
+    pushing:()=>!!fsm&&fsm.pushing(),
+    pushState:()=>fsm?fsm.pushState():null,
+    runSample:()=>fsm?fsm.runSample():null,
+    pushClipRef:()=>pushClip
   };
 })();
-// ---------- Royal palace door: measured fit + original GLB clip + procedural hero push ----------
+// ---------- Royal palace door: original leaf clip scrubbed in time with push_object ----------
 // Arch measurements were taken from palace.glb after its existing world transform (PAL.s/PAL.ry).
-// The supplied door has one animated leaf (Cube.004); its frame, materials and original clip are retained.
+// The supplied door keeps its mesh, materials, placement and original open clip. No procedural bone posing.
 async function buildRoyalDoor(gltf,heroModel){
   const ARCH={x:1.0,y:3.86,z:183.85,width:4.42,height:8.18,depth:.38};
   const root=new THREE.Group();root.name='RoyalDoorRig';scene.add(root);
@@ -1053,57 +1130,45 @@ async function buildRoyalDoor(gltf,heroModel){
   root.updateMatrixWorld(true);leafBox.setFromObject(pivot);
   const frontZ=leafBox.min.z,basePivotZ=pivot.position.z;
 
-  // Wrist anchors are attached to the animated hinge, so both hands follow the same original leaf.
-  const anchors=[];
-  for(const side of[-1,1]){
-    const a=new THREE.Object3D();pivot.add(a);
-    a.position.copy(pivot.worldToLocal(new THREE.Vector3(ARCH.x+side*.43,ARCH.y+1.27,frontZ-.09)));
-    anchors.push(a);
-  }
-  const bone=n=>heroModel.getObjectByName(n);
-  const arms=[
-    {upper:bone('LeftArm'),lower:bone('LeftForeArm'),hand:bone('LeftHand'),anchor:anchors[1],side:1},
-    {upper:bone('RightArm'),lower:bone('RightForeArm'),hand:bone('RightHand'),anchor:anchors[0],side:-1}
-  ];
-  const spine=bone('Spine'),spine1=bone('Spine1');
-  const legs=[{up:bone('LeftUpLeg'),low:bone('LeftLeg')},{up:bone('RightUpLeg'),low:bone('RightLeg')}];
-  heroModel.updateMatrixWorld(true);
-  const reach=arms[0].upper.getWorldPosition(new THREE.Vector3()).distanceTo(arms[0].hand.getWorldPosition(new THREE.Vector3()));
-  const standZ=frontZ-Math.max(.50,Math.min(.78,reach*.86)),triggerZ=standZ-1.85;
+  // How far the untouched push_object clip carries the hands ahead of heroRoot. Sample a clone, then restore the bind pose.
+  const pushReach=(()=>{
+    const src=combat.pushClipRef&&combat.pushClipRef();
+    if(!src)return .48;
+    const saved=[];
+    heroModel.traverse(o=>{if(o.isBone)saved.push([o,o.quaternion.clone(),o.position.clone()]);});
+    const mx=new THREE.AnimationMixer(heroModel);
+    const act=mx.clipAction(src.clone());
+    act.setLoop(THREE.LoopOnce,1);act.clampWhenFinished=true;act.play();
+    const hands=['LeftHand','RightHand'].map(n=>heroModel.getObjectByName(n)).filter(Boolean);
+    const v=new THREE.Vector3(),rig=heroModel.parent||heroModel;
+    const sample=frac=>{
+      mx.setTime(src.duration*frac);heroModel.updateMatrixWorld(true);let z=.2;
+      for(const h of hands){h.getWorldPosition(v);rig.worldToLocal(v);if(v.z>z)z=v.z;}
+      return z;
+    };
+    const plant=sample(.667);
+    act.stop();
+    for(const [o,q,pos] of saved){o.quaternion.copy(q);o.position.copy(pos);}
+    heroModel.updateMatrixWorld(true);
+    return plant;
+  })();
+  const standZ=frontZ-pushReach-.02,triggerZ=standZ-1.85;
+  let phase='idle',elapsed=0,progress=0,audio=null,creak=null;
 
-  let phase='idle',elapsed=0,progress=0,armWeight=0,bodyWeight=0,audio=null,creak=null;
-  const PUSH_SECONDS=7.4,CONTACT_SECONDS=1.15,RECOVER_SECONDS=1.25;
-  const vA=new THREE.Vector3(),vB=new THREE.Vector3(),vC=new THREE.Vector3(),vT=new THREE.Vector3(),vD=new THREE.Vector3(),vE=new THREE.Vector3(),vP=new THREE.Vector3();
-  const qA=new THREE.Quaternion(),qB=new THREE.Quaternion(),qC=new THREE.Quaternion(),qD=new THREE.Quaternion();
-  const camWant=new THREE.Vector3(),camLook=new THREE.Vector3(),handTarget=new THREE.Vector3();
-  const worldX=new THREE.Vector3(1,0,0);
+  function doorFromPush(st){
+    if(!st||st.mode==='enter'||st.mode==='blend'||!(st.duration>0))return 0;
+    const u=Math.max(0,Math.min(1,st.time/st.duration));
+    // Hand-forward curve of the untouched push_object clip: the palms load on a shut door, then drive it open.
+    const keys=[[0,0],[.64,0],[.708,.036],[.751,.107],[.792,.202],[.832,.274],[.876,.429],[.917,.631],[.957,.821],[1,1]];
+    let hand=1;
+    for(let i=1;i<keys.length;i++){
+      if(u<=keys[i][0]){const a=keys[i-1],b=keys[i],k=(u-a[0])/((b[0]-a[0])||1);hand=a[1]+(b[1]-a[1])*k;break;}
+    }
+    return Math.pow(Math.max(0,Math.min(1,hand)),1.2);
+  }
+  const vA=new THREE.Vector3();
+  const camWant=new THREE.Vector3(),camLook=new THREE.Vector3();
 
-  function rotateWorld(b,axis,angle,w){
-    if(!b||w<.0001)return;
-    b.updateWorldMatrix(true,false);b.parent.getWorldQuaternion(qA);b.getWorldQuaternion(qB);
-    qC.copy(qA).invert();qD.setFromAxisAngle(axis,angle);
-    qC.multiply(qD).multiply(qB);b.quaternion.slerp(qC,w);b.updateWorldMatrix(false,true);
-  }
-  function rotateTowards(b,delta,w){
-    b.parent.getWorldQuaternion(qA);b.getWorldQuaternion(qB);qC.copy(qA).invert().multiply(delta).multiply(qB);
-    b.quaternion.slerp(qC,w);b.updateWorldMatrix(false,true);
-  }
-  function solveArm(arm,target,w){
-    const {upper,lower,hand,side}=arm;if(!upper||!lower||!hand||w<.0001)return;
-    upper.updateWorldMatrix(true,true);
-    upper.getWorldPosition(vA);lower.getWorldPosition(vB);hand.getWorldPosition(vC);
-    const l1=vA.distanceTo(vB),l2=vB.distanceTo(vC);if(l1<1e-5||l2<1e-5)return;
-    vT.copy(target);vD.subVectors(vT,vA);let dist=vD.length();if(dist<1e-5)return;
-    dist=Math.max(Math.abs(l1-l2)+.002,Math.min(l1+l2-.002,dist));vD.normalize();vT.copy(vA).addScaledVector(vD,dist);
-    const along=(l1*l1+dist*dist-l2*l2)/(2*dist),height=Math.sqrt(Math.max(0,l1*l1-along*along));
-    vP.set(side*.72,-.34,-.22).add(vA).sub(vA); // outward/down/back elbow pole
-    vP.addScaledVector(vD,-vP.dot(vD));if(vP.lengthSq()<1e-6)vP.set(side,0,0);vP.normalize();
-    vE.copy(vA).addScaledVector(vD,along).addScaledVector(vP,height);
-    vB.sub(vA).normalize();vP.subVectors(vE,vA).normalize();qD.setFromUnitVectors(vB,vP);rotateTowards(upper,qD,w);
-    lower.updateWorldMatrix(true,true);lower.getWorldPosition(vB);hand.getWorldPosition(vC);
-    vC.sub(vB).normalize();vP.subVectors(vT,vB).normalize();qD.setFromUnitVectors(vC,vP);rotateTowards(lower,qD,w);
-    hand.updateWorldMatrix(true,false);
-  }
   function thump(freq,volume){
     if(!audio)return;const t=audio.currentTime,o=audio.createOscillator(),g=audio.createGain();
     o.type='sine';o.frequency.setValueAtTime(freq,t);o.frequency.exponentialRampToValueAtTime(Math.max(25,freq*.45),t+.42);
@@ -1128,8 +1193,9 @@ async function buildRoyalDoor(gltf,heroModel){
     for(const n of[c.low,c.metal,c.noise]){try{n.stop(t+.7);}catch(_){}}
   }
   function setDoor(p){
-    progress=Math.max(0,Math.min(1,p));doorAction.paused=false;doorAction.time=clip.duration*progress;doorMixer.update(0);doorAction.paused=true;
-    pivot.position.z=basePivotZ+(phase==='push'?Math.sin(elapsed*31)*.75*Math.sin(Math.PI*progress):0);root.updateMatrixWorld(true);
+    progress=Math.max(0,Math.min(1,p));
+    doorAction.paused=false;doorAction.time=clip.duration*progress;doorMixer.update(0);doorAction.paused=true;
+    pivot.position.z=basePivotZ;root.updateMatrixWorld(true);
   }
   function begin(){
     if(phase!=='idle')return;phase='approach';elapsed=0;startAudio();
@@ -1146,30 +1212,32 @@ async function buildRoyalDoor(gltf,heroModel){
       const p=heroRoot.position,f=1-Math.exp(-dt*3.4);p.x+=(ARCH.x-p.x)*f;p.z+=(standZ-p.z)*f;
       let d=-heroYaw;d=Math.atan2(Math.sin(d),Math.cos(d));heroYaw+=d*Math.min(1,dt*7);
       $('hint').textContent='SÎN  /  الباب الملكي';
-      if(Math.hypot(p.x-ARCH.x,p.z-standZ)<.025){p.x=ARCH.x;p.z=standZ;heroYaw=0;phase='contact';elapsed=0;thump(72,.18);}
+      if(Math.hypot(p.x-ARCH.x,p.z-standZ)<.025){p.x=ARCH.x;p.z=standZ;heroYaw=0;phase='contact';elapsed=0;combat.startPush();thump(72,.18);}
     }else if(phase==='contact'){
-      armWeight=ease(Math.min(1,elapsed/CONTACT_SECONDS));bodyWeight=armWeight*.72;
-      $('hint').textContent='ثقل الباب يهتز تحت يديك';
-      if(elapsed>=CONTACT_SECONDS){phase='push';elapsed=0;armWeight=bodyWeight=1;startCreak();thump(48,.26);}
+      $('hint').textContent='سين يضع يديه على الباب';
     }else if(phase==='push'){
-      const p=Math.min(1,elapsed/PUSH_SECONDS);setDoor(ease(p));armWeight=bodyWeight=1;
-      // Follow the rotating leaf with short weight-bearing steps; arms never stretch to keep contact.
-      anchors[0].getWorldPosition(vA);anchors[1].getWorldPosition(vB);vC.addVectors(vA,vB).multiplyScalar(.5);
-      const follow=Math.max(vA.z,vB.z)-reach*.78,ff=1-Math.exp(-dt*5.5);heroRoot.position.x+=(vC.x-heroRoot.position.x)*ff;heroRoot.position.z+=(follow-heroRoot.position.z)*ff;
-      if(creak&&audio){const t=audio.currentTime;creak.low.frequency.setTargetAtTime(58-18*p+Math.sin(elapsed*4.1)*3,t,.05);creak.metal.frequency.setTargetAtTime(117-31*p,t,.07);creak.filter.frequency.setTargetAtTime(190-75*p,t,.08);}
-      $('hint').textContent='دفع الباب الملكي…';
-      if(p>=1){phase='recover';elapsed=0;stopCreak();thump(42,.22);}
+      if(creak&&audio){const t=audio.currentTime,p=progress;creak.low.frequency.setTargetAtTime(58-18*p+Math.sin(elapsed*4.1)*3,t,.05);creak.metal.frequency.setTargetAtTime(117-31*p,t,.07);creak.filter.frequency.setTargetAtTime(190-75*p,t,.08);}
+      $('hint').textContent=progress<.08?'سين يسند يديه على الباب الثقيل':'الباب الملكي يُفتح';
     }else if(phase==='recover'){
-      const p=Math.min(1,elapsed/RECOVER_SECONDS);armWeight=1-ease(p);bodyWeight=armWeight;
       $('hint').textContent='الطريق إلى القصر أصبح مفتوحاً';
-      if(p>=1){phase='done';armWeight=bodyWeight=0;pivot.position.z=basePivotZ;$('hint').style.opacity=0;}
+      if(!combat.pushing()){phase='done';pivot.position.z=basePivotZ;$('hint').style.opacity=0;}
     }
   }
   function postAnimation(){
-    if(phase==='idle'||phase==='done'||bodyWeight+armWeight<.0001)return;
-    rotateWorld(spine,worldX,.085,bodyWeight);rotateWorld(spine1,worldX,.075,bodyWeight);
-    for(const l of legs){rotateWorld(l.up,worldX,-.075,bodyWeight);rotateWorld(l.low,worldX,.14,bodyWeight);}
-    for(const arm of arms){arm.anchor.getWorldPosition(handTarget);solveArm(arm,handTarget,armWeight);}
+    const st=combat.pushState();
+    if(phase==='contact'){
+      setDoor(0);
+      if(st&&st.mode==='play'){phase='push';elapsed=0;startCreak();thump(48,.26);}
+      return;
+    }
+    if(phase==='push'){
+      if(!st||!(st.duration>0)||st.mode!=='play')return;
+      const p=doorFromPush(st);
+      setDoor(p);
+      if(st.time/st.duration>=.995){setDoor(1);phase='recover';elapsed=0;combat.releasePush();stopCreak();thump(42,.22);}
+      return;
+    }
+    if(phase==='recover')setDoor(1);
   }
   function updateCamera(dt){
     if(phase==='idle'||phase==='done')return false;
@@ -1183,15 +1251,41 @@ async function buildRoyalDoor(gltf,heroModel){
     return phase!=='done'&&Math.abs(x-ARCH.x)<ARCH.width*.5+.24&&z>frontZ-.28&&z<frontZ+ARCH.depth+.45;
   }
   function skip(){
-    if(phase==='idle'||phase==='done')return;stopCreak();setDoor(1);phase='done';elapsed=0;armWeight=bodyWeight=0;pivot.position.z=basePivotZ;$('hint').style.opacity=0;
+    if(phase==='idle'||phase==='done')return;
+    stopCreak();setDoor(1);if(combat.pushing())combat.releasePush();phase='recover';elapsed=0;pivot.position.z=basePivotZ;
   }
   function probe(){
-    return{phase,progress,doorTime:doorAction.time,clipDuration:clip.duration,clipName:clip.name,
+    const st=combat.pushState();
+    return{phase,progress,doorTime:doorAction.time,clipDuration:clip.duration,clipName:clip.name,push:st,standZ,frontZ,triggerZ,pushReach,loco:combat.state(),
       hero:{x:heroRoot.position.x,y:heroRoot.position.y,z:heroRoot.position.z},
       door:{x:ARCH.x,y:ARCH.y,z:ARCH.z,width:ARCH.width,height:ARCH.height,frontZ},
       blockedAtDoor:blocks(ARCH.x,frontZ),active:phase!=='idle'&&phase!=='done'};
   }
-  if(new URLSearchParams(location.search).has('royalDoorDebug'))window.__royalDoorProbe=probe;
+  function advance(seconds){
+    window.__holdSim=true;
+    const n=Math.max(1,Math.round(Math.max(0,seconds)*60));
+    for(let i=0;i<n;i++){
+      update(1/60,true);
+      heroRoot.rotation.y=heroYaw;
+      combat.step(1/60,false,false,false);
+      postAnimation();
+      updateCamera(1/60);
+      const p=heroRoot.position;p.y+=(palGround(p.x,p.z,p.y)-p.y)*Math.min(1,(1/60)*12);
+    }
+    renderer.render(scene,camera);
+  }
+  const qs=new URLSearchParams(location.search);
+  if(qs.has('royalDoorDebug')||qs.has('royalDoorTest'))window.__royalDoorProbe=probe;
+  if(qs.has('royalDoorTest'))window.__royalDoorTest={
+    place(){window.__holdSim=true;introT=INTRO;const z=triggerZ+.05;heroRoot.position.set(ARCH.x,palGround(ARCH.x,z,ARCH.y),z);heroYaw=0;renderer.render(scene,camera);},
+    run(seconds){
+      window.__holdSim=true;
+      const n=Math.max(1,Math.round(Math.max(0,seconds)*60)),samples=[];
+      for(let i=0;i<n;i++){combat.step(1/60,true,true,true);if(i%8===0)samples.push(combat.runSample());}
+      renderer.render(scene,camera);return samples;
+    },
+    advance,state:probe
+  };
   return{update,postAnimation,updateCamera,blocks,skip,active:()=>phase!=='idle'&&phase!=='done',open:()=>phase==='done',probe};
 }
 const blocked=(x,z)=>{if(royalDoor.blocks(x,z))return true;if(palaceBlocked(x,z))return true;if(Math.abs(z)<GATE_HD+.4&&Math.abs(x)>PASS&&Math.abs(x)<GATE_HW+.3)return true;for(const c of colliders){const dx=x-c[0],dz=z-c[1];if(dx*dx+dz*dz<c[2]*c[2])return true;}return false;};
@@ -1202,7 +1296,7 @@ const camStart=new THREE.Vector3(6,1.6,-56),gateTop=new THREE.Vector3(0,9,0),wan
 // cinematic intro path: start at the head of the walkway, sweep across the market stalls, then rise to the Ishtar gate, then settle behind the hero
 const cP0=new THREE.Vector3(-4.2,1.7,-71),cP1=new THREE.Vector3(3.6,2.4,-60),cP2=new THREE.Vector3(0,3.6,-46),cL0=new THREE.Vector3(-10.5,2.6,-60),cL1=new THREE.Vector3(10.5,2.6,-50),tmpP=new THREE.Vector3(),tmpL=new THREE.Vector3(),hv=new THREE.Vector3();
 const smx=(a,b,t)=>ease(Math.max(0,Math.min(1,(t-a)/(b-a))));
-function loop(ts){requestAnimationFrame(loop);const t=ts/1000,dt=Math.min(.05,t-last||.016);last=t;tAcc+=dt;const heroZBefore=heroRoot.position.z;
+function loop(ts){requestAnimationFrame(loop);if(window.__holdSim){renderer.render(scene,camera);return;}const t=ts/1000,dt=Math.min(.05,t-last||.016);last=t;tAcc+=dt;const heroZBefore=heroRoot.position.z;
   const intro=introT>=0&&introT<INTRO;if(introT>=0&&introT<INTRO)introT+=dt;
   royalDoor.update(dt,introT>=INTRO);const doorCinematic=royalDoor.active();
   let fw=inp.y,st=inp.x,run=inp.run;const k=inp.keys;
