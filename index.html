@@ -935,7 +935,7 @@ const ANIM_CFG={
   clips:{idle:'idle_impatient',walk:'walk_casual',run:'sprint_loop_quaternius',counter:'riposte',airpunch:'aerial_punch_down'},
   walkTS:1.5, runTS:0.6,                    // walk kept; run retimed so this clip's planted foot matches the existing 4.3 m/s (the old 1.9 suited sprint_enter only)
   tau:.075, runTau:.04,                     // blend time constants (s): ~0.25 s for a full cross-fade
-  runBlend:.3,                              // run clip does not loop closed, so the existing cross-fade into a second copy stays
+  runSeam:.18,                              // tail of the sprint blended back to its first pose so the loop does not pop
   atk:{counter:{lock:.55,end:.86},airpunch:{lock:.55,end:.86}}   // lock = fraction of the clip during which movement is locked / a new attack is refused; end = fraction where we blend back to locomotion
 };
 const animKey=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_');
@@ -952,6 +952,31 @@ function normalizeHeroRoot(clips,cfg){
     else{const dx=bx-v[0],dz=bz-v[2];for(let i=0;i<n;i++){v[i*3]+=dx;v[i*3+2]+=dz;}}
   }
 }
+// The sprint's last pose does not meet its first, and restarting a second copy mid-clip cut the stride.
+// Blend only the tail back onto the first pose, then let the one clip loop.
+function closeHeroLoop(clip,seam){
+  if(!clip)return;
+  for(const track of clip.tracks){
+    const size=track.getValueSize(),times=track.times,v=track.values,n=times.length;
+    if(n<3||!(seam>0))continue;
+    const dur=times[n-1];
+    for(let i=0;i<n;i++){
+      const k=Math.min(1,Math.max(0,(times[i]-(dur-seam))/seam));
+      if(k<=0)continue;
+      const s=k*k*(3-2*k);
+      if(size===4){
+        let ax=v[0],ay=v[1],az=v[2],aw=v[3];
+        const bx=v[i*4],by=v[i*4+1],bz=v[i*4+2],bw=v[i*4+3];
+        if(ax*bx+ay*by+az*bz+aw*bw<0){ax=-ax;ay=-ay;az=-az;aw=-aw;}
+        let x=bx+(ax-bx)*s,y=by+(ay-by)*s,z=bz+(az-bz)*s,w=bw+(aw-bw)*s;
+        const L=Math.hypot(x,y,z,w)||1;
+        v[i*4]=x/L;v[i*4+1]=y/L;v[i*4+2]=z/L;v[i*4+3]=w/L;
+      }else{
+        for(let c=0;c<size;c++)v[i*size+c]+=(v[c]-v[i*size+c])*s;
+      }
+    }
+  }
+}
 
 // Animation State Machine: states idle | walk | run | counter | airpunch.
 // Blending is done with explicit weights (always summing to 1), so any transition at any moment is smooth and nothing can fight.
@@ -962,12 +987,11 @@ function heroFSM(T,mixer,clips,cfg){
     a.enabled=true;a.setEffectiveWeight(0);a.play();A[key]=a;W[key]=0;return a;};
   mk('idle',clips.idle,true);
   mk('walk',clips.walk,true).setEffectiveTimeScale(cfg.walkTS);
-  mk('run',clips.run,false).setEffectiveTimeScale(cfg.runTS);
-  mk('run2',clips.run.clone(),false).setEffectiveTimeScale(cfg.runTS);
+  mk('run',clips.run,true).setEffectiveTimeScale(cfg.runTS);
   if(clips.counter)mk('counter',clips.counter,false);
   if(clips.airpunch)mk('airpunch',clips.airpunch,false);
   W.idle=1;A.idle.setEffectiveWeight(1);
-  let runCur='run',runAlt='run2',loco='idle',atk=null,can=false;
+  let loco='idle',atk=null,can=false;
   const dur=k=>A[k].getClip().duration;
   const restart=k=>{const a=A[k];a.reset();a.enabled=true;a.play();};
 
@@ -1007,6 +1031,9 @@ function heroFSM(T,mixer,clips,cfg){
         }else if(pushMode==='blend'){
           pushBlend=Math.max(0,pushBlend-dt/.2);
           if(pushBlend<=0){stopAct(pushAlt);pushAlt=null;pushMode='play';}
+        }else if(pushMode==='play'){
+          const d=pushAct.getClip().duration||1;
+          pushAct.setEffectiveTimeScale(pushAct.time/d>=.62?.4:1);
         }else if(pushMode==='out'){pushAct.paused=true;if(pushAlt)pushAlt.paused=true;}
         let sum=0;
         for(const k in W){W[k]+=(0-W[k])*f;if(W[k]<.001)W[k]=0;sum+=W[k];}
@@ -1027,18 +1054,16 @@ function heroFSM(T,mixer,clips,cfg){
     }
     // 2) locomotion state from the player's input
     const want=wantMove?(wantRun?'run':'walk'):'idle';
-    if(want!==loco){loco=want;const k=want==='run'?runCur:want;if(W[k]<.05)restart(k);}
-    // 3) the 0.87 s run clip is looped by cross-fading into a second copy of itself
-    if(loco==='run'&&!atk&&A[runCur].time>=dur(runCur)-cfg.runBlend){restart(runAlt);const t=runCur;runCur=runAlt;runAlt=t;}
-    // 4) target weights -> smooth blend (sum stays 1)
-    const target=atk?atk.k:(loco==='run'?runCur:loco);
+    if(want!==loco){loco=want;if(W[want]<.05)restart(want);}
+    // 3) target weights -> smooth blend (sum stays 1). The sprint is one looping clip; it is not restarted mid-stride.
+    const target=atk?atk.k:loco;
     const fT=1-Math.exp(-dt/cfg.tau),fR=1-Math.exp(-dt/cfg.runTau);let sum=0;
-    for(const k in W){const goal=k===target?1:0,f=(k==='run'||k==='run2')?fR:fT;W[k]+=(goal-W[k])*f;if(goal===0&&W[k]<.001)W[k]=0;sum+=W[k];}
+    for(const k in W){const goal=k===target?1:0,f=k==='run'?fR:fT;W[k]+=(goal-W[k])*f;if(goal===0&&W[k]<.001)W[k]=0;sum+=W[k];}
     if(sum<1e-6){W[target]=1;sum=1;}
     for(const k in W){W[k]/=sum;A[k].setEffectiveWeight(W[k]);}
     mixer.update(dt);
   }
-  return{step,attack,locked:()=>!!atk&&!atk.free,busy:()=>!!atk,state:()=>atk?atk.k:loco,hasCombat:!!(clips.counter&&clips.airpunch),W,A,startPush,releasePush,pushing:()=>!!pushMode,pushState};
+  return{step,attack,locked:()=>!!atk&&!atk.free,busy:()=>!!atk,state:()=>atk?atk.k:loco,hasCombat:!!(clips.counter&&clips.airpunch),W,A,startPush,releasePush,pushing:()=>!!pushMode,pushState,runSample:()=>{const a=A.run;return {time:a.time,dur:a.getClip().duration,loop:a.loop,w:W.run};}};
 }
 
 // hooks the state machine to the game: combat button + keyboard (J = counterattack, K = sword air punch)
@@ -1064,6 +1089,7 @@ const combat=(function(){
       enterClip=anims.find(c=>c.name==='push_enter_quaternius')||null;
       if(!pushClip)throw new Error('حركة push_object غير موجودة في ملف الشخصية. المتوفر: '+anims.map(c=>c.name).join(', '));
       normalizeHeroRoot(clips,ANIM_CFG);
+      closeHeroLoop(clips.run,ANIM_CFG.runSeam);
       fsm=heroFSM(THREE,mx,clips,ANIM_CFG);
       okCombat=fsm.hasCombat;
       if(!okCombat)console.warn('حركات القتال غير موجودة في الموديل — تم إخفاء زر القتال');
@@ -1081,6 +1107,7 @@ const combat=(function(){
     releasePush(){if(fsm)fsm.releasePush();},
     pushing:()=>!!fsm&&fsm.pushing(),
     pushState:()=>fsm?fsm.pushState():null,
+    runSample:()=>fsm?fsm.runSample():null,
     pushClipRef:()=>pushClip
   };
 })();
@@ -1251,6 +1278,12 @@ async function buildRoyalDoor(gltf,heroModel){
   if(qs.has('royalDoorDebug')||qs.has('royalDoorTest'))window.__royalDoorProbe=probe;
   if(qs.has('royalDoorTest'))window.__royalDoorTest={
     place(){window.__holdSim=true;introT=INTRO;const z=triggerZ+.05;heroRoot.position.set(ARCH.x,palGround(ARCH.x,z,ARCH.y),z);heroYaw=0;renderer.render(scene,camera);},
+    run(seconds){
+      window.__holdSim=true;
+      const n=Math.max(1,Math.round(Math.max(0,seconds)*60)),samples=[];
+      for(let i=0;i<n;i++){combat.step(1/60,true,true,true);if(i%8===0)samples.push(combat.runSample());}
+      renderer.render(scene,camera);return samples;
+    },
     advance,state:probe
   };
   return{update,postAnimation,updateCamera,blocks,skip,active:()=>phase!=='idle'&&phase!=='done',open:()=>phase==='done',probe};
