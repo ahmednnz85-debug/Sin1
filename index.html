@@ -924,7 +924,7 @@ $('go').addEventListener('click',()=>{$('ov').style.display='none';document.body
 $('skip').addEventListener('click',()=>{if(introT>=0&&introT<INTRO)introT=INTRO;else royalDoor.skip();});
 // ===================== HERO v2: Animation State Machine + combat button =====================
 // Hero mesh is assets/سين_وقوف_ساكن_سينمائي.glb (Mixamo rig). Loaded once; locomotion clips are the ones embedded in THAT file.
-// Idle clip in the file is Sin_Idle_Cinematic (the only cinematic idle; there is no clip named exactly Idle_Cinematic).
+// Standing loop in this file is idle_impatient (there is no clip named Sin_Idle_Cinematic).
 // walk_casual here is this file's clip, not the same-named clip inside hero_new.glb.
 // Run is sprint_loop_quaternius, the only sprint/run clip in this file; it targets this rig (not sprint_enter_quaternius from hero_new).
 const HERO_FILE='\u200e\u2068\u0633\u064a\u0646_\u0648\u0642\u0648\u0641_\u0633\u0627\u0643\u0646_\u0633\u064a\u0646\u0645\u0627\u064a\u0654\u064a\u2069';
@@ -932,8 +932,7 @@ const HERO_FOOT=[0.0188,0.0503];            // idle-pose sole centre (model x/z)
 const HERO_SOLE=0.4885;                     // idle-pose lowest vertex (model Y); keeps the soles on the ground at scale hs
 const ANIM_CFG={
   root:'Hips',                              // Mixamo hips of the replacement rig (hero_new used spine)
-  // combat clip names stay so the existing fallback can hide the fight button; this file has neither riposte nor aerial_punch_down
-  clips:{idle:'Sin_Idle_Cinematic',walk:'walk_casual',run:'sprint_loop_quaternius',counter:'riposte',airpunch:'aerial_punch_down'},
+  clips:{idle:'idle_impatient',walk:'walk_casual',run:'sprint_loop_quaternius',counter:'riposte',airpunch:'aerial_punch_down'},
   walkTS:1.5, runTS:0.6,                    // walk kept; run retimed so this clip's planted foot matches the existing 4.3 m/s (the old 1.9 suited sprint_enter only)
   tau:.075, runTau:.04,                     // blend time constants (s): ~0.25 s for a full cross-fade
   runBlend:.3,                              // run clip does not loop closed, so the existing cross-fade into a second copy stays
@@ -978,40 +977,44 @@ function heroFSM(T,mixer,clips,cfg){
     else if(W[k]>.05)return false;               // the same move is still fading out: refuse (prevents a visible pop)
     atk={k,t:0,free:false};restart(k);return true;
   }
-  let pushAct=null,pushW=0,pushMode=null;
-  function startPush(clip){
+  let pushAct=null,pushAlt=null,pushW=0,pushMode=null,pushMain=null,pushBlend=0;
+  function takeClip(clip){
+    const a=mixer.clipAction(clip);
+    a.setLoop(T.LoopOnce,1);a.clampWhenFinished=true;a.enabled=true;a.reset();a.setEffectiveWeight(0);a.paused=false;a.play();
+    return a;
+  }
+  function stopAct(a){if(!a)return;a.stop();a.enabled=false;}
+  function startPush(enterClip,clip){
     if(!clip||pushMode)return false;
-    atk=null;
-    pushAct=mixer.clipAction(clip);
-    pushAct.setLoop(T.LoopOnce,1);
-    pushAct.clampWhenFinished=true;
-    pushAct.enabled=true;
-    pushAct.reset();
-    pushAct.setEffectiveWeight(0);
-    pushAct.play();
-    pushAct.paused=true;
-    pushAct.time=0;
-    pushW=0;pushMode='in';
+    atk=null;pushMain=clip;
+    pushAct=takeClip(enterClip||clip);
+    pushAlt=null;pushW=0;pushBlend=0;pushMode=enterClip?'enter':'play';
     return true;
   }
-  function releasePush(){if(pushMode==='in'||pushMode==='play')pushMode='out';}
-  function pushState(){return pushAct?{mode:pushMode,time:pushAct.time,duration:pushAct.getClip().duration,weight:pushW}:null;}
+  function releasePush(){if(pushMode&&pushMode!=='out')pushMode='out';}
+  function pushState(){return pushAct?{mode:pushMode,time:pushAct.time,duration:pushAct.getClip().duration,weight:pushW,name:pushAct.getClip().name}:null;}
   function step(dt,wantMove,wantRun,canAct){
     can=!!canAct;
     if(pushMode){
-      const f=1-Math.exp(-dt/.18);
+      const f=1-Math.exp(-dt/(pushMode==='out'?.12:.16));
       pushW+=((pushMode==='out'?0:1)-pushW)*f;
       if(pushMode==='out'&&pushW<.001){
-        pushW=0;pushAct.stop();pushAct.enabled=false;pushAct=null;pushMode=null;
+        pushW=0;stopAct(pushAct);stopAct(pushAlt);pushAct=pushAlt=null;pushMode=null;
       }else{
-        if(pushMode==='in'){pushAct.paused=true;pushAct.time=0;if(pushW>.9){pushMode='play';pushAct.paused=false;pushAct.time=0;}}
-        else if(pushMode==='play')pushAct.paused=false;
-        else pushAct.paused=true;
+        if(pushMode==='enter'&&pushAct.time>=pushAct.getClip().duration-.02){
+          pushAlt=pushAct;pushAlt.paused=true;
+          pushAct=takeClip(pushMain);pushBlend=1;pushMode='blend';
+        }else if(pushMode==='blend'){
+          pushBlend=Math.max(0,pushBlend-dt/.2);
+          if(pushBlend<=0){stopAct(pushAlt);pushAlt=null;pushMode='play';}
+        }else if(pushMode==='out'){pushAct.paused=true;if(pushAlt)pushAlt.paused=true;}
         let sum=0;
         for(const k in W){W[k]+=(0-W[k])*f;if(W[k]<.001)W[k]=0;sum+=W[k];}
         const tot=sum+pushW,inv=tot>1e-6?1/tot:0;
         for(const k in W)A[k].setEffectiveWeight(W[k]*inv);
-        pushAct.setEffectiveWeight(pushW*inv);
+        const altS=pushMode==='blend'?pushBlend:0;
+        pushAct.setEffectiveWeight(pushW*inv*(1-altS));
+        if(pushAlt)pushAlt.setEffectiveWeight(pushW*inv*altS);
         mixer.update(dt);
         return;
       }
@@ -1040,7 +1043,7 @@ function heroFSM(T,mixer,clips,cfg){
 
 // hooks the state machine to the game: combat button + keyboard (J = counterattack, K = sword air punch)
 const combat=(function(){
-  let fsm=null,okCombat=false,pushClip=null;
+  let fsm=null,okCombat=false,pushClip=null,enterClip=null;
   const fightB=$('fight'),menu=$('fmenu'),bC=$('f-counter'),bA=$('f-air');
   const menuOpen=()=>menu.style.display==='flex';
   const setOpen=v=>{menu.style.display=v?'flex':'none';fightB.classList.toggle('on',v);};
@@ -1055,19 +1058,10 @@ const combat=(function(){
     attach(mx,anims){
       const byKey={};anims.forEach(c=>{byKey[animKey(c.name)]=c;});
       const clips={};for(const r in ANIM_CFG.clips)clips[r]=byKey[animKey(ANIM_CFG.clips[r])]||null;
-      // This GLB has no clip named Sin_Idle_Cinematic. Hold the file's authored rest pose
-      // (the standing pose stored on the skeleton) and do not retarget or rewrite any other clip.
-      if(!clips.idle){
-        const root=typeof mx.getRoot==='function'?mx.getRoot():mx._root;
-        const tracks=[];
-        root.traverse(o=>{if(!o.isBone)return;const q=o.quaternion,p=o.position;
-          tracks.push(new THREE.QuaternionKeyframeTrack(o.name+'.quaternion',[0,1.2],[q.x,q.y,q.z,q.w,q.x,q.y,q.z,q.w]));
-          tracks.push(new THREE.VectorKeyframeTrack(o.name+'.position',[0,1.2],[p.x,p.y,p.z,p.x,p.y,p.z]));});
-        clips.idle=new THREE.AnimationClip('rest_hold',1.2,tracks);
-      }
-      const miss=['walk','run'].filter(r=>!clips[r]);
+      const miss=['idle','walk','run'].filter(r=>!clips[r]);
       if(miss.length)throw new Error('حركات ناقصة في assets/'+HERO_FILE+'.glb: '+miss.map(r=>ANIM_CFG.clips[r]).join(', ')+'\nالمتوفر: '+anims.map(c=>c.name).join(', '));
       pushClip=anims.find(c=>c.name==='push_object')||null;
+      enterClip=anims.find(c=>c.name==='push_enter_quaternius')||null;
       if(!pushClip)throw new Error('حركة push_object غير موجودة في ملف الشخصية. المتوفر: '+anims.map(c=>c.name).join(', '));
       normalizeHeroRoot(clips,ANIM_CFG);
       fsm=heroFSM(THREE,mx,clips,ANIM_CFG);
@@ -1083,10 +1077,9 @@ const combat=(function(){
     },
     locked:()=>!!fsm&&fsm.locked(),
     state:()=>fsm?fsm.state():'loading',
-    startPush(){return !!(fsm&&pushClip&&fsm.startPush(pushClip));},
+    startPush(){return !!(fsm&&pushClip&&fsm.startPush(enterClip,pushClip));},
     releasePush(){if(fsm)fsm.releasePush();},
     pushing:()=>!!fsm&&fsm.pushing(),
-    pushState:()=>fsm?fsm.pushState():null,
     pushState:()=>fsm?fsm.pushState():null,
     pushClipRef:()=>pushClip
   };
@@ -1121,20 +1114,31 @@ async function buildRoyalDoor(gltf,heroModel){
     act.setLoop(THREE.LoopOnce,1);act.clampWhenFinished=true;act.play();
     const hands=['LeftHand','RightHand'].map(n=>heroModel.getObjectByName(n)).filter(Boolean);
     const v=new THREE.Vector3(),rig=heroModel.parent||heroModel;
-    let maxZ=.3;
-    for(let i=0;i<=24;i++){
-      mx.setTime(src.duration*i/24);
-      heroModel.updateMatrixWorld(true);
-      for(const h of hands){h.getWorldPosition(v);rig.worldToLocal(v);if(v.z>maxZ)maxZ=v.z;}
-    }
+    const sample=frac=>{
+      mx.setTime(src.duration*frac);heroModel.updateMatrixWorld(true);let z=.2;
+      for(const h of hands){h.getWorldPosition(v);rig.worldToLocal(v);if(v.z>z)z=v.z;}
+      return z;
+    };
+    const plant=sample(.667);
     act.stop();
     for(const [o,q,pos] of saved){o.quaternion.copy(q);o.position.copy(pos);}
     heroModel.updateMatrixWorld(true);
-    return maxZ;
+    return plant;
   })();
-  const standZ=frontZ-pushReach-.06,triggerZ=standZ-1.85;
-
+  const standZ=frontZ-pushReach-.02,triggerZ=standZ-1.85;
   let phase='idle',elapsed=0,progress=0,audio=null,creak=null;
+
+  function doorFromPush(st){
+    if(!st||st.mode==='enter'||st.mode==='blend'||!(st.duration>0))return 0;
+    const u=Math.max(0,Math.min(1,st.time/st.duration));
+    // Hand-forward curve of the untouched push_object clip: the palms load on a shut door, then drive it open.
+    const keys=[[0,0],[.64,0],[.708,.036],[.751,.107],[.792,.202],[.832,.274],[.876,.429],[.917,.631],[.957,.821],[1,1]];
+    let hand=1;
+    for(let i=1;i<keys.length;i++){
+      if(u<=keys[i][0]){const a=keys[i-1],b=keys[i],k=(u-a[0])/((b[0]-a[0])||1);hand=a[1]+(b[1]-a[1])*k;break;}
+    }
+    return Math.pow(Math.max(0,Math.min(1,hand)),1.2);
+  }
   const vA=new THREE.Vector3();
   const camWant=new THREE.Vector3(),camLook=new THREE.Vector3();
 
@@ -1185,9 +1189,8 @@ async function buildRoyalDoor(gltf,heroModel){
     }else if(phase==='contact'){
       $('hint').textContent='سين يضع يديه على الباب';
     }else if(phase==='push'){
-      const st=combat.pushState(),p=st&&st.duration?Math.min(1,st.time/st.duration):progress;
-      if(creak&&audio){const t=audio.currentTime;creak.low.frequency.setTargetAtTime(58-18*p+Math.sin(elapsed*4.1)*3,t,.05);creak.metal.frequency.setTargetAtTime(117-31*p,t,.07);creak.filter.frequency.setTargetAtTime(190-75*p,t,.08);}
-      $('hint').textContent='دفع الباب الملكي…';
+      if(creak&&audio){const t=audio.currentTime,p=progress;creak.low.frequency.setTargetAtTime(58-18*p+Math.sin(elapsed*4.1)*3,t,.05);creak.metal.frequency.setTargetAtTime(117-31*p,t,.07);creak.filter.frequency.setTargetAtTime(190-75*p,t,.08);}
+      $('hint').textContent=progress<.08?'سين يسند يديه على الباب الثقيل':'الباب الملكي يُفتح';
     }else if(phase==='recover'){
       $('hint').textContent='الطريق إلى القصر أصبح مفتوحاً';
       if(!combat.pushing()){phase='done';pivot.position.z=basePivotZ;$('hint').style.opacity=0;}
@@ -1201,10 +1204,10 @@ async function buildRoyalDoor(gltf,heroModel){
       return;
     }
     if(phase==='push'){
-      if(!st||!(st.duration>0))return;
-      const p=Math.min(1,st.time/st.duration);
+      if(!st||!(st.duration>0)||st.mode!=='play')return;
+      const p=doorFromPush(st);
       setDoor(p);
-      if(p>=.999){setDoor(1);phase='recover';elapsed=0;combat.releasePush();stopCreak();thump(42,.22);}
+      if(st.time/st.duration>=.995){setDoor(1);phase='recover';elapsed=0;combat.releasePush();stopCreak();thump(42,.22);}
       return;
     }
     if(phase==='recover')setDoor(1);
@@ -1226,7 +1229,7 @@ async function buildRoyalDoor(gltf,heroModel){
   }
   function probe(){
     const st=combat.pushState();
-    return{phase,progress,doorTime:doorAction.time,clipDuration:clip.duration,clipName:clip.name,push:st,standZ,frontZ,triggerZ,pushReach,
+    return{phase,progress,doorTime:doorAction.time,clipDuration:clip.duration,clipName:clip.name,push:st,standZ,frontZ,triggerZ,pushReach,loco:combat.state(),
       hero:{x:heroRoot.position.x,y:heroRoot.position.y,z:heroRoot.position.z},
       door:{x:ARCH.x,y:ARCH.y,z:ARCH.z,width:ARCH.width,height:ARCH.height,frontZ},
       blockedAtDoor:blocks(ARCH.x,frontZ),active:phase!=='idle'&&phase!=='done'};
