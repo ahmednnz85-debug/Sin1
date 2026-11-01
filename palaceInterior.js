@@ -1,9 +1,9 @@
 /* Palace interior. Assets load only after the hero walks through the open royal door.
    Originals stay in assets/. Optimized copies live in ارضيات وسقوف/optimized/.
-   Build hall5 — asset URLs carry ?v=hall5 so Safari cannot reuse a stale copy.
-   Hall blockout: proportions and swappable prop slots. Real prop GLBs replace placeholders later. */
+   Build hall12 — asset URLs carry ?v=hall12 so Safari cannot reuse a stale copy.
+   Final hall: wall modules, columns, marble, carpet, lions, braziers, procedural fire. */
 (function () {
-  const BUILD = 'hall5';
+  const BUILD = 'hall18';
   const CONFIG = {
     useOptimizedAssets: true,
     disposeExteriorAfterEntry: false,
@@ -17,8 +17,8 @@
     minBlackHoldSeconds: 0.35,
     revealHoldSeconds: 0.45,
     autoWalkH: 1.5,
-    lightCount: 5,
-    torchFlicker: 0.08,
+    lightCount: 6,
+    torchFlicker: 0,
     stallMs: 30000,
     retries: 3,
     columnHeightH: 6.35,
@@ -31,10 +31,13 @@
     stairWidthH: 8,
     platformDepthH: 3.2,
     backMarginH: 0.65,
-    plinthHeightH: 0.5,
+    plinthHeightH: 0,
     maxPropBytes: 3 * 1024 * 1024,
-    maxPropTris: 20000,
-    maxPalaceBytes: 20 * 1024 * 1024
+    maxPropTris: 22000,
+    maxPalaceBytes: 25 * 1024 * 1024,
+    archWidthRatio: 0.30,
+    archHeightRatio: 0.64,
+    lodDistanceH: 14
   };
 
   const PLAN = (function () {
@@ -58,36 +61,36 @@
     return out;
   }
 
-  const lionLarge = [[2.55, 0.72, PLAN.stairFootZ - 1.05], [2.62, 0.72, PLAN.stairFootZ - 4.9]];
-  const lionSmall = [[1.42, PLAN.topY + 0.36, PLAN.throneZ + 0.12]];
-  const PI = Math.PI;
+  CONFIG.PASSAGES = [];
   CONFIG.PROPS = [
-    { id: 'lionWinged', type: 'lionWinged', positions: mirrorXZ(lionLarge), rotY: PI, targetHeightH: 1.85, glbPath: null, collider: 'box', colliderSize: { x: 0.9, y: 1.85, z: 1.4 } },
-    { id: 'lionWingedThrone', type: 'lionWinged', positions: mirrorXZ(lionSmall), rotY: PI, targetHeightH: 1.1, glbPath: null, collider: 'box', colliderSize: { x: 0.55, y: 1.1, z: 0.9 } },
-    { id: 'pedestal', type: 'pedestal', positions: mirrorXZ(lionLarge.map(function (p) { return [p[0], 0, p[2]]; })), rotY: 0, targetHeightH: 0.72, glbPath: null, collider: 'box', colliderSize: { x: 1.35, y: 0.72, z: 1.2 } },
-    { id: 'pedestalThrone', type: 'pedestal', positions: mirrorXZ(lionSmall.map(function (p) { return [p[0], PLAN.topY, p[2]]; })), rotY: 0, targetHeightH: 0.36, glbPath: null, collider: 'box', colliderSize: { x: 0.85, y: 0.36, z: 0.75 } },
-    { id: 'brazier', type: 'brazier', positions: mirrorXZ([[5.15, 0, 6.5], [5.15, 0, 10.3], [5.15, 0, 14.1], [5.15, 0, 17.8], [5.05, 0, 21.15]]), rotY: 0, targetHeightH: 0.95, glbPath: null, collider: 'box', colliderSize: { x: 0.72, y: 0.95, z: 0.72 } },
-    { id: 'lantern', type: 'lantern', positions: [[0, 6.15, 7.2], [1.65, 6.15, 12.0], [-1.65, 6.15, 16.4], [1.35, 6.15, 20.6], [-1.15, 6.25, 24.4]], rotY: 0, targetHeightH: 0.62, glbPath: null, collider: 'none', colliderSize: { x: 0.4, y: 0.62, z: 0.4 } },
-    { id: 'banner', type: 'banner', positions: [[4.75, 1.7, 11.6], [-4.75, 1.7, 11.6], [4.75, 1.7, 16.6], [-4.75, 1.7, 16.6], [2.25, PLAN.topY + 0.85, PLAN.platformBackZ - 0.55], [-2.25, PLAN.topY + 0.85, PLAN.platformBackZ - 0.55]], rotY: 0, rotYs: [PI / 2, -PI / 2, PI / 2, -PI / 2, PI, PI], targetHeightH: 3.05, glbPath: null, collider: 'none', colliderSize: { x: 0.12, y: 3.05, z: 0.72 } },
-    { id: 'statueAlcove', type: 'statueAlcove', positions: mirrorXZ([[6.42, 0, 8.0], [6.42, 0, 12.0], [6.42, 0, 16.0], [6.42, 0, 20.0]]), rotY: 0, rotYs: [PI / 2, -PI / 2, PI / 2, -PI / 2, PI / 2, -PI / 2, PI / 2, -PI / 2], targetHeightH: 1.65, glbPath: null, collider: 'box', colliderSize: { x: 0.5, y: 1.65, z: 0.48 } },
-    { id: 'tableLow', type: 'tableLow', positions: mirrorXZ([[5.05, 0, 2.75]]), rotY: 0, targetHeightH: 0.42, glbPath: null, collider: 'box', colliderSize: { x: 1.2, y: 0.42, z: 0.62 } },
-    { id: 'benchCushion', type: 'benchCushion', positions: mirrorXZ([[5.05, 0, 1.5], [5.05, 0, 4.0]]), rotY: 0, targetHeightH: 0.48, glbPath: null, collider: 'box', colliderSize: { x: 0.62, y: 0.48, z: 1.28 } },
-    { id: 'vase', type: 'vase', positions: mirrorXZ([[6.18, 0, 1.85], [6.18, 0, 3.7]]), rotY: 0, targetHeightH: 0.8, glbPath: null, collider: 'box', colliderSize: { x: 0.42, y: 0.8, z: 0.42 } }
+    { id: 'lantern', type: 'lantern', positions: [[-1.6, 0, 8.2], [1.6, 0, 13.4], [-1.6, 0, 18.8], [1.6, 0, 24.2]], rotY: 0, targetHeightH: 0.62, glbPath: null, collider: 'none', colliderSize: { x: 0.4, y: 0.62, z: 0.4 } }
   ];
 
   const FILES = {
-    floor: 'ارضية',
-    carpet: 'السجاد',
-    ceiling: 'السقف',
-    medallion: 'المدالية المركزية',
-    wall: 'نقوش جدارية',
-    frieze: 'نقوش جدارية 2',
-    columns: 'اربع اعمده مختلفة.glb',
-    torchWood: 'مشعل خشب.glb',
-    torchBlack: 'مشعل اسود.glb',
-    throne: 'عرش البطل.glb'
+    floor: ['marble.webp', 'IMG_2962.JPG'],
+    floorOrm: ['floor-orm.webp', 'floor-orm.webp'],
+    floorBorder: ['ارضية.webp', 'ارضية.JPG'],
+    carpet: ['سجاد-الارضية.webp', 'سجاد الارضية.jpg'],
+    ceiling: ['سقف-القصر.webp', 'سقف القصر .PNG'],
+    medallion: ['المدالية المركزية.webp', 'المدالية المركزية.JPG'],
+    back: ['جدار-خلف-العرش.webp', 'جدار خلف عرش البطل.PNG'],
+    doorWall: ['جدران-الباب.webp', 'جدران الباب.PNG'],
+    wall: ['الجدارية.glb', 'الجدارية.glb'],
+    columns: ['اعمدة.glb', 'اعمدة.glb'],
+    columnsLod: ['اعمدة-lod1.glb', ''],
+    brazier: ['المباخر.glb', 'المباخر.glb'],
+    brazierLod: ['المباخر-lod1.glb', ''],
+    lion: ['lion_winged.glb', 'lion_winged.glb.glb'],
+    lionLod: ['lion_winged-lod1.glb', ''],
+    stairs: ['درج.glb', 'درج.glb'],
+    door: ['مجسم الباب.glb', 'مجسم الباب.glb'],
+    props: ['props-set.glb', 'مجموعة غراض.glb'],
+    throne: ['عرش البطل.glb', 'عرش البطل.glb']
   };
 
+
+  let camBack = 3.6;
+  let entranceLeft = 0;
   let state = 'IDLE';
   let busy = false;
   let fadeT = 0;
@@ -127,6 +130,11 @@
   let ramp = null;
   let flames = [];
   let slotModes = [];
+  let palaceEnv = null;
+  let fireMats = [];
+  let lodPacks = [];
+  let fireList = [];
+  let lightAssignAt = 0;
   let overlapNotes = [];
   let propsProbed = false;
   let perfNote = '';
@@ -196,20 +204,32 @@
     return loadEl;
   }
 
+  function fileURL(pair) {
+    const name = CONFIG.useOptimizedAssets ? pair[0] : (pair[1] || pair[0]);
+    if (!name) return '';
+    const folder = CONFIG.useOptimizedAssets ? 'ارضيات وسقوف/optimized/' : 'assets/';
+    return bust(encodeURI(folder + name));
+  }
+
   function makeSpecs() {
     const list = [];
     if (CONFIG.useOptimizedAssets) {
       list.push({ id: 'decoder', key: 'decoder', name: 'meshopt_decoder.js', kind: 'js', url: bust(encodeURI('vendor/meshopt_decoder.js')) });
     }
-    [FILES.floor, FILES.carpet, FILES.ceiling, FILES.medallion, FILES.wall, FILES.frieze].forEach(function (n) {
-      const file = n + (CONFIG.useOptimizedAssets ? '.webp' : '.JPG');
-      list.push({ id: 'tex:' + n, key: n, name: file, kind: 'tex', url: bust(encodeURI(dir() + file)) });
+    ['floor', 'floorOrm', 'floorBorder', 'carpet', 'ceiling', 'back', 'doorWall'].forEach(function (key) {
+      const pair = FILES[key];
+      const name = CONFIG.useOptimizedAssets ? pair[0] : pair[1];
+      list.push({ id: 'tex:' + key, key: key, name: name, kind: 'tex', url: fileURL(pair), linear: key === 'floorOrm' });
     });
-    [['columns', FILES.columns], ['torchWood', FILES.torchWood], ['torchBlack', FILES.torchBlack], ['throne', FILES.throne]].forEach(function (pair) {
-      list.push({ id: 'glb:' + pair[0], key: pair[0], name: pair[1], kind: 'glb', url: bust(encodeURI(dir() + pair[1])) });
+    ['wall', 'columns', 'columnsLod', 'brazier', 'brazierLod', 'lion', 'lionLod', 'stairs', 'door', 'props', 'throne'].forEach(function (key) {
+      const pair = FILES[key];
+      const name = CONFIG.useOptimizedAssets ? pair[0] : pair[1];
+      if (!name) return;
+      list.push({ id: 'glb:' + key, key: key, name: name, kind: 'glb', url: fileURL(pair), optional: /Lod$/.test(key) || key === 'stairs' || key === 'door' });
     });
     list.forEach(function (s) {
       s.status = 'pending'; s.loaded = 0; s.total = 0; s.error = ''; s.attempt = 0; s.buf = null; s.result = null;
+      if (s.optional == null) s.optional = false;
     });
     return list;
   }
@@ -288,6 +308,7 @@
     lines.push('hallBuilt: ' + hallBuilt + ' warmFrame: ' + warmFrame + ' loadOk: ' + loadOk);
     lines.push('bytes: ' + b.loaded + '/' + (b.total || '?') + (b.unknown ? ' unknown=' + b.unknown : ''));
     lines.push('perf: ' + (perfNote || '—'));
+    lines.push('passages: ' + ((CONFIG.PASSAGES && CONFIG.PASSAGES.length) || 0) + ' ceilingH=' + (CONFIG.hallHeightH || 0).toFixed(2));
     lines.push('slots: ' + (slotModes.length ? slotModes.map(function (s) { return s.id + 'x' + s.count + ':' + s.mode; }).join(' ') : CONFIG.PROPS.map(function (s) { return s.id + 'x' + s.positions.length; }).join(' ')));
     if (overlapNotes.length) lines.push('overlaps: ' + overlapNotes.slice(0, 8).join(' | '));
     lines.push('--- files ---');
@@ -480,8 +501,8 @@
     });
   }
 
-  function textureFromBytes(buf, name) {
-    const mime = /\.jpe?g$/i.test(name) ? 'image/jpeg' : 'image/webp';
+  function textureFromBytes(buf, name, linear) {
+    const mime = /\.png$/i.test(name) ? 'image/png' : /\.jpe?g$/i.test(name) ? 'image/jpeg' : 'image/webp';
     const blob = new Blob([buf], { type: mime });
     const url = URL.createObjectURL(blob);
     return new Promise(function (resolve, reject) {
@@ -491,7 +512,13 @@
         if (!img.naturalWidth) { reject(new Error('صورة فارغة — ' + name)); return; }
         const tex = new THREE.Texture(img);
         tex.needsUpdate = true;
-        srgb(tex);
+        if (linear) {
+          tex.anisotropy = aniso.v;
+          tex.generateMipmaps = true;
+          tex.minFilter = THREE.LinearMipmapLinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          tex.needsUpdate = true;
+        } else srgb(tex);
         resolve(tex);
       };
       img.onerror = function () {
@@ -507,10 +534,17 @@
       if (!o.isMesh || !o.material) return;
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       mats.forEach(function (m) {
-        ['map', 'emissiveMap'].forEach(function (k) { if (m[k]) srgb(m[k]); });
-        ['normalMap', 'roughnessMap', 'metalnessMap', 'aoMap'].forEach(function (k) {
-          if (m[k]) { m[k].anisotropy = aniso.v; m[k].needsUpdate = true; }
+        ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap'].forEach(function (k) {
+          if (!m[k]) return;
+          m[k].userData.palaceShared = true;
+          if (k === 'map' || k === 'emissiveMap') srgb(m[k]);
+          else { m[k].anisotropy = aniso.v; m[k].needsUpdate = true; }
         });
+        m.userData.palaceShared = true;
+        if ((m.metalness == null || m.metalness >= 0.99) && !m.metalnessMap) {
+          m.metalness = 0.3;
+          m.roughness = 0.5;
+        }
       });
     });
     return gltf;
@@ -552,7 +586,7 @@
     try {
       if (!spec.buf) spec.buf = await fetchWithRetry(spec);
       if (spec.kind === 'js') spec.result = await installDecoder(spec.buf);
-      else if (spec.kind === 'tex') spec.result = await textureFromBytes(spec.buf, spec.name);
+      else if (spec.kind === 'tex') spec.result = await textureFromBytes(spec.buf, spec.name, spec.linear);
       else {
         await waitDecoder();
         spec.result = await parseGLB(spec.buf);
@@ -589,9 +623,28 @@
       if (s.kind === 'tex') tex[s.key] = s.result;
       if (s.optional && s.kind === 'glb' && s.result) props[s.name] = s.result;
     });
-    if (payload > CONFIG.maxPalaceBytes) console.warn('حمولة القصر تتجاوز ٢٠ ميجابايت', payload);
-    const get = function (key) { return specs.find(function (s) { return s.key === key; }).result; };
-    assets = { tex: tex, columns: get('columns'), torchWood: get('torchWood'), torchBlack: get('torchBlack'), throne: get('throne'), props: props, payload: payload };
+    if (payload > CONFIG.maxPalaceBytes) console.warn('حمولة القصر تتجاوز ٢٥ ميجابايت', payload);
+    if (payload > 30 * 1024 * 1024) console.warn('حمولة القصر تجاوزت السقف الصلب ٣٠ ميجابايت', payload);
+    const grab = function (key) {
+      const s = specs.find(function (x) { return x.key === key; });
+      return s && s.result ? s.result : null;
+    };
+    assets = {
+      tex: tex,
+      wall: grab('wall'),
+      columns: grab('columns'),
+      columnsLod: grab('columnsLod'),
+      brazier: grab('brazier'),
+      brazierLod: grab('brazierLod'),
+      lion: grab('lion'),
+      lionLod: grab('lionLod'),
+      stairs: grab('stairs'),
+      door: grab('door'),
+      props: grab('props'),
+      throne: grab('throne'),
+      propFiles: props,
+      payload: payload
+    };
     return assets;
   }
 
@@ -760,9 +813,35 @@
     colliders.push({ minx: min.x, miny: min.y, minz: min.z, maxx: max.x, maxy: max.y, maxz: max.z });
   }
 
+  function releaseCity(scene, hero) {
+    if (!scene || scene.userData.cityReleased) return;
+    scene.userData.cityReleased = true;
+    const keep = new Set();
+    function hold(root) {
+      if (!root) return;
+      root.traverse(function (o) { keep.add(o); });
+    }
+    hold(hero);
+    hold(group);
+    scene.traverse(function (o) {
+      if (o.isLight || o.isCamera || o.isPoints || o.name === 'SkyPhoto') hold(o);
+    });
+    const drop = [];
+    scene.children.forEach(function (ch) {
+      if (keep.has(ch) || ch === group || ch === hero) return;
+      drop.push(ch);
+    });
+    drop.forEach(function (ch) {
+      scene.remove(ch);
+      try { disposeObject(ch); } catch (e) { /* keep going */ }
+    });
+    if (scene.userData) scene.userData.cityReleased = true;
+    note('city released ' + drop.length);
+  }
+
   function holdCull(scene, hero) {
     if (!scene || !group) return;
-    const on = state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'FAILED' || (state === 'DONE' && occupant);
+    const on = state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED' || (state === 'DONE' && occupant);
     scene.children.forEach(function (ch) {
       if (ch === group || ch === hero || ch.name === 'SkyPhoto' || ch.name === 'PalaceInterior') return;
       if (on) {
@@ -785,13 +864,13 @@
 
   function disposeObject(obj) {
     obj.traverse(o => {
-      if (o.geometry) o.geometry.dispose();
+      if (o.geometry && !o.geometry.userData.palaceShared && o.geometry.dispose) o.geometry.dispose();
       const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
       mats.forEach(m => {
-        ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'].forEach(k => {
-          if (m[k] && m[k].dispose) m[k].dispose();
+        ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'envMap'].forEach(k => {
+          if (m[k] && m[k].dispose && !m[k].userData.palaceShared) m[k].dispose();
         });
-        if (m.dispose) m.dispose();
+        if (m.dispose && !m.userData.palaceShared) m.dispose();
       });
     });
   }
@@ -800,16 +879,286 @@
     if (!group) return;
     scene.remove(group);
     disposeObject(group);
+    if (palaceEnv && palaceEnv.dispose && !palaceEnv.userData.keep) palaceEnv.dispose();
+    palaceEnv = null;
     flameSprite.mat = null;
     group = null;
     colliders = [];
     lights = [];
     ramp = null;
     flames = [];
+    fireMats = [];
+    lodPacks = [];
+    fireList = [];
+    lightAssignAt = 0;
   }
 
+  const poser = new THREE.Object3D();
+
+  const FIRE_VS = [
+    'varying vec2 vUv;',
+    'varying float vSeed;',
+    'attribute float aSeed;',
+    'void main() {',
+    '  vUv = uv;',
+    '  vSeed = aSeed;',
+    '  vec3 center = (modelMatrix * instanceMatrix * vec4(0.0, position.y, 0.0, 1.0)).xyz;',
+    '  float sx = length(instanceMatrix[0].xyz);',
+    '  vec3 toCam = cameraPosition - center;',
+    '  toCam.y = 0.0;',
+    '  float dlen = length(toCam);',
+    '  vec3 side = dlen > 0.0001 ? vec3(toCam.z, 0.0, -toCam.x) / dlen : vec3(1.0, 0.0, 0.0);',
+    '  vec3 worldPos = center + side * position.x * sx;',
+    '  gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 1.0);',
+    '}'
+  ].join('\n');
+  const FIRE_FS = [
+    'precision mediump float;',
+    'varying vec2 vUv;',
+    'varying float vSeed;',
+    'uniform float uTime;',
+    'float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+    'float noise(vec2 p){',
+    '  vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);',
+    '  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);',
+    '}',
+    'float fbm(vec2 p){ float v = 0.0; float a = 0.5; v += a * noise(p); p *= 2.03; a *= 0.5; v += a * noise(p); p *= 2.03; a *= 0.5; v += a * noise(p); p *= 2.03; a *= 0.5; v += a * noise(p); return v; }',
+    'void main() {',
+    '  vec2 uv = vUv;',
+    '  float t = uTime * (0.65 + fract(vSeed) * 0.45);',
+    '  float n = fbm(vec2(uv.x * 3.0 + vSeed, uv.y * 2.2 - t));',
+    '  float n2 = fbm(vec2(uv.x * 6.0 - t * 0.4, uv.y * 4.0 - t * 1.35));',
+    '  float flick = n * 0.65 + n2 * 0.35;',
+    '  float width = mix(0.46, 0.07, uv.y);',
+    '  width *= mix(0.72, 1.18, flick);',
+    '  float dx = abs(uv.x - 0.5);',
+    '  float mask = smoothstep(width, width * 0.42, dx);',
+    '  float top = smoothstep(1.0, 0.7, uv.y);',
+    '  float body = mask * top * smoothstep(0.0, 0.07, uv.y);',
+    '  body *= smoothstep(0.12, 0.55, flick + uv.y * 0.22);',
+    '  vec3 col = mix(vec3(0.32, 0.02, 0.0), vec3(1.0, 0.28, 0.02), smoothstep(0.0, 0.5, uv.y));',
+    '  col = mix(col, vec3(1.0, 0.7, 0.18), smoothstep(0.4, 0.82, 1.0 - uv.y));',
+    '  col = mix(col, vec3(1.0, 0.95, 0.8), smoothstep(0.55, 0.95, flick) * (1.0 - uv.y));',
+    '  float alpha = body * (0.5 + 0.5 * flick);',
+    '  if (alpha < 0.02) discard;',
+    '  gl_FragColor = vec4(col, alpha);',
+    '}'
+  ].join('\n');
+  const GLOW_VS = [
+    'varying vec2 vUv;',
+    'attribute float aSeed;',
+    'void main() {',
+    '  vUv = uv;',
+    '  vec3 center = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;',
+    '  vec3 camRight = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);',
+    '  vec3 camUp = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);',
+    '  float sx = length(instanceMatrix[0].xyz);',
+    '  float sy = length(instanceMatrix[1].xyz);',
+    '  vec3 worldPos = center + camRight * position.x * sx + camUp * position.y * sy;',
+    '  gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 1.0);',
+    '}'
+  ].join('\n');
+  const GLOW_FS = [
+    'precision mediump float;',
+    'varying vec2 vUv;',
+    'void main() {',
+    '  float d = length(vUv - 0.5);',
+    '  float a = smoothstep(0.5, 0.0, d);',
+    '  a *= a;',
+    '  if (a < 0.02) discard;',
+    '  gl_FragColor = vec4(1.0, 0.55, 0.18, a * 0.45);',
+    '}'
+  ].join('\n');
+  const EMBER_VS = [
+    'attribute float aSeed;',
+    'uniform float uTime;',
+    'void main() {',
+    '  float life = fract(uTime * (0.28 + aSeed * 0.35) + aSeed);',
+    '  vec3 p = position;',
+    '  float ang = aSeed * 6.28318;',
+    '  p.x += cos(ang + life * 3.0) * life * 0.16;',
+    '  p.z += sin(ang + life * 2.2) * life * 0.16;',
+    '  p.y += life * (0.45 + fract(aSeed * 7.1) * 0.65);',
+    '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
+    '  gl_PointSize = max(1.0, (1.0 - life) * 12.0 * (7.0 / max(0.25, -mv.z)));',
+    '  gl_Position = projectionMatrix * mv;',
+    '}'
+  ].join('\n');
+  const EMBER_FS = [
+    'precision mediump float;',
+    'void main() {',
+    '  float d = length(gl_PointCoord - 0.5);',
+    '  if (d > 0.5) discard;',
+    '  float a = smoothstep(0.5, 0.05, d);',
+    '  gl_FragColor = vec4(1.0, 0.46, 0.12, a);',
+    '}'
+  ].join('\n');
+
+  function pose(x, y, z, rot, sx, sy, sz) {
+    poser.position.set(x, y, z);
+    poser.rotation.set(0, rot || 0, 0);
+    poser.scale.set(sx, sy, sz);
+    poser.updateMatrix();
+    return poser.matrix.clone();
+  }
+
+  function geoSize(geo) {
+    geo.computeBoundingBox();
+    return geo.boundingBox.getSize(new THREE.Vector3());
+  }
+
+  function recenterGeo(geo) {
+    geo.computeBoundingBox();
+    const b = geo.boundingBox;
+    geo.translate(-(b.min.x + b.max.x) * 0.5, -b.min.y, -(b.min.z + b.max.z) * 0.5);
+    geo.computeBoundingBox();
+  }
+
+  function prepMesh(gltf) {
+    if (!gltf || !gltf.scene) return null;
+    gltf.scene.updateMatrixWorld(true);
+    let mesh = null;
+    gltf.scene.traverse(function (o) { if (!mesh && o.isMesh) mesh = o; });
+    if (!mesh) return null;
+    const geo = mesh.geometry.clone();
+    geo.userData.palaceShared = false;
+    geo.applyMatrix4(mesh.matrixWorld);
+    recenterGeo(geo);
+    return { geo: geo, size: geoSize(geo), material: mesh.material };
+  }
+
+  function palaceMat(src) {
+    const base = Array.isArray(src) ? src[0] : src;
+    const m = base.clone();
+    m.userData = Object.assign({}, m.userData, { palaceShared: false });
+    if ((m.metalness == null || m.metalness >= 0.99) && !m.metalnessMap) {
+      m.metalness = 0.3;
+      m.roughness = 0.5;
+    }
+    m.side = THREE.DoubleSide;
+    if (palaceEnv) {
+      m.envMap = palaceEnv;
+      m.envMapIntensity = 0.6;
+    }
+    return m;
+  }
+
+  function addLOD(geo0, mat0, geo1, mat1, matrices, locals, limitH) {
+    const n = matrices.length;
+    const near = new THREE.InstancedMesh(geo0, mat0, n);
+    const far = new THREE.InstancedMesh(geo1, mat1, n);
+    near.frustumCulled = false;
+    far.frustumCulled = false;
+    near.castShadow = far.castShadow = false;
+    near.receiveShadow = far.receiveShadow = true;
+    for (let i = 0; i < n; i++) near.setMatrixAt(i, matrices[i]);
+    near.count = n;
+    far.count = 0;
+    far.visible = false;
+    near.instanceMatrix.needsUpdate = true;
+    near.name = 'lod-near';
+    far.name = 'lod-far';
+    group.add(near, far);
+    lodPacks.push({ near: near, far: far, matrices: matrices, local: locals, limitH: limitH });
+  }
+
+  function makePalaceEnv(renderer) {
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, 64);
+    grd.addColorStop(0, '#100e0c');
+    grd.addColorStop(0.4, '#3a2618');
+    grd.addColorStop(0.52, '#e39a45');
+    grd.addColorStop(0.64, '#5c381f');
+    grd.addColorStop(1, '#0c0a09');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 128, 64);
+    g.fillStyle = 'rgba(255,214,150,0.95)';
+    [[18, 34], [46, 36], [74, 33], [104, 35]].forEach(function (p) {
+      g.beginPath();
+      g.arc(p[0], p[1], 3.2, 0, 6.283);
+      g.fill();
+    });
+    const tex = new THREE.CanvasTexture(c);
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    tex.encoding = THREE.sRGBEncoding;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    const env = pmrem.fromEquirectangular(tex).texture;
+    pmrem.dispose();
+    tex.dispose();
+    return env;
+  }
+
+  function attachFloorShader(material) {
+    material.onBeforeCompile = function (shader) {
+      shader.uniforms.slabSize = { value: 1.8 };
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vPalaceWorld;')
+        .replace('#include <project_vertex>', 'vec4 palaceWorldV = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\npalaceWorldV = instanceMatrix * palaceWorldV;\n#endif\npalaceWorldV = modelMatrix * palaceWorldV;\nvPalaceWorld = palaceWorldV.xyz;\n#include <project_vertex>');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vPalaceWorld;\nuniform float slabSize;')
+        .replace('#include <map_fragment>', [
+          '#ifdef USE_MAP',
+          'vec4 sampledDiffuseColor = texture2D(map, vUv);',
+          'vec4 sampledHalf = texture2D(map, vUv + vec2(0.5, 0.5));',
+          'sampledDiffuseColor = mix(sampledDiffuseColor, sampledHalf, 0.16);',
+          'diffuseColor *= sampledDiffuseColor;',
+          '#endif',
+          '{',
+          '  vec2 wp = vPalaceWorld.xz / max(0.001, slabSize);',
+          '  vec2 cell = floor(wp);',
+          '  vec2 f = fract(wp);',
+          '  float jw = 0.028;',
+          '  float joint = smoothstep(jw, jw + 0.018, f.x) * smoothstep(jw, jw + 0.018, 1.0 - f.x);',
+          '  joint *= smoothstep(jw, jw + 0.018, f.y) * smoothstep(jw, jw + 0.018, 1.0 - f.y);',
+          '  float ncell = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);',
+          '  vec3 tint = mix(vec3(0.93, 0.90, 0.86), vec3(1.06, 1.02, 0.96), ncell);',
+          '  float macro = 0.93 + 0.07 * sin(vPalaceWorld.x * 0.17) * cos(vPalaceWorld.z * 0.11);',
+          '  diffuseColor.rgb *= mix(vec3(0.42, 0.38, 0.34), tint, joint) * macro;',
+          '}'
+        ].join('\n'))
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor * (0.82 + 0.36 * fract(sin(dot(floor(vPalaceWorld.xz / max(0.001, slabSize)), vec2(12.9, 78.2))) * 437.1)), 0.14, 0.55);');
+    };
+    material.customProgramCacheKey = function () { return 'palaceMarble6'; };
+  }
+
+  function updateLODs(cam) {
+    if (!cam || !group || !lodPacks.length) return;
+    group.updateMatrixWorld(true);
+    const wp = new THREE.Vector3();
+    for (let p = 0; p < lodPacks.length; p++) {
+      const pack = lodPacks[p];
+      const lim = (pack.limitH || CONFIG.lodDistanceH) * H;
+      let ni = 0;
+      let fi = 0;
+      for (let i = 0; i < pack.local.length; i++) {
+        wp.copy(pack.local[i]);
+        group.localToWorld(wp);
+        if (cam.position.distanceTo(wp) > lim) pack.far.setMatrixAt(fi++, pack.matrices[i]);
+        else pack.near.setMatrixAt(ni++, pack.matrices[i]);
+      }
+      pack.near.count = ni;
+      pack.far.count = fi;
+      pack.near.visible = ni > 0;
+      pack.far.visible = fi > 0;
+      if (ni) pack.near.instanceMatrix.needsUpdate = true;
+      if (fi) pack.far.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  function animateHall(dt, ctx) {
+    if (!group) return;
+    const cam = ctx.camera;
+    if (cam) updateLODs(cam);
+  }
+
+
   function build(ctx) {
-    const W = CONFIG.hallWidthH * H, L = CONFIG.hallLengthH * H, CH = CONFIG.hallHeightH * H;
+    const W = CONFIG.hallWidthH * H, L = CONFIG.hallLengthH * H;
+    let CH = CONFIG.hallHeightH * H;
     const portal = ctx.portal;
     hallW = W;
     hallLen = L;
@@ -821,39 +1170,238 @@
     const gy = floorY;
     group.position.set(portal.x, gy, portal.frontZ);
     ctx.scene.add(group);
+    if (ctx.renderer && ctx.renderer.shadowMap) ctx.renderer.shadowMap.enabled = false;
+    try { releaseCity(ctx.scene, ctx.hero); } catch (relErr) { note('release ' + (relErr && relErr.message)); }
     flames = [];
     slotModes = [];
     overlapNotes = [];
     ramp = null;
-
+    lodPacks = [];
+    fireList = [];
+    fireMats = [];
+    lightAssignAt = 0;
+    const dummy = new THREE.Object3D();
+    const extras = [];
+    const pendingWatch = [];
     const tex = assets.tex;
-    const tile = 2.2 * H;
-    const floor = plane(W, L, 0, tiledMap(tex[FILES.floor], W / tile, L / tile), 0, L / 2);
-    floor.name = 'floor';
-    group.add(floor);
+    Object.keys(tex).forEach(function (k) { if (tex[k]) tex[k].userData.palaceShared = true; });
+    if (!assets.props) console.warn('مجموعة الأغراض غير محمّلة — القاعة بلا أثاث مفصول.');
+    try {
+      palaceEnv = ctx.renderer ? makePalaceEnv(ctx.renderer) : null;
+      if (palaceEnv) palaceEnv.userData.palaceShared = true;
+    } catch (envErr) {
+      palaceEnv = null;
+      console.warn('تعذّر إنشاء انعكاس القاعة', envErr && envErr.message);
+    }
 
     const stairFootZ = PLAN.stairFootZ * H;
-    const platformFrontZ = PLAN.platformFrontZ * H;
-    const topY = PLAN.topY * H;
-    const throneZ = PLAN.throneZ * H;
+    let platformFrontZ = PLAN.platformFrontZ * H;
+    let topY = PLAN.topY * H;
+    let throneZ = PLAN.throneZ * H;
     const stepDepth = CONFIG.stairTreadH * H;
     const stepH = CONFIG.stairRiseH * H;
     const stepsN = CONFIG.stairSteps;
-    const stairW = CONFIG.stairWidthH * H;
+    let stairW = CONFIG.stairWidthH * H;
+    let stairOuter = stairW * 0.5;
 
-    const med = CONFIG.medallionSizeH * H;
-    const medallion = plane(med, med, 0.012 * H, tex[FILES.medallion].clone(), 0, L / 2);
-    srgb(medallion.material.map);
-    medallion.name = 'medallion';
-    medallion.material.polygonOffset = true;
-    medallion.material.polygonOffsetFactor = -2;
-    medallion.material.polygonOffsetUnits = -2;
-    group.add(medallion);
+    const wallSrc = prepMesh(assets.wall);
+    if (!wallSrc) throw new Error('نموذج الجدارية بلا شبكة');
+    if (wallSrc.size.x > wallSrc.size.z) {
+      wallSrc.geo.rotateY(Math.PI / 2);
+      recenterGeo(wallSrc.geo);
+      wallSrc.size = geoSize(wallSrc.geo);
+    }
+    let n = 3;
+    for (let k = 2; k <= 6; k++) {
+      const hTry = wallSrc.size.y * ((L / k) / Math.max(1e-4, wallSrc.size.z));
+      if (hTry >= 5.5 * H && hTry <= 8 * H) { n = k; break; }
+    }
+    const moduleLen = L / n;
+    const wallScale = moduleLen / Math.max(1e-4, wallSrc.size.z);
+    CH = wallSrc.size.y * wallScale;
+    if (CH > 8 * H) {
+      const fit = (8 * H) / CH;
+      CH = 8 * H;
+      console.warn('ارتفاع الجدارية مقصوص عند 8H', fit);
+    }
+    CONFIG.hallHeightH = CH / H;
+    const wallThick = wallSrc.size.x * wallScale;
+    const halfT = wallThick * 0.5;
+    const wallMat = palaceMat(wallSrc.material);
+    const wallMats = [];
+    const wallLocals = [];
+    for (let i = 0; i < n; i++) {
+      const zc = (i + 0.5) * moduleLen;
+      [-1, 1].forEach(function (side) {
+        const x = side < 0 ? (-W / 2 - halfT) : (W / 2 + halfT);
+        const scx = side < 0 ? wallScale : -wallScale;
+        wallMats.push(pose(x, -0.05, zc, 0, scx, wallScale, wallScale * 1.08));
+        wallLocals.push(new THREE.Vector3(x, CH * 0.5, zc));
+      });
+    }
+    const wallsMesh = new THREE.InstancedMesh(wallSrc.geo, wallMat, wallMats.length);
+    wallsMesh.name = 'wall-module';
+    wallsMesh.frustumCulled = false;
+    wallsMesh.castShadow = false;
+    wallMats.forEach(function (m, i) { wallsMesh.setMatrixAt(i, m); });
+    wallsMesh.instanceMatrix.needsUpdate = true;
+    group.add(wallsMesh);
+    slotModes.push({ id: 'wall', count: wallMats.length, mode: 'real' });
+
+    const archW = CONFIG.archWidthRatio * moduleLen;
+    const archH = CONFIG.archHeightRatio * CH;
+    CONFIG.PASSAGES = [];
+    const alcoveMat = new THREE.MeshStandardMaterial({ color: 0x14110e, roughness: 0.96, metalness: 0.02 });
+    if (palaceEnv) { alcoveMat.envMap = palaceEnv; alcoveMat.envMapIntensity = 0.15; }
+    function inArch(z) {
+      for (let i = 0; i < n; i++) {
+        if (Math.abs(z - (i + 0.5) * moduleLen) < archW * 0.5 + 0.25 * H) return true;
+      }
+      return false;
+    }
+    for (let i = 0; i < n; i++) {
+      const zc = (i + 0.5) * moduleLen;
+      [-1, 1].forEach(function (side) {
+        const depth = 1.15 * H;
+        const inner = side * (W / 2);
+        const outer = inner + side * wallThick;
+        const backX = outer + side * depth;
+        const back = new THREE.Mesh(new THREE.PlaneGeometry(archW, archH), alcoveMat);
+        back.position.set(backX, archH * 0.5, zc);
+        back.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+        back.name = 'passage-back';
+        group.add(back);
+        const sideGeo = new THREE.BoxGeometry(depth, archH, 0.08 * H);
+        [-1, 1].forEach(function (k) {
+          const jamb = new THREE.Mesh(sideGeo, alcoveMat);
+          jamb.position.set((outer + backX) / 2, archH * 0.5, zc + k * (archW / 2));
+          jamb.name = 'passage-jamb';
+          group.add(jamb);
+        });
+        const ceilGeo = new THREE.BoxGeometry(depth, 0.06 * H, archW);
+        const cl = new THREE.Mesh(ceilGeo, alcoveMat);
+        cl.position.set((outer + backX) / 2, archH, zc);
+        cl.name = 'passage-slab';
+        const floorSpan = Math.abs(backX - inner) + 0.2 * H;
+        const fl = new THREE.Mesh(new THREE.BoxGeometry(floorSpan, 0.1 * H, archW + 0.2 * H), alcoveMat);
+        fl.position.set((inner + backX) / 2, -0.02, zc);
+        fl.name = 'passage-slab';
+        group.add(fl, cl);
+        const span = 0.22 * H;
+        const x0 = Math.min(inner, inner - side * span);
+        const x1 = Math.max(inner, inner - side * span);
+        extras.push({ min: new THREE.Vector3(x0, 0, zc - archW / 2), max: new THREE.Vector3(x1, archH, zc + archW / 2) });
+        CONFIG.PASSAGES.push({
+          id: 'passage-' + (side < 0 ? 'L' : 'R') + i,
+          position: [inner, 0, zc],
+          rotY: side < 0 ? Math.PI / 2 : -Math.PI / 2,
+          width: archW,
+          height: archH,
+          state: 'closed'
+        });
+      });
+    }
+
+    const colSrc = prepMesh(assets.columns);
+    const colLod = prepMesh(assets.columnsLod) || colSrc;
+    if (!colSrc) throw new Error('نموذج الأعمدة بلا شبكة');
+    const colH = Math.max(H, CH - 0.05);
+    const colScale = colH / Math.max(1e-4, colSrc.size.y);
+    const colRad = Math.max(colSrc.size.x, colSrc.size.z) * 0.5 * colScale;
+    let colX = W / 2 - colRad - 1.22 * H;
+    const minColX = 1.5 * H + colRad + 0.15 * H;
+    if (colX < minColX) {
+      console.warn('صف الأعمدة زاحم الممر', (colX / H).toFixed(2));
+      colX = minColX;
+    }
+    const aisle = 2 * (colX - colRad);
+    if (aisle < 3 * H) console.warn('الممر أضيق من 3H', (aisle / H).toFixed(2));
+    const colZs = [];
+    for (let i = 0; i <= n; i++) {
+      let z = i * moduleLen;
+      if (i === 0) z = Math.min(colRad * 0.92, moduleLen * 0.12);
+      if (i === n) z = Math.max(L - colRad * 0.92, L - moduleLen * 0.12);
+      colZs.push(z);
+    }
+    for (let i = 0; i < n; i++) {
+      const mid = (colZs[i] + colZs[i + 1]) * 0.5;
+      const archZ = (i + 0.5) * moduleLen;
+      if (Math.abs(mid - archZ) > 0.75 * H) console.warn('قوس بعيد عن منتصف عمودين', i, (mid / H).toFixed(2), (archZ / H).toFixed(2));
+    }
+    const colMat = palaceMat(colSrc.material);
+    const colMatrices = [];
+    const colLocals = [];
+    colZs.forEach(function (z) {
+      [-1, 1].forEach(function (side) {
+        const x = side * colX;
+        colMatrices.push(pose(x, 0, z, 0, colScale, colScale, colScale));
+        colLocals.push(new THREE.Vector3(x, colH * 0.5, z));
+        extras.push({ min: new THREE.Vector3(x - colRad * 0.72, 0, z - colRad * 0.72), max: new THREE.Vector3(x + colRad * 0.72, colH, z + colRad * 0.72) });
+        pendingWatch.push({ name: 'column', min: new THREE.Vector3(x - colRad, 0, z - colRad), max: new THREE.Vector3(x + colRad, colH, z + colRad) });
+      });
+    });
+    addLOD(colSrc.geo, colMat, colLod.geo === colSrc.geo ? colSrc.geo.clone() : colLod.geo, colMat, colMatrices, colLocals, 5.2);
+    slotModes.push({ id: 'column', count: colMatrices.length, mode: 'real' });
+
+    const floorPadX = Math.max(0.5 * H, wallThick * 0.9);
+    const floorPadZ = 0.05 * H;
+    const marble = tex.floor.clone();
+    srgb(marble);
+    marble.wrapS = marble.wrapT = THREE.RepeatWrapping;
+    marble.repeat.set((W + floorPadX * 2) / 1.8, (L + floorPadZ * 2) / 1.8);
+    const orm = tex.floorOrm ? tex.floorOrm.clone() : null;
+    if (orm) {
+      orm.wrapS = orm.wrapT = THREE.RepeatWrapping;
+      orm.repeat.copy(marble.repeat);
+    }
+    const floorGeo = new THREE.PlaneGeometry(W + floorPadX * 2, L + floorPadZ * 2);
+    floorGeo.setAttribute('uv2', floorGeo.attributes.uv);
+    const floorMat = new THREE.MeshStandardMaterial({
+      map: marble, roughness: 1, metalness: 0, roughnessMap: orm, aoMap: orm, aoMapIntensity: 0.85
+    });
+    if (palaceEnv) { floorMat.envMap = palaceEnv; floorMat.envMapIntensity = 0.6; }
+    attachFloorShader(floorMat);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, -0.015, L / 2);
+    floor.name = 'floor';
+    floor.receiveShadow = true;
+    group.add(floor);
+
+    const borderMap = tex.floorBorder.clone();
+    srgb(borderMap);
+    borderMap.wrapS = borderMap.wrapT = THREE.RepeatWrapping;
+    const borderMat = new THREE.MeshStandardMaterial({ map: borderMap, roughness: 0.72, metalness: 0.08 });
+    if (palaceEnv) { borderMat.envMap = palaceEnv; borderMat.envMapIntensity = 0.35; }
+    const bw = 0.48 * H;
+    function borderStrip(w, len, x, z, alongX) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, len), borderMat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(x, 0.006 * H, z);
+      m.material = borderMat.clone();
+      m.material.map = borderMap.clone();
+      srgb(m.material.map);
+      m.material.map.wrapS = m.material.map.wrapT = THREE.RepeatWrapping;
+      m.material.map.repeat.set(alongX ? w / (1.2 * H) : 1, alongX ? 1 : len / (1.2 * H));
+      if (palaceEnv) { m.material.envMap = palaceEnv; m.material.envMapIntensity = 0.35; }
+      m.material.polygonOffset = true;
+      m.material.polygonOffsetFactor = -1;
+      m.material.polygonOffsetUnits = -1;
+      m.name = 'floor-border';
+      group.add(m);
+    }
+    borderStrip(W, bw, 0, bw / 2, true);
+    borderStrip(W - bw * 2, bw, 0, stairFootZ - bw * 0.65, true);
+    borderStrip(bw, stairFootZ - bw, -W / 2 + bw / 2, (stairFootZ - bw) / 2, false);
+    borderStrip(bw, stairFootZ - bw, W / 2 - bw / 2, (stairFootZ - bw) / 2, false);
 
     const cw = CONFIG.carpetWidthH * H;
-    const carpetSrc = tex[FILES.carpet];
-    const img = carpetSrc.image || { width: 512, height: 2064 };
-    const tileLen = cw * (img.height / Math.max(1, img.width));
+    const carpetSrc = tex.carpet;
+    const img = carpetSrc.image || { width: 1067, height: 1809 };
+    const iw = img.naturalWidth || img.width || 1067;
+    const ih = img.naturalHeight || img.height || 1809;
+    const portrait = ih >= iw;
+    const tileLen = portrait ? cw * (ih / Math.max(1, iw)) : cw * (iw / Math.max(1, ih));
     function carpetSeg(z0, z1) {
       const len = Math.max(0.2, z1 - z0);
       const map = carpetSrc.clone();
@@ -861,60 +1409,72 @@
       map.wrapS = THREE.ClampToEdgeWrapping;
       map.wrapT = THREE.RepeatWrapping;
       map.repeat.set(1, len / tileLen);
-      const m = plane(cw, len, 0.01 * H, map, 0, (z0 + z1) / 2);
+      if (!portrait) { map.rotation = Math.PI / 2; map.center.set(0.5, 0.5); }
+      const m = plane(cw, len, 0.012 * H, map, 0, (z0 + z1) / 2);
+      m.material.roughness = 0.84;
+      m.material.metalness = 0.02;
       m.material.polygonOffset = true;
       m.material.polygonOffsetFactor = -4;
       m.material.polygonOffsetUnits = -4;
       m.name = 'carpet';
       return m;
     }
-    const gap = med * 0.55;
-    const carpetEnd = stairFootZ - 0.2 * H;
-    const carpetA = carpetSeg(0.55 * H, Math.min(carpetEnd, L / 2 - gap));
-    const carpetB = carpetSeg(L / 2 + gap, carpetEnd);
-    group.add(carpetA, carpetB);
+    const carpetEnd = stairFootZ + 0.04 * H;
+    group.add(carpetSeg(0.4 * H, carpetEnd));
 
-    const gold = new THREE.MeshStandardMaterial({ color: 0xd4b06a, roughness: 0.4, metalness: 0.52 });
-    const blueMat = new THREE.MeshStandardMaterial({ color: 0x1a3d78, roughness: 0.58, metalness: 0.08 });
-    const stoneMat = mat(tiledMap(tex[FILES.floor], 2, 2), { roughness: 0.9, color: 0xcbb59a });
-    const stoneDark = mat(tiledMap(tex[FILES.floor], 1, 1), { roughness: 0.92, color: 0x6d5c4c });
-    function addBorder(z0, z1) {
-      const len = Math.max(0.2, z1 - z0);
-      const bw = 0.16 * H;
-      [-1, 1].forEach(function (side) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.018 * H, len), gold);
-        m.position.set(side * (cw / 2 + bw / 2), 0.008 * H, (z0 + z1) / 2);
-        m.name = 'carpet-border';
-        m.castShadow = false;
-        m.receiveShadow = true;
-        group.add(m);
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0xcbb9a4, roughness: 0.62, metalness: 0.04 });
+    if (palaceEnv) { stoneMat.envMap = palaceEnv; stoneMat.envMapIntensity = 0.28; }
+    if (assets.stairs && assets.stairs.scene) {
+      const model = assets.stairs.scene.clone(true);
+      model.rotation.y = Math.PI;
+      const holder = new THREE.Group();
+      holder.name = 'stairs';
+      const fit = H / 1.8;
+      holder.scale.setScalar(fit);
+      holder.add(model);
+      holder.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(holder);
+      const size = box.getSize(new THREE.Vector3());
+      const fitOk = [size.x, size.y, size.z].every(Number.isFinite) && size.y > 0.2 && size.z > 0.2 && size.x > 0.2;
+      if (!fitOk) {
+        console.warn('قياس الدرج غير صالح — يُبقى الدرج البرمجي', size.x, size.y, size.z);
+      } else {
+      holder.position.x -= (box.min.x + box.max.x) * 0.5;
+      holder.position.y -= box.min.y;
+      holder.position.z += stairFootZ - box.min.z;
+      model.traverse(function (o) {
+        if (!o.isMesh) return;
+        o.castShadow = false;
+        o.receiveShadow = true;
+        o.frustumCulled = true;
       });
+      group.add(holder);
+      const rise = size.y * (3.09022 / 4.49554);
+      const run = size.z * (7.17277 / 7.45301);
+      stairW = size.x * (8.84 / 11.26);
+      stairOuter = size.x * 0.5;
+      platformFrontZ = stairFootZ + run;
+      topY = rise;
+      const platBack = L - CONFIG.backMarginH * H;
+      throneZ = (platformFrontZ + platBack) * 0.5;
+      const stepHalf = stairW * 0.5;
+      extras.push({ min: new THREE.Vector3(-stairOuter, 0, stairFootZ), max: new THREE.Vector3(-stepHalf + 0.04 * H, topY + 0.4 * H, platformFrontZ) });
+      extras.push({ min: new THREE.Vector3(stepHalf - 0.04 * H, 0, stairFootZ), max: new THREE.Vector3(stairOuter, topY + 0.4 * H, platformFrontZ) });
+      }
     }
-    addBorder(0.55 * H, Math.min(carpetEnd, L / 2 - gap));
-    addBorder(L / 2 + gap, carpetEnd);
-    const perimZ1 = stairFootZ - 0.15 * H;
-    [-1, 1].forEach(function (side) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.22 * H, 0.02 * H, perimZ1 - 0.7 * H), gold);
-      m.position.set(side * (W / 2 - 0.5 * H), 0.006 * H, (0.7 * H + perimZ1) / 2);
-      m.name = 'floor-border';
-      m.castShadow = false;
-      group.add(m);
-    });
-    const frontBorder = new THREE.Mesh(new THREE.BoxGeometry(W - 1.4 * H, 0.02 * H, 0.18 * H), gold);
-    frontBorder.position.set(0, 0.006 * H, 0.32 * H);
-    frontBorder.name = 'floor-border';
-    group.add(frontBorder);
-
-    for (let i = 0; i < stepsN; i++) {
-      const zFront = stairFootZ + i * stepDepth;
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(stairW, stepH, stepDepth + 0.03 * H), stoneMat);
-      mesh.position.set(0, stepH * 0.5 + i * stepH, zFront + stepDepth * 0.5);
-      mesh.name = 'step';
-      mesh.castShadow = false;
-      mesh.receiveShadow = true;
-      group.add(mesh);
+    if (!group.getObjectByName('stairs')) {
+      console.warn('درج.glb غير موجود — يُبقى الدرج البرمجي');
+      for (let i = 0; i < stepsN; i++) {
+        const zFront = stairFootZ + i * stepDepth;
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(stairW, stepH, stepDepth + 0.02 * H), stoneMat);
+        mesh.position.set(0, stepH * 0.5 + i * stepH, zFront + stepDepth * 0.5);
+        mesh.name = 'step';
+        mesh.receiveShadow = true;
+        group.add(mesh);
+      }
+      stairOuter = stairW * 0.5;
     }
-    const platLen = (L - 0.08 * H) - platformFrontZ;
+    const platLen = Math.max(1.2 * H, (L - 0.08 * H) - platformFrontZ);
     const platform = new THREE.Mesh(new THREE.BoxGeometry(stairW, 0.12 * H, platLen), stoneMat);
     platform.position.set(0, topY - 0.06 * H, platformFrontZ + platLen * 0.5);
     platform.name = 'platform';
@@ -930,297 +1490,655 @@
       throneObj.rotation.y = Math.PI;
     } else {
       console.error('عرش البطل.glb غير موجود — وُضع عرش بديل.');
-      const wood = mat(tex[FILES.wall].clone(), { roughness: .72, color: 0x6a3a22 });
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(1.35 * H, 0.42 * H, 1.05 * H), wood);
-      const back = new THREE.Mesh(new THREE.BoxGeometry(1.35 * H, 1.45 * H, 0.16 * H), wood);
       throneObj = new THREE.Group();
       throneObj.name = 'throne-stand-in';
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(1.35 * H, 0.42 * H, 1.05 * H), stoneMat);
       seat.position.y = 0.21 * H;
-      back.position.set(0, 0.95 * H, 0.46 * H);
-      throneObj.add(seat, back);
+      throneObj.add(seat);
       throneObj.position.set(0, topY, throneZ);
     }
     group.add(throneObj);
 
-    const archW = 6.4 * H, archR = 2.55 * H, archBase = topY + 0.15 * H;
-    const archZ = L - 0.42 * H;
-    const vous = [];
-    const vousGeo = new THREE.BoxGeometry(0.38 * H, 0.42 * H, 0.28 * H);
-    const dummy = new THREE.Object3D();
-    for (let i = 0; i <= 10; i++) {
-      const a = Math.PI * (1 - i / 10);
-      dummy.position.set(Math.cos(a) * archR, archBase + Math.sin(a) * archR, archZ);
-      dummy.rotation.set(0, 0, a - Math.PI / 2);
-      dummy.scale.set(1, 1, 1);
-      dummy.updateMatrix();
-      vous.push(dummy.matrix.clone());
-    }
-    const vousMesh = new THREE.InstancedMesh(vousGeo, gold, vous.length);
-    vousMesh.name = 'arch';
-    vousMesh.frustumCulled = false;
-    vous.forEach(function (m, i) { vousMesh.setMatrixAt(i, m); });
-    vousMesh.instanceMatrix.needsUpdate = true;
-    group.add(vousMesh);
-    [-1, 1].forEach(function (side) {
-      const pier = new THREE.Mesh(new THREE.BoxGeometry(0.42 * H, archBase + 0.2 * H, 0.32 * H), gold);
-      pier.position.set(side * archR, (archBase + 0.2 * H) / 2, archZ);
-      pier.name = 'arch-pier';
-      group.add(pier);
+    const backImg = tex.back.image || { width: 1536, height: 1024 };
+    const bwA = (backImg.naturalWidth || backImg.width || 1536) / Math.max(1, backImg.naturalHeight || backImg.height || 1024);
+    let panelH = CH * 0.94;
+    let panelW = panelH * bwA;
+    if (panelW > W * 0.94) { panelW = W * 0.94; panelH = panelW / bwA; }
+    const backMap = tex.back.clone();
+    srgb(backMap);
+    const backEmit = backMap.clone();
+    srgb(backEmit);
+    const backMat = new THREE.MeshStandardMaterial({
+      map: backMap, emissive: new THREE.Color(0xffffff), emissiveMap: backEmit, emissiveIntensity: 0.2,
+      roughness: 0.9, metalness: 0.05
     });
-    const emblemZ = L - 0.22 * H;
-    const emblemY = archBase + archR * 0.72;
-    const bluePanel = new THREE.Mesh(new THREE.PlaneGeometry(archR * 1.85, archR * 1.35), blueMat);
-    bluePanel.position.set(0, emblemY - 0.15 * H, emblemZ);
-    bluePanel.rotation.y = Math.PI;
-    bluePanel.name = 'winged-disc-panel';
-    group.add(bluePanel);
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.72 * H, 20), gold);
-    disc.position.set(0, emblemY, emblemZ - 0.04 * H);
-    disc.rotation.y = Math.PI;
-    disc.name = 'winged-disc';
-    group.add(disc);
-    [-1, 1].forEach(function (side) {
-      const wing = new THREE.Mesh(new THREE.BoxGeometry(1.55 * H, 0.38 * H, 0.06 * H), gold);
-      wing.position.set(side * 1.35 * H, emblemY + 0.05 * H, emblemZ - 0.05 * H);
-      wing.rotation.z = side * 0.38;
-      wing.name = 'wing';
-      group.add(wing);
-      const feather = new THREE.Mesh(new THREE.BoxGeometry(1.15 * H, 0.22 * H, 0.05 * H), gold);
-      feather.position.set(side * 1.15 * H, emblemY - 0.28 * H, emblemZ - 0.05 * H);
-      feather.rotation.z = side * 0.22;
-      group.add(feather);
-    });
-
-    const trimH = 0.48 * H;
-    const galleryBase = 6.05 * H;
-    const galleryH = 1.12 * H;
-    const panelH = Math.max(1.2 * H, galleryBase - trimH);
-    const alcoveZs = [8, 12, 16, 20].map(function (z) { return z * H; });
-    const alcoveW = 1.62 * H;
-    const alcoveH = 2.4 * H;
-    const alcoveSill = 0.18 * H;
-    const prefabs = columnPrefabs(assets.columns, CONFIG.columnHeightH * H);
-    const colBox = new THREE.Box3().setFromObject(prefabs[0]);
-    const colSize = colBox.getSize(new THREE.Vector3());
-    const colLocalZ = [7.8, 11.6, 15.4, 19.2];
-    const colLocalX = [3.55, 3.42, 3.2, 2.92];
-    const columns = [];
-
-    function sideWall(side, zA, zB) {
-      const seg = Math.max(0.35, zB - zA);
-      const map = tiledMap(tex[FILES.wall], seg / tile, panelH / tile);
-      const panel = new THREE.Mesh(new THREE.PlaneGeometry(seg, panelH), mat(map));
-      panel.position.set(side * (W / 2 - 0.12), trimH + panelH / 2, (zA + zB) / 2);
-      panel.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-      panel.name = 'wall-panel';
-      panel.castShadow = false;
-      group.add(panel);
-    }
-    [-1, 1].forEach(function (side) {
-      const holes = alcoveZs.map(function (z) { return [z - alcoveW / 2, z + alcoveW / 2]; });
-      let zc = 0.25 * H;
-      const zMax = L - 0.3 * H;
-      const segs = [];
-      holes.forEach(function (h) {
-        if (h[0] > zc + 0.25) segs.push([zc, h[0]]);
-        zc = Math.max(zc, h[1]);
-      });
-      if (zMax > zc + 0.25) segs.push([zc, zMax]);
-      segs.forEach(function (s) { sideWall(side, s[0], s[1]); });
-      const trim = new THREE.Mesh(new THREE.BoxGeometry(0.22, trimH, L), mat(tiledMap(tex[FILES.floor], L / tile, 1), { color: 0x3a3128, roughness: .95 }));
-      trim.position.set(side * (W / 2 - 0.02), trimH / 2, L / 2);
-      trim.name = 'trim';
-      group.add(trim);
-      const topH = Math.max(0.4 * H, CH - galleryBase - galleryH);
-      const friezeAspect = (tex[FILES.frieze].image ? tex[FILES.frieze].image.width / tex[FILES.frieze].image.height : 2);
-      const fmap = tex[FILES.frieze].clone();
-      srgb(fmap);
-      fmap.wrapS = THREE.RepeatWrapping;
-      fmap.wrapT = THREE.ClampToEdgeWrapping;
-      fmap.repeat.set(L / (topH * friezeAspect), 1);
-      const fr = new THREE.Mesh(new THREE.PlaneGeometry(L, topH), mat(fmap));
-      fr.position.set(side * (W / 2 - 0.1), galleryBase + galleryH + topH / 2, L / 2);
-      fr.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-      fr.name = 'frieze';
-      group.add(fr);
-      const ledge = new THREE.Mesh(new THREE.BoxGeometry(0.55 * H, 0.14 * H, L - 0.8 * H), stoneDark);
-      ledge.position.set(side * (W / 2 - 0.38 * H), galleryBase, L / 2);
-      ledge.name = 'gallery';
-      group.add(ledge);
-    });
-
-    const nicheBacks = [];
-    const nicheJambs = [];
-    const nicheLintels = [];
-    const backGeo = new THREE.PlaneGeometry(alcoveW * 0.92, alcoveH * 0.92);
-    const jambGeo = new THREE.BoxGeometry(0.42 * H, alcoveH, 0.12 * H);
-    const lintelGeo = new THREE.BoxGeometry(0.42 * H, 0.18 * H, alcoveW);
-    [-1, 1].forEach(function (side) {
-      alcoveZs.forEach(function (z) {
-        dummy.position.set(side * (W / 2 + 0.08 * H), alcoveSill + alcoveH / 2, z);
-        dummy.rotation.set(0, side < 0 ? Math.PI / 2 : -Math.PI / 2, 0);
-        dummy.scale.set(1, 1, 1);
-        dummy.updateMatrix();
-        nicheBacks.push(dummy.matrix.clone());
-        [-1, 1].forEach(function (k) {
-          dummy.position.set(side * (W / 2 - 0.18 * H), alcoveSill + alcoveH / 2, z + k * (alcoveW / 2));
-          dummy.rotation.set(0, 0, 0);
-          dummy.updateMatrix();
-          nicheJambs.push(dummy.matrix.clone());
+    if (palaceEnv) { backMat.envMap = palaceEnv; backMat.envMapIntensity = 0.25; }
+    const northFill = new THREE.Mesh(new THREE.PlaneGeometry(W + wallThick * 2 + 0.8, CH + 0.5), new THREE.MeshStandardMaterial({ color: 0x1a140f, roughness: 0.94, metalness: 0.02 }));
+    northFill.position.set(0, CH / 2, L + 0.04);
+    northFill.rotation.y = Math.PI;
+    northFill.name = 'north-wall';
+    group.add(northFill);
+    const backPanel = new THREE.Mesh(new THREE.PlaneGeometry(panelW, panelH), backMat);
+    backPanel.position.set(0, 0.04 * H + panelH / 2, L - 0.06);
+    backPanel.rotation.y = Math.PI;
+    backPanel.name = 'back-relief';
+    group.add(backPanel);
+    (function fillThroneGaps() {
+      const gapW = (W - panelW) * 0.5;
+      if (gapW < 0.2 * H) return;
+      const overlapSide = 0.7 * H;
+      const overlapMural = 0.35 * H;
+      const span = gapW + overlapSide + overlapMural;
+      const naturalH = span * (wallSrc.size.y / Math.max(1e-4, wallSrc.size.z));
+      const rows = Math.max(1, Math.ceil((CH + 0.04) / Math.max(0.35 * H, naturalH)));
+      const rowH = (CH + 0.05) / rows;
+      const sy = (rowH * 1.04) / wallSrc.size.y;
+      const sz = span / wallSrc.size.z;
+      const sx = Math.min(wallScale * 0.7, (0.7 * H) / Math.max(1e-4, wallSrc.size.x));
+      const thick = wallSrc.size.x * sx;
+      const z = L - thick * 0.35;
+      const mats = [];
+      for (let r = 0; r < rows; r++) {
+        const y = r * rowH - 0.04;
+        [-1, 1].forEach(function (side) {
+          const x = side * (panelW * 0.5 - overlapMural + span * 0.5);
+          mats.push(pose(x, y, z, Math.PI / 2, sx, sy, sz));
         });
-        dummy.position.set(side * (W / 2 - 0.18 * H), alcoveSill + alcoveH, z);
-        dummy.rotation.set(0, 0, 0);
-        dummy.updateMatrix();
-        nicheLintels.push(dummy.matrix.clone());
-      });
-    });
-    function addInstances(geo, material, matrices, name) {
-      const mesh = new THREE.InstancedMesh(geo, material, matrices.length);
-      mesh.name = name;
-      mesh.frustumCulled = false;
-      mesh.castShadow = false;
-      mesh.receiveShadow = true;
-      matrices.forEach(function (m, i) { mesh.setMatrixAt(i, m); });
-      mesh.instanceMatrix.needsUpdate = true;
-      group.add(mesh);
-      return mesh;
-    }
-    addInstances(backGeo, mat(tex[FILES.wall].clone(), { color: 0x5c4c40 }), nicheBacks, 'alcove');
-    addInstances(jambGeo, stoneDark, nicheJambs, 'alcove-jamb');
-    addInstances(lintelGeo, stoneDark, nicheLintels, 'alcove-lintel');
-
-    const gArchZ = [];
-    for (let i = 0; i < 8; i++) gArchZ.push((2.2 + i * 3.35) * H);
-    const gPiers = [];
-    const gHoles = [];
-    const pierGeo = new THREE.BoxGeometry(0.16 * H, galleryH * 0.82, 0.16 * H);
-    const holeGeo = new THREE.PlaneGeometry(1.15 * H, galleryH * 0.62);
-    [-1, 1].forEach(function (side) {
-      gArchZ.forEach(function (z) {
-        dummy.position.set(side * (W / 2 - 0.16 * H), galleryBase + galleryH * 0.48, z);
-        dummy.rotation.set(0, side < 0 ? Math.PI / 2 : -Math.PI / 2, 0);
-        dummy.updateMatrix();
-        gHoles.push(dummy.matrix.clone());
-        [-1, 1].forEach(function (k) {
-          dummy.position.set(side * (W / 2 - 0.28 * H), galleryBase + 0.2 * H + galleryH * 0.4, z + k * 0.72 * H);
-          dummy.rotation.set(0, 0, 0);
-          dummy.updateMatrix();
-          gPiers.push(dummy.matrix.clone());
-        });
-      });
-    });
-    const holeMat = new THREE.MeshBasicMaterial({ color: 0xffe2b8, transparent: true, opacity: 0.22, depthWrite: false });
-    addInstances(holeGeo, holeMat, gHoles, 'gallery-arch');
-    addInstances(pierGeo, stoneDark, gPiers, 'gallery-pier');
-
-    const shaftMat = new THREE.MeshBasicMaterial({ color: 0xffe6c0, transparent: true, opacity: 0.09, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
-    const shaftGeo = new THREE.PlaneGeometry(1, 1);
-    const shafts = [];
-    const up = new THREE.Vector3(0, 1, 0);
-    [-1, 1].forEach(function (side) {
-      [7.4, 13.6, 19.6].forEach(function (zH) {
-        const x0 = side * (W / 2 - 0.2 * H), y0 = galleryBase + galleryH * 0.45, z0 = zH * H;
-        const x1 = side * 1.4 * H, y1 = 0.35 * H, z1 = z0 + 1.2 * H;
-        const dir = new THREE.Vector3(x1 - x0, y1 - y0, z1 - z0);
-        const len = dir.length();
-        dummy.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
-        dummy.quaternion.setFromUnitVectors(up, dir.normalize());
-        dummy.scale.set(1.15 * H, len, 1);
-        dummy.updateMatrix();
-        shafts.push(dummy.matrix.clone());
-      });
-    });
-    addInstances(shaftGeo, shaftMat, shafts, 'light-shaft');
-
-    const plinthH = CONFIG.plinthHeightH * H;
-    const plinthW = Math.min(1.45 * H, Math.max(colSize.x * 1.05, 1.05 * H));
-    const plinthGeo = new THREE.BoxGeometry(plinthW, plinthH, plinthW);
-    plinthGeo.translate(0, plinthH / 2, 0);
-    const plinthMats = [];
-    const torchSrc = [assets.torchWood, assets.torchBlack];
-    colLocalZ.forEach(function (zH, i) {
+      }
+      const fill = new THREE.InstancedMesh(wallSrc.geo, wallMat, mats.length);
+      fill.name = 'back-wall-fill';
+      fill.frustumCulled = false;
+      fill.castShadow = false;
+      mats.forEach(function (m, i) { fill.setMatrixAt(i, m); });
+      fill.instanceMatrix.needsUpdate = true;
+      group.add(fill);
+      slotModes.push({ id: 'backFill', count: mats.length, mode: 'real' });
+      const seamMat = new THREE.MeshStandardMaterial({ color: 0x4a3824, roughness: 0.72, metalness: 0.18 });
+      if (palaceEnv) { seamMat.envMap = palaceEnv; seamMat.envMapIntensity = 0.2; }
       [-1, 1].forEach(function (side) {
-        const prefab = prefabs[i % prefabs.length];
-        const rig = new THREE.Group();
-        rig.name = 'column';
-        const col = prefab.clone(true);
-        col.position.y = plinthH;
-        rig.add(col);
-        rig.position.set(side * colLocalX[i] * H, 0, zH * H);
-        if (side < 0) rig.scale.x = -1;
-        group.add(rig);
-        columns.push(rig);
-        dummy.position.set(side * colLocalX[i] * H, 0, zH * H);
-        dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(1, 1, 1);
-        dummy.updateMatrix();
-        plinthMats.push(dummy.matrix.clone());
-        if (i % 2 === 0) {
-          const torch = wrapFitted(torchSrc[(i + (side < 0 ? 1 : 0)) % 2].scene.clone(true), 1.15 * H);
-          torch.name = 'torch';
-          torch.position.set(side * (colLocalX[i] * H - colSize.x * 0.42), plinthH + 1.25 * H, zH * H);
-          torch.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-          const flame = flameSprite();
-          flame.position.set(0, 1.05 * H, 0.05 * H);
-          flame.scale.setScalar(0.5 * H);
-          flame.userData.base = 0.5 * H;
-          flame.userData.seed = i + side;
-          flame.name = 'flame';
-          torch.add(flame);
-          flames.push(flame);
-          group.add(torch);
+        const seam = new THREE.Mesh(new THREE.BoxGeometry(0.28, CH + 0.2, 0.28), seamMat);
+        seam.position.set(side * (W / 2), (CH + 0.2) * 0.5 - 0.08, L - 0.12);
+        seam.name = 'corner-seal';
+        group.add(seam);
+      });
+    })();
+
+    const tile = 3.15 * H;
+    const doorMap = tex.doorWall ? tiledMap(tex.doorWall, (W + wallThick * 2) / tile, (CH + 0.4) / tile) : null;
+    if (doorMap) doorMap.anisotropy = aniso.v;
+    const southMat = new THREE.MeshStandardMaterial({
+      map: doorMap, color: doorMap ? 0xfff1d4 : 0x2a241e,
+      roughness: 0.58, metalness: 0.22
+    });
+    if (palaceEnv) { southMat.envMap = palaceEnv; southMat.envMapIntensity = 0.42; }
+    const southWall = new THREE.Mesh(new THREE.BoxGeometry(W + wallThick * 2, CH + 0.45, 0.28), southMat);
+    southWall.position.set(0, (CH + 0.45) * 0.5 - 0.08, 0.02);
+    southWall.name = 'south-wall';
+    southWall.receiveShadow = true;
+    group.add(southWall);
+    if (assets.door && assets.door.scene) {
+      const model = assets.door.scene.clone(true);
+      model.traverse(function (o) {
+        if (!o.isMesh) return;
+        o.castShadow = false;
+        o.receiveShadow = true;
+        o.frustumCulled = true;
+        if (o.material) {
+          o.material = o.material.clone();
+          o.material.side = THREE.DoubleSide;
         }
       });
-    });
-    addInstances(plinthGeo, stoneDark, plinthMats, 'plinth');
+      const holder = new THREE.Group();
+      holder.name = 'entry-door';
+      holder.add(model);
+      holder.updateMatrixWorld(true);
+      let box = new THREE.Box3().setFromObject(holder);
+      let size = box.getSize(new THREE.Vector3());
+      if (size.z > size.x) {
+        model.rotation.y = Math.PI / 2;
+        holder.updateMatrixWorld(true);
+        box = new THREE.Box3().setFromObject(holder);
+        size = box.getSize(new THREE.Vector3());
+      }
+      const fitW = Math.max(1.2, portal.width);
+      const fitH = Math.min(CH * 0.78, fitW * (size.y / Math.max(0.01, size.x)));
+      const s = Math.min(fitW / Math.max(0.01, size.x), fitH / Math.max(0.01, size.y));
+      holder.scale.setScalar(s);
+      holder.updateMatrixWorld(true);
+      box = new THREE.Box3().setFromObject(holder);
+      holder.position.x -= (box.min.x + box.max.x) * 0.5;
+      holder.position.y -= box.min.y;
+      holder.position.z += 0.28 - box.min.z;
+      group.add(holder);
+      slotModes.push({ id: 'entryDoor', count: 1, mode: 'real' });
+    } else {
+      console.warn('مجسم الباب غير موجود — فتحة الدخول مغلقة بجدار فقط');
+    }
 
-    const northMap = tiledMap(tex[FILES.wall], W / tile, CH / tile);
-    const endWall = new THREE.Mesh(new THREE.PlaneGeometry(W, CH), mat(northMap));
-    endWall.position.set(0, CH / 2, L - 0.04);
-    endWall.rotation.y = Math.PI;
-    endWall.name = 'north-wall';
-    group.add(endWall);
-    const southW = Math.max(0.4, (W - portal.width) / 2);
-    const southMap = tiledMap(tex[FILES.wall], southW / tile, CH / tile);
-    const southL = new THREE.Mesh(new THREE.PlaneGeometry(southW, CH), mat(southMap));
-    const southR = new THREE.Mesh(new THREE.PlaneGeometry(southW, CH), mat(southMap.clone()));
-    srgb(southR.material.map);
-    const doorHalf = portal.width / 2;
-    southL.position.set(-(doorHalf + southW / 2), CH / 2, 0.04);
-    southR.position.set(doorHalf + southW / 2, CH / 2, 0.04);
-    southL.name = southR.name = 'south-wall';
-    group.add(southL, southR);
-
-    const ceiling = plane(W, L, CH, tiledMap(tex[FILES.ceiling], W / tile, L / tile), 0, L / 2);
+    const ceilOver = wallThick + 0.4 * H;
+    const ceilSpanX = W + ceilOver * 2;
+    const ceilSpanZ = L + 0.7 * H;
+    const ceilMap = tex.ceiling.clone();
+    srgb(ceilMap);
+    ceilMap.wrapS = ceilMap.wrapT = THREE.RepeatWrapping;
+    const ceilTile = 4.2 * H;
+    ceilMap.repeat.set(ceilSpanX / ceilTile, ceilSpanZ / ceilTile);
+    const ceiling = plane(ceilSpanX, ceilSpanZ, CH, ceilMap, 0, L / 2);
     ceiling.rotation.x = Math.PI / 2;
-    ceiling.position.y = CH - 0.02;
+    ceiling.position.y = CH - 0.22;
     ceiling.name = 'ceiling';
+    ceiling.material.color = new THREE.Color(0xffffff);
+    ceiling.material.roughness = 0.62;
+    ceiling.material.metalness = 0.16;
+    ceiling.material.emissive = new THREE.Color(0x3a2a16);
+    ceiling.material.emissiveIntensity = 0.08;
     group.add(ceiling);
+    const corniceMat = new THREE.MeshStandardMaterial({ color: 0x8d6840, roughness: 0.62, metalness: 0.28 });
+    if (palaceEnv) { corniceMat.envMap = palaceEnv; corniceMat.envMapIntensity = 0.3; }
+    const beamH = 0.26 * H;
+    const beamT = 0.34 * H;
+    function cornice(w, d, x, z) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, beamH, d), corniceMat);
+      m.position.set(x, CH - beamH * 0.42, z);
+      m.name = 'cornice';
+      group.add(m);
+    }
+    cornice(W + wallThick, beamT, 0, beamT * 0.2);
+    cornice(W + wallThick, beamT, 0, L - beamT * 0.2);
+    cornice(beamT, L, -W / 2 + beamT * 0.12, L / 2);
+    cornice(beamT, L, W / 2 - beamT * 0.12, L / 2);
 
-    const hemi = new THREE.HemisphereLight(0xffc896, 0x3a2a22, 0.7);
+    const lionSrc = prepMesh(assets.lion);
+    const lionLod = prepMesh(assets.lionLod) || lionSrc;
+    if (!lionSrc) throw new Error('نموذج الأسد بلا شبكة');
+    const lionMat = palaceMat(lionSrc.material);
+    const lionMatrices = [];
+    const lionLocals = [];
+    function addLion(x, y, z, scale, rot, name) {
+      lionMatrices.push(pose(x, y, z, rot, scale, scale, scale));
+      lionLocals.push(new THREE.Vector3(x, y + lionSrc.size.y * scale * 0.5, z));
+      const sx = lionSrc.size.x * scale * 0.5;
+      const sz = lionSrc.size.z * scale * 0.5;
+      const swap = Math.abs(Math.sin(rot)) > 0.7;
+      const hx = swap ? sz : sx;
+      const hz = swap ? sx : sz;
+      const hy = lionSrc.size.y * scale;
+      const box = { name: name, min: new THREE.Vector3(x - hx, y, z - hz), max: new THREE.Vector3(x + hx, y + hy, z + hz) };
+      pendingWatch.push(box);
+      extras.push({ min: box.min.clone(), max: box.max.clone() });
+    }
+    const lionH = 4.25;
+    const lionS = lionH / Math.max(1e-4, lionSrc.size.y);
+    const lionLen = lionSrc.size.z * lionS;
+    const carpetHalf = CONFIG.carpetWidthH * H * 0.5;
+    const lionCenterX = carpetHalf + 0.42 * H + lionLen * 0.5;
+    const lionZ = stairFootZ - 1.2 * H;
+    [-1, 1].forEach(function (side) {
+      addLion(side * lionCenterX, 0, lionZ, lionS, side < 0 ? Math.PI / 2 : -Math.PI / 2, 'lion');
+    });
+    const smallS = 2.2 / Math.max(1e-4, lionSrc.size.y);
+    [-1, 1].forEach(function (side) {
+      addLion(side * 1.65 * H, topY, throneZ + 0.22 * H, smallS, Math.PI, 'lionSmall');
+    });
+    addLOD(lionSrc.geo, lionMat, lionLod.geo === lionSrc.geo ? lionSrc.geo.clone() : lionLod.geo, lionMat, lionMatrices, lionLocals, 9);
+    slotModes.push({ id: 'lion', count: 2, mode: 'real' });
+    slotModes.push({ id: 'lionSmall', count: 2, mode: 'real' });
+
+    const brzSrc = prepMesh(assets.brazier);
+    const brzLod = prepMesh(assets.brazierLod) || brzSrc;
+    if (!brzSrc) throw new Error('نموذج المباخر بلا شبكة');
+    const brzMat = palaceMat(brzSrc.material);
+    const brzMatrices = [];
+    const brzLocals = [];
+    function addBrazier(x, z, y, targetMeters, intensity, rot) {
+      const s = targetMeters / Math.max(1e-4, brzSrc.size.y);
+      brzMatrices.push(pose(x, y, z, rot || 0, s, s, s));
+      brzLocals.push(new THREE.Vector3(x, y + targetMeters * 0.5, z));
+      const r = Math.max(brzSrc.size.x, brzSrc.size.z) * s * 0.5;
+      extras.push({ min: new THREE.Vector3(x - r, y, z - r), max: new THREE.Vector3(x + r, y + targetMeters, z + r) });
+      pendingWatch.push({ name: 'brazier', min: new THREE.Vector3(x - r, y, z - r), max: new THREE.Vector3(x + r, y + targetMeters, z + r) });
+      fireList.push({ x: x, y: y + targetMeters * 0.66, z: z, intensity: intensity, seed: fireList.length * 1.7 + 0.2 });
+    }
+    [4.2, 9.0, 13.8, 18.6].forEach(function (zH) {
+      [-1, 1].forEach(function (side) {
+        addBrazier(side * 2.2 * H, zH * H, 0, 3.05, 1.55, side < 0 ? Math.PI / 2 : -Math.PI / 2);
+      });
+    });
+    [-1, 1].forEach(function (side) {
+      const rot = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+      addBrazier(side * (stairOuter + 0.55 * H), stairFootZ - 0.35 * H, 0, 3.25, 1.75, rot);
+      addBrazier(side * 2.15 * H, platformFrontZ + 0.55 * H, topY, 2.55, 1.4, rot);
+    });
+    addLOD(brzSrc.geo, brzMat, brzLod.geo === brzSrc.geo ? brzSrc.geo.clone() : brzLod.geo, brzMat, brzMatrices, brzLocals, 7);
+    slotModes.push({ id: 'brazier', count: brzMatrices.length, mode: 'real' });
+
+    function splitProps(gltf) {
+      const parts = [];
+      if (!gltf || !gltf.scene) return parts;
+      gltf.scene.updateMatrixWorld(true);
+      const meshes = [];
+      gltf.scene.traverse(function (o) { if (o.isMesh) meshes.push(o); });
+      if (!meshes.length) return parts;
+      if (meshes.length > 2) {
+        meshes.forEach(function (o, i) {
+          const geo = o.geometry.clone();
+          geo.applyMatrix4(o.matrixWorld);
+          recenterGeo(geo);
+          parts.push({ geo: geo, size: geoSize(geo), material: o.material, name: o.name || ('part' + i) });
+        });
+        return parts;
+      }
+      const mesh = meshes[0];
+      const src = mesh.geometry;
+      const index = src.index;
+      const posAttr = src.attributes.position;
+      if (!index || !posAttr) return parts;
+      const nrm = src.attributes.normal;
+      const uv = src.attributes.uv;
+      const ntri = index.count / 3;
+      const voxel = 0.012;
+      const parent = new Uint32Array(ntri);
+      for (let i = 0; i < ntri; i++) parent[i] = i;
+      function find(a) {
+        while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; }
+        return a;
+      }
+      function union(a, b) {
+        const ra = find(a), rb = find(b);
+        if (ra !== rb) parent[rb] = ra;
+      }
+      const cells = new Map();
+      const v = new THREE.Vector3();
+      const mw = mesh.matrixWorld;
+      for (let t = 0; t < ntri; t++) {
+        let sx = 0, sy = 0, sz = 0;
+        for (let k = 0; k < 3; k++) {
+          v.fromBufferAttribute(posAttr, index.getX(t * 3 + k)).applyMatrix4(mw);
+          sx += v.x; sy += v.y; sz += v.z;
+        }
+        const key = Math.floor(sx / 3 / voxel) + ',' + Math.floor(sy / 3 / voxel) + ',' + Math.floor(sz / 3 / voxel);
+        const list = cells.get(key);
+        if (list) list.push(t);
+        else cells.set(key, [t]);
+      }
+      cells.forEach(function (tris, key) {
+        for (let i = 1; i < tris.length; i++) union(tris[0], tris[i]);
+        const bits = key.split(',');
+        const x = parseInt(bits[0], 10), y = parseInt(bits[1], 10), z = parseInt(bits[2], 10);
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              if (!dx && !dy && !dz) continue;
+              const nb = cells.get((x + dx) + ',' + (y + dy) + ',' + (z + dz));
+              if (nb) union(tris[0], nb[0]);
+            }
+          }
+        }
+      });
+      const groups = new Map();
+      for (let t = 0; t < ntri; t++) {
+        const r = find(t);
+        const g = groups.get(r);
+        if (g) g.push(t);
+        else groups.set(r, [t]);
+      }
+      let pi = 0;
+      groups.forEach(function (tris) {
+        if (tris.length < 40) return;
+        const mapV = new Map();
+        const positions = [];
+        const normals = [];
+        const uvs = [];
+        const indices = [];
+        function add(vi) {
+          let n = mapV.get(vi);
+          if (n == null) {
+            n = positions.length / 3;
+            mapV.set(vi, n);
+            v.fromBufferAttribute(posAttr, vi).applyMatrix4(mw);
+            positions.push(v.x, v.y, v.z);
+            if (nrm) {
+              v.fromBufferAttribute(nrm, vi).transformDirection(mw);
+              normals.push(v.x, v.y, v.z);
+            }
+            if (uv) uvs.push(uv.getX(vi), uv.getY(vi));
+          }
+          indices.push(n);
+        }
+        tris.forEach(function (t) {
+          add(index.getX(t * 3));
+          add(index.getX(t * 3 + 1));
+          add(index.getX(t * 3 + 2));
+        });
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        if (normals.length) geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+        else geo.computeVertexNormals();
+        if (uvs.length) geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        geo.setIndex(indices);
+        recenterGeo(geo);
+        const size = geoSize(geo);
+        parts.push({ geo: geo, size: size, material: mesh.material, name: 'piece' + (pi++) });
+      });
+      return parts;
+    }
+    let propParts = [];
+    try { propParts = splitProps(assets.props); }
+    catch (propErr) { console.warn('فصل الأغراض فشل', propErr); note('props split ' + (propErr && propErr.message)); }
+    note('props parts=' + propParts.length);
+    const propMat = propParts.length ? palaceMat(propParts[0].material) : null;
+    function dropProp(part, x, z, rot, targetH, y) {
+      if (!part) return;
+      y = y || 0;
+      const s = targetH / Math.max(1e-4, part.size.y);
+      const mesh = new THREE.Mesh(part.geo, propMat);
+      mesh.position.set(x, y, z);
+      mesh.rotation.y = rot || 0;
+      mesh.scale.setScalar(s);
+      mesh.name = 'prop-real';
+      group.add(mesh);
+      const sx = part.size.x * s * 0.5;
+      const sz = part.size.z * s * 0.5;
+      const swap = Math.abs(Math.sin(rot || 0)) > 0.7;
+      const hx = swap ? sz : sx;
+      const hz = swap ? sx : sz;
+      extras.push({ min: new THREE.Vector3(x - hx, y, z - hz), max: new THREE.Vector3(x + hx, y + targetH, z + hz) });
+    }
+    function roleOf(size) {
+      const thin = Math.min(size.x, size.z);
+      const wide = Math.max(size.x, size.z);
+      const tall = Math.max(size.y, wide);
+      if (thin / tall < 0.26 && size.y > thin * 2.2) return 'banner';
+      if (size.y / Math.max(1e-4, wide) < 0.62) return 'low';
+      return 'vessel';
+    }
+    function splitBanner(part) {
+      const size = part.size;
+      const flat = Math.min(size.x, size.z) / Math.max(size.x, size.y, size.z);
+      if (flat > 0.26) return [part];
+      const axis = size.x < size.z ? 2 : 0;
+      const geo = part.geo;
+      const pos = geo.attributes.position;
+      const index = geo.index;
+      if (!index) return [part];
+      const ntri = index.count / 3;
+      let min = Infinity, max = -Infinity;
+      const cents = new Float32Array(ntri);
+      const read = axis === 0 ? function (i) { return pos.getX(i); } : (axis === 1 ? function (i) { return pos.getY(i); } : function (i) { return pos.getZ(i); });
+      for (let t = 0; t < ntri; t++) {
+        let s = 0;
+        for (let k = 0; k < 3; k++) s += read(index.getX(t * 3 + k));
+        cents[t] = s / 3;
+        if (cents[t] < min) min = cents[t];
+        if (cents[t] > max) max = cents[t];
+      }
+      const bins = 16;
+      const hist = new Array(bins).fill(0);
+      const span = Math.max(1e-6, max - min);
+      for (let t = 0; t < ntri; t++) hist[Math.min(bins - 1, Math.floor((cents[t] - min) / span * bins))]++;
+      let gap = 6, gapV = Infinity;
+      for (let b = 5; b <= 10; b++) if (hist[b] < gapV) { gapV = hist[b]; gap = b; }
+      const avg = (hist[Math.max(0, gap - 1)] + hist[Math.min(bins - 1, gap + 1)]) * 0.5;
+      if (!(gapV < avg * 0.4 && avg > 8)) return [part];
+      const cut = min + (gap + 0.5) / bins * span;
+      function take(side) {
+        const mapV = new Map();
+        const positions = [], normals = [], uvs = [], indices = [];
+        const nrm = geo.attributes.normal, uv = geo.attributes.uv;
+        const v = new THREE.Vector3();
+        function add(vi) {
+          let n = mapV.get(vi);
+          if (n == null) {
+            n = positions.length / 3;
+            mapV.set(vi, n);
+            v.fromBufferAttribute(pos, vi);
+            positions.push(v.x, v.y, v.z);
+            if (nrm) { v.fromBufferAttribute(nrm, vi); normals.push(v.x, v.y, v.z); }
+            if (uv) uvs.push(uv.getX(vi), uv.getY(vi));
+          }
+          indices.push(n);
+        }
+        for (let t = 0; t < ntri; t++) {
+          if (side < 0 ? cents[t] < cut : cents[t] >= cut) {
+            add(index.getX(t * 3)); add(index.getX(t * 3 + 1)); add(index.getX(t * 3 + 2));
+          }
+        }
+        if (indices.length < 30) return null;
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        if (normals.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+        if (uvs.length) g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        g.setIndex(indices);
+        recenterGeo(g);
+        return { geo: g, size: geoSize(g), material: part.material, name: part.name + (side < 0 ? 'L' : 'R') };
+      }
+      const a = take(-1), b = take(1);
+      return a && b ? [a, b] : [part];
+    }
+    const banners = [], lows = [], vessels = [];
+    propParts.forEach(function (part) {
+      const role = roleOf(part.size);
+      if (role === 'banner') splitBanner(part).forEach(function (b) { banners.push(b); });
+      else if (role === 'low') lows.push(part);
+      else vessels.push(part);
+    });
+    lows.sort(function (a, b) { return (b.size.x * b.size.z) - (a.size.x * a.size.z); });
+    vessels.sort(function (a, b) { return b.size.y - a.size.y; });
+    const couch = lows[0] || null;
+    const chest = lows[1] || lows[0] || null;
+    const vase = vessels[0] || null;
+    const jar = vessels[1] || vessels[0] || null;
+    const pot = vessels.length > 2 ? vessels[vessels.length - 1] : jar;
+    function seatOf(part, height) {
+      const pos = part.geo.attributes.position;
+      const ys = [];
+      const step = Math.max(1, Math.floor(pos.count / 700));
+      for (let i = 0; i < pos.count; i += step) {
+        if (Math.abs(pos.getX(i)) > part.size.x * 0.3 || Math.abs(pos.getZ(i)) > part.size.z * 0.3) continue;
+        ys.push(pos.getY(i));
+      }
+      if (!ys.length) return height * 0.74;
+      ys.sort(function (a, b) { return a - b; });
+      const y = ys[Math.min(ys.length - 1, Math.floor(ys.length * 0.78))];
+      return Math.max(0.2, (y / Math.max(1e-4, part.size.y)) * height - 0.02);
+    }
+    function fitted(part, height) {
+      const s = height / Math.max(1e-4, part.size.y);
+      const longIsX = part.size.x >= part.size.z;
+      return {
+        along: (longIsX ? part.size.x : part.size.z) * s,
+        across: (longIsX ? part.size.z : part.size.x) * s,
+        rot: longIsX ? Math.PI / 2 : 0
+      };
+    }
+    if (couch && chest) {
+      const stations = 3;
+      const z0 = 4.2 * H;
+      const z1 = Math.max(z0 + 8, stairFootZ - 1.7 * H);
+      const couchH = 1.08, chestH = 1.2, vaseH = 1.9, jarH = 0.78, potH = 0.46;
+      const couchFit = fitted(couch, couchH);
+      const chestFit = fitted(chest, chestH);
+      const carpetEdge = CONFIG.carpetWidthH * H * 0.5;
+      for (let s = 0; s < stations; s++) {
+        const zc = stations === 1 ? (z0 + z1) * 0.5 : z0 + (z1 - z0) * (s / (stations - 1));
+        [-1, 1].forEach(function (side) {
+          const couchX = side * (carpetEdge + couchFit.across * 0.5 + 0.42);
+          const gap = couchFit.along * 0.58;
+          dropProp(couch, couchX, zc - gap, side < 0 ? couchFit.rot : -couchFit.rot, couchH, 0);
+          dropProp(couch, couchX, zc + gap, side < 0 ? couchFit.rot : -couchFit.rot, couchH, 0);
+          const chestX = side * (Math.abs(couchX) + couchFit.across * 0.5 + 0.55 + chestFit.across * 0.5);
+          dropProp(chest, chestX, zc, side < 0 ? chestFit.rot : -chestFit.rot, chestH, 0);
+          if (vase) {
+            const vaseFit = fitted(vase, vaseH);
+            const vaseX = side * (Math.abs(chestX) + chestFit.across * 0.5 + vaseFit.across * 0.5 + 0.28);
+            dropProp(vase, vaseX, zc - chestFit.along * 0.15, 0, vaseH, 0);
+          }
+          if (jar) dropProp(jar, chestX, zc - chestFit.along * 0.12, 0, jarH, seatOf(chest, chestH));
+          if (pot && pot !== jar) dropProp(pot, chestX, zc + chestFit.along * 0.12, 0, potH, seatOf(chest, chestH));
+        });
+      }
+      slotModes.push({ id: 'furniture', count: stations * 2, mode: 'arranged' });
+    }
+    (function hangBanners() {
+      const flags = banners.length ? banners : [];
+      if (!flags.length) return;
+      const left = flags[0];
+      const right = flags[1] || flags[0];
+      const bannerH = Math.max(4.2, Math.min(CH * 0.58, CH - topY - 0.7));
+      const bottom = topY + 0.1;
+      const x = 2.45 * H;
+      const z = L - 0.48;
+      function hang(part, px) {
+        const thinIsX = part.size.x <= part.size.z;
+        const face = thinIsX ? part.size.z : part.size.x;
+        const sH = bannerH / Math.max(1e-4, part.size.y);
+        const sFace = 1.65 / Math.max(1e-4, face);
+        const sThin = sH;
+        const mesh = new THREE.Mesh(part.geo, propMat);
+        if (thinIsX) mesh.scale.set(sThin, sH, sFace);
+        else mesh.scale.set(sFace, sH, sThin);
+        mesh.rotation.y = thinIsX ? Math.PI / 2 : 0;
+        mesh.position.set(px, bottom, z);
+        mesh.name = 'throne-banner';
+        group.add(mesh);
+      }
+      hang(left, -x);
+      hang(right, x);
+      slotModes.push({ id: 'banner', count: 2, mode: 'throne-wall' });
+    })();
+    if (!propParts.length) slotModes.push({ id: 'propsSheet', count: 0, mode: 'missing' });
+
+    const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.78);
     group.add(hemi);
+    const fill = new THREE.AmbientLight(0xffd0a4, 0.12);
+    group.add(fill);
+    const wash = new THREE.DirectionalLight(0xfff0d0, 0.5);
+    wash.position.set(-0.2 * H, CH * 0.86, L * 0.18);
+    wash.target.position.set(0, CH * 0.28, L * 0.66);
+    wash.castShadow = false;
+    group.add(wash);
+    group.add(wash.target);
     lights = [];
-    const pointSpots = [
-      [0, topY + 2.3 * H, throneZ - 0.4 * H, 1.7, 9 * H],
-      [-2.4 * H, 2.5 * H, 8 * H, 1.35, 8 * H],
-      [2.6 * H, 2.5 * H, 13.5 * H, 1.35, 8 * H],
-      [-2.2 * H, 2.6 * H, 18.5 * H, 1.25, 8 * H],
-      [0, topY + 1.8 * H, stairFootZ - 1.2 * H, 1.4, 9 * H]
-    ];
-    pointSpots.forEach(function (s, i) {
-      if (i >= CONFIG.lightCount) return;
-      const pl = new THREE.PointLight(0xffb46a, s[3], s[4], 2);
-      pl.position.set(s[0], s[1], s[2]);
+    for (let i = 0; i < CONFIG.lightCount; i++) {
+      const pl = new THREE.PointLight(0xffb15a, 2.15, 16 * H, 2);
       pl.castShadow = false;
-      pl.userData.base = pl.intensity;
-      pl.userData.seed = i * 1.7;
+      pl.position.set(0, 2.2 * H, L * 0.45);
       group.add(pl);
       lights.push(pl);
-    });
+    }
+    console.info('قاعة', n, 'وحدات، ارتفاع', (CH / H).toFixed(2), 'H، مباخر', brzMatrices.length, 'أقواس', CONFIG.PASSAGES.length);
+
+    function buildFires() {
+      if (!fireList.length) return;
+      const layers = [
+        { w: 0.16 * H, h: 0.32 * H, seed: 0 },
+        { w: 0.26 * H, h: 0.48 * H, seed: 2.3 },
+        { w: 0.36 * H, h: 0.62 * H, seed: 5.1 }
+      ];
+      const count = fireList.length * layers.length;
+      const geo = new THREE.PlaneGeometry(1, 1);
+      geo.translate(0, 0.5, 0);
+      const seeds = new Float32Array(count);
+      const matrices = new Array(count);
+      let si = 0;
+      layers.forEach(function (layer) {
+        fireList.forEach(function (f, i) {
+          seeds[si] = f.seed + layer.seed;
+          matrices[si] = pose(f.x, f.y, f.z, 0, layer.w, layer.h, 1);
+          si++;
+        });
+      });
+      geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
+      const fireMat = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 } },
+        vertexShader: FIRE_VS,
+        fragmentShader: FIRE_FS,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide
+      });
+      const fireMesh = new THREE.InstancedMesh(geo, fireMat, count);
+      fireMesh.name = 'fire';
+      fireMesh.frustumCulled = false;
+      fireMesh.renderOrder = 2;
+      matrices.forEach(function (m, i) { fireMesh.setMatrixAt(i, m); });
+      fireMesh.instanceMatrix.needsUpdate = true;
+      group.add(fireMesh);
+      fireMats.push(fireMat);
+
+      const ggeo = new THREE.PlaneGeometry(1, 1);
+      const gseeds = new Float32Array(fireList.length);
+      ggeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(gseeds, 1));
+      const gmat = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 } },
+        vertexShader: GLOW_VS,
+        fragmentShader: GLOW_FS,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide
+      });
+      const glowMesh = new THREE.InstancedMesh(ggeo, gmat, fireList.length);
+      glowMesh.name = 'fire-glow';
+      glowMesh.frustumCulled = false;
+      glowMesh.renderOrder = 1;
+      fireList.forEach(function (f, i) {
+        gseeds[i] = f.seed;
+        glowMesh.setMatrixAt(i, pose(f.x, f.y + 0.08 * H, f.z, 0, 0.55 * H, 0.55 * H, 1));
+      });
+      glowMesh.instanceMatrix.needsUpdate = true;
+      group.add(glowMesh);
+      fireMats.push(gmat);
+
+      const per = 8;
+      const en = fireList.length * per;
+      const epos = new Float32Array(en * 3);
+      const eseed = new Float32Array(en);
+      fireList.forEach(function (f, fi) {
+        for (let k = 0; k < per; k++) {
+          const ei = fi * per + k;
+          epos[ei * 3] = f.x;
+          epos[ei * 3 + 1] = f.y;
+          epos[ei * 3 + 2] = f.z;
+          eseed[ei] = (fi * 0.17 + k * 0.13) % 1;
+        }
+      });
+      const egeo = new THREE.BufferGeometry();
+      egeo.setAttribute('position', new THREE.BufferAttribute(epos, 3));
+      egeo.setAttribute('aSeed', new THREE.BufferAttribute(eseed, 1));
+      const emat = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 } },
+        vertexShader: EMBER_VS,
+        fragmentShader: EMBER_FS,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      });
+      const embers = new THREE.Points(egeo, emat);
+      embers.name = 'embers';
+      embers.frustumCulled = false;
+      embers.renderOrder = 3;
+      group.add(embers);
+      fireMats.push(emat);
+
+      fireMats.forEach(function (m) {
+        if (m.uniforms && m.uniforms.uTime) m.uniforms.uTime.value = 1.15;
+      });
+      const sorted = fireList.slice().sort(function (a, b) { return a.z - b.z || a.x - b.x; });
+      const ly = Math.min(CH * 0.46, 3.1 * H);
+      for (let i = 0; i < lights.length; i++) {
+        const f = sorted[Math.min(sorted.length - 1, Math.round(i * (sorted.length - 1) / Math.max(1, lights.length - 1)))];
+        lights[i].position.set(f.x, ly, f.z);
+        lights[i].intensity = 2.15;
+        lights[i].distance = 16 * H;
+      }
+    }
 
     const TYPE_COLOR = {
       lionWinged: 0xd4652f, pedestal: 0xa0845c, brazier: 0xe07a2f, lantern: 0xf0c14a,
-      banner: 0x2f6fbe, statueAlcove: 0xc49a7a, tableLow: 0x8d6b4a, benchCushion: 0xa33b48, vase: 0x3e7d9a
+      banner: 0x2f6fbe, statueAlcove: 0xc49a7a, tableLow: 0x8d6b4a, benchCushion: 0xa33b48, vase: 0x3e7d9a,
+      daybed: 0x8a3a34, lampStand: 0xe0b15a
     };
     const matCache = {};
     function phMat(type, part) {
@@ -1234,6 +2152,8 @@
       else if (type === 'lantern') { color = 0xc4923e; metal = 0.6; rough = 0.38; }
       else if (part === 'gold' || part === 'cushion') { color = part === 'cushion' ? 0x8a3a34 : 0xd4b06a; metal = 0.35; }
       else if (type === 'vase') { color = 0xb9925a; metal = 0.28; }
+      else if (type === 'daybed') { color = 0x6a3a32; metal = 0.08; rough = 0.72; }
+      else if (type === 'lampStand') { color = 0xc4923e; metal = 0.55; rough = 0.4; }
       const m = new THREE.MeshStandardMaterial({ color: color, roughness: rough, metalness: metal });
       matCache[key] = m;
       return m;
@@ -1368,9 +2288,27 @@
       return fitGeo(mergeParts([belly, neck]), h);
     }
     function clothGeo(h) {
-      const g = new THREE.PlaneGeometry(h * 0.23, h);
+      const g = new THREE.PlaneGeometry(h * (1.2 / 3.5), h);
       g.translate(0, h / 2, 0);
       return g;
+    }
+    function daybedGeo(h) {
+      const base = new THREE.BoxGeometry(h * 1.15, h * 0.28, h * 2.35);
+      base.translate(0, h * 0.34, 0);
+      const head = new THREE.BoxGeometry(h * 1.15, h * 0.42, h * 0.16);
+      head.translate(0, h * 0.62, -h * 1.05);
+      const pad = new THREE.BoxGeometry(h * 0.9, h * 0.12, h * 1.7);
+      pad.translate(0, h * 0.52, 0.08 * h);
+      return fitGeo(mergeParts([base, head, pad]), h);
+    }
+    function lampStandGeo(h) {
+      const foot = new THREE.CylinderGeometry(0.12 * h, 0.14 * h, 0.06 * h, 6);
+      foot.translate(0, 0.03 * h, 0);
+      const pole = new THREE.CylinderGeometry(0.035 * h, 0.05 * h, 0.78 * h, 6);
+      pole.translate(0, 0.42 * h, 0);
+      const cup = new THREE.CylinderGeometry(0.11 * h, 0.07 * h, 0.1 * h, 6);
+      cup.translate(0, 0.86 * h, 0);
+      return fitGeo(mergeParts([foot, pole, cup]), h);
     }
     function discGeo(h) {
       const g = new THREE.CircleGeometry(h * 0.075, 16);
@@ -1418,28 +2356,22 @@
         });
       },
       lantern: function (slot) {
-        stamp(slot, lanternGeo(slot.targetHeightH * H), phMat(slot.type, 'gold'), 'prop:' + slot.id);
-        const chainH = Math.max(0.3 * H, CH - 6.7 * H);
-        const chainGeo = new THREE.CylinderGeometry(0.015 * H, 0.015 * H, chainH, 4);
-        chainGeo.translate(0, chainH / 2, 0);
-        const chains = new THREE.InstancedMesh(chainGeo, phMat(slot.type), slot.positions.length);
+        const h = slot.targetHeightH * H;
+        const yHang = Math.max(0.8 * H, CH - h - 0.85 * H);
+        const fake = Object.assign({}, slot, { positions: slot.positions.map(function (p) { return [p[0], yHang / H, p[2]]; }) });
+        stamp(fake, lanternGeo(h), phMat(slot.type, 'gold'), 'prop:' + slot.id);
+        const chainLen = Math.max(0.2 * H, CH - (yHang + h));
+        const chainGeo = new THREE.CylinderGeometry(0.012 * H, 0.012 * H, chainLen, 4);
+        chainGeo.translate(0, chainLen / 2, 0);
+        const chains = new THREE.InstancedMesh(chainGeo, phMat(slot.type), fake.positions.length);
         chains.name = 'lantern-chain';
         chains.frustumCulled = false;
-        slot.positions.forEach(function (p, i) {
-          dummy.position.set(p[0] * H, p[1] * H + slot.targetHeightH * H, p[2] * H);
+        fake.positions.forEach(function (p, i) {
+          dummy.position.set(p[0] * H, p[1] * H + h, p[2] * H);
           dummy.rotation.set(0, 0, 0);
           dummy.scale.set(1, 1, 1);
           dummy.updateMatrix();
           chains.setMatrixAt(i, dummy.matrix);
-          const f = flameSprite();
-          f.position.set(p[0] * H, p[1] * H + slot.targetHeightH * H * 0.45, p[2] * H);
-          const sc = 0.28 * H;
-          f.scale.setScalar(sc);
-          f.userData.base = sc;
-          f.userData.seed = i + 2;
-          f.name = 'flame';
-          group.add(f);
-          flames.push(f);
         });
         chains.instanceMatrix.needsUpdate = true;
         group.add(chains);
@@ -1447,8 +2379,10 @@
       },
       banner: function (slot) {
         const h = slot.targetHeightH * H;
-        stamp(slot, clothGeo(h), phMat(slot.type), 'prop:' + slot.id);
-        stamp(slot, discGeo(h), phMat(slot.type, 'disc'), 'prop:' + slot.id + ':disc');
+        const yHang = Math.max(0.4 * H, CH - h - 0.3 * H);
+        const fake = Object.assign({}, slot, { positions: slot.positions.map(function (p) { return [p[0], yHang / H, p[2]]; }) });
+        stamp(fake, clothGeo(h), phMat(slot.type), 'prop:' + slot.id);
+        stamp(fake, discGeo(h), phMat(slot.type, 'disc'), 'prop:' + slot.id + ':disc');
       },
       statueAlcove: function (slot) { stamp(slot, statueGeo(slot.targetHeightH * H), phMat(slot.type), 'prop:' + slot.id); },
       tableLow: function (slot) { stamp(slot, tableGeo(slot.targetHeightH * H), phMat(slot.type), 'prop:' + slot.id); },
@@ -1456,7 +2390,15 @@
         stamp(slot, benchGeo(slot.targetHeightH * H), phMat(slot.type), 'prop:' + slot.id);
         stamp(slot, cushionGeo(slot.targetHeightH * H), phMat(slot.type, 'cushion'), 'prop:' + slot.id + ':cushion');
       },
-      vase: function (slot) { stamp(slot, vaseGeo(slot.targetHeightH * H), phMat(slot.type), 'prop:' + slot.id); }
+      vase: function (slot) { stamp(slot, vaseGeo(slot.targetHeightH * H), phMat(slot.type), 'prop:' + slot.id); },
+      daybed: function (slot) { stamp(slot, daybedGeo(slot.targetHeightH * H), phMat(slot.type), 'prop:' + slot.id); },
+      lampStand: function (slot) {
+        const h = slot.targetHeightH * H;
+        stamp(slot, lampStandGeo(h), phMat(slot.type, 'gold'), 'prop:' + slot.id);
+        slot.positions.forEach(function (p, i) {
+          fireList.push({ x: p[0] * H, y: p[1] * H + h * 0.92, z: p[2] * H, intensity: 0.9, seed: 50 + i });
+        });
+      }
     };
     const labelTex = {};
     function labelSprite(id) {
@@ -1481,7 +2423,7 @@
     }
     CONFIG.PROPS.forEach(function (slot) {
       if (slot.rotYs && slot.rotYs.length !== slot.positions.length) console.warn('rotYs لا يطابق المواضع', slot.id);
-      const gltf = slot.glbPath && assets.props && assets.props[slot.glbPath];
+      const gltf = slot.glbPath && assets.propFiles && assets.propFiles[slot.glbPath];
       const buildPh = builders[slot.type] || builders[slot.id];
       if (!buildPh) { console.warn('لا يوجد شكل مؤقت لهذا النوع', slot.type); return; }
       buildPh(slot);
@@ -1511,6 +2453,7 @@
       }
     });
 
+    buildFires();
     const dustN = 48;
     const pos = new Float32Array(dustN * 3);
     for (let i = 0; i < dustN; i++) {
@@ -1533,19 +2476,11 @@
     }
     [-1, 1].forEach(function (side) { worldBox(new THREE.Vector3(side * (W / 2) - 0.45, 0, 0), new THREE.Vector3(side * (W / 2) + 0.45, CH, L)); });
     worldBox(new THREE.Vector3(-W / 2, 0, L - 0.45), new THREE.Vector3(W / 2, CH, L + 0.45));
-    worldBox(new THREE.Vector3(-W / 2, 0, -0.45), new THREE.Vector3(-portal.width / 2, CH, 0.4));
-    worldBox(new THREE.Vector3(portal.width / 2, 0, -0.45), new THREE.Vector3(W / 2, CH, 0.4));
+    worldBox(new THREE.Vector3(-W / 2 - 0.3, 0, -0.4), new THREE.Vector3(W / 2 + 0.3, CH, 0.85));
     const hx = stairW / 2;
     worldBox(new THREE.Vector3(-hx - 0.3 * H, 0, platformFrontZ), new THREE.Vector3(-hx + 0.04 * H, topY + H, L));
     worldBox(new THREE.Vector3(hx - 0.04 * H, 0, platformFrontZ), new THREE.Vector3(hx + 0.3 * H, topY + H, L));
-    colLocalZ.forEach(function (zH, i) {
-      [-1, 1].forEach(function (side) {
-        const px = side * colLocalX[i] * H;
-        const pz = zH * H;
-        const rad = Math.min(plinthW * 0.46, 0.55 * H);
-        worldBox(new THREE.Vector3(px - rad, 0, pz - rad), new THREE.Vector3(px + rad, CONFIG.columnHeightH * H + plinthH, pz + rad));
-      });
-    });
+    extras.forEach(function (b) { worldBox(b.min, b.max); });
     group.traverse(function (o) {
       if (o.name !== 'throne' && o.name !== 'throne-stand-in') return;
       const b = new THREE.Box3().setFromObject(o);
@@ -1554,7 +2489,9 @@
     });
     const watch = [];
     function watchBox(name, min, max) { watch.push({ name: name, min: min, max: max }); }
-    columns.forEach(function (c, i) { const b = new THREE.Box3().setFromObject(c); watchBox('column' + i, b.min, b.max); });
+    pendingWatch.forEach(function (w) {
+      watchBox(w.name, new THREE.Vector3(ox + w.min.x, gy + w.min.y, oz + w.min.z), new THREE.Vector3(ox + w.max.x, gy + w.max.y, oz + w.max.z));
+    });
     const tb = new THREE.Box3().setFromObject(throneObj); watchBox('throne', tb.min, tb.max);
     CONFIG.PROPS.forEach(function (slot) {
       if (slot.collider !== 'box' || !slot.colliderSize) return;
@@ -1574,13 +2511,16 @@
       });
     });
     function allowOverlap(a, b) {
-      const pair = [a, b].sort().join('+');
-      return pair === 'lionWinged+pedestal' || pair === 'lionWingedThrone+pedestalThrone';
+      const pair = [a.name, b.name].sort().join('+');
+      if (pair !== 'lion+pedestal' && pair !== 'lionSmall+pedestalThrone') return false;
+      const acx = (a.min.x + a.max.x) / 2, acz = (a.min.z + a.max.z) / 2;
+      const bcx = (b.min.x + b.max.x) / 2, bcz = (b.min.z + b.max.z) / 2;
+      return Math.hypot(acx - bcx, acz - bcz) < 1.35 * H;
     }
     for (let i = 0; i < watch.length; i++) {
       for (let j = i + 1; j < watch.length; j++) {
         const a = watch[i], b = watch[j];
-        if (allowOverlap(a.name, b.name)) continue;
+        if (allowOverlap(a, b)) continue;
         if (a.min.x >= b.max.x || b.min.x >= a.max.x || a.min.y >= b.max.y || b.min.y >= a.max.y || a.min.z >= b.max.z || b.min.z >= a.max.z) continue;
         const msg = a.name + '/' + b.name;
         if (overlapNotes.length < 12) overlapNotes.push(msg);
@@ -1594,40 +2534,66 @@
       const ext = ctx.scene.getObjectByName('PalaceExterior');
       if (ext) ext.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
     }
-    let geomDraws = 0, geomTris = 0;
-    group.traverse(function (o) {
-      if (o.isSprite) { geomDraws++; return; }
-      if (!o.isMesh || !o.geometry) return;
-      geomDraws++;
-      const g = o.geometry;
-      const t = g.index ? g.index.count / 3 : (g.attributes.position ? g.attributes.position.count / 3 : 0);
-      geomTris += t * (o.isInstancedMesh ? o.count : 1);
+    if (palaceEnv) {
+      group.traverse(function (o) {
+        if (!o.material) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach(function (m) {
+          if (!m.isMeshStandardMaterial || m.envMap) return;
+          m.envMap = palaceEnv;
+          if (!m.envMapIntensity) m.envMapIntensity = 0.45;
+        });
+      });
+    }
+    function geomLoad() {
+      let draws = 0, tris = 0;
+      group.traverse(function (o) {
+        if (!o.visible) return;
+        if (o.isSprite || o.isPoints) { draws++; return; }
+        if (!o.isMesh || !o.geometry) return;
+        draws++;
+        const g = o.geometry;
+        const t = g.index ? g.index.count / 3 : (g.attributes.position ? g.attributes.position.count / 3 : 0);
+        tris += t * (o.isInstancedMesh ? o.count : 1);
+      });
+      return { draws: draws, tris: tris };
+    }
+    let worst = { draws: 0, tris: 0, at: '—' };
+    [[0, 3], [0, 12], [0, 20], [2.4, 20], [0, PLAN.throneZ]].forEach(function (s) {
+      updateLODs({ position: new THREE.Vector3(portal.x + s[0] * H, gy + 1.6 * H, portal.frontZ + s[1] * H) });
+      const gstat = geomLoad();
+      if (gstat.tris > worst.tris) worst = { draws: gstat.draws, tris: gstat.tris, at: s[0] + ',' + s[1] };
     });
+    if (ctx.camera) updateLODs(ctx.camera);
+    const live = geomLoad();
     let blockedZ = -1;
     for (let z = 0.6 * H; z < stairFootZ - 0.2 * H; z += 0.45 * H) {
       if (blocks(ox, oz + z)) { blockedZ = z; break; }
     }
-    note('hall built lights=' + (lights.length + 1) + ' draws~' + geomDraws + ' tris~' + Math.round(geomTris) + ' centerBlock=' + (blockedZ < 0 ? 'clear' : blockedZ.toFixed(1)));
+    note('hall built points=' + lights.length + ' hemi=1 draws~' + live.draws + ' tris~' + Math.round(live.tris) + ' worst~' + Math.round(worst.tris) + '@' + worst.at + ' passages=' + CONFIG.PASSAGES.length + ' centerBlock=' + (blockedZ < 0 ? 'clear' : blockedZ.toFixed(1)));
   }
 
   function aimCamera(ctx, snap) {
     const hp = ctx.hero.position;
-    const dest = new THREE.Vector3(hp.x, hp.y + 1.62, hp.z - 4.3);
-    if (snap) ctx.camera.position.copy(dest);
-    else ctx.camera.position.lerp(dest, 1 - Math.exp(-Math.max(0.001, lastDt) * 3));
-    ctx.camera.lookAt(hp.x, hp.y + 1.32, hp.z + 16);
+    const goal = 6.2;
+    if (snap) camBack = 3.5;
+    else camBack += (goal - camBack) * (1 - Math.exp(-Math.max(0.001, lastDt) * 0.62));
+    const dest = new THREE.Vector3(hp.x, hp.y + 1.75, hp.z - camBack);
+    if (snap || !ctx.camera.position.distanceTo(dest)) ctx.camera.position.copy(dest);
+    else ctx.camera.position.lerp(dest, 1 - Math.exp(-Math.max(0.001, lastDt) * 2.2));
+    ctx.camera.lookAt(hp.x, hp.y + 1.28, hp.z + 12);
   }
 
   function placeHero(ctx) {
-    const spawnZ = ctx.portal.frontZ + CONFIG.spawnOffsetH * H;
+    const spawnZ = ctx.portal.frontZ + 1.05 * H;
     ctx.hero.position.set(ctx.portal.x, floorY, spawnZ);
     ctx.setFacing(0);
     occupant = true;
+    entranceLeft = 1.7;
     aimCamera(ctx, true);
     constrainCamera(ctx.camera, ctx.hero);
     const blockedSpawn = blocks(ctx.hero.position.x, ctx.hero.position.z);
-    if (blockedSpawn) console.warn('نقطة الظهور داخل عائق — أُزيحت نحو وسط القاعة');
-    if (blockedSpawn) ctx.hero.position.z = ctx.portal.frontZ + Math.min(hallLen * 0.5, CONFIG.spawnOffsetH * H + 1.5);
+    if (blockedSpawn) ctx.hero.position.z = ctx.portal.frontZ + Math.min(hallLen * 0.35, 2.4);
   }
 
   function watchContext(renderer) {
@@ -1661,8 +2627,21 @@
 
   let lastDt = 0.016;
   function tick(dt, ctx) {
+    try { tickInner(dt, ctx); }
+    catch (err) {
+      console.error(err);
+      runtimeErrors.push('tick: ' + (err && (err.stack || err.message) || err));
+      if (state !== 'IDLE' && state !== 'FAILED') {
+        loadError = err;
+        state = 'FAILED';
+        try { showFail(err); } catch (e2) { /* keep the page alive */ }
+      }
+    }
+  }
+  function tickInner(dt, ctx) {
     lastDt = dt;
     clock += dt;
+    if (group && hallBuilt && (state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'DONE')) animateHall(dt, ctx);
     if (ctx.hero) heroSnap = ctx.hero.position.x.toFixed(2) + ', ' + ctx.hero.position.y.toFixed(2) + ', ' + ctx.hero.position.z.toFixed(2);
     lastDoor = !!ctx.doorOpen;
     if (ctx.renderer) {
@@ -1708,7 +2687,7 @@
       const u = Math.min(1, fadeT / CONFIG.fadeOutSeconds);
       loadEl.style.opacity = String(easeInOut(u));
       ctx.hero.position.y = floorY;
-      ctx.hero.position.z += ((CONFIG.autoWalkH * H) / CONFIG.fadeOutSeconds) * dt;
+      ctx.hero.position.z += 1.28 * dt;
       ctx.setFacing(0);
       aimCamera(ctx, false);
       if (u >= 1) { state = 'LOADING'; holdT = 0; note('black'); }
@@ -1736,11 +2715,8 @@
         hallBuilt = true;
         placeHero(ctx);
         renderUI();
-        if (ctx.renderer.compile) {
-          try { ctx.renderer.compile(ctx.scene, ctx.camera); }
-          catch (compileErr) { note('compile ' + (compileErr && compileErr.message)); }
-        }
-        ctx.renderer.render(ctx.scene, ctx.camera);
+        try { ctx.renderer.render(ctx.scene, ctx.camera); }
+        catch (renderErr) { note('render ' + (renderErr && renderErr.message)); }
         warmFrame = true;
         renderUI();
         note('warm frame percent=' + shownPercent());
@@ -1777,10 +2753,33 @@
       if (u >= 1) {
         loadEl.style.opacity = '0';
         loadEl.style.pointerEvents = 'none';
-        state = 'DONE';
-        note('done');
+        state = 'ENTRANCE';
+        fadeT = 0;
+        entranceLeft = 1.7;
+        note('entrance');
         renderDebug();
       }
+      return;
+    }
+    if (state === 'ENTRANCE') {
+      const step = Math.min(entranceLeft, 0.48 * dt);
+      const p = ctx.hero.position;
+      const nz = p.z + step;
+      if (!blocks(p.x, nz)) p.z = nz;
+      else entranceLeft = 0;
+      entranceLeft = Math.max(0, entranceLeft - step);
+      p.y = floorAt(p.x, p.z);
+      ctx.setFacing(0);
+      aimCamera(ctx, false);
+      if (entranceLeft <= 0) { state = 'SETTLE'; fadeT = 0; note('settle'); }
+      return;
+    }
+    if (state === 'SETTLE') {
+      fadeT += dt;
+      ctx.hero.position.y = floorAt(ctx.hero.position.x, ctx.hero.position.z);
+      ctx.setFacing(0);
+      aimCamera(ctx, false);
+      if (fadeT >= 0.9) { state = 'DONE'; note('done'); renderDebug(); }
       return;
     }
     if (state === 'DONE') {
@@ -1789,17 +2788,6 @@
       occupant = lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;
       if (group) group.visible = occupant;
       setExteriorVisible(ctx.scene, !occupant);
-      if (occupant) ctx.hero.position.y = floorAt(ctx.hero.position.x, ctx.hero.position.z);
-      for (const L of lights) {
-        const n = Math.sin(clock * 3.1 + L.userData.seed) * .6 + Math.sin(clock * 7.7 + L.userData.seed * 2) * .4;
-        L.intensity = L.userData.base * (1 + CONFIG.torchFlicker * n);
-      }
-      for (let i = 0; i < flames.length; i++) {
-        const f = flames[i];
-        const n = Math.sin(clock * 9 + f.userData.seed) * 0.5 + Math.sin(clock * 17 + f.userData.seed) * 0.5;
-        const s = (f.userData.base || 1) * (1 + 0.12 * n);
-        f.scale.setScalar(s);
-      }
       if (ctx.renderer && ctx.renderer.info && ctx.renderer.info.render) {
         const inf = ctx.renderer.info.render;
         if (inf.calls) perfNote = 'calls=' + inf.calls + ' tris=' + inf.triangles;
@@ -1808,7 +2796,7 @@
   }
 
   function blocks(x, z) {
-    const active = state === 'FADING_IN' || state === 'REVEAL' || state === 'SETUP' || (state === 'DONE' && occupant);
+    const active = state === 'FADING_IN' || state === 'REVEAL' || state === 'SETUP' || state === 'ENTRANCE' || state === 'SETTLE' || (state === 'DONE' && occupant);
     if (!active) return false;
     for (const c of colliders) {
       if (x > c.minx && x < c.maxx && z > c.minz && z < c.maxz) return true;
@@ -1845,7 +2833,9 @@
     const dx = cam.position.x - ox, dy = cam.position.y - oy, dz = cam.position.z - oz;
     let hit = 1;
     for (let i = 0; i < colliders.length; i++) {
-      const t = rayHit(ox, oy, oz, dx, dy, dz, colliders[i]);
+      const b = colliders[i];
+      if (Math.max(b.maxx - b.minx, b.maxz - b.minz) < 8) continue;
+      const t = rayHit(ox, oy, oz, dx, dy, dz, b);
       if (t != null && t < hit) hit = t;
     }
     const margin = 0.35 * H;
@@ -1861,12 +2851,22 @@
     if (![cam.position.x, cam.position.y, cam.position.z].every(Number.isFinite)) cam.position.copy(savedCam);
   }
 
+  function clampFollowTarget(want) {
+    if (!want || state !== 'DONE' || !occupant) return;
+    const margin = 0.7 * H;
+    want.x = Math.max(portalX - hallW / 2 + margin, Math.min(portalX + hallW / 2 - margin, want.x));
+    want.z = Math.max(portalFront + 0.9, Math.min(portalFront + hallLen - margin, want.z));
+    want.y = Math.max(floorY + 1.2, Math.min(floorY + Math.max(2.4, CONFIG.hallHeightH * H * 0.55), want.y));
+  }
+
   window.PalaceInterior = {
     CONFIG: CONFIG,
     BUILD: BUILD,
     tick: tick,
-    locksControl: function () { return state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'FAILED'; },
-    ownsCamera: function () { return state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'FAILED'; },
+    locksControl: function () { return state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
+    ownsCamera: function () { return state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
+    wantsWalk: function () { return state === 'ENTRANCE'; },
+    clampFollowTarget: clampFollowTarget,
     ownsGround: function () { return state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'FAILED' || (state === 'DONE' && occupant); },
     blocks: blocks,
     constrainCamera: constrainCamera,

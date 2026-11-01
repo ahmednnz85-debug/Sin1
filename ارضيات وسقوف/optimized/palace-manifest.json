@@ -1,0 +1,95 @@
+{
+  "build": "hall6",
+  "payloadBytes": 13653465,
+  "payloadMB": 13.02,
+  "warnMB": 25,
+  "ceilingMB": 30,
+  "notes": [
+    "مجموعة غراض.glb is one fused mesh and is not in this manifest",
+    "flame geometry above y=0.34 was removed from المباخر before simplify",
+    "column LOD1 is 6122 tris (target 5000)",
+    "wall module is 33965 tris, instanced 6 times"
+  ],
+  "files": [
+    {
+      "name": "vendor/meshopt_decoder.js",
+      "bytes": 25217,
+      "tris": null
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/marble.webp",
+      "bytes": 117388,
+      "tris": null
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/floor-orm.webp",
+      "bytes": 1690,
+      "tris": null
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/ارضية.webp",
+      "bytes": 333086,
+      "tris": null
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/سجاد-الارضية.webp",
+      "bytes": 403928,
+      "tris": null
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/السقف.webp",
+      "bytes": 331468,
+      "tris": null
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/المدالية المركزية.webp",
+      "bytes": 361650,
+      "tris": null
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/جدار-خلف-العرش.webp",
+      "bytes": 724082,
+      "tris": null
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/الجدارية.glb",
+      "bytes": 3398632,
+      "tris": 33965
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/اعمدة.glb",
+      "bytes": 1763148,
+      "tris": 18578
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/اعمدة-lod1.glb",
+      "bytes": 688024,
+      "tris": 6122
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/المباخر.glb",
+      "bytes": 961468,
+      "tris": 12840
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/المباخر-lod1.glb",
+      "bytes": 253952,
+      "tris": 2756
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/lion_winged.glb",
+      "bytes": 2063108,
+      "tris": 22453
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/lion_winged-lod1.glb",
+      "bytes": 592240,
+      "tris": 5317
+    },
+    {
+      "name": "ارضيات وسقوف/optimized/عرش البطل.glb",
+      "bytes": 1634384,
+      "tris": 56230
+    }
+  ]
+}
