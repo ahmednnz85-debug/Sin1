@@ -40,6 +40,7 @@
     archHeightRatio: 0.64,
     lodDistanceH: 14
   };
+  if (new URLSearchParams(location.search).get('wings') === '0') CONFIG.useWings = false;
 
   const PLAN = (function () {
     const L = CONFIG.hallLengthH;
