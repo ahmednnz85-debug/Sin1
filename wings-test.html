@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Palace Wings — independent geometry tests</title>
+  <style>
+    html,body{margin:0;background:#090806;color:#f2e2c4;font:13px/1.45 ui-monospace,monospace}canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+    #panel{position:fixed;z-index:2;left:10px;top:10px;width:min(680px,92vw);max-height:90vh;overflow:auto;background:rgba(5,4,3,.93);border:1px solid #8d7348;padding:12px;white-space:pre-wrap}
+    button{background:#342718;color:#f5e4c3;border:1px solid #9d7b48;padding:8px 12px;margin:0 8px 8px 0}a{color:#e7c27f}
+  </style>
+</head>
+<body>
+  <div id="panel"><strong>PALACE WINGS · INDEPENDENT TESTS</strong><br><button id="run">Run all first-stage tests</button><button id="view">Cutaway overview</button><span id="status">Loading…</span><div id="out"></div></div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <script src="vendor/clipper.js"></script>
+  <script src="wings.js"></script>
+  <script>
+    const out=document.getElementById('out'),status=document.getElementById('status');
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0x0b0907);
+    const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,500);
+    const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);document.body.appendChild(renderer.domElement);
+    scene.add(new THREE.HemisphereLight(0xffe0b5,0x211810,1.2));const sun=new THREE.DirectionalLight(0xffd6a0,1.1);sun.position.set(-30,80,-20);scene.add(sun);
+    const hero=new THREE.Object3D();scene.add(hero);
+    const H=1.8396676123142246,width=25.755346572399144,length=55.19002836942674,archW=5.519002836942674,archH=7.782022617449925;
+    const passage=(id,side,z)=>({id,position:[side*width/2,0,z],width:archW,height:archH,rotY:side<0?Math.PI/2:-Math.PI/2,state:'closed'});
+    const hall={width,length,wallThickness:.9,alcoveDepth:1.15*H,floorY:0,passages:[passage('passage-L0',-1,9.198338061571123),passage('passage-R0',1,9.198338061571123),passage('passage-L1',-1,27.59501418471337),passage('passage-R1',1,27.59501418471337),passage('passage-L2',-1,45.99169030785561),passage('passage-R2',1,45.99169030785561)]};
+    const ctx={scene,camera,renderer,hero,portal:{x:0,frontZ:0},setFacing(){}};
+    let built;
+    try{built=PalaceWings.build(ctx,hall);PalaceWings.teleport('K1');PalaceWings.overview();renderer.render(scene,camera);status.textContent=' Built: '+built.rooms+' rooms. Not yet tested.';window.__wingsReady=true;}
+    catch(e){status.textContent=' BUILD FAILED';out.textContent=e.stack||String(e);window.__wingsError=String(e.stack||e);}
+    async function run(){if(!built)return;const b=document.getElementById('run');b.disabled=true;status.textContent=' Running exact geometry tests…';out.textContent='';const started=performance.now();try{const report=await PalaceWings.runTests({camera:false});report.elapsedMs=Math.round(performance.now()-started);out.textContent=PalaceWings.formatReport(report)+'\nElapsed: '+report.elapsedMs+' ms\n'+JSON.stringify(PalaceWings.metrics());status.textContent=report.failures?' FAILED':' ALL FIRST-STAGE TESTS PASSED';window.__wingsTestsDone=true;}catch(e){out.textContent=e.stack||String(e);status.textContent=' TEST ERROR';window.__wingsError=String(e.stack||e);window.__wingsTestsDone=true;}finally{b.disabled=false;}}
+    document.getElementById('run').onclick=run;document.getElementById('view').onclick=()=>{PalaceWings.overview();renderer.render(scene,camera);};
+    addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+    if(new URLSearchParams(location.search).has('autorun'))run();
+  </script>
+</body>
+</html>
