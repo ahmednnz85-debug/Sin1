@@ -2638,14 +2638,15 @@
   }
 
   function floorAt(x, z) {
-    if (!ramp || !Number.isFinite(x) || !Number.isFinite(z)) return floorY;
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return floorY;
     const lx = x - portalX;
     const lz = z - portalFront;
     let h = 0;
-    if (lx >= ramp.x0 && lx <= ramp.x1) {
+    if (ramp && lx >= ramp.x0 && lx <= ramp.x1) {
       if (lz >= ramp.z1 && lz <= ramp.zPlat) h = ramp.yTop;
       else if (lz > ramp.z0 && lz < ramp.z1) h = ramp.yTop * ((lz - ramp.z0) / Math.max(0.001, ramp.z1 - ramp.z0));
     }
+    if (CONFIG.useWings && window.Wings && window.Wings.floorAt && window.Wings.containsPoint(lx, lz)) return window.Wings.floorAt(lx, lz, floorY) + h;
     return floorY + h;
   }
 
@@ -2674,6 +2675,7 @@
     }
     const portal = ctx.portal;
     if (!portal) return;
+    if (CONFIG.useWings && window.Wings && window.Wings.tick) window.Wings.tick({ hero: ctx.hero, camera: ctx.camera, renderer: ctx.renderer, scene: ctx.scene, portal: portal, floorY: floorY });
     if (debugOn()) renderDebug();
     if (state === 'IDLE') {
       if (!ctx.doorOpen || busy) return;
@@ -2809,7 +2811,7 @@
     if (state === 'DONE') {
       const lx = ctx.hero.position.x - portalX;
       const lz = ctx.hero.position.z - portalFront;
-      occupant = lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;
+      occupant = (lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2) || (CONFIG.useWings && window.Wings && window.Wings.containsPoint(lx, lz));
       if (group) group.visible = occupant;
       setExteriorVisible(ctx.scene, !occupant);
       if (ctx.renderer && ctx.renderer.info && ctx.renderer.info.render) {
@@ -2863,8 +2865,13 @@
       if (t != null && t < hit) hit = t;
     }
     const margin = 0.35 * H;
-    const minX = portalX - hallW / 2 + margin, maxX = portalX + hallW / 2 - margin;
-    const minZ = portalFront + margin, maxZ = portalFront + hallLen - margin;
+    let minX = portalX - hallW / 2 + margin, maxX = portalX + hallW / 2 - margin;
+    let minZ = portalFront + margin, maxZ = portalFront + hallLen - margin;
+    if (CONFIG.useWings && window.Wings && window.Wings.getWalkBounds) {
+      const wb = window.Wings.getWalkBounds();
+      minX = portalX + wb.minx + margin; maxX = portalX + wb.maxx - margin;
+      minZ = portalFront + wb.minz + margin; maxZ = portalFront + wb.maxz - margin;
+    }
     if (hit < 0.98) {
       const t = Math.max(0.18, hit - 0.05);
       cam.position.set(ox + dx * t, oy + dy * t, oz + dz * t);
@@ -2878,8 +2885,10 @@
   function clampFollowTarget(want) {
     if (!want || state !== 'DONE' || !occupant) return;
     const margin = 0.7 * H;
-    want.x = Math.max(portalX - hallW / 2 + margin, Math.min(portalX + hallW / 2 - margin, want.x));
-    want.z = Math.max(portalFront + 0.9, Math.min(portalFront + hallLen - margin, want.z));
+    let minX = portalX - hallW / 2 + margin, maxX = portalX + hallW / 2 - margin, minZ = portalFront + 0.9, maxZ = portalFront + hallLen - margin;
+    if (CONFIG.useWings && window.Wings && window.Wings.getWalkBounds) { const wb = window.Wings.getWalkBounds(); minX = portalX + wb.minx + margin; maxX = portalX + wb.maxx - margin; minZ = portalFront + wb.minz + margin; maxZ = portalFront + wb.maxz - margin; }
+    want.x = Math.max(minX, Math.min(maxX, want.x));
+    want.z = Math.max(minZ, Math.min(maxZ, want.z));
     want.y = Math.max(floorY + 1.2, Math.min(floorY + Math.max(2.4, CONFIG.hallHeightH * H * 0.55), want.y));
   }
 

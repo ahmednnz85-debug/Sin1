@@ -22,7 +22,7 @@
     g.strokeStyle='#6be0bd';g.lineWidth=3;Wings.DOORS.forEach(function(d){if(!d.b)return;var r=Wings.ROOMS.filter(function(q){return q.id===d.a||q.id===d.b})[0];if(!r)return;g.beginPath();g.moveTo(px(d.x),py(d.z));g.lineTo(px(r.x),py(r.z));g.stroke();});
     g.fillStyle='#aaa';g.font='12px system-ui';g.textAlign='left';g.fillText('entrance',50,735);g.textAlign='right';g.fillText('throne / rear gallery',950,28);
   }
-  function run(){var v=Wings.validate();out.className=v.pass?'ok':'bad';out.textContent=JSON.stringify(v,null,2);draw();}
+  function run(){var buildSmoke={ok:false};try{var root=new THREE.Group();var built=Wings.build({group:root});buildSmoke={ok:!!(built&&built.group&&built.colliders.length),metrics:built.metrics};}catch(e){buildSmoke={ok:false,error:String(e&&e.stack||e)};}var v=Wings.validate();v.buildSmoke=buildSmoke;out.className=v.pass&&buildSmoke.ok?'ok':'bad';out.textContent=JSON.stringify(v,null,2);draw();}
   document.getElementById('validate').onclick=run;document.getElementById('reset').onclick=draw;draw();run();
 })();
 </script></body></html>
