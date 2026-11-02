@@ -113,7 +113,7 @@
     var wallMat = new THREE.MeshStandardMaterial({ color: 0x81796e, roughness: 0.92, metalness: 0.01 });
     var ceilMat = new THREE.MeshStandardMaterial({ color: 0x665e57, roughness: 0.95, metalness: 0 });
     var slabMat = new THREE.MeshStandardMaterial({ color: 0x3d342b, roughness: 0.96, metalness: 0.02 });
-    var floorM = [], wallM = [], ceilM = [], slabM = [], colliders = [];
+    var floorM = [], wallM = [], wallBoxes = [], ceilM = [], slabM = [], colliders = [];
     var openings = {};
     function opposite(side) { return side === 'east' ? 'west' : side === 'west' ? 'east' : side === 'north' ? 'south' : 'north'; }
     DOORS.forEach(function (d) {
@@ -123,10 +123,10 @@
     ROOMS.forEach(function (r) {
       var b = bounds(r), y = r.floor;
       if (r.id !== 'L4') { addMatrix(floorM, r.x, y - 0.08, r.z, r.w, 0.16, r.d); addMatrix(ceilM, r.x, y + r.h + 0.08, r.z, r.w, 0.16, r.d); }
-      sideWall(r, 'north', openings[r.id], wallM, y); sideWall(r, 'south', openings[r.id], wallM, y); sideWall(r, 'east', openings[r.id], wallM, y); sideWall(r, 'west', openings[r.id], wallM, y);
+      sideWall(r, 'north', openings[r.id], wallBoxes, y); sideWall(r, 'south', openings[r.id], wallBoxes, y); sideWall(r, 'east', openings[r.id], wallBoxes, y); sideWall(r, 'west', openings[r.id], wallBoxes, y);
     });
-    CONNECTORS.forEach(function (r) { addMatrix(floorM, r.x, -0.08, r.z, r.w, 0.16, r.d); sideWall(r, 'north', openings[r.id], wallM, 0); sideWall(r, 'south', openings[r.id], wallM, 0); sideWall(r, 'east', openings[r.id], wallM, 0); sideWall(r, 'west', openings[r.id], wallM, 0); });
-    wallM.forEach(function (m) { var e = new THREE.Vector3(), p = new THREE.Vector3(), q = new THREE.Vector3(); m.decompose(p, new THREE.Quaternion(), e); colliders.push(box(p.x - e.x / 2, 0, p.z - e.z / 2, p.x + e.x / 2, e.y, p.z + e.z / 2)); });
+    CONNECTORS.forEach(function (r) { addMatrix(floorM, r.x, -0.08, r.z, r.w, 0.16, r.d); sideWall(r, 'north', openings[r.id], wallBoxes, 0); sideWall(r, 'south', openings[r.id], wallBoxes, 0); sideWall(r, 'east', openings[r.id], wallBoxes, 0); sideWall(r, 'west', openings[r.id], wallBoxes, 0); });
+    wallBoxes.forEach(function (b) { addMatrix(wallM, (b.minx + b.maxx) / 2, (b.miny + b.maxy) / 2, (b.minz + b.maxz) / 2, b.maxx - b.minx, b.maxy - b.miny, b.maxz - b.minz); colliders.push(b); });
     var unit = new THREE.BoxGeometry(1, 1, 1);
     function inst(name, mats, mat) { if (!mats.length) return; var mesh = new THREE.InstancedMesh(unit, mat, mats.length); mesh.name = name; mats.forEach(function (m, i) { mesh.setMatrixAt(i, m); }); mesh.instanceMatrix.needsUpdate = true; mesh.castShadow = false; mesh.receiveShadow = true; group.add(mesh); }
     inst('wings-floor', floorM, floorMat); inst('wings-wall-solid', wallM, wallMat); inst('wings-ceiling', ceilM, ceilMat);
