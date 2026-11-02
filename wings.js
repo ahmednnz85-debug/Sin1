@@ -19,19 +19,19 @@
 
   // Hall-local metres. x is across the hall, z runs from entrance to throne.
   var ROOMS = [
-    rect('K1', 'Kings', -24.6, 45, 18, 14, 8.5),
+    rect('K1', 'Kings', -21.6, 45, 18, 14, 8.5),
     rect('K2', 'Kings', -49.6, 45, 30, 24, 9),
     rect('K3', 'Kings', -75, 29, 16, 12, 5.5),
     rect('K4', 'Kings', -75, 45, 14, 12, 5),
     rect('K5', 'Kings', -75, 65, 22, 16, 6),
-    rect('T1', 'Temple', 23.6, 45, 16, 12, 8.5),
+    rect('T1', 'Temple', 20.6, 45, 16, 12, 8.5),
     rect('T2', 'Temple', 45, 45, 20, 16, 8),
     rect('T3', 'Temple', 78, 45, 44, 24, 12),
     rect('T4', 'Temple', 112.5, 45, 24, 20, 10),
-    rect('T5', 'Temple', 78, 24, 18, 14, 5.5),
-    rect('L1', 'Library', 27, 15, 40, 26, 11),
-    rect('L2', 'Library', 57, 2, 18, 14, 5.5),
-    rect('L3', 'Library', 57, 24, 20, 14, 5.5),
+    rect('T5', 'Temple', 82, 24, 18, 14, 5.5),
+    rect('L1', 'Library', 32.6, 15, 40, 26, 11),
+    rect('L2', 'Library', 63, 2, 18, 14, 5.5),
+    rect('L3', 'Library', 63, 24, 20, 14, 5.5),
     rect('L4', 'Library', 105, 12, 24, 24, 11, 0)
   ];
 
@@ -53,9 +53,9 @@
   ];
 
   var DOORS = [
-    door('HALL_L3_K1', 'Hall', 'K1', -12.6, 45, 4.5, 6, 'east'),
-    door('HALL_R3_T1', 'Hall', 'T1', 12.6, 45, 4.5, 6, 'west'),
-    door('HALL_R1_L1', 'Hall', 'L1', 12.6, 9, 4.5, 6, 'west'),
+    door('HALL_L3_K1', 'Hall', 'K1', -12.6, 45, 4.5, 6, 'west'),
+    door('HALL_R3_T1', 'Hall', 'T1', 12.6, 45, 4.5, 6, 'east'),
+    door('HALL_R1_L1', 'Hall', 'L1', 12.6, 9, 4.5, 6, 'east'),
     door('HALL_L1_SEALED', 'Hall', null, -12.6, 9, 4.5, 6, 'east'),
     door('K1_K2', 'K1', 'K2', -34, 45, 4.5, 6, 'west'),
     door('K2_K3', 'K2', 'K3', -64.6, 34, 4.5, 5.5, 'west'),
@@ -234,8 +234,9 @@
   }
 
   function validate() {
-    var failures = [], seen = {}, floorMisses = 0, visualLeaks = 0;
+    var failures = [], seen = {}, floorMisses = 0, visualLeaks = 0, hallIntrusions = 0;
     ROOMS.forEach(function (a, i) { var ab = bounds(a); if (seen[a.id]) failures.push('duplicate:' + a.id); seen[a.id] = true; for (var j = i + 1; j < ROOMS.length; j++) if (overlap(ab, bounds(ROOMS[j]), 0.02)) failures.push('overlap:' + a.id + '/' + ROOMS[j].id); });
+    ROOMS.forEach(function (r) { var b = bounds(r); if (r.wing === 'Kings' && b.maxx > -12.6 + 0.02) { failures.push('hall-intrusion:' + r.id); hallIntrusions++; } if (r.wing === 'Temple' && b.minx < 12.6 - 0.02) { failures.push('hall-intrusion:' + r.id); hallIntrusions++; } if (r.wing === 'Library' && r.id === 'L1' && b.minx < 12.6 - 0.02) { failures.push('hall-intrusion:' + r.id); hallIntrusions++; } });
     function exitDistance(r, x, z, dx, dz) {
       var b = bounds(r), ts = [];
       if (dx > 1e-8) ts.push((b.maxx - x) / dx); else if (dx < -1e-8) ts.push((b.minx - x) / dx);
@@ -252,7 +253,7 @@
     });
     var reachable = { Hall: true }; DOORS.forEach(function (d) { if (reachable[d.a]) reachable[d.b || d.id] = true; if (reachable[d.b]) reachable[d.a] = true; });
     var missing = ROOMS.filter(function (r) { return !reachable[r.id]; }).map(function (r) { return r.id; });
-    return { boundaryEdges: 0, visualLeaks: visualLeaks, physicalLeaks: missing.length, floorMisses: floorMisses, footprintOverlaps: failures.length, graphMissing: missing, failures: failures.slice(0, 20), pass: !failures.length && !missing.length && !visualLeaks && !floorMisses };
+    return { boundaryEdges: 0, visualLeaks: visualLeaks, physicalLeaks: missing.length, floorMisses: floorMisses, footprintOverlaps: failures.length, hallIntrusions: hallIntrusions, graphMissing: missing, failures: failures.slice(0, 20), pass: !failures.length && !missing.length && !visualLeaks && !floorMisses };
   }
   function debugText() { var v = validateRuntime(); var m = last && last.metrics; return 'wings: ' + (m ? 'built' : 'not built') + '\nrooms=' + (m ? m.rooms : ROOMS.length) + ' doors=' + (m ? m.doors : DOORS.length) + ' colliders=' + (m ? m.colliders : 0) + '\nvalidators=' + JSON.stringify(v); }
   function isHallArchOpen(side, index) { return !!OPEN_ARCHES[side + index]; }
