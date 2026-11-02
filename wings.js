@@ -109,10 +109,10 @@
   function build(ctx) {
     if (!window.THREE || !ctx || !ctx.group) return { colliders: [], metrics: { error: 'missing context' } };
     var group = new THREE.Group(); group.name = 'PalaceWings'; ctx.group.add(group);
-    var floorMat = new THREE.MeshStandardMaterial({ color: 0x777067, roughness: 0.9, metalness: 0.02 });
-    var wallMat = new THREE.MeshStandardMaterial({ color: 0x81796e, roughness: 0.92, metalness: 0.01 });
-    var ceilMat = new THREE.MeshStandardMaterial({ color: 0x665e57, roughness: 0.95, metalness: 0 });
-    var slabMat = new THREE.MeshStandardMaterial({ color: 0x3d342b, roughness: 0.96, metalness: 0.02 });
+    var floorMat = new THREE.MeshStandardMaterial({ color: 0x40332a, roughness: 0.94, metalness: 0.02 });
+    var wallMat = new THREE.MeshStandardMaterial({ color: 0x2a211b, roughness: 0.96, metalness: 0.01 });
+    var ceilMat = new THREE.MeshStandardMaterial({ color: 0x17120f, roughness: 0.98, metalness: 0 });
+    var slabMat = new THREE.MeshStandardMaterial({ color: 0x100d0b, roughness: 0.98, metalness: 0.02 });
     var floorM = [], wallM = [], wallBoxes = [], ceilM = [], slabM = [], colliders = [];
     var openings = {};
     function opposite(side) { return side === 'east' ? 'west' : side === 'west' ? 'east' : side === 'north' ? 'south' : 'north'; }
@@ -230,7 +230,11 @@
     var p = runtime.ctx.hero.position, lx = p.x - runtime.ctx.portal.x, lz = p.z - runtime.ctx.portal.frontZ; g.fillStyle = '#fff'; g.beginPath(); g.arc(x(lx), y(lz), 3, 0, Math.PI * 2); g.fill();
   }
   function tick(ctx) {
-    runtime.ctx = ctx; installTools(); if (!runtime.tools) return; var p = ctx.hero && ctx.hero.position, local = p && ctx.portal ? locate(p.x - ctx.portal.x, p.z - ctx.portal.frontZ) : null; runtime.tools.querySelector('#wings-label').textContent = local ? (local.wing + ': ' + local.id) : 'Hall'; drawMinimap();
+    runtime.ctx = ctx;
+    var p = ctx.hero && ctx.hero.position, lx = p && ctx.portal ? p.x - ctx.portal.x : 0, lz = p && ctx.portal ? p.z - ctx.portal.frontZ : 0;
+    var inMainHall = Math.abs(lx) <= 12.7 && lz >= -0.2 && lz <= 54.5;
+    if (last && last.group) last.group.visible = !inMainHall;
+    installTools(); if (!runtime.tools) return; var local = p && ctx.portal ? locate(lx, lz) : null; runtime.tools.querySelector('#wings-label').textContent = local ? (local.wing + ': ' + local.id) : 'Hall'; drawMinimap();
   }
 
   function validate() {

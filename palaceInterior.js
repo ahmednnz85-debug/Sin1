@@ -2489,7 +2489,20 @@
     function worldBox(min, max) {
       addBox(new THREE.Vector3(ox + min.x, gy + min.y, oz + min.z), new THREE.Vector3(ox + max.x, gy + max.y, oz + max.z));
     }
-    [-1, 1].forEach(function (side) { worldBox(new THREE.Vector3(side * (W / 2) - 0.45, 0, 0), new THREE.Vector3(side * (W / 2) + 0.45, CH, L)); });
+    function sideCollider(side) {
+      const wallMin = side < 0 ? -W / 2 - 0.45 : W / 2 - 0.0;
+      const wallMax = side < 0 ? -W / 2 + 0.0 : W / 2 + 0.45;
+      let cursor = 0;
+      for (let i = 0; i < n; i++) {
+        const open = window.Wings && CONFIG.useWings && window.Wings.isHallArchOpen(side < 0 ? 'L' : 'R', i);
+        if (!open) continue;
+        const center = (i + 0.5) * moduleLen, lo = Math.max(cursor, center - archW / 2), hi = Math.min(L, center + archW / 2);
+        if (lo > cursor) worldBox(new THREE.Vector3(wallMin, 0, cursor), new THREE.Vector3(wallMax, CH, lo));
+        cursor = Math.max(cursor, hi);
+      }
+      if (cursor < L) worldBox(new THREE.Vector3(wallMin, 0, cursor), new THREE.Vector3(wallMax, CH, L));
+    }
+    [-1, 1].forEach(sideCollider);
     worldBox(new THREE.Vector3(-W / 2, 0, L - 0.45), new THREE.Vector3(W / 2, CH, L + 0.45));
     worldBox(new THREE.Vector3(-W / 2 - 0.3, 0, -0.4), new THREE.Vector3(W / 2 + 0.3, CH, 0.85));
     const hx = stairW / 2;
