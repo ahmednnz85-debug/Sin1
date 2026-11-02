@@ -5,6 +5,7 @@
 (function () {
   const BUILD = 'hall18';
   const CONFIG = {
+    useWings: true,
     useOptimizedAssets: true,
     disposeExteriorAfterEntry: false,
     hallWidthH: 14,
@@ -309,6 +310,7 @@
     lines.push('bytes: ' + b.loaded + '/' + (b.total || '?') + (b.unknown ? ' unknown=' + b.unknown : ''));
     lines.push('perf: ' + (perfNote || '—'));
     lines.push('passages: ' + ((CONFIG.PASSAGES && CONFIG.PASSAGES.length) || 0) + ' ceilingH=' + (CONFIG.hallHeightH || 0).toFixed(2));
+    if (window.Wings && CONFIG.useWings) lines.push(Wings.debugText());
     lines.push('slots: ' + (slotModes.length ? slotModes.map(function (s) { return s.id + 'x' + s.count + ':' + s.mode; }).join(' ') : CONFIG.PROPS.map(function (s) { return s.id + 'x' + s.positions.length; }).join(' ')));
     if (overlapNotes.length) lines.push('overlaps: ' + overlapNotes.slice(0, 8).join(' | '));
     lines.push('--- files ---');
@@ -1262,6 +1264,18 @@
     for (let i = 0; i < n; i++) {
       const zc = (i + 0.5) * moduleLen;
       [-1, 1].forEach(function (side) {
+        const archSide = side < 0 ? 'L' : 'R';
+        if (window.Wings && CONFIG.useWings && window.Wings.isHallArchOpen(archSide, i)) {
+          CONFIG.PASSAGES.push({
+            id: 'passage-' + archSide + i,
+            position: [side * (W / 2), 0, zc],
+            rotY: side < 0 ? Math.PI / 2 : -Math.PI / 2,
+            width: archW,
+            height: archH,
+            state: 'open'
+          });
+          return;
+        }
         const depth = 1.15 * H;
         const inner = side * (W / 2);
         const outer = inner + side * wallThick;
@@ -2481,6 +2495,16 @@
     worldBox(new THREE.Vector3(-hx - 0.3 * H, 0, platformFrontZ), new THREE.Vector3(-hx + 0.04 * H, topY + H, L));
     worldBox(new THREE.Vector3(hx - 0.04 * H, 0, platformFrontZ), new THREE.Vector3(hx + 0.3 * H, topY + H, L));
     extras.forEach(function (b) { worldBox(b.min, b.max); });
+    if (CONFIG.useWings && window.Wings && window.Wings.build) {
+      const wingBuild = window.Wings.build({ group: group, scene: ctx.scene, hero: ctx.hero, renderer: ctx.renderer });
+      (wingBuild.colliders || []).forEach(function (b) {
+        colliders.push({
+          minx: ox + b.minx, miny: gy + b.miny, minz: oz + b.minz,
+          maxx: ox + b.maxx, maxy: gy + b.maxy, maxz: oz + b.maxz
+        });
+      });
+      note('wings built rooms=' + (wingBuild.metrics ? wingBuild.metrics.rooms : 0) + ' colliders=' + (wingBuild.colliders || []).length);
+    }
     group.traverse(function (o) {
       if (o.name !== 'throne' && o.name !== 'throne-stand-in') return;
       const b = new THREE.Box3().setFromObject(o);

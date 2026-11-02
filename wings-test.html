@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sin1 — Wings Architecture Harness</title>
+<style>
+:root{color-scheme:dark}body{margin:0;background:#111;color:#eee;font:14px system-ui,sans-serif;display:grid;grid-template-columns:minmax(0,1fr) 330px;height:100vh}main{display:grid;place-items:center;overflow:hidden}canvas{background:#161616;border:1px solid #555;max-width:96vw;max-height:96vh}aside{padding:18px;background:#1d1b19;border-left:1px solid #444;overflow:auto}button{display:block;width:100%;margin:0 0 10px;padding:11px;background:#b07a35;border:1px solid #e0b777;color:#fff;border-radius:4px;font-weight:700}pre{white-space:pre-wrap;direction:ltr;font:12px/1.45 ui-monospace,monospace}.ok{color:#9fe3a4}.bad{color:#ff9b8c}
+</style>
+</head>
+<body><main><canvas id="plan" width="1000" height="760"></canvas></main><aside><h2>Wings architecture harness</h2><p>مخطط واحد مشترك، بوابات ومناطق قابلة للتحرير من <code>wings.js</code>.</p><button id="validate">تشغيل جميع الاختبارات</button><button id="reset">إعادة رسم المخطط</button><pre id="out">جاهز.</pre></aside>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="wings.js?v=wings1"></script>
+<script>
+(function(){
+  var c=document.getElementById('plan'),g=c.getContext('2d'),out=document.getElementById('out');
+  var colors={Kings:'#1eaa8d',Temple:'#d18b2e',Library:'#4d90c6',Rear:'#a767b8'};
+  function draw(){g.clearRect(0,0,c.width,c.height);var rs=Wings.ROOMS, minX=-105,maxX=170,minZ=-5,maxZ=82,sx=900/(maxX-minX),sy=650/(maxZ-minZ),ox=50,oy=700;
+    function px(x){return ox+(x-minX)*sx} function py(z){return oy-(z-minZ)*sy}
+    g.strokeStyle='#8a5d1c';g.lineWidth=5;g.beginPath();g.moveTo(px(-12.6),py(-5));g.lineTo(px(-12.6),py(82));g.moveTo(px(12.6),py(-5));g.lineTo(px(12.6),py(82));g.stroke();
+    g.fillStyle='#242424';g.strokeStyle='#777';g.lineWidth=1;g.fillRect(px(-12.6),py(0),25.2,54*sy);g.strokeRect(px(-12.6),py(0),25.2,54*sy);g.fillStyle='#ddd';g.textAlign='center';g.fillText('قاعة العرش',px(0),py(28));
+    rs.forEach(function(r){var x=px(r.x-r.w/2),y=py(r.z+r.d/2),w=r.w*sx,h=r.d*sy;g.fillStyle=colors[r.wing]||'#555';g.globalAlpha=.75;g.fillRect(x,y,w,h);g.globalAlpha=1;g.strokeStyle='#bde6dc';g.strokeRect(x,y,w,h);g.fillStyle='#fff';g.font='13px system-ui';g.fillText(r.id+' · '+r.w+'×'+r.d,x+w/2,y+h/2);});
+    g.strokeStyle='#6be0bd';g.lineWidth=3;Wings.DOORS.forEach(function(d){if(!d.b)return;var r=Wings.ROOMS.filter(function(q){return q.id===d.a||q.id===d.b})[0];if(!r)return;g.beginPath();g.moveTo(px(d.x),py(d.z));g.lineTo(px(r.x),py(r.z));g.stroke();});
+    g.fillStyle='#aaa';g.font='12px system-ui';g.textAlign='left';g.fillText('entrance',50,735);g.textAlign='right';g.fillText('throne / rear gallery',950,28);
+  }
+  function run(){var v=Wings.validate();out.className=v.pass?'ok':'bad';out.textContent=JSON.stringify(v,null,2);draw();}
+  document.getElementById('validate').onclick=run;document.getElementById('reset').onclick=draw;draw();run();
+})();
+</script></body></html>
