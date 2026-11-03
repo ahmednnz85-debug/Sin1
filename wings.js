@@ -722,12 +722,266 @@
       if (r.id !== 'K1') { addFutureZones(r, g); addTorches(r); }
     });
     addSpecials();
+    dressCorridors();
     const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
     const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
     const dummy = new THREE.Object3D();
     state.fires.forEach((f, i) => { dummy.position.set(f.x, f.y, f.z); dummy.updateMatrix(); torches.setMatrixAt(i, dummy.matrix); });
     torches.instanceMatrix.needsUpdate = true; state.root.add(torches);
     state.root.updateMatrixWorld(true);
+  }
+  /* ---------------------------------------------------------------------------
+     Corridor dressing: every corridor/gallery region of the Kings, Library and
+     Temple wings (plus the shared passages that link them) is re-skinned with
+     the repository corridor assets only:
+       assets/ارضية الممرات.JPG  -> corridor floors (incl. the door strips)
+       assets/سقف الممرات.PNG    -> corridor ceilings
+       assets/جدار الممرات.jpg   -> corridor wall faces + door lintels
+       assets/شتله.glb           -> potted plants, repeated on both sides
+     Rooms are never touched: corridor pieces are clipped against every room
+     polygon and against each other, so no surface is drawn twice. */
+  const CORRIDOR_TILE = { floor: 2.0, ceiling: 3.0, wall: 3.0 };
+  const CORRIDOR_ASSETS = {
+    floor: 'assets/ارضية الممرات.JPG', ceiling: 'assets/سقف الممرات.PNG',
+    wall: 'assets/جدار الممرات.jpg', plant: 'assets/شتله.glb'
+  };
+  function corridorTexture(url) {
+    const tex = new THREE.TextureLoader().load(encodeURI(url), t => { t.needsUpdate = true; });
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.encoding = THREE.sRGBEncoding;
+    tex.anisotropy = 8; return tex;
+  }
+  function corridorMaterial(url, rough) {
+    const m = new THREE.MeshStandardMaterial({ map: corridorTexture(url), roughness: rough, metalness: 0.02, emissive: 0x17120e, emissiveIntensity: 0.16 });
+    state.materials.push(m); return m;
+  }
+  // Flat triangulated sheet over clipper solids, world-anchored UVs so adjacent
+  // corridor pieces continue the pattern without seams.
+  function flatSheet(solids, y, faceUp, tile) {
+    const pos = [], uv = [], nor = [];
+    (solids || []).forEach(s => {
+      const outer = cleanPoly(s.outer, true), holes = (s.holes || []).map(h => cleanPoly(h, false));
+      if (outer.length < 3) return;
+      let faces = [];
+      try { faces = THREE.ShapeUtils.triangulateShape(outer.map(p => new THREE.Vector2(p[0], p[1])), holes.map(h => h.map(p => new THREE.Vector2(p[0], p[1])))); } catch (e) { console.error('Corridor triangulation', e); }
+      const verts = outer.concat.apply(outer, holes);
+      faces.forEach(f => {
+        let a = verts[f[0]], b = verts[f[1]], c = verts[f[2]];
+        const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+        // In X/Z, a negative cross gives an upward (+Y) facing triangle.
+        if ((cross < 0) !== faceUp) { const t = b; b = c; c = t; }
+        [a, b, c].forEach(p => { pos.push(p[0], y, p[1]); uv.push(p[0] / tile, p[1] / tile); nor.push(0, faceUp ? 1 : -1, 0); });
+      });
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.computeBoundingBox(); g.computeBoundingSphere(); return g;
+  }
+  // Every face of the real wall solid that looks into this corridor (side
+  // walls, end walls, door jambs, door walls standing inside the corridor) is
+  // collected in 0.25 m steps and merged into straight runs.
+  function corridorWallRuns(wallSolids, area) {
+    const runs = [], STEP = 0.25, INSET = 0.012;
+    (wallSolids || []).forEach(s => {
+      [cleanPoly(s.outer, true)].concat((s.holes || []).map(h => cleanPoly(h, false))).forEach(poly => {
+        for (let i = 0; i < poly.length; i++) {
+          const a = poly[i], b = poly[(i + 1) % poly.length];
+          const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.05) continue;
+          const tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
+          let wx = tz, wz = -tx;
+          const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+          if (pointInSolids(mx + wx * 0.05, mz + wz * 0.05, wallSolids)) { wx = -wx; wz = -wz; }
+          const n = Math.max(1, Math.round(L / STEP)), st = L / n;
+          let cur = null;
+          for (let k = 0; k < n; k++) {
+            const cx = a[0] + tx * st * (k + 0.5), cz = a[1] + tz * st * (k + 0.5);
+            const inside = pointInSolids(cx + wx * 0.2, cz + wz * 0.2, area);
+            if (inside) { if (cur) cur.s1 = st * (k + 1); else cur = { a, tx, tz, nx: -wx, nz: -wz, s0: st * k, s1: st * (k + 1), inset: INSET }; }
+            else if (cur) { runs.push(cur); cur = null; }
+          }
+          if (cur) runs.push(cur);
+        }
+      });
+    });
+    return runs;
+  }
+  function wallQuads(segs, yOf, tile) {
+    const pos = [], uv = [], nor = [];
+    segs.forEach(r => {
+      const [y0, y1] = yOf(r);
+      if (y1 - y0 < 0.02 || r.s1 - r.s0 < 0.02) return;
+      const ix = -r.nx * r.inset, iz = -r.nz * r.inset;
+      const P = s => [r.a[0] + r.tx * s + ix, r.a[1] + r.tz * s + iz];
+      const p0 = P(r.s0), p1 = P(r.s1);
+      // world-anchored U so walls continue across corners and pieces
+      const u0 = (p0[0] * Math.abs(r.tx) + p0[1] * Math.abs(r.tz)) / tile;
+      const u1 = u0 + (r.s1 - r.s0) * (r.tx + r.tz >= 0 ? 1 : -1) / tile;
+      const A = [p0[0], y0, p0[1]], B = [p1[0], y0, p1[1]], Cq = [p1[0], y1, p1[1]], D = [p0[0], y1, p0[1]];
+      const uA = [u0, y0 / tile], uB = [u1, y0 / tile], uC = [u1, y1 / tile], uD = [u0, y1 / tile];
+      // face inward (-outward normal)
+      const fx = -r.nx, fz = -r.nz;
+      const e1 = [B[0] - A[0], 0, B[2] - A[2]];
+      const cr = e1[2] * 1 - 0; // (e1 x up).x sign helper
+      const flip = (e1[0] * 0 - 0) + 0; void cr; void flip;
+      // normal of (A,B,C) = (B-A)x(C-A) = (e1x,0,e1z)x(…,h,…) -> (-e1z*h, 0, e1x*h)
+      const want = (-e1[2]) * fx + e1[0] * fz > 0;
+      const tri = want ? [A, B, Cq, A, Cq, D] : [A, Cq, B, A, D, Cq];
+      const tuv = want ? [uA, uB, uC, uA, uC, uD] : [uA, uC, uB, uA, uD, uC];
+      tri.forEach((p, i) => { pos.push(p[0], p[1], p[2]); uv.push(tuv[i][0], tuv[i][1]); nor.push(fx, 0, fz); });
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.computeBoundingBox(); g.computeBoundingSphere(); return g;
+  }
+  function dressCorridors() {
+    const corridors = state.connectors.filter(r => r.kind === 'corridor' || r.kind === 'gallery');
+    const mats = {
+      floor: corridorMaterial(CORRIDOR_ASSETS.floor, 0.86),
+      ceiling: corridorMaterial(CORRIDOR_ASSETS.ceiling, 0.92),
+      wall: corridorMaterial(CORRIDOR_ASSETS.wall, 0.9)
+    };
+    mats.ceiling.side = THREE.FrontSide;
+    let roomsSolid = []; state.rooms.forEach(r => { roomsSolid = union(roomsSolid, solid(r.poly)); });
+    state.corridorCeilings = [];
+    let claimed = [], claimedDoors = [];
+    const plantSlots = [], report = [];
+    corridors.forEach(r => {
+      const g = state.regionGroups.get(r.id); if (!g) return;
+      const piece = difference(difference(solid(r.poly), roomsSolid), claimed);
+      claimed = union(claimed, piece);
+      if (!piece.length) return;
+      // door strips through the 1 m walls that open from this corridor
+      let doorStrip = [];
+      state.doors.filter(d => d.kind !== 'arch' && d.floorPoly && (d.from === r.id || d.to === r.id)).forEach(d => { doorStrip = union(doorStrip, solid(d.floorPoly)); });
+      doorStrip = difference(difference(doorStrip, claimedDoors), claimed);
+      claimedDoors = union(claimedDoors, doorStrip);
+      const floorG = flatSheet(union(piece, doorStrip), 0.012, true, CORRIDOR_TILE.floor);
+      const fm = mesh(floorG, mats.floor, r.id + '-corridor-floor', g); fm.renderOrder = 1;
+      const h = r.height;
+      const cm = mesh(flatSheet(piece, h - 0.012, false, CORRIDOR_TILE.ceiling), mats.ceiling, r.id + '-corridor-ceiling', g);
+      cm.userData.ceiling = true; state.corridorCeilings.push(cm);
+      const area = union(piece, doorStrip);
+      // door walls may stand inside the corridor footprint, so keep every wall
+      // solid touching the corridor and sample only its free (walkable) side
+      const wallsHere = intersection(state.baseWall, offset(area, 1.6));
+      const freeArea = difference(area, state.baseWall);
+      const runs = corridorWallRuns(wallsHere, freeArea);
+      const lintelRuns = [], soffits = [];
+      state.doors.filter(d => d.kind !== 'arch' && d.openPoly && (d.from === r.id || d.to === r.id)).forEach(d => {
+        const op = solid(d.openPoly);
+        corridorWallRuns(op, difference(freeArea, op)).forEach(l => { l.door = d; lintelRuns.push(l); });
+        const under = intersection(op, area);
+        if (under.length) soffits.push({ d, under });
+      });
+      const parts = [
+        wallQuads(runs, () => [0, h - 0.012], CORRIDOR_TILE.wall),
+        wallQuads(lintelRuns, l => [Math.min(l.door.height, h), h - 0.012], CORRIDOR_TILE.wall)
+      ];
+      soffits.forEach(sf => parts.push(flatSheet(sf.under, Math.min(sf.d.height, h) - 0.012, false, CORRIDOR_TILE.wall)));
+      mesh(mergeGeometriesUV(parts), mats.wall, r.id + '-corridor-walls', g);
+      const lintels = lintelRuns;
+      // plant slots along every solid wall run, both sides
+      const b = r.bbox, dx = b.x1 - b.x0, dz = b.z1 - b.z0;
+      // transverse width; short wall stubs (KC3/KC4) report their long side
+      const width = Math.min(dx, dz) >= 2.5 ? Math.min(dx, dz) : Math.max(dx, dz);
+      const spacing = Math.min(6.0, Math.max(3.5, width * 0.85));
+      const off = Math.min(0.7, Math.max(0.45, width * 0.09));
+      const margin = Math.max(1.0, off + 0.6);
+      let count = 0;
+      runs.forEach(run => {
+        const len = run.s1 - run.s0 - margin * 2; if (len < -1.0) return;
+        const n = Math.floor(len / spacing) + 1, used = (n - 1) * spacing;
+        for (let i = 0; i < n; i++) {
+          const s = run.s0 + margin + (len - used) / 2 + i * spacing;
+          let x = 0, z = 0, ok = false;
+          for (const shift of [0, 1.0, -1.0]) {
+            const ss = s + shift; if (ss < run.s0 + 0.6 || ss > run.s1 - 0.6) continue;
+            x = run.a[0] + run.tx * ss - run.nx * off; z = run.a[1] + run.tz * ss - run.nz * off;
+            if (!pointInSolids(x, z, freeArea) || pointInSolids(x, z, offset(wallsHere, 0.4))) continue;
+            if (state.fires.some(f => Math.hypot(f.x - x, f.z - z) < 0.7)) continue;
+            if (plantSlots.some(p => Math.hypot(p.x - x, p.z - z) < spacing * 0.6)) continue;
+            if (state.doors.some(d => d.kind !== 'arch' && Math.hypot(d.x - x, d.z - z) < d.width * 0.5 + 0.4)) continue;
+            ok = true; break;
+          }
+          if (!ok) continue;
+          plantSlots.push({ x, z, region: r.id, width, rot: (plantSlots.length * 2.399) % (Math.PI * 2) }); count++;
+        }
+      });
+      report.push({ id: r.id, wing: r.wing, bbox: r.bbox, width, plants: count, wallRuns: runs.length, lintels: lintels.length });
+    });
+    state.corridorReport = report;
+    state.corridorPlants = plantSlots;
+    // footprint colliders so the hero walks around the pots
+    plantSlots.forEach(p => {
+      const rr = 0.32;
+      state.colliders.push({ minx: p.x - rr, maxx: p.x + rr, miny: 0, maxy: 1.2, minz: p.z - rr, maxz: p.z + rr, _wing: true, _plant: true });
+    });
+    loadCorridorPlants(plantSlots);
+  }
+  function mergeGeometriesUV(list) {
+    const pos = [], nor = [], uv = [];
+    list.forEach(g => { const p = g.attributes.position.array, n = g.attributes.normal.array, u = g.attributes.uv.array; for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); } for (let i = 0; i < u.length; i++) uv.push(u[i]); g.dispose(); });
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    out.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    out.computeBoundingBox(); out.computeBoundingSphere(); return out;
+  }
+  function loadCorridorPlants(slots) {
+    if (!slots.length || !THREE.GLTFLoader) return;
+    const root = state.root;
+    const go = dec => {
+      const loader = new THREE.GLTFLoader();
+      if (dec) loader.setMeshoptDecoder(dec);
+      loader.load(encodeURI(CORRIDOR_ASSETS.plant), gltf => {
+        if (state.root !== root) return; // rebuilt meanwhile
+        gltf.scene.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(gltf.scene), size = box.getSize(new THREE.Vector3());
+        const parts = [];
+        gltf.scene.traverse(o => { if (o.isMesh) parts.push(o); });
+        const byRegion = new Map();
+        slots.forEach(s => { if (!byRegion.has(s.region)) byRegion.set(s.region, []); byRegion.get(s.region).push(s); });
+        const dummy = new THREE.Object3D(), rel = new THREE.Matrix4();
+        byRegion.forEach((list, id) => {
+          const g = state.regionGroups.get(id); if (!g) return;
+          parts.forEach(part => {
+            const im = new THREE.InstancedMesh(part.geometry, part.material, list.length);
+            im.name = id + '-corridor-plants'; im.castShadow = false; im.receiveShadow = true;
+            list.forEach((s, i) => {
+              const target = Math.min(1.15, Math.max(0.75, s.width * 0.18));
+              const k = target / Math.max(1e-3, size.y);
+              dummy.position.set(s.x, -box.min.y * k, s.z); dummy.rotation.set(0, s.rot, 0); dummy.scale.setScalar(k);
+              dummy.updateMatrix();
+              rel.copy(dummy.matrix).multiply(part.matrixWorld);
+              im.setMatrixAt(i, rel);
+            });
+            im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere && im.computeBoundingSphere();
+            g.add(im);
+          });
+        });
+        state.root.updateMatrixWorld(true);
+        state.corridorPlantsReady = true;
+      }, undefined, e => console.warn('Corridor plant model failed', e));
+    };
+    const D = window.MeshoptDecoder;
+    if (D && D.ready) D.ready.then(() => go(D)); else {
+      // The plant GLB is meshopt-compressed: load the repository decoder if the
+      // palace loader has not installed it yet.
+      setTimeout(() => {
+        if (window.MeshoptDecoder || document.querySelector('script[data-corridor-meshopt]')) return;
+        const sc = document.createElement('script'); sc.src = 'vendor/meshopt_decoder.js'; sc.dataset.corridorMeshopt = '1';
+        document.head.appendChild(sc);
+      }, 3000);
+      // MeshoptDecoder is installed lazily by palaceInterior; wait for it.
+      let tries = 0; const t = setInterval(() => {
+        const d = window.MeshoptDecoder;
+        if (d && d.ready) { clearInterval(t); d.ready.then(() => go(d)); }
+        else if (++tries > 300) { clearInterval(t); console.warn('MeshoptDecoder missing; corridor plants skipped'); }
+      }, 100);
+    }
   }
   function rebuildSpatial() {
     state.spatial.clear();
@@ -889,7 +1143,7 @@
     ui.addEventListener('click', ev => {
       const b = ev.target.closest('button'); if (!b) return;
       if (b.dataset.tp) teleport(b.dataset.tp);
-      if (b.dataset.act === 'cutaway') { state.cutaway = !state.cutaway; state.ceilings.forEach(c => { c.visible = !state.cutaway; }); }
+      if (b.dataset.act === 'cutaway') { state.cutaway = !state.cutaway; state.ceilings.concat(state.corridorCeilings || []).forEach(c => { c.visible = !state.cutaway; }); }
       if (b.dataset.act === 'bright') {
         state.fullbright = !state.fullbright;
         state.materials.forEach(m => { if (m.emissive) { if (m.userData.oldEmissive == null) m.userData.oldEmissive = m.emissiveIntensity || 0; m.emissiveIntensity = state.fullbright ? 0.85 : m.userData.oldEmissive; } });
@@ -921,7 +1175,7 @@
   }
   function overview() {
     if (!state.built) return false;
-    state.cutaway = true; state.ceilings.forEach(c => { c.visible = false; });
+    state.cutaway = true; state.ceilings.concat(state.corridorCeilings || []).forEach(c => { c.visible = false; });
     const all = state.regions.map(r => r.bbox), cx = (Math.min(...all.map(b => b.x0)) + Math.max(...all.map(b => b.x1))) * 0.5;
     const cz = (Math.min(...all.map(b => b.z0)) + Math.max(...all.map(b => b.z1))) * 0.5;
     const span = Math.max(Math.max(...all.map(b => b.x1)) - Math.min(...all.map(b => b.x0)), Math.max(...all.map(b => b.z1)) - Math.min(...all.map(b => b.z0)));
@@ -1248,7 +1502,7 @@
 
   window.PalaceWings = {
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget,
-    teleport, overview, runTests, formatReport, cameraTour, metrics,
+    teleport, overview, runTests, formatReport, cameraTour, metrics, corridorReport: () => state.corridorReport,
     shortestPath,
     get report() { return state.report; },
     get state() { return state; }
