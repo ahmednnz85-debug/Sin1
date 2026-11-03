@@ -2904,8 +2904,18 @@
       cam.position.set(ox + dx * t, oy + dy * t, oz + dz * t);
     }
     if (inWings) {
+      // Wing camera is a third-person rig, not a free-floating follow target.
+      // Re-anchor it behind the hero every frame so crossing K1 thresholds or
+      // leaving to a corridor cannot pull it far away from the player.
+      const yaw = hero.rotation && Number.isFinite(hero.rotation.y) ? hero.rotation.y : 0;
+      const followDistance = 4.2;
+      cam.position.set(
+        p.x - Math.sin(yaw) * followDistance,
+        p.y + 1.65,
+        p.z - Math.cos(yaw) * followDistance
+      );
       PalaceWings.resolveCamera(cam);
-      cam.position.y = Math.max(floorY + 0.35, Math.min(floorY + 12.0, cam.position.y));
+      cam.position.y = Math.max(p.y + 0.45, Math.min(p.y + 10.0, cam.position.y));
     } else {
       cam.position.x = Math.max(minX, Math.min(maxX, cam.position.x));
       cam.position.z = Math.max(minZ, Math.min(maxZ, cam.position.z));

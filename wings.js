@@ -18,6 +18,7 @@
     built: false, root: null, ctx: null, hall: null, rooms: [], connectors: [], doors: [], regions: [],
     floors: null, floorExtended: null, wallSolid: null, baseWall: null, wallGeometry: null,
     colliders: [], spatial: new Map(), regionGroups: new Map(), ceilings: [], materials: [],
+    k1FloorY: 0, k1ModelMetrics: null, k1ModelColliderCount: 0,
     current: null, cutaway: false, fullbright: false, debug: false, report: null,
     ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null
   };
@@ -552,18 +553,37 @@
       const roomW = r.bbox.x1 - r.bbox.x0;
       const roomD = r.bbox.z1 - r.bbox.z0;
       const roomH = r.height;
-      // Uniform scale to fit the footprint without distortion (use min scale)
-      const scaleX = roomW / Math.max(size.x, 0.001);
-      const scaleZ = roomD / Math.max(size.z, 0.001);
+      // Stretch only the authored gate-to-gate axis to the room footprint.
+      // The old uniform min-scale left a visible gap at both gates.
+      // The model is rotated around Y, so its local Z is the room's world X
+      // gate-to-gate axis and its local X is the room's world Z axis.
+      const scaleLocalX = roomD / Math.max(size.z, 0.001);
+      const scaleLocalZ = roomW / Math.max(size.x, 0.001);
       const scaleY = roomH / Math.max(size.y, 0.001);
-      const scale = Math.min(scaleX, scaleZ, scaleY); // preserve proportions and ceiling clearance
-      model.scale.setScalar(scale);
-      // Position: center the model in the room, y=0 (floor)
+      model.scale.set(scaleLocalX, scaleY, scaleLocalZ);
+      // Position is corrected from the actual post-rotation bounds below.
       const targetX = r.bbox.cx;
       const targetZ = r.bbox.cz;
-      model.position.set(targetX - center.x * scale, -box.min.y * scale, targetZ - center.z * scale);
+      model.position.set(0, -box.min.y * scaleY, 0);
       parent.add(model);
-      console.info('K1 model loaded and placed at scale', scale.toFixed(3), 'rotationY=90°', 'embeddedLightsRemoved', embeddedLights, 'size after', size.multiplyScalar(scale));
+      state.root.updateMatrixWorld(true);
+      const fitted0 = new THREE.Box3().setFromObject(model);
+      const fittedCenter0 = fitted0.getCenter(new THREE.Vector3());
+      model.position.x += targetX + state.root.position.x - fittedCenter0.x;
+      model.position.z += targetZ + state.root.position.z - fittedCenter0.z;
+      model.updateMatrixWorld(true);
+      let floorTop = 0;
+      model.traverse(function (node) {
+        if (!node.isMesh || !/^K1_(Floor|Carpet)/.test(node.name)) return;
+        const fb = new THREE.Box3().setFromObject(node);
+        floorTop = Math.max(floorTop, fb.max.y - state.root.position.y);
+        if (state.floorMeshes && state.floorMeshes.indexOf(node) < 0) state.floorMeshes.push(node);
+      });
+      state.k1FloorY = Math.max(0, floorTop);
+      addK1ModelColliders(model);
+      const fitted = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+      state.k1ModelMetrics = { size: fitted.toArray(), scale: [scaleLocalX, scaleY, scaleLocalZ], floorY: state.k1FloorY, embeddedLightsRemoved: embeddedLights };
+      console.info('K1 model loaded and fitted to both gates', state.k1ModelMetrics);
       // Add approximate wall colliders for the room (perimeter, inset for doors)
       addK1Colliders(r);
     }, undefined, function (err) {
@@ -594,6 +614,28 @@
     state.colliders.push({ minx: x1, miny: 0, minz: cz + eastGap, maxx: x1 + wallT, maxy: h, maxz: z1 });
     // Rebuild spatial after adding
     if (typeof rebuildSpatial === 'function') rebuildSpatial();
+  }
+  function addK1ModelColliders(model) {
+    const rootX = state.root.position.x, rootZ = state.root.position.z;
+    const selected = /K1_(Column|VaseLarge|VaseSmall)_/;
+    let added = 0;
+    model.traverse(function (node) {
+      if (!node.isMesh || !selected.test(node.name)) return;
+      const b = new THREE.Box3().setFromObject(node);
+      const minx = b.min.x - rootX, maxx = b.max.x - rootX;
+      const minz = b.min.z - rootZ, maxz = b.max.z - rootZ;
+      if (![minx, maxx, minz, maxz, b.min.y, b.max.y].every(Number.isFinite)) return;
+      const pad = node.name.indexOf('Column') >= 0 ? 0.10 : 0.08;
+      state.colliders.push({
+        minx: minx - pad, maxx: maxx + pad,
+        miny: Math.max(0, b.min.y - state.root.position.y),
+        maxy: b.max.y - state.root.position.y,
+        minz: minz - pad, maxz: maxz + pad, _wing: true, _k1Model: true
+      });
+      added++;
+    });
+    state.k1ModelColliderCount = added;
+    rebuildSpatial();
   }
   function buildVisuals(layout) {
     state.floorSupport = [];
@@ -676,6 +718,7 @@
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.fires = [];
+    state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
   }
   function build(ctx, hall) {
     assertDeps(); dispose();
@@ -749,6 +792,8 @@
   }
   function floorAt(x, z) {
     if (!contains(x, z)) return null;
+    const K1 = state.rooms.find(r => r.id === 'K1');
+    if (K1 && pointInPoly(x, z, K1.poly)) return state.k1FloorY;
     const T4 = state.rooms.find(r => r.id === 'T4');
     if (T4 && pointInPoly(x, z, T4.poly)) {
       const start = T4.bbox.x1 - 14.4, end = T4.bbox.x1 - 8.4;
@@ -1169,7 +1214,7 @@
       let visible = o.visible, p = o.parent; while (visible && p) { visible = p.visible; p = p.parent; }
       if (visible) { visibleMeshes++; visibleTriangles += count * instances; }
     });
-    return { meshes, triangles, visibleMeshes, visibleTriangles, colliders: state.colliders.length, rooms: state.rooms.length, regions: state.regions.length };
+    return { meshes, triangles, visibleMeshes, visibleTriangles, colliders: state.colliders.length, k1ModelColliders: state.k1ModelColliderCount, k1FloorY: state.k1FloorY, k1Model: state.k1ModelMetrics, rooms: state.rooms.length, regions: state.regions.length };
   }
 
   window.PalaceWings = {
