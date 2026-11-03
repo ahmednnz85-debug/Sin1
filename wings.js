@@ -563,32 +563,29 @@
       // Room size from region
       const roomD = r.bbox.z1 - r.bbox.z0;
       const roomH = r.height;
-      // The model is rotated around Y, so local X becomes world Z and local Z
-      // becomes the gate-to-gate world X axis.  Fit the depth to K1, but fit
-      // the gate axis to the real interfaces instead of the inner room box:
-      // the west gate meets the corridor wall and the east gate meets the
-      // palace facade.  This removes the alcove gap without moving any other room.
+      // The model is rotated around Y, so the post-rotation X axis is the
+      // west/east axis. Fit that full outer axis to the real interfaces. The
+      // previous version fitted gate-center-to-gate-center, leaving the
+      // decorative wall ends protruding through both adjoining walls.
       const westBoundary = r.bbox.x0;
       const palaceDoor = state.doors.find(d => d.id === 'PalaceL3');
       const eastBoundary = palaceDoor ? palaceDoor.x : r.bbox.x1;
       const sourceGateSpan = Math.abs((gateCenters.K1_Gate_Exit_ToK2 == null ? size.z * 0.5 : gateCenters.K1_Gate_Exit_ToK2) -
         (gateCenters.K1_Gate_Entrance_Main == null ? -size.z * 0.5 : gateCenters.K1_Gate_Entrance_Main));
-      const targetGateSpan = Math.max(0.001, eastBoundary - westBoundary);
+      const targetOuterSpan = Math.max(0.001, eastBoundary - westBoundary);
       const scaleLocalX = roomD / Math.max(size.z, 0.001);
-      const scaleLocalZ = targetGateSpan / Math.max(sourceGateSpan, 0.001);
+      const scaleLocalZ = targetOuterSpan / Math.max(size.x, 0.001);
       const scaleY = roomH / Math.max(size.y, 0.001);
       model.scale.set(scaleLocalX, scaleY, scaleLocalZ);
-      // Position from the fitted gate centers, not the decorative outer bounds.
-      const gateWest = gateCenters.K1_Gate_Entrance_Main == null ? -sourceGateSpan * 0.5 : gateCenters.K1_Gate_Entrance_Main * scaleLocalZ;
-      const gateEast = gateCenters.K1_Gate_Exit_ToK2 == null ? sourceGateSpan * 0.5 : gateCenters.K1_Gate_Exit_ToK2 * scaleLocalZ;
       const targetGateCenter = (westBoundary + eastBoundary) * 0.5;
       const targetZ = r.bbox.cz;
       model.position.set(0, -box.min.y * scaleY, 0);
       parent.add(model);
       state.root.updateMatrixWorld(true);
-      model.position.x += targetGateCenter - (gateWest + gateEast) * 0.5;
       const fitted0 = new THREE.Box3().setFromObject(model);
       const fittedCenter0 = fitted0.getCenter(new THREE.Vector3());
+      const fittedCenterLocalX = fittedCenter0.x - state.root.position.x;
+      model.position.x += targetGateCenter - fittedCenterLocalX;
       model.position.z += targetZ + state.root.position.z - fittedCenter0.z;
       model.updateMatrixWorld(true);
       model.visible = true;
@@ -602,7 +599,7 @@
       state.k1FloorY = Math.max(0, floorTop);
       addK1ModelColliders(model);
       const fitted = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
-      state.k1ModelMetrics = { size: fitted.toArray(), scale: [scaleLocalX, scaleY, scaleLocalZ], gateSpan: targetGateSpan, floorY: state.k1FloorY, embeddedLightsRemoved: embeddedLights };
+      state.k1ModelMetrics = { size: fitted.toArray(), scale: [scaleLocalX, scaleY, scaleLocalZ], outerSpan: targetOuterSpan, sourceGateSpan: sourceGateSpan, floorY: state.k1FloorY, embeddedLightsRemoved: embeddedLights };
       console.info('K1 model loaded and fitted to both gates', state.k1ModelMetrics);
       // Add approximate wall colliders for the room (perimeter, inset for doors)
       addK1Colliders(r);
