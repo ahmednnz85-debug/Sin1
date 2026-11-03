@@ -548,28 +548,41 @@
       model.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model);
       const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
+      const gateCenters = {};
+      model.traverse(function (node) {
+        if (!node.isMesh || !/^K1_Gate_(Entrance_Main|Exit_ToK2)$/.test(node.name)) return;
+        const gateBox = new THREE.Box3().setFromObject(node);
+        gateCenters[node.name] = gateBox.getCenter(new THREE.Vector3()).x;
+      });
       // Room size from region
-      const roomW = r.bbox.x1 - r.bbox.x0;
       const roomD = r.bbox.z1 - r.bbox.z0;
       const roomH = r.height;
-      // Stretch only the authored gate-to-gate axis to the room footprint.
-      // The old uniform min-scale left a visible gap at both gates.
-      // The model is rotated around Y, so its local Z is the room's world X
-      // gate-to-gate axis and its local X is the room's world Z axis.
+      // The model is rotated around Y, so local X becomes world Z and local Z
+      // becomes the gate-to-gate world X axis.  Fit the depth to K1, but fit
+      // the gate axis to the real interfaces instead of the inner room box:
+      // the west gate meets the corridor wall and the east gate meets the
+      // palace facade.  This removes the alcove gap without moving any other room.
+      const westBoundary = r.bbox.x0;
+      const palaceDoor = state.doors.find(d => d.id === 'PalaceL3');
+      const eastBoundary = palaceDoor ? palaceDoor.x : r.bbox.x1;
+      const sourceGateSpan = Math.abs((gateCenters.K1_Gate_Exit_ToK2 == null ? size.z * 0.5 : gateCenters.K1_Gate_Exit_ToK2) -
+        (gateCenters.K1_Gate_Entrance_Main == null ? -size.z * 0.5 : gateCenters.K1_Gate_Entrance_Main));
+      const targetGateSpan = Math.max(0.001, eastBoundary - westBoundary);
       const scaleLocalX = roomD / Math.max(size.z, 0.001);
-      const scaleLocalZ = roomW / Math.max(size.x, 0.001);
+      const scaleLocalZ = targetGateSpan / Math.max(sourceGateSpan, 0.001);
       const scaleY = roomH / Math.max(size.y, 0.001);
       model.scale.set(scaleLocalX, scaleY, scaleLocalZ);
-      // Position is corrected from the actual post-rotation bounds below.
-      const targetX = r.bbox.cx;
+      // Position from the fitted gate centers, not the decorative outer bounds.
+      const gateWest = gateCenters.K1_Gate_Entrance_Main == null ? -sourceGateSpan * 0.5 : gateCenters.K1_Gate_Entrance_Main * scaleLocalZ;
+      const gateEast = gateCenters.K1_Gate_Exit_ToK2 == null ? sourceGateSpan * 0.5 : gateCenters.K1_Gate_Exit_ToK2 * scaleLocalZ;
+      const targetGateCenter = (westBoundary + eastBoundary) * 0.5;
       const targetZ = r.bbox.cz;
       model.position.set(0, -box.min.y * scaleY, 0);
       parent.add(model);
       state.root.updateMatrixWorld(true);
+      model.position.x += targetGateCenter - (gateWest + gateEast) * 0.5;
       const fitted0 = new THREE.Box3().setFromObject(model);
       const fittedCenter0 = fitted0.getCenter(new THREE.Vector3());
-      model.position.x += targetX + state.root.position.x - fittedCenter0.x;
       model.position.z += targetZ + state.root.position.z - fittedCenter0.z;
       model.updateMatrixWorld(true);
       let floorTop = 0;
@@ -582,7 +595,7 @@
       state.k1FloorY = Math.max(0, floorTop);
       addK1ModelColliders(model);
       const fitted = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
-      state.k1ModelMetrics = { size: fitted.toArray(), scale: [scaleLocalX, scaleY, scaleLocalZ], floorY: state.k1FloorY, embeddedLightsRemoved: embeddedLights };
+      state.k1ModelMetrics = { size: fitted.toArray(), scale: [scaleLocalX, scaleY, scaleLocalZ], gateSpan: targetGateSpan, floorY: state.k1FloorY, embeddedLightsRemoved: embeddedLights };
       console.info('K1 model loaded and fitted to both gates', state.k1ModelMetrics);
       // Add approximate wall colliders for the room (perimeter, inset for doors)
       addK1Colliders(r);
@@ -595,7 +608,8 @@
     // Doors are on the sides; leave openings roughly matching door positions
     const wallT = 0.8;
     const h = r.height;
-    const x0 = r.bbox.x0, x1 = r.bbox.x1, z0 = r.bbox.z0, z1 = r.bbox.z1;
+    const palaceDoor = state.doors.find(d => d.id === 'PalaceL3');
+    const x0 = r.bbox.x0, x1 = palaceDoor ? palaceDoor.x : r.bbox.x1, z0 = r.bbox.z0, z1 = r.bbox.z1;
     const cx = r.bbox.cx, cz = r.bbox.cz;
     // Four walls, with matched west/east gaps for the two arch openings.
     // K1's GLB gates are on the west/east sides after the loader rotation.
