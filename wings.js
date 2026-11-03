@@ -127,7 +127,7 @@
       doors.push(d); links.push([a, b, id]); return d;
     }
 
-    const K1 = addRoom(rectRegion('K1', 'Kings', ROOM_NAMES.K1, -back - 18, zK - 7, 18, 14, 8.5));
+    const K1 = addRoom(rectRegion('K1', 'Kings', ROOM_NAMES.K1, -back - 18, zK - 7, 18, 14, 8.5)); K1.ceiling = false;
     const KC12 = addCon(rectRegion('KC12', 'Kings', 'Kings corridor', K1.bbox.x0 - 8, zK - 3, 8, 6, 6, 'corridor'));
     const K2 = addRoom(rectRegion('K2', 'Kings', ROOM_NAMES.K2, KC12.bbox.x0 - 31, zK, 30, 24, 9));
     door('K1-KC12', 'K1', 'KC12', K1.bbox.x0 - 0.5, zK, 'x');
@@ -516,6 +516,61 @@
     wall(b.x0 + 1, b.x1 - 1, b.z0 + 0.45, true); wall(b.x0 + 1, b.x1 - 1, b.z1 - 0.45, true);
     if (b.z1 - b.z0 > 8) { wall(b.z0 + 1, b.z1 - 1, b.x0 + 0.45, false); wall(b.z0 + 1, b.z1 - 1, b.x1 - 0.45, false); }
   }
+  function loadK1Model(r, parent) {
+    if (!window.THREE || !window.THREE.GLTFLoader) {
+      console.warn('GLTFLoader not available for K1 model');
+      return;
+    }
+    const loader = new THREE.GLTFLoader();
+    const url = 'assets/K1_RoyalReceptionHall.glb';
+    loader.load(url, function (gltf) {
+      const model = gltf.scene;
+      model.name = 'K1-RoyalReceptionHall';
+      // Compute bounding box
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      // Room size from region
+      const roomW = r.bbox.x1 - r.bbox.x0;
+      const roomD = r.bbox.z1 - r.bbox.z0;
+      const roomH = r.height;
+      // Uniform scale to fit the footprint without distortion (use min scale)
+      const scaleX = roomW / Math.max(size.x, 0.001);
+      const scaleZ = roomD / Math.max(size.z, 0.001);
+      const scale = Math.min(scaleX, scaleZ); // preserve proportions
+      model.scale.setScalar(scale);
+      // Position: center the model in the room, y=0 (floor)
+      const targetX = r.bbox.cx;
+      const targetZ = r.bbox.cz;
+      model.position.set(targetX - center.x * scale, -box.min.y * scale, targetZ - center.z * scale);
+      parent.add(model);
+      console.info('K1 model loaded and placed at scale', scale.toFixed(3), 'size after', size.multiplyScalar(scale));
+      // Add approximate wall colliders for the room (perimeter, inset for doors)
+      addK1Colliders(r);
+    }, undefined, function (err) {
+      console.error('Failed to load K1 model', err);
+    });
+  }
+  function addK1Colliders(r) {
+    // Simple perimeter colliders so player doesn't fall through or walk through walls
+    // Doors are on the sides; leave openings roughly matching door positions
+    const wallT = 0.8;
+    const h = r.height;
+    const x0 = r.bbox.x0, x1 = r.bbox.x1, z0 = r.bbox.z0, z1 = r.bbox.z1;
+    const cx = r.bbox.cx, cz = r.bbox.cz;
+    // Four walls, with gaps for doors (approximate)
+    // South wall (lower z) - may have door to corridor
+    state.colliders.push({ minx: x0, miny: 0, minz: z0 - wallT, maxx: x1, maxy: h, maxz: z0 });
+    // North wall
+    state.colliders.push({ minx: x0, miny: 0, minz: z1, maxx: x1, maxy: h, maxz: z1 + wallT });
+    // West wall (lower x) - door to palace arch roughly centered
+    state.colliders.push({ minx: x0 - wallT, miny: 0, minz: z0, maxx: x0, maxy: h, maxz: cz - 3 });
+    state.colliders.push({ minx: x0 - wallT, miny: 0, minz: cz + 3, maxx: x0, maxy: h, maxz: z1 });
+    // East wall
+    state.colliders.push({ minx: x1, miny: 0, minz: z0, maxx: x1 + wallT, maxy: h, maxz: z1 });
+    // Rebuild spatial after adding
+    if (typeof rebuildSpatial === 'function') rebuildSpatial();
+  }
   function buildVisuals(layout) {
     state.floorSupport = [];
     state.wallMat = gridMaterial(0x8d7a63, 0.9, 0x1c1510);
@@ -539,7 +594,7 @@
     let claimedFloor = [];
     ['Kings', 'Temple', 'Library', 'Shared'].forEach((wing, wi) => {
       let wingFloor = [];
-      state.regions.filter(r => r.wing === wing).forEach(r => { wingFloor = union(wingFloor, solid(r.poly)); });
+      state.regions.filter(r => r.wing === wing && r.id !== 'K1').forEach(r => { wingFloor = union(wingFloor, solid(r.poly)); });
       layout.doors.filter(d => d.kind !== 'arch').forEach(d => {
         const target = state.regions.find(r => r.id === d.to), source = state.regions.find(r => r.id === d.from);
         if ((target && target.wing === wing) || (source && source.wing === wing)) wingFloor = union(wingFloor, solid(d.floorPoly));
@@ -564,12 +619,12 @@
           mesh(extrudeSolids(solid(polyCircle(r.bbox.cx, r.bbox.cz, 3.0, 32)), r.height + 3, r.height + 3.25), state.darkMat, 'L4-oculus-dark-cap', g);
         }
       }
-      if (r.id === 'K1') addColumns(r, g, columnPairs(r, 3, 2.4, 2.4), 0.48);
+      if (r.id === 'K1') { /* procedural geometry removed for GLB model */ loadK1Model(r, g); }
       if (r.id === 'K2') addColumns(r, g, columnPairs(r, 4, 4.2, 3.2), 0.68);
       if (r.id === 'T1') addColumns(r, g, columnPairs(r, 3, 2.3, 2.2), 0.48);
       if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
       if (r.id === 'L1') addColumns(r, g, columnPairs(r, 4, 4.0, 3.4), 0.60);
-      addFutureZones(r, g); addTorches(r);
+      if (r.id !== 'K1') { addFutureZones(r, g); addTorches(r); }
     });
     addSpecials();
     const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
@@ -607,6 +662,12 @@
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
     state.regions = state.rooms.concat(state.connectors); state.links = layout.links; state.sealed = layout.sealed; state.back = layout.back;
     prepareArchitecture(layout);
+    // Remove procedural walls inside K1 so the GLB model is the only interior
+    const k1 = state.rooms.find(r => r.id === 'K1');
+    if (k1) {
+      state.baseWall = difference(state.baseWall, solid(k1.poly));
+      state.wallSolid = difference(state.wallSolid, solid(k1.poly));
+    }
     makeColliders(state.baseWall, state.caps);
     buildVisuals(layout); rebuildSpatial();
     state.built = true;
