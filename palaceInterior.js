@@ -2838,7 +2838,9 @@
       const inHall = lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;
       const inWings = !!(wingRuntime && window.PalaceWings && PalaceWings.contains(lx, lz));
       occupant = inHall || inWings;
-      if (group) group.visible = wingRuntime ? inHall : occupant;
+      // Keep the palace hall drawn from nearby wing rooms so the arch behind the player is not a void.
+      const palaceSeen = inWings && (typeof PalaceWings.palaceVisible !== 'function' || PalaceWings.palaceVisible());
+      if (group) group.visible = wingRuntime ? (inHall || palaceSeen) : occupant;
       setExteriorVisible(ctx.scene, !occupant);
       if (ctx.renderer && ctx.renderer.info && ctx.renderer.info.render) {
         const inf = ctx.renderer.info.render;

@@ -1057,6 +1057,8 @@
     if (force || state.current !== id) {
       state.current = id;
       const dist = distancesFrom(id);
+      // Palace hall stays drawn while it is within two links (seen through the arch behind the player).
+      state.palaceNear = id === 'Palace' || (dist.has('Palace') && dist.get('Palace') <= 2);
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
         const d = dist.has(rr.id) ? dist.get(rr.id) : 99;
@@ -1501,6 +1503,7 @@
   }
 
   window.PalaceWings = {
+    palaceVisible: function () { return state.palaceNear !== false; },
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget,
     teleport, overview, runTests, formatReport, cameraTour, metrics, corridorReport: () => state.corridorReport,
     shortestPath,
