@@ -195,7 +195,7 @@
       const x0 = Math.min(inner, room.bbox.x0, room.bbox.x1) - 0.05;
       const x1 = Math.max(inner, room.bbox.x0, room.bbox.x1) + 0.05;
       const r = rectRegion(id, wing, 'Arch threshold', x0, passage.position[2] - passage.width * 0.5 - 0.05, x1 - x0, passage.width + 0.1, room.height, 'threshold');
-      r.ceiling = false; thresholds.push(r);
+      r.ceiling = false; r.linkRoom = room.id; thresholds.push(r);
     }
     threshold('ARCH_L3', 'Kings', passages.L2, K1);
     threshold('ARCH_R3', 'Temple', passages.R2, T1);
@@ -506,6 +506,8 @@
   }
   function addTorches(r) {
     if (r.kind === 'threshold') return;
+    // corridors and galleries use the repository torch models (dressCorridors)
+    if (r.kind === 'corridor' || r.kind === 'gallery') return;
     const b = r.bbox, spacing = 10;
     function wall(a, b0, fixed, alongX) {
       const len = b0 - a, n = Math.max(1, Math.round(len / spacing));
@@ -847,7 +849,7 @@
     let roomsSolid = []; state.rooms.forEach(r => { roomsSolid = union(roomsSolid, solid(r.poly)); });
     state.corridorCeilings = [];
     let claimed = [], claimedDoors = [];
-    const plantSlots = [], report = [];
+    const plantSlots = [], report = [], torchSlots = [];
     corridors.forEach(r => {
       const g = state.regionGroups.get(r.id); if (!g) return;
       const piece = difference(difference(solid(r.poly), roomsSolid), claimed);
@@ -883,6 +885,7 @@
       soffits.forEach(sf => parts.push(flatSheet(sf.under, Math.min(sf.d.height, h) - 0.012, false, CORRIDOR_TILE.wall)));
       mesh(mergeGeometriesUV(parts), mats.wall, r.id + '-corridor-walls', g);
       const lintels = lintelRuns;
+      placeCorridorTorches(r, runs, freeArea, torchSlots);
       // plant slots along every solid wall run, both sides
       const b = r.bbox, dx = b.x1 - b.x0, dz = b.z1 - b.z0;
       // transverse width; short wall stubs (KC3/KC4) report their long side
@@ -902,6 +905,7 @@
             x = run.a[0] + run.tx * ss - run.nx * off; z = run.a[1] + run.tz * ss - run.nz * off;
             if (!pointInSolids(x, z, freeArea) || pointInSolids(x, z, offset(wallsHere, 0.4))) continue;
             if (state.fires.some(f => Math.hypot(f.x - x, f.z - z) < 0.7)) continue;
+            if (torchSlots.some(t => Math.hypot(t.x - x, t.z - z) < 1.1)) continue;
             if (plantSlots.some(p => Math.hypot(p.x - x, p.z - z) < spacing * 0.6)) continue;
             if (state.doors.some(d => d.kind !== 'arch' && Math.hypot(d.x - x, d.z - z) < d.width * 0.5 + 0.4)) continue;
             ok = true; break;
@@ -920,6 +924,8 @@
       state.colliders.push({ minx: p.x - rr, maxx: p.x + rr, miny: 0, maxy: 1.2, minz: p.z - rr, maxz: p.z + rr, _wing: true, _plant: true });
     });
     loadCorridorPlants(plantSlots);
+    state.corridorTorches = torchSlots;
+    loadCorridorTorches(torchSlots);
   }
   function mergeGeometriesUV(list) {
     const pos = [], nor = [], uv = [];
@@ -983,6 +989,256 @@
       }, 100);
     }
   }
+  /* ---------------------------------------------------------------------------
+     Corridor torches: the repository models "مشعل اسود" and "مشعل خشب" replace
+     the procedural brackets in corridor/gallery regions only. They alternate at a
+     fixed spacing along every solid corridor wall run, keep one standard size, and
+     their back plate is seated flush on the wall surface (no gap). Each torch
+     carries a fully procedural fire: domain-warped flame layers, a flickering
+     halo, warm light spill on the wall behind it and rising embers.
+  --------------------------------------------------------------------------- */
+  const TORCH_ASSETS = ['assets/مشعل اسود.glb', 'assets/مشعل خشب.glb'];
+  const TORCH = {
+    spacing: 7.0,      // metres between torches along a wall run
+    margin: 1.3,       // keep clear of run ends / corners
+    height: 1.05,      // standard model height (metres)
+    mountY: 1.75,      // bottom of the model above the floor
+    sink: 0.01,        // seat the plate into the wall so no seam can show
+    flameY: 0.70,      // flame base, fraction of model height (inside the cage)
+    flameZ: 0.25      // flame base, fraction of model height out from the plate
+  };
+  function placeCorridorTorches(r, runs, freeArea, out) {
+    runs.forEach(run => {
+      const len = run.s1 - run.s0, usable = len - TORCH.margin * 2;
+      if (usable < 0) return;
+      const n = Math.floor(usable / TORCH.spacing) + 1, used = (n - 1) * TORCH.spacing;
+      for (let i = 0; i < n; i++) {
+        const s = run.s0 + TORCH.margin + (usable - used) / 2 + i * TORCH.spacing;
+        const dx = -run.nx, dz = -run.nz; // into the corridor
+        const wx = run.a[0] + run.tx * s + dx * run.inset, wz = run.a[1] + run.tz * s + dz * run.inset;
+        // the plate and the flame must face free corridor floor
+        if (!pointInSolids(wx + dx * 0.35, wz + dz * 0.35, freeArea)) continue;
+        if (!pointInSolids(wx + dx * 0.35 + run.tx * 0.3, wz + dz * 0.35 + run.tz * 0.3, freeArea)) continue;
+        if (!pointInSolids(wx + dx * 0.35 - run.tx * 0.3, wz + dz * 0.35 - run.tz * 0.3, freeArea)) continue;
+        if (state.doors.some(d => d.kind !== 'arch' && Math.hypot(d.x - wx, d.z - wz) < d.width * 0.5 + 0.9)) continue;
+        if (out.some(t => Math.hypot(t.x - wx, t.z - wz) < TORCH.spacing * 0.55)) continue;
+        out.push({ x: wx, z: wz, dx, dz, region: r.id, type: out.length % 2, seed: out.length * 0.618 + 0.37 });
+      }
+    });
+  }
+  const TORCH_FIRE_VS = [
+    'attribute float aSeed;', 'attribute float aLayer;',
+    'varying vec2 vUv;', 'varying float vSeed;', 'varying float vLayer;',
+    'void main() {',
+    '  vUv = uv; vSeed = aSeed; vLayer = aLayer;',
+    '  vec3 base = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;',
+    '  float sx = length(instanceMatrix[0].xyz), sy = length(instanceMatrix[1].xyz);',
+    '  vec3 toCam = cameraPosition - base; toCam.y = 0.0;',
+    '  float dl = length(toCam);',
+    '  vec3 side = dl > 1e-4 ? vec3(toCam.z, 0.0, -toCam.x) / dl : vec3(1.0, 0.0, 0.0);',
+    '  vec3 p = base + side * position.x * sx + vec3(0.0, position.y * sy, 0.0);',
+    '  gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);',
+    '}'
+  ].join('\n');
+  const TORCH_NOISE = [
+    'float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
+    'float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);',
+    '  return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), u.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), u.x), u.y); }',
+    'float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ v += a * vnoise(p); p = p * 2.07 + vec2(1.7, 9.2); a *= 0.5; } return v; }'
+  ].join('\n');
+  const TORCH_FIRE_FS = [
+    'precision highp float;',
+    'uniform float uTime;', 'varying vec2 vUv;', 'varying float vSeed;', 'varying float vLayer;',
+    TORCH_NOISE,
+    'void main() {',
+    '  vec2 uv = vUv;',
+    '  float t = uTime * (1.0 + fract(vSeed * 7.13) * 0.25) + vSeed * 13.0;',
+    '  vec2 q = vec2(fbm(uv * vec2(2.6, 1.8) + vec2(vSeed, -t * 1.5)), fbm(uv * vec2(2.6, 1.8) + vec2(vSeed + 5.2, -t * 1.8)));',
+    '  float n = fbm(vec2(uv.x * 3.4, uv.y * 2.4 - t * 2.7) + q * 1.6);',
+    '  float sway = ((q.x - 0.5) * 0.55 + sin(t * 1.9) * 0.08 + sin(t * 4.3 + vSeed) * 0.04) * uv.y * uv.y;',
+    '  float x = (uv.x - 0.5) * 2.0 - sway;',
+    '  float w = mix(1.0, 0.10, pow(uv.y, 0.9)) * mix(0.85, 1.2, n);',
+    '  float body = 1.0 - smoothstep(0.0, 1.0, abs(x) / max(w, 1e-3));',
+    '  body *= smoothstep(0.0, 0.10, uv.y);',
+    '  float v = body * 1.5 - uv.y * 0.45 - (1.0 - n) * 0.6 * uv.y;',
+    '  v += (n - 0.5) * 0.35;',
+    '  v = clamp(v, 0.0, 1.0);',
+    '  float core = vLayer < 0.5 ? 1.0 : (vLayer < 1.5 ? 0.6 : 0.25);',
+    '  float T = clamp(v * (0.7 + core * 0.6) * (1.0 - uv.y * 0.35), 0.0, 1.0);',
+    '  vec3 c = vec3(0.45, 0.04, 0.0);',
+    '  c = mix(c, vec3(0.95, 0.30, 0.03), smoothstep(0.08, 0.38, T));',
+    '  c = mix(c, vec3(1.0, 0.62, 0.16), smoothstep(0.32, 0.62, T));',
+    '  c = mix(c, vec3(1.0, 0.88, 0.55), smoothstep(0.58, 0.85, T));',
+    '  c = mix(c, vec3(1.0, 0.97, 0.88), smoothstep(0.82, 1.0, T));',
+    '  float base = smoothstep(0.22, 0.0, uv.y) * body;',
+    '  c = mix(c, vec3(0.35, 0.55, 1.0), base * 0.35 * core);',
+    '  float a = smoothstep(0.03, 0.4, v) * (vLayer > 1.5 ? 0.55 : 0.9);',
+    '  if (a < 0.01) discard;',
+    '  gl_FragColor = vec4(c * a * 1.25, a);',
+    '}'
+  ].join('\n');
+  const TORCH_GLOW_VS = [
+    'attribute float aSeed;', 'varying vec2 vUv;', 'varying float vSeed;',
+    'void main() {',
+    '  vUv = uv; vSeed = aSeed;',
+    '  vec3 c = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;',
+    '  vec3 r = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);',
+    '  vec3 u = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);',
+    '  float s = length(instanceMatrix[0].xyz);',
+    '  gl_Position = projectionMatrix * viewMatrix * vec4(c + (r * position.x + u * position.y) * s, 1.0);',
+    '}'
+  ].join('\n');
+  const TORCH_FLICKER = 'float flick(float t, float s){ return 0.78 + 0.12 * sin(t * 7.1 + s * 11.0) + 0.07 * sin(t * 13.7 + s * 3.0) + 0.05 * sin(t * 23.3 + s * 5.0); }';
+  const TORCH_GLOW_FS = [
+    'precision mediump float;', 'uniform float uTime;', 'varying vec2 vUv;', 'varying float vSeed;', TORCH_FLICKER,
+    'void main() {',
+    '  float d = length(vUv - 0.5) * 2.0;',
+    '  float a = pow(max(0.0, 1.0 - d), 2.4) * flick(uTime, vSeed);',
+    '  if (a < 0.004) discard;',
+    '  gl_FragColor = vec4(vec3(1.0, 0.52, 0.16) * a * 0.55, a);',
+    '}'
+  ].join('\n');
+  const TORCH_WALL_VS = [
+    'attribute float aSeed;', 'varying vec2 vUv;', 'varying float vSeed;',
+    'void main() { vUv = uv; vSeed = aSeed; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }'
+  ].join('\n');
+  const TORCH_WALL_FS = [
+    'precision mediump float;', 'uniform float uTime;', 'varying vec2 vUv;', 'varying float vSeed;', TORCH_FLICKER,
+    'void main() {',
+    '  vec2 p = (vUv - vec2(0.5, 0.42)) * vec2(2.0, 1.6);',
+    '  float a = pow(max(0.0, 1.0 - length(p)), 2.0) * flick(uTime * 0.9, vSeed + 1.3);',
+    '  if (a < 0.004) discard;',
+    '  gl_FragColor = vec4(vec3(1.0, 0.45, 0.12) * a * 0.42, a);',
+    '}'
+  ].join('\n');
+  const TORCH_EMBER_VS = [
+    'uniform float uTime;', 'attribute float aSeed;', 'varying float vLife;',
+    'void main() {',
+    '  float life = fract(uTime * (0.35 + fract(aSeed * 3.7) * 0.3) + aSeed);',
+    '  vLife = life;',
+    '  vec3 p = position;',
+    '  p.x += sin(aSeed * 31.0 + uTime * 1.7) * 0.09 * life;',
+    '  p.z += cos(aSeed * 17.0 + uTime * 1.3) * 0.09 * life;',
+    '  p.y += life * (0.75 + fract(aSeed * 5.3) * 0.5);',
+    '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
+    '  gl_PointSize = (1.0 - life) * 34.0 / max(0.5, -mv.z);',
+    '  gl_Position = projectionMatrix * mv;',
+    '}'
+  ].join('\n');
+  const TORCH_EMBER_FS = [
+    'precision mediump float;', 'varying float vLife;',
+    'void main() {',
+    '  float d = length(gl_PointCoord - 0.5);',
+    '  float a = smoothstep(0.5, 0.0, d) * (1.0 - vLife) * smoothstep(0.0, 0.08, vLife);',
+    '  if (a < 0.01) discard;',
+    '  gl_FragColor = vec4(mix(vec3(1.0, 0.8, 0.4), vec3(1.0, 0.25, 0.03), vLife) * a, a);',
+    '}'
+  ].join('\n');
+  function torchFireMaterials() {
+    const add = (vs, fs, extra) => new THREE.ShaderMaterial(Object.assign({
+      uniforms: { uTime: { value: 0 } }, vertexShader: vs, fragmentShader: fs,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false
+    }, extra || {}));
+    const m = {
+      fire: add(TORCH_FIRE_VS, TORCH_FIRE_FS, { side: THREE.DoubleSide }),
+      glow: add(TORCH_GLOW_VS, TORCH_GLOW_FS),
+      wall: add(TORCH_WALL_VS, TORCH_WALL_FS, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      ember: add(TORCH_EMBER_VS, TORCH_EMBER_FS)
+    };
+    state.torchFireMats = [m.fire, m.glow, m.wall, m.ember];
+    return m;
+  }
+  function torchFit(scene) {
+    scene.updateMatrixWorld(true);
+    const parts = [], drop = [];
+    scene.traverse(o => { if (o.isMesh) (/flame/i.test(o.name) ? drop : parts).push(o); });
+    const box = new THREE.Box3(), plate = new THREE.Box3();
+    parts.forEach(o => { const b = new THREE.Box3().setFromObject(o); box.union(b); if (/holder/i.test(o.name)) plate.union(b); });
+    const contactZ = plate.isEmpty() ? box.min.z : plate.min.z;
+    const h = Math.max(1e-4, box.max.y - box.min.y), cx = (box.min.x + box.max.x) / 2;
+    return { parts, k: TORCH.height / h, minY: box.min.y, h, cx, contactZ };
+  }
+  function loadCorridorTorches(slots) {
+    if (!slots.length || !THREE.GLTFLoader) return;
+    const root = state.root, fits = [], dummy = new THREE.Object3D();
+    const byRegion = new Map();
+    slots.forEach(s => { if (!byRegion.has(s.region)) byRegion.set(s.region, []); byRegion.get(s.region).push(s); });
+    function slotMatrix(s, fit) {
+      // model +Z (away from its plate) -> into the corridor; plate seated on the wall
+      const out = fit.contactZ * fit.k;
+      dummy.rotation.set(0, Math.atan2(s.dx, s.dz), 0);
+      dummy.scale.setScalar(fit.k);
+      const off = new THREE.Vector3(-fit.cx * fit.k, 0, -out).applyEuler(dummy.rotation);
+      dummy.position.set(s.x + off.x - s.dx * TORCH.sink, TORCH.mountY - fit.minY * fit.k, s.z + off.z - s.dz * TORCH.sink);
+      dummy.updateMatrix();
+      return dummy.matrix.clone();
+    }
+    function buildFire() {
+      const mats = torchFireMaterials();
+      const layers = [{ w: 0.20, h: 0.34 }, { w: 0.30, h: 0.48 }, { w: 0.40, h: 0.60 }];
+      byRegion.forEach((list, id) => {
+        const g = state.regionGroups.get(id); if (!g) return;
+        const fpos = list.map(s => {
+          const fit = fits[s.type], m = slotMatrix(s, fit);
+          return new THREE.Vector3(fit.cx, fit.minY + fit.h * TORCH.flameY, fit.contactZ + fit.h * TORCH.flameZ).applyMatrix4(m);
+        });
+        // flame layers
+        const fg = new THREE.PlaneGeometry(1, 1); fg.translate(0, 0.5, 0);
+        const cnt = list.length * layers.length, seeds = new Float32Array(cnt), lay = new Float32Array(cnt);
+        const fire = new THREE.InstancedMesh(fg, mats.fire, cnt); fire.name = id + '-torch-fire'; fire.frustumCulled = false; fire.renderOrder = 3;
+        let k = 0;
+        layers.forEach((L, li) => list.forEach((s, i) => {
+          seeds[k] = s.seed + li * 2.31; lay[k] = li;
+          dummy.position.copy(fpos[i]); dummy.position.y -= 0.03; dummy.rotation.set(0, 0, 0); dummy.scale.set(L.w, L.h, 1); dummy.updateMatrix();
+          fire.setMatrixAt(k++, dummy.matrix);
+        }));
+        fg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
+        fg.setAttribute('aLayer', new THREE.InstancedBufferAttribute(lay, 1));
+        fire.instanceMatrix.needsUpdate = true; g.add(fire);
+        // halo around the flame
+        const gg = new THREE.PlaneGeometry(1, 1), gs = new Float32Array(list.length);
+        const glow = new THREE.InstancedMesh(gg, mats.glow, list.length); glow.name = id + '-torch-glow'; glow.frustumCulled = false; glow.renderOrder = 2;
+        list.forEach((s, i) => { gs[i] = s.seed; dummy.position.copy(fpos[i]); dummy.position.y += 0.16; dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(1.1); dummy.updateMatrix(); glow.setMatrixAt(i, dummy.matrix); });
+        gg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(gs, 1)); glow.instanceMatrix.needsUpdate = true; g.add(glow);
+        // warm light spill on the wall behind the torch
+        const wg = new THREE.PlaneGeometry(1, 1), ws = new Float32Array(list.length);
+        const wall = new THREE.InstancedMesh(wg, mats.wall, list.length); wall.name = id + '-torch-wall-light'; wall.frustumCulled = false; wall.renderOrder = 1;
+        list.forEach((s, i) => {
+          ws[i] = s.seed;
+          dummy.position.set(s.x + s.dx * 0.006, fpos[i].y + 0.1, s.z + s.dz * 0.006);
+          dummy.rotation.set(0, Math.atan2(s.dx, s.dz), 0); dummy.scale.set(2.4, 2.8, 1); dummy.updateMatrix();
+          wall.setMatrixAt(i, dummy.matrix);
+        });
+        wg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(ws, 1)); wall.instanceMatrix.needsUpdate = true; g.add(wall);
+        // rising embers
+        const PER = 10, ep = new Float32Array(list.length * PER * 3), es = new Float32Array(list.length * PER);
+        list.forEach((s, i) => { for (let j = 0; j < PER; j++) { const e = i * PER + j; ep[e * 3] = fpos[i].x; ep[e * 3 + 1] = fpos[i].y + 0.12; ep[e * 3 + 2] = fpos[i].z; es[e] = (s.seed * 0.37 + j * 0.1037) % 1; } });
+        const eg = new THREE.BufferGeometry();
+        eg.setAttribute('position', new THREE.BufferAttribute(ep, 3)); eg.setAttribute('aSeed', new THREE.BufferAttribute(es, 1));
+        const embers = new THREE.Points(eg, mats.ember); embers.name = id + '-torch-embers'; embers.frustumCulled = false; embers.renderOrder = 4; g.add(embers);
+      });
+    }
+    let pending = TORCH_ASSETS.length;
+    TORCH_ASSETS.forEach((url, type) => {
+      new THREE.GLTFLoader().load(encodeURI(url), gltf => {
+        if (state.root !== root) return; // rebuilt meanwhile
+        const fit = torchFit(gltf.scene); fits[type] = fit;
+        byRegion.forEach((list, id) => {
+          const g = state.regionGroups.get(id); if (!g) return;
+          const mine = list.filter(s => s.type === type); if (!mine.length) return;
+          fit.parts.forEach(part => {
+            const im = new THREE.InstancedMesh(part.geometry, part.material, mine.length);
+            im.name = id + '-corridor-torch-' + type; im.castShadow = false; im.receiveShadow = true;
+            mine.forEach((s, i) => im.setMatrixAt(i, slotMatrix(s, fit).multiply(part.matrixWorld)));
+            im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere && im.computeBoundingSphere();
+            g.add(im);
+          });
+        });
+        if (--pending === 0) { buildFire(); state.corridorTorchesReady = true; }
+        state.root.updateMatrixWorld(true);
+      }, undefined, e => { console.warn('Corridor torch model failed', url, e); });
+    });
+  }
   function rebuildSpatial() {
     state.spatial.clear();
     state.colliders.forEach((b, i) => {
@@ -1000,7 +1256,7 @@
     });
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
-    state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.fires = [];
+    state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
   }
   function build(ctx, hall) {
@@ -1056,9 +1312,14 @@
     const r = regionAt(x, z), id = r ? r.id : 'Palace';
     if (force || state.current !== id) {
       state.current = id;
-      const dist = distancesFrom(id);
+      // Arch thresholds are not part of the link graph: measure from the wing room
+      // they open into, and always keep the palace hall drawn while standing in one
+      // (the hall is right behind the player there).
+      const isArch = !!(r && r.kind === 'threshold');
+      const dist = distancesFrom(isArch && r.linkRoom ? r.linkRoom : id);
+      if (isArch) dist.set(id, 0);
       // Palace hall stays drawn while it is within two links (seen through the arch behind the player).
-      state.palaceNear = id === 'Palace' || (dist.has('Palace') && dist.get('Palace') <= 2);
+      state.palaceNear = id === 'Palace' || isArch || (dist.has('Palace') && dist.get('Palace') <= 2);
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
         const d = dist.has(rr.id) ? dist.get(rr.id) : 99;
@@ -1073,6 +1334,7 @@
   function tick() {
     if (!state.built) return;
     updateCulling(false);
+    if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
     if (state.debug && state.ui && performance.now() - state.minimapAt > 120) { state.minimapAt = performance.now(); drawMinimap(); }
   }
   function floorAt(x, z) {
