@@ -721,10 +721,12 @@
       if (r.id === 'T1') addColumns(r, g, columnPairs(r, 3, 2.3, 2.2), 0.48);
       if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
       if (r.id === 'L1') addColumns(r, g, columnPairs(r, 4, 4.0, 3.4), 0.60);
-      if (r.id !== 'K1') { addFutureZones(r, g); addTorches(r); }
+      // K2 no longer gets the procedural wall torches (council hall dressing).
+      if (r.id !== 'K1') { addFutureZones(r, g); if (r.id !== 'K2') addTorches(r); }
     });
     addSpecials();
     dressCorridors();
+    dressK2();
     const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
     const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
     const dummy = new THREE.Object3D();
@@ -1237,6 +1239,251 @@
         if (--pending === 0) { buildFire(); state.corridorTorchesReady = true; }
         state.root.updateMatrixWorld(true);
       }, undefined, e => { console.warn('Corridor torch model failed', url, e); });
+    });
+  }
+  /* ---------------------------------------------------------------------------
+     K2 council hall (Kings wing) dressing — visuals only:
+       assets/جدار المجلس .PNG   -> mural on every wall face of the hall, repeated
+                                    in whole panels (2 rows) fitted to each wall
+       assets/سقف المجلس.glb      -> coffered ceiling panel tiled edge-to-edge over
+                                    the whole hall (6 m squares, no gaps)
+       assets/ثريا المجلس .glb    -> chandelier at the hall centre, its top seated
+                                    on the ceiling relief (no gap)
+       assets/lion_winged.glb.glb -> two winged lions facing each other, flanking
+                                    the north doorway
+       assets/شتله.glb            -> six large potted plants, three per side wall
+     The procedural wall torches of K2 are no longer generated (see buildVisuals).
+  --------------------------------------------------------------------------- */
+  const K2_ASSETS = {
+    wall: 'assets/جدار المجلس .PNG', ceiling: 'assets/سقف المجلس.glb',
+    chandelier: 'assets/ثريا المجلس .glb', lion: 'assets/lion_winged.glb.glb', plant: 'assets/شتله.glb'
+  };
+  const K2_DRESS = {
+    wallPanelW: 6.75,   // mural panel width (image is 3:2), fitted to whole panels per wall
+    wallRows: 2,        // mural rows from floor to ceiling
+    ceilingTile: 6.0,   // ceiling panel size (30 x 24 m hall -> 5 x 4 squares)
+    ceilingDepth: 0.30, // relief depth of the ceiling panels
+    chandelierH: 3.6,   // chandelier height
+    lionH: 3.2,         // winged lion height incl. its pedestal
+    lionFoot: { len: 0.824, wid: 0.386 }, // lion footprint / height (measured from the GLB)
+    lionX: 4.6,         // lion centres, either side of the north door axis
+    lionInsetZ: 2.6,    // distance of the lions from the north wall
+    plantH: 2.2,        // potted plant height (large)
+    plantInset: 1.15,   // plant distance from its wall
+    plantSpacing: 6.0,  // plants per side: centre and +/- this distance
+    plantRadius: 0.6
+  };
+  function k2LoadGLB(url, needsMeshopt, onLoad) {
+    if (!THREE.GLTFLoader) { console.warn('GLTFLoader not available; K2 model skipped', url); return; }
+    const root = state.root;
+    const go = dec => {
+      const loader = new THREE.GLTFLoader();
+      if (dec) loader.setMeshoptDecoder(dec);
+      loader.load(encodeURI(url), gltf => { if (state.root === root) onLoad(gltf); },
+        undefined, e => { console.warn('K2 council hall model failed', url, e); if (state.root === root) onLoad(null); });
+    };
+    const D = window.MeshoptDecoder;
+    if (D && D.ready) { D.ready.then(() => go(D), () => go(null)); return; }
+    if (!needsMeshopt) { go(null); return; }
+    setTimeout(() => {
+      if (window.MeshoptDecoder || document.querySelector('script[data-corridor-meshopt]')) return;
+      const sc = document.createElement('script'); sc.src = 'vendor/meshopt_decoder.js'; sc.dataset.corridorMeshopt = '1';
+      document.head.appendChild(sc);
+    }, 3000);
+    let tries = 0; const t = setInterval(() => {
+      const d = window.MeshoptDecoder;
+      if (d && d.ready) { clearInterval(t); d.ready.then(() => go(d)); }
+      else if (++tries > 300) { clearInterval(t); console.warn('MeshoptDecoder missing; K2 model skipped', url); }
+    }, 100);
+  }
+  // Wall faces with world-anchored UVs: U runs to the viewer's right and is
+  // fitted so every wall holds whole mural panels from corner to corner.
+  function k2WallQuads(segs, yOf, b, fitU, tileV) {
+    const pos = [], uv = [], nor = [];
+    segs.forEach(r => {
+      const [y0, y1] = yOf(r);
+      if (y1 - y0 < 0.02 || r.s1 - r.s0 < 0.02) return;
+      const ix = -r.nx * r.inset, iz = -r.nz * r.inset;
+      const P = s => [r.a[0] + r.tx * s + ix, r.a[1] + r.tz * s + iz];
+      const p0 = P(r.s0), p1 = P(r.s1);
+      const rx = -r.nz, rz = r.nx; // viewer's right when facing this wall
+      const tileU = Math.abs(r.tx) >= Math.abs(r.tz) ? fitU.x : fitU.z;
+      const U = p => ((p[0] - b.x0) * rx + (p[1] - b.z0) * rz) / tileU;
+      const u0 = U(p0), u1 = U(p1);
+      const A = [p0[0], y0, p0[1]], B = [p1[0], y0, p1[1]], Cq = [p1[0], y1, p1[1]], D = [p0[0], y1, p0[1]];
+      const uA = [u0, y0 / tileV], uB = [u1, y0 / tileV], uC = [u1, y1 / tileV], uD = [u0, y1 / tileV];
+      const fx = -r.nx, fz = -r.nz;
+      const e1 = [B[0] - A[0], 0, B[2] - A[2]];
+      const want = (-e1[2]) * fx + e1[0] * fz > 0;
+      const tri = want ? [A, B, Cq, A, Cq, D] : [A, Cq, B, A, D, Cq];
+      const tuv = want ? [uA, uB, uC, uA, uC, uD] : [uA, uC, uB, uA, uD, uC];
+      tri.forEach((p, i) => { pos.push(p[0], p[1], p[2]); uv.push(tuv[i][0], tuv[i][1]); nor.push(fx, 0, fz); });
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.computeBoundingBox(); g.computeBoundingSphere(); return g;
+  }
+  function dressK2() {
+    const r = state.rooms.find(q => q.id === 'K2'), g = state.regionGroups.get('K2');
+    if (!r || !g) return;
+    const b = r.bbox, W = b.x1 - b.x0, D = b.z1 - b.z0, h = r.height;
+    state.k2Dress = { walls: false, ceiling: 0, chandelier: false, lions: 0, plants: 0 };
+
+    // 1) Mural walls
+    const area = solid(r.poly);
+    const freeArea = difference(area, state.baseWall);
+    const wallsHere = intersection(state.baseWall, offset(area, 1.6));
+    const runs = corridorWallRuns(wallsHere, freeArea);
+    const lintelRuns = [];
+    state.doors.filter(d => d.kind !== 'arch' && d.openPoly && (d.from === 'K2' || d.to === 'K2')).forEach(d => {
+      const op = solid(d.openPoly);
+      corridorWallRuns(op, difference(freeArea, op)).forEach(l => { l.door = d; lintelRuns.push(l); });
+    });
+    const fitU = {
+      x: W / Math.max(1, Math.round(W / K2_DRESS.wallPanelW)),
+      z: D / Math.max(1, Math.round(D / K2_DRESS.wallPanelW))
+    };
+    const tileV = h / K2_DRESS.wallRows;
+    const wallMat = corridorMaterial(K2_ASSETS.wall, 0.82);
+    const wallGeo = mergeGeometriesUV([
+      k2WallQuads(runs, () => [0, h], b, fitU, tileV),
+      k2WallQuads(lintelRuns, l => [Math.min(l.door.height, h), h], b, fitU, tileV)
+    ]);
+    mesh(wallGeo, wallMat, 'K2-majlis-walls', g);
+    state.k2Dress.walls = true;
+
+    // 2) Ceiling panels, then the chandelier seated on them
+    const nx = Math.max(1, Math.round(W / K2_DRESS.ceilingTile)), nz = Math.max(1, Math.round(D / K2_DRESS.ceilingTile));
+    const tw = W / nx, td = D / nz;
+    let ceilingMeshes = [];
+    k2LoadGLB(K2_ASSETS.ceiling, false, gltf => {
+      if (gltf) {
+        const parts = []; gltf.scene.traverse(o => { if (o.isMesh) parts.push(o); });
+        const bb = new THREE.Box3();
+        parts.forEach(p => { p.geometry.computeBoundingBox(); bb.union(p.geometry.boundingBox); });
+        if (parts.length && !bb.isEmpty()) {
+          // The panel is authored standing up: thin axis = local X, decorated face = +X.
+          // Rotate -90 deg about Z so the decorated face looks down; local Y -> world X.
+          // The node's tiny authored tilt is ignored so the squares butt edge to edge.
+          const size = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+          const sX = K2_DRESS.ceilingDepth / Math.max(1e-4, size.x), sY = tw / Math.max(1e-4, size.y), sZ = td / Math.max(1e-4, size.z);
+          const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+          const scl = new THREE.Vector3(sX, sY, sZ);
+          const offX = c.y * sY, offZ = c.z * sZ, top = -bb.min.x * sX;
+          const m = new THREE.Matrix4(), p = new THREE.Vector3();
+          parts.forEach(part => {
+            const im = new THREE.InstancedMesh(part.geometry, part.material, nx * nz);
+            im.name = 'K2-majlis-ceiling'; im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false;
+            let i = 0;
+            for (let ix = 0; ix < nx; ix++) for (let iz = 0; iz < nz; iz++) {
+              p.set(b.x0 + tw * (ix + 0.5) - offX, h - top, b.z0 + td * (iz + 0.5) - offZ);
+              m.compose(p, q, scl); im.setMatrixAt(i++, m);
+            }
+            im.instanceMatrix.needsUpdate = true;
+            im.userData.ceiling = true; im.visible = !state.cutaway;
+            g.add(im); ceilingMeshes.push(im);
+            (state.corridorCeilings || (state.corridorCeilings = [])).push(im);
+          });
+          state.k2Dress.ceiling = nx * nz;
+        }
+      }
+      state.root.updateMatrixWorld(true);
+      loadK2Chandelier(r, g, ceilingMeshes);
+    });
+
+    // 3) Winged lions facing each other across the north doorway
+    const lionSlots = [
+      { x: b.cx - K2_DRESS.lionX, z: b.z1 - K2_DRESS.lionInsetZ, rot: Math.PI / 2 },   // looks +X
+      { x: b.cx + K2_DRESS.lionX, z: b.z1 - K2_DRESS.lionInsetZ, rot: -Math.PI / 2 }   // looks -X
+    ];
+    lionSlots.forEach(s => {
+      const hl = K2_DRESS.lionH * K2_DRESS.lionFoot.len * 0.5, hw = K2_DRESS.lionH * K2_DRESS.lionFoot.wid * 0.5;
+      state.colliders.push({ minx: s.x - hl, maxx: s.x + hl, miny: 0, maxy: K2_DRESS.lionH, minz: s.z - hw, maxz: s.z + hw, _wing: true, _k2Prop: true });
+    });
+    k2LoadGLB(K2_ASSETS.lion, false, gltf => {
+      if (!gltf) return;
+      const src = gltf.scene; src.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(src), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+      const k = K2_DRESS.lionH / Math.max(1e-4, size.y);
+      lionSlots.forEach((s, i) => {
+        const model = i ? src.clone(true) : src;
+        model.scale.setScalar(k);
+        model.position.set(-c.x * k, -box.min.y * k, -c.z * k);
+        const holder = new THREE.Group(); holder.name = 'K2-winged-lion-' + (i + 1);
+        holder.position.set(s.x, 0, s.z); holder.rotation.y = s.rot; holder.add(model);
+        model.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
+        g.add(holder);
+      });
+      state.k2Dress.lions = lionSlots.length;
+      state.root.updateMatrixWorld(true);
+    });
+
+    // 4) Six large potted plants, three on each side wall, evenly spaced
+    const plantSlots = [];
+    for (let i = -1; i <= 1; i++) {
+      const z = b.cz + i * K2_DRESS.plantSpacing;
+      plantSlots.push({ x: b.x0 + K2_DRESS.plantInset, z, rot: 0 });
+      plantSlots.push({ x: b.x1 - K2_DRESS.plantInset, z, rot: Math.PI });
+    }
+    plantSlots.forEach(p => {
+      const rr = K2_DRESS.plantRadius;
+      state.colliders.push({ minx: p.x - rr, maxx: p.x + rr, miny: 0, maxy: K2_DRESS.plantH, minz: p.z - rr, maxz: p.z + rr, _wing: true, _plant: true, _k2Prop: true });
+    });
+    k2LoadGLB(K2_ASSETS.plant, true, gltf => {
+      if (!gltf) return;
+      gltf.scene.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(gltf.scene), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+      const k = K2_DRESS.plantH / Math.max(1e-3, size.y);
+      const parts = []; gltf.scene.traverse(o => { if (o.isMesh) parts.push(o); });
+      const dummy = new THREE.Object3D(), rel = new THREE.Matrix4(), centre = new THREE.Matrix4().makeTranslation(-c.x, -box.min.y, -c.z);
+      parts.forEach(part => {
+        const im = new THREE.InstancedMesh(part.geometry, part.material, plantSlots.length);
+        im.name = 'K2-majlis-plants'; im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false;
+        plantSlots.forEach((s, i) => {
+          dummy.position.set(s.x, 0, s.z); dummy.rotation.set(0, s.rot, 0); dummy.scale.setScalar(k); dummy.updateMatrix();
+          rel.copy(dummy.matrix).multiply(centre).multiply(part.matrixWorld);
+          im.setMatrixAt(i, rel);
+        });
+        im.instanceMatrix.needsUpdate = true; g.add(im);
+      });
+      state.k2Dress.plants = plantSlots.length;
+      state.root.updateMatrixWorld(true);
+    });
+  }
+  function loadK2Chandelier(r, g, ceilingMeshes) {
+    const b = r.bbox, h = r.height;
+    k2LoadGLB(K2_ASSETS.chandelier, false, gltf => {
+      if (!gltf) return;
+      const model = gltf.scene; model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+      const k = K2_DRESS.chandelierH / Math.max(1e-4, size.y);
+      // Highest ceiling surface over the canopy footprint, so the top touches the
+      // relief everywhere (pushes into the frames rather than leaving a gap).
+      let seat = ceilingMeshes.length ? h - K2_DRESS.ceilingDepth : h;
+      if (ceilingMeshes.length) {
+        state.root.updateMatrixWorld(true);
+        const ray = new THREE.Raycaster(), up = new THREE.Vector3(0, 1, 0), o = new THREE.Vector3();
+        const canopyR = Math.max(0.05, Math.min(size.x, size.z) * k * 0.2);
+        const probes = [[0, 0]];
+        for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; probes.push([Math.cos(a) * canopyR, Math.sin(a) * canopyR]); }
+        let best = -Infinity;
+        probes.forEach(([dx, dz]) => {
+          o.set(b.cx + dx, h - 2, b.cz + dz); g.localToWorld(o);
+          ray.set(o, up); ray.far = 4;
+          const hit = ray.intersectObjects(ceilingMeshes, false)[0];
+          if (hit) { const lp = g.worldToLocal(hit.point.clone()); best = Math.max(best, lp.y); }
+        });
+        if (Number.isFinite(best)) seat = Math.min(h, best);
+      }
+      model.scale.setScalar(k);
+      model.position.set(b.cx - c.x * k, seat - box.max.y * k, b.cz - c.z * k);
+      model.name = 'K2-majlis-chandelier';
+      model.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+      g.add(model);
+      state.k2Dress.chandelier = true; state.k2Dress.chandelierTop = seat;
+      state.root.updateMatrixWorld(true);
     });
   }
   function rebuildSpatial() {
