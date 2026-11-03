@@ -2620,6 +2620,32 @@
 
   function aimCamera(ctx, snap) {
     const hp = ctx.hero.position;
+    if (hallBuilt && colliders.length) {
+      // ENTRANCE SHOT. The hero spawns ~1 m in front of the hall's inner front wall,
+      // between the two open door leaves, so a chase camera was crushed against that
+      // wall (≈1 m behind his head) and shook as the old lerp + collision clamp
+      // fought every frame; any side angle is blocked by a door leaf.
+      // Instead: a fixed camera inside the hall, facing him, framed by the doorway.
+      // He walks in towards it, then the shot cuts cleanly to the normal follow
+      // camera straight behind him (same collision rig as play, so no hand-off jump).
+      if (state === 'SETTLE' || state === 'DONE') {
+        followCamera(ctx.camera, ctx.hero, 0, FOLLOW_PITCH, FOLLOW_DIST, lastDt, !entryCut, true);
+        entryCut = true;
+        return;
+      }
+      if (snap || !entryCam) {
+        entryCut = false;
+        const px = hp.x, py = hp.y + CAM_PIVOT, pz = hp.z;
+        const cp = Math.cos(ENTRY_PITCH), uy = Math.sin(ENTRY_PITCH), uz = cp;
+        let d = castCamera(px, py, pz, 0, uy, uz, ENTRY_DIST, hp.y, false);
+        d = Math.min(d, castCamera(px, py, pz, 0, uy, uz, d, hp.y, true));
+        entryCam = new THREE.Vector3(px, py + uy * d, pz + uz * d);
+      }
+      ctx.camera.position.copy(entryCam);
+      ctx.camera.lookAt(hp.x, hp.y + ENTRY_LOOK, hp.z);
+      rig.fresh = true; // already collision-checked: nothing else may move this shot
+      return;
+    }
     const goal = 6.2;
     if (snap) camBack = 3.5;
     else camBack += (goal - camBack) * (1 - Math.exp(-Math.max(0.001, lastDt) * 0.62));
@@ -2677,6 +2703,7 @@
 
   let lastDt = 0.016;
   function tick(dt, ctx) {
+    rig.idle++; // frames since the camera rig last ran (a re-entry snaps instead of swinging)
     try { tickInner(dt, ctx); }
     catch (err) {
       console.error(err);
@@ -2881,8 +2908,122 @@
     return tmin;
   }
 
+  // ---------------------------------------------------------------------------
+  // THIRD-PERSON CAMERA RIG (palace hall + wings)
+  // The camera always sits on the ray from a pivot at the hero's shoulders,
+  // pointing back along the view yaw/pitch, at the longest distance that keeps a
+  // CAM_RADIUS sphere clear of walls, door jambs, lintels, floor and ceiling.
+  //   - it pulls IN instantly when something comes between (never clips through);
+  //   - it eases back OUT slowly (no pumping);
+  //   - it is rigidly attached to the hero (no position lerp that lags behind on
+  //     a sprint and then gets snapped by a collision clamp: that fight was the
+  //     shake on entry and the "camera flies away" in the narrow wing corridors).
+  // Small free-standing hall props (throne, braziers) do not yank the camera in
+  // when they pass between it and the hero; the camera is only stopped in front
+  // of one when it would otherwise end up inside it. Every wing box (walls, door
+  // jambs, columns, lions, plants) is a full obstacle.
+  const CAM_RADIUS = 0.3;      // clearance kept around the lens (m)
+  const CAM_PIVOT = 1.5;       // pivot height above the hero's feet (= main follow rig)
+  const CAM_MIN = 0.35;        // closest the lens may get to the pivot (m)
+  const CAM_OUT = 2.4;         // ease-out rate after an obstruction clears (1/s)
+  const CAM_ZOOM = 4;          // ease rate for requested distance changes (1/s)
+  const CAM_TURN = 10;         // yaw/pitch smoothing (1/s) — light, keeps touch drag responsive
+  const FOLLOW_DIST = 4.6, FOLLOW_PITCH = 0.2;                  // = index.html follow defaults
+  const ENTRY_DIST = 4.6, ENTRY_PITCH = 0.3, ENTRY_LOOK = 1.2; // entrance: fixed shot in front of the hero
+  let entryCam = null, entryCut = false;
+  const rig = { d: -1, ds: FOLLOW_DIST, yaw: 0, pitch: FOLLOW_PITCH, idle: 0, fresh: false };
+  const camBox = { minx: 0, maxx: 0, miny: 0, maxy: 0, minz: 0, maxz: 0 };
+  function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
+
+  function insideBox(x, y, z, b) { return x >= b.minx && x <= b.maxx && y >= b.miny && y <= b.maxy && z >= b.minz && z <= b.maxz; }
+
+  // Ceiling height (world y) above a point, or +Infinity when unknown.
+  function ceilingAt(x, z) {
+    if (wingRuntime && window.PalaceWings && PalaceWings.state && PalaceWings.state.root) {
+      const root = PalaceWings.state.root.position, lx = x - root.x, lz = z - root.z;
+      if (PalaceWings.contains(lx, lz)) {
+        const r = PalaceWings.regionAt(lx, lz);
+        if (r && r.height > 0) return root.y + r.height;
+      }
+    }
+    const lx = x - portalX, lz = z - portalFront;
+    if (Math.abs(lx) <= hallW / 2 + 0.6 && lz >= -0.5 && lz <= hallLen + 0.6) return floorY + CONFIG.hallHeightH * H;
+    return Infinity;
+  }
+
+  function isProp(b) { return !b._wing && Math.max(b.maxx - b.minx, b.maxz - b.minz) < 8; }
+  function padBox(b, r) {
+    camBox.minx = b.minx - r; camBox.maxx = b.maxx + r;
+    camBox.miny = b.miny - r; camBox.maxy = b.maxy + r;
+    camBox.minz = b.minz - r; camBox.maxz = b.maxz + r;
+    return camBox;
+  }
+  // Longest clear distance (≤ len) along the unit ray (ux,uy,uz) from the pivot.
+  // props=false: walls only. props=true: only props that would contain the lens at len.
+  function castCamera(px, py, pz, ux, uy, uz, len, feetY, props) {
+    const r = CAM_RADIUS;
+    const ex = px + ux * len, ey = py + uy * len, ez = pz + uz * len;
+    const lox = Math.min(px, ex) - r, hix = Math.max(px, ex) + r;
+    const loy = Math.min(py, ey) - r, hiy = Math.max(py, ey) + r;
+    const loz = Math.min(pz, ez) - r, hiz = Math.max(pz, ez) + r;
+    let best = len;
+    for (let i = 0; i < colliders.length; i++) {
+      const b = colliders[i];
+      if (b.maxx < lox || b.minx > hix || b.maxy < loy || b.miny > hiy || b.maxz < loz || b.minz > hiz) continue;
+      if (isProp(b) !== !!props) continue;
+      let box = padBox(b, r);
+      if (insideBox(px, py, pz, camBox)) {
+        // Hero hugging a wall / brushing a plant: the padded box already contains (or
+        // touches) the pivot. Test the real box instead; a box the pivot is in or on
+        // cannot be between the hero and the lens.
+        if (insideBox(px, py, pz, b)) continue;
+        box = b;
+      }
+      if (props && !insideBox(ex, ey, ez, box)) continue;
+      const t = rayHit(px, py, pz, ux * len, uy * len, uz * len, box);
+      if (t != null && t * len < best) best = t * len;
+    }
+    if (props) return best;
+    // Ceiling / floor planes (rooms and corridors have different heights).
+    const ceil = Math.min(ceilingAt(px, pz), ceilingAt(ex, ez));
+    if (uy > 1e-4 && Number.isFinite(ceil)) best = Math.min(best, Math.max(0, (ceil - r - py) / uy));
+    if (uy < -1e-4) best = Math.min(best, Math.max(0, (feetY + r - py) / uy));
+    return Math.max(0, best - 0.03);
+  }
+
+  // Positions + aims the camera. Returns false when the rig is not in charge.
+  function followCamera(cam, hero, yaw, pitch, dist, dt, snap, cinematic) {
+    if (!cam || !hero || !hallBuilt || colliders.length === 0) return false;
+    if (!cinematic && !(state === 'DONE' && occupant)) return false;
+    const p = hero.isObject3D ? hero.position : hero;
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return false;
+    if (![yaw, pitch, dist].every(Number.isFinite)) return false;
+    dt = Math.min(0.1, Math.max(0.001, dt || lastDt));
+    if (snap || rig.d < 0 || rig.idle > 3) { snap = true; rig.yaw = yaw; rig.pitch = pitch; rig.ds = dist; }
+    rig.idle = 0;
+    const turn = 1 - Math.exp(-dt * CAM_TURN);
+    rig.yaw += wrapAngle(yaw - rig.yaw) * turn;
+    rig.pitch += (pitch - rig.pitch) * turn;
+    rig.ds += (dist - rig.ds) * (1 - Math.exp(-dt * CAM_ZOOM));
+    const pt = Math.max(-0.1, Math.min(1.2, rig.pitch)), cp = Math.cos(pt);
+    const ux = -Math.sin(rig.yaw) * cp, uy = Math.sin(pt), uz = -Math.cos(rig.yaw) * cp;
+    const px = p.x, py = p.y + CAM_PIVOT, pz = p.z;
+    const safe = castCamera(px, py, pz, ux, uy, uz, rig.ds, p.y, false);
+    const want = Math.max(Math.min(CAM_MIN, safe), Math.min(rig.ds, safe));
+    if (snap || want < rig.d) rig.d = want;
+    else rig.d += (want - rig.d) * (1 - Math.exp(-dt * CAM_OUT));
+    if (rig.d > 0.05) rig.d = Math.max(Math.min(CAM_MIN, rig.d), Math.min(rig.d, castCamera(px, py, pz, ux, uy, uz, rig.d, p.y, true)));
+    cam.position.set(px + ux * rig.d, py + uy * rig.d, pz + uz * rig.d);
+    cam.lookAt(px, py, pz);
+    rig.fresh = true;
+    return true;
+  }
+
   function constrainCamera(cam, hero) {
     if (!cam || !hero || colliders.length === 0) return;
+    // The rig already placed this frame's camera collision-free; a second,
+    // different clamp on top of it is what used to make the view shake.
+    if (rig.fresh) { rig.fresh = false; return; }
     if (state === 'IDLE' || state === 'FAILED' || state === 'FADING_OUT' || state === 'LOADING') return;
     if (state === 'DONE' && !occupant) return;
     const p = hero.isObject3D ? hero.position : hero;
@@ -2941,6 +3082,7 @@
     ownsGround: function () { return state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'FAILED' || (state === 'DONE' && occupant); },
     blocks: blocks,
     constrainCamera: constrainCamera,
+    followCamera: function (cam, hero, yaw, pitch, dist, dt) { return followCamera(cam, hero, yaw, pitch, dist, dt, false, false); },
     floorY: function () { return floorY; },
     floorAt: floorAt,
     holdCull: holdCull,
