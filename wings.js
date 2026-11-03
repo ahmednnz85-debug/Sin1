@@ -531,6 +531,12 @@
     loader.load(url, function (gltf) {
       const model = gltf.scene;
       model.name = 'K1-RoyalReceptionHall';
+      // K1 is non-uniformly fitted after rotation. Disable per-mesh frustum
+      // culling so stale GLTF bounds cannot make the hall disappear when the
+      // player enters from the palace alcove.
+      model.traverse(function (node) {
+        if (node.isMesh) { node.frustumCulled = false; node.visible = true; }
+      });
       // The source GLB contains KHR_lights_punctual nodes at intensity 90-120.
       // Three.js instantiates them during parsing; keeping them causes the
       // white exposure spike when the player enters K1.  The game owns its
@@ -585,6 +591,7 @@
       const fittedCenter0 = fitted0.getCenter(new THREE.Vector3());
       model.position.z += targetZ + state.root.position.z - fittedCenter0.z;
       model.updateMatrixWorld(true);
+      model.visible = true;
       let floorTop = 0;
       model.traverse(function (node) {
         if (!node.isMesh || !/^K1_(Floor|Carpet)/.test(node.name)) return;
@@ -608,8 +615,10 @@
     // Doors are on the sides; leave openings roughly matching door positions
     const wallT = 0.8;
     const h = r.height;
-    const palaceDoor = state.doors.find(d => d.id === 'PalaceL3');
-    const x0 = r.bbox.x0, x1 = palaceDoor ? palaceDoor.x : r.bbox.x1, z0 = r.bbox.z0, z1 = r.bbox.z1;
+    // Keep procedural wing structure on its authored K1 room footprint. The
+    // GLB alone is stretched to the palace facade; extending these walls into
+    // the alcove corrupts the neighbouring wing/corridor structure.
+    const x0 = r.bbox.x0, x1 = r.bbox.x1, z0 = r.bbox.z0, z1 = r.bbox.z1;
     const cx = r.bbox.cx, cz = r.bbox.cz;
     // Four walls, with matched west/east gaps for the two arch openings.
     // K1's GLB gates are on the west/east sides after the loader rotation.
