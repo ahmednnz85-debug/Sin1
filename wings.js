@@ -127,7 +127,11 @@
       doors.push(d); links.push([a, b, id]); return d;
     }
 
-    const K1 = addRoom(rectRegion('K1', 'Kings', ROOM_NAMES.K1, -back - 18, zK - 7, 18, 14, 8.5)); K1.ceiling = false;
+    // K1_RoyalReceptionHall.glb is authored as a 39m-long by 28m-wide hall,
+    // with its two gates on the local Z ends.  K1 is entered/exited from the
+    // west/east sides of the wing layout, so the room follows that footprint
+    // and the loader rotates the asset once to put both gates on those sides.
+    const K1 = addRoom(rectRegion('K1', 'Kings', ROOM_NAMES.K1, -back - 39, zK - 14, 39, 28, 8.5)); K1.ceiling = false;
     const KC12 = addCon(rectRegion('KC12', 'Kings', 'Kings corridor', K1.bbox.x0 - 8, zK - 3, 8, 6, 6, 'corridor'));
     const K2 = addRoom(rectRegion('K2', 'Kings', ROOM_NAMES.K2, KC12.bbox.x0 - 31, zK, 30, 24, 9));
     door('K1-KC12', 'K1', 'KC12', K1.bbox.x0 - 0.5, zK, 'x');
@@ -526,7 +530,21 @@
     loader.load(url, function (gltf) {
       const model = gltf.scene;
       model.name = 'K1-RoyalReceptionHall';
-      // Compute bounding box
+      // The source GLB contains KHR_lights_punctual nodes at intensity 90-120.
+      // Three.js instantiates them during parsing; keeping them causes the
+      // white exposure spike when the player enters K1.  The game owns its
+      // lighting, so keep the visible fixtures but remove only embedded lights.
+      const embeddedLightNodes = [];
+      model.traverse(function (node) {
+        if (!node.isLight) return;
+        embeddedLightNodes.push(node);
+      });
+      embeddedLightNodes.forEach(function (node) { if (node.parent) node.parent.remove(node); });
+      const embeddedLights = embeddedLightNodes.length;
+      model.updateMatrixWorld(true);
+      // Gates are authored on Z; rotate them onto the room's west/east arches.
+      model.rotation.y = Math.PI * 0.5;
+      model.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model);
       const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
@@ -537,14 +555,15 @@
       // Uniform scale to fit the footprint without distortion (use min scale)
       const scaleX = roomW / Math.max(size.x, 0.001);
       const scaleZ = roomD / Math.max(size.z, 0.001);
-      const scale = Math.min(scaleX, scaleZ); // preserve proportions
+      const scaleY = roomH / Math.max(size.y, 0.001);
+      const scale = Math.min(scaleX, scaleZ, scaleY); // preserve proportions and ceiling clearance
       model.scale.setScalar(scale);
       // Position: center the model in the room, y=0 (floor)
       const targetX = r.bbox.cx;
       const targetZ = r.bbox.cz;
       model.position.set(targetX - center.x * scale, -box.min.y * scale, targetZ - center.z * scale);
       parent.add(model);
-      console.info('K1 model loaded and placed at scale', scale.toFixed(3), 'size after', size.multiplyScalar(scale));
+      console.info('K1 model loaded and placed at scale', scale.toFixed(3), 'rotationY=90°', 'embeddedLightsRemoved', embeddedLights, 'size after', size.multiplyScalar(scale));
       // Add approximate wall colliders for the room (perimeter, inset for doors)
       addK1Colliders(r);
     }, undefined, function (err) {
@@ -558,16 +577,21 @@
     const h = r.height;
     const x0 = r.bbox.x0, x1 = r.bbox.x1, z0 = r.bbox.z0, z1 = r.bbox.z1;
     const cx = r.bbox.cx, cz = r.bbox.cz;
-    // Four walls, with gaps for doors (approximate)
-    // South wall (lower z) - may have door to corridor
+    // Four walls, with matched west/east gaps for the two arch openings.
+    // K1's GLB gates are on the west/east sides after the loader rotation.
     state.colliders.push({ minx: x0, miny: 0, minz: z0 - wallT, maxx: x1, maxy: h, maxz: z0 });
     // North wall
     state.colliders.push({ minx: x0, miny: 0, minz: z1, maxx: x1, maxy: h, maxz: z1 + wallT });
-    // West wall (lower x) - door to palace arch roughly centered
-    state.colliders.push({ minx: x0 - wallT, miny: 0, minz: z0, maxx: x0, maxy: h, maxz: cz - 3 });
-    state.colliders.push({ minx: x0 - wallT, miny: 0, minz: cz + 3, maxx: x0, maxy: h, maxz: z1 });
-    // East wall
-    state.colliders.push({ minx: x1, miny: 0, minz: z0, maxx: x1 + wallT, maxy: h, maxz: z1 });
+    const westDoor = state.doors.find(d => d.id === 'K1-KC12');
+    const eastDoor = state.doors.find(d => d.id === 'PalaceL3');
+    const westGap = Math.max(3, westDoor ? westDoor.width * 0.5 : 3);
+    const eastGap = Math.max(3, eastDoor ? eastDoor.width * 0.5 : 3);
+    // West wall: corridor opening.
+    state.colliders.push({ minx: x0 - wallT, miny: 0, minz: z0, maxx: x0, maxy: h, maxz: cz - westGap });
+    state.colliders.push({ minx: x0 - wallT, miny: 0, minz: cz + westGap, maxx: x0, maxy: h, maxz: z1 });
+    // East wall: palace arch opening.
+    state.colliders.push({ minx: x1, miny: 0, minz: z0, maxx: x1 + wallT, maxy: h, maxz: cz - eastGap });
+    state.colliders.push({ minx: x1, miny: 0, minz: cz + eastGap, maxx: x1 + wallT, maxy: h, maxz: z1 });
     // Rebuild spatial after adding
     if (typeof rebuildSpatial === 'function') rebuildSpatial();
   }
