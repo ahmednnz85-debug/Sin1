@@ -598,7 +598,16 @@
       });
       state.k1FloorY = Math.max(0, floorTop);
       addK1ModelColliders(model);
-      const fitted = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+      const fittedBox = new THREE.Box3().setFromObject(model);
+      // Hide only palace geometry that occupies K1's already-fitted volume.
+      // This is a palace-material mask, not a transform or collider change.
+      // No other wing is inside these bounds.
+      if (window.__K1PalaceHole) {
+        window.__K1PalaceHole.min.value.copy(fittedBox.min).subScalar(0.05);
+        window.__K1PalaceHole.max.value.copy(fittedBox.max).addScalar(0.05);
+        window.__K1PalaceHole.enabled.value = 1;
+      }
+      const fitted = fittedBox.getSize(new THREE.Vector3());
       state.k1ModelMetrics = { size: fitted.toArray(), scale: [scaleLocalX, scaleY, scaleLocalZ], outerSpan: targetOuterSpan, sourceGateSpan: sourceGateSpan, floorY: state.k1FloorY, embeddedLightsRemoved: embeddedLights };
       console.info('K1 model loaded and fitted to both gates', state.k1ModelMetrics);
       // Add approximate wall colliders for the room (perimeter, inset for doors)
