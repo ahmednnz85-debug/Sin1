@@ -140,11 +140,22 @@
   let overlapNotes = [];
   let propsProbed = false;
   let wingsProbed = false;
-  let perfNote = '';
+  let warmMeshes = null;
+  let warmIndex = 0;
+  let warmSlow = 0;
+  let warmProxy = null;
+  let warmProxyI = null;
   const aniso = { v: 4 };
   const runtimeErrors = [];
   const LOG = [];
+  const MARKS = [];
   let paintQueued = false;
+  let perfNote = '';
+  function mark(msg) {
+    MARKS.push(Math.round(performance.now()) + ' ' + msg);
+    if (MARKS.length > 240) MARKS.shift();
+    note(msg);
+  }
 
   function debugOn() {
     const href = String(location.href || '');
@@ -276,6 +287,9 @@
 
   function shownPercent() {
     if (warmFrame && hallBuilt && filesReady()) return 100;
+    if (state === 'REVEAL' && warmMeshes && warmMeshes.length) {
+      return Math.min(99, 92 + Math.floor((7 * warmIndex) / warmMeshes.length));
+    }
     return Math.min(99, Math.floor(progressRatio() * 100));
   }
 
@@ -288,6 +302,7 @@
     if (pctEl) pctEl.textContent = pct + '%';
     if (statusEl) {
       if (state === 'FAILED') statusEl.textContent = 'توقف تحميل القصر الملكي';
+      else if (state === 'REVEAL') statusEl.textContent = 'جارٍ تجهيز القاعة';
       else if (filesReady() && !warmFrame) statusEl.textContent = 'جارٍ بناء القاعة';
       else if (pct >= 100) statusEl.textContent = 'القصر الملكي';
       else statusEl.textContent = 'جارٍ تحميل: القصر الملكي';
@@ -327,6 +342,8 @@
     runtimeErrors.forEach(function (e) { lines.push(e); });
     lines.push('--- log ---');
     LOG.forEach(function (l) { lines.push(l); });
+    lines.push('--- marks ---');
+    MARKS.forEach(function (l) { lines.push(l); });
     return lines.join('\n');
   }
 
@@ -378,6 +395,7 @@
     if (!filesReady()) assets = null;
     hallBuilt = false;
     warmFrame = false;
+    warmMeshes = null;
     loadOk = null;
     loadError = null;
     holdT = CONFIG.minBlackHoldSeconds;
@@ -896,6 +914,33 @@
     note('city released ' + drop.length);
   }
 
+  let lightsCulled = false;
+  function cullOutsideLights(scene, on) {
+    if (!scene) return;
+    scene.traverse(function (o) {
+      if (!o.isLight) return;
+      let p = o.parent, inside = false;
+      while (p) {
+        if (p === group || p.name === 'PalaceWings') { inside = true; break; }
+        p = p.parent;
+      }
+      if (inside) return;
+      if (on) {
+        if (o.userData._palaceLight == null) o.userData._palaceLight = o.visible;
+        o.visible = false;
+      } else if (o.userData._palaceLight != null) {
+        o.visible = o.userData._palaceLight;
+        o.userData._palaceLight = null;
+      }
+    });
+    lightsCulled = on;
+    if (on) {
+      let n = 0;
+      scene.traverse(function (o) { if (o.isLight && o.visible) n++; });
+      mark('palace lights ' + n);
+    }
+  }
+
   function holdCull(scene, hero) {
     if (!scene || !group) return;
     const on = state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED' || (state === 'DONE' && occupant);
@@ -909,6 +954,9 @@
         ch.userData._palaceWas = null;
       }
     });
+    const onLights = state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED' || (state === 'DONE' && occupant);
+    if (onLights && !lightsCulled) cullOutsideLights(scene, true);
+    if (!onLights && lightsCulled) cullOutsideLights(scene, false);
   }
 
   function setExteriorVisible(scene, visible) {
@@ -1311,6 +1359,7 @@
     wallsMesh.instanceMatrix.needsUpdate = true;
     group.add(wallsMesh);
     slotModes.push({ id: 'wall', count: wallMats.length, mode: 'real' });
+    mark('phase walls n=' + wallMats.length);
 
     const archW = CONFIG.archWidthRatio * moduleLen;
     const archH = CONFIG.archHeightRatio * CH;
@@ -1408,6 +1457,7 @@
     });
     addLOD(colSrc.geo, colMat, colLod.geo === colSrc.geo ? colSrc.geo.clone() : colLod.geo, colMat, colMatrices, colLocals, 5.2);
     slotModes.push({ id: 'column', count: colMatrices.length, mode: 'real' });
+    mark('phase columns n=' + colMatrices.length);
 
     const floorPadX = Math.max(0.5 * H, wallThick * 0.9);
     const floorPadZ = 0.05 * H;
@@ -1713,6 +1763,7 @@
     cornice(W + wallThick, beamT, 0, L - beamT * 0.2);
     cornice(beamT, L, -W / 2 + beamT * 0.12, L / 2);
     cornice(beamT, L, W / 2 - beamT * 0.12, L / 2);
+    mark('phase ceiling');
 
     const lionSrc = prepMesh(assets.lion);
     const lionLod = prepMesh(assets.lionLod) || lionSrc;
@@ -2520,10 +2571,13 @@
     });
 
     if (CONFIG.useWings && window.PalaceWings) {
+      const tWings = performance.now();
+      mark('phase wings start');
       wingRuntime = PalaceWings.build(ctx, {
         width: W, length: L, wallThickness: wallThick, alcoveDepth: 1.15 * H,
         floorY: gy, passages: CONFIG.PASSAGES
       });
+      note('wings ' + Math.round(performance.now() - tWings) + 'ms');
       wingRuntime.fires.forEach(function (f) { f._wing = true; fireList.push(f); });
     }
     buildFires();
@@ -2808,6 +2862,7 @@
         loadError = null;
         hallBuilt = false;
         warmFrame = false;
+    warmMeshes = null;
         occupant = true;
         loadStartedAt = performance.now();
         note('threshold x=' + p.x.toFixed(2) + ' z=' + p.z.toFixed(2) + ' door=' + ctx.doorOpen);
@@ -2845,17 +2900,20 @@
       try {
         if (statusEl) statusEl.textContent = 'جارٍ بناء القاعة';
         renderUI();
+        const tBuild = performance.now();
         build(ctx);
         hallBuilt = true;
         placeHero(ctx);
+        // Hide the city before any palace frame. Drawing the whole avenue
+        // together with the new hall uploads enough geometry to kill the tab,
+        // which reloads the game back to the opening loading screen at 99%.
+        holdCull(ctx.scene, ctx.hero);
+        note('built ' + Math.round(performance.now() - tBuild) + 'ms');
         renderUI();
-        try { ctx.renderer.render(ctx.scene, ctx.camera); }
-        catch (renderErr) { note('render ' + (renderErr && renderErr.message)); }
-        warmFrame = true;
-        renderUI();
-        note('warm frame percent=' + shownPercent());
         state = 'REVEAL';
         fadeT = 0;
+        warmFrame = false;
+    warmMeshes = null;
       } catch (err) {
         console.error(err);
         runtimeErrors.push('SETUP: ' + (err && (err.stack || err.message) || err));
@@ -2866,6 +2924,112 @@
       return;
     }
     if (state === 'REVEAL') {
+      // One full palace frame used to compile every new shader and draw the
+      // whole hall at once. The browser treats that as a dead tab and reloads
+      // the opening screen while the bar is stuck at 99%. Compile one material
+      // per frame on a tiny stand-in, then draw the real hall once.
+      if (!warmFrame) {
+        holdCull(ctx.scene, ctx.hero);
+        if (!warmMeshes) {
+          const seen = new Set();
+          warmMeshes = [];
+          const consider = function (root) {
+            if (!root) return;
+            root.traverse(function (o) {
+              if (!o.isMesh && !o.isSprite && !o.isPoints) return;
+              const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+              if (!mats.length || mats.every(function (m) { return !m || seen.has(m.uuid); })) return;
+              mats.forEach(function (m) {
+                if (!m || seen.has(m.uuid)) return;
+                seen.add(m.uuid);
+                warmMeshes.push({ obj: o, mat: m });
+              });
+            });
+          };
+          consider(group);
+          if (wingRuntime && wingRuntime.root) consider(wingRuntime.root);
+          if (ctx.hero) consider(ctx.hero);
+          warmMeshes.forEach(function (e) {
+            if (e.obj.userData._warmVis == null) e.obj.userData._warmVis = e.obj.visible;
+            e.obj.visible = false;
+          });
+          if (ctx.hero && ctx.hero.userData._warmHero == null) {
+            ctx.hero.userData._warmHero = ctx.hero.visible;
+            ctx.hero.visible = false;
+          }
+          const tiny = new THREE.BufferGeometry();
+          tiny.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0.04, 0, 0, 0, 0.04, 0], 3));
+          tiny.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+          tiny.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1], 2));
+          tiny.setIndex([0, 1, 2]);
+          warmProxy = new THREE.Mesh(tiny, new THREE.MeshBasicMaterial());
+          warmProxy.frustumCulled = false;
+          warmProxy.visible = false;
+          warmProxy.name = 'warm-proxy';
+          ctx.scene.add(warmProxy);
+          warmProxyI = new THREE.InstancedMesh(tiny.clone(), new THREE.MeshBasicMaterial(), 1);
+          warmProxyI.frustumCulled = false;
+          warmProxyI.visible = false;
+          warmProxyI.name = 'warm-proxy-i';
+          const idm = new THREE.Object3D();
+          idm.updateMatrix();
+          warmProxyI.setMatrixAt(0, idm.matrix);
+          warmProxyI.instanceMatrix.needsUpdate = true;
+          ctx.scene.add(warmProxyI);
+          warmIndex = 0;
+          warmSlow = 0;
+          mark('warm materials ' + warmMeshes.length);
+        }
+        const e = warmMeshes[warmIndex];
+        const o = e && e.obj;
+        const heavy = o && (o.isSprite || o.isPoints || o.isSkinnedMesh);
+        const proxy = !o ? null : heavy ? o : (o.isInstancedMesh ? warmProxyI : warmProxy);
+        if (proxy && proxy !== o) {
+          proxy.material = e.mat;
+          const dir = new THREE.Vector3();
+          ctx.camera.getWorldDirection(dir);
+          proxy.position.copy(ctx.camera.position).addScaledVector(dir, 0.45);
+          proxy.quaternion.copy(ctx.camera.quaternion);
+          proxy.visible = true;
+        } else if (o) {
+          o.visible = o.userData._warmVis !== false;
+          if (e.mat) o.material = o.material;
+        }
+        const tWarm = performance.now();
+        try { ctx.renderer.render(ctx.scene, ctx.camera); }
+        catch (renderErr) { mark('render ' + (renderErr && renderErr.message)); }
+        const took = performance.now() - tWarm;
+        if (took > warmSlow) warmSlow = took;
+        if (took > 120) mark('warm ' + Math.round(took) + 'ms ' + ((e && e.mat && (e.mat.name || e.mat.type)) || (o && (o.name || o.type)) || '?'));
+        if (proxy && proxy !== o) proxy.visible = false;
+        else if (o) o.visible = false;
+        warmIndex += 1;
+        if (statusEl) statusEl.textContent = 'جارٍ تجهيز القاعة';
+        renderUI();
+        if (warmIndex >= warmMeshes.length) {
+          const restored = new Set();
+          warmMeshes.forEach(function (e2) {
+            if (restored.has(e2.obj)) return;
+            restored.add(e2.obj);
+            e2.obj.visible = e2.obj.userData._warmVis !== false;
+            delete e2.obj.userData._warmVis;
+          });
+          if (ctx.hero && ctx.hero.userData._warmHero != null) {
+            ctx.hero.visible = ctx.hero.userData._warmHero !== false;
+            delete ctx.hero.userData._warmHero;
+          }
+          if (warmProxy) { ctx.scene.remove(warmProxy); warmProxy.geometry.dispose(); warmProxy = null; }
+          if (warmProxyI) { ctx.scene.remove(warmProxyI); warmProxyI.geometry.dispose(); warmProxyI = null; }
+          const tFull = performance.now();
+          try { ctx.renderer.render(ctx.scene, ctx.camera); }
+          catch (renderErr) { mark('render ' + (renderErr && renderErr.message)); }
+          warmFrame = true;
+          mark('warm slices max=' + Math.round(warmSlow) + 'ms full=' + Math.round(performance.now() - tFull) + 'ms n=' + warmMeshes.length);
+          warmMeshes = null;
+          renderUI();
+        }
+        return;
+      }
       fadeT += dt;
       loadEl.style.opacity = '1';
       renderUI();
@@ -3151,6 +3315,7 @@
     state: function () { return state; },
     percent: shownPercent,
     debugText: debugText,
+    mark: mark,
     metrics: function () { return { H: H, length: hallLen, width: hallW, front: portalFront, x: portalX, state: state, occupant: occupant, lights: lights.length + 1, ramp: ramp ? ramp.yTop : 0 }; }
   };
   if (debugOn()) { ensureLoadScreen(); renderDebug(); }

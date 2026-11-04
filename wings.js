@@ -766,6 +766,7 @@
     const palaceBand = solid(polyRect(-hwv - wtv - 0.02, -0.5, (hwv + wtv + 0.02) * 2, state.hall.length + 1));
     const visualWall = difference(state.baseWall, palaceBand);
     state.wallGeometry = mergeGeometries([extrudeSolids(visualWall, 0, MAX_H)].concat(capGeos));
+    wingMark('wings wall mesh');
     state.wallMesh = mesh(state.wallGeometry, state.wallMat, 'wings-unified-watertight-walls');
     const floorMats = {
       Kings: gridMaterial(0x80705a, 0.94, 0x1d1710), Temple: gridMaterial(0x65756e, 0.94, 0x121c18),
@@ -818,7 +819,9 @@
     });
     addSpecials();
     dressCorridors();
+    wingMark('wings corridors');
     dressK2();
+    wingMark('wings k2');
     const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
     const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
     const dummy = new THREE.Object3D();
@@ -1949,6 +1952,9 @@
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
   }
+  function wingMark(msg) {
+    try { if (window.PalaceInterior && PalaceInterior.mark) PalaceInterior.mark(msg); } catch (e) { /* marks are diagnostic only */ }
+  }
   function build(ctx, hall) {
     assertDeps(); dispose();
     state.building = true; deferredLoads.length = 0;
@@ -1960,9 +1966,11 @@
     state.root = new THREE.Group(); state.root.name = 'PalaceWings';
     state.root.position.set(ctx.portal.x, hall.floorY || 0, ctx.portal.frontZ); ctx.scene.add(state.root);
     const layout = solveLayout(hall);
+    wingMark('wings layout');
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
     state.regions = state.rooms.concat(state.connectors); state.links = layout.links; state.sealed = layout.sealed; state.back = layout.back;
     prepareArchitecture(layout);
+    wingMark('wings architecture');
     // Remove procedural walls inside K1 so the GLB model is the only interior
     const k1 = state.rooms.find(r => r.id === 'K1');
     if (k1) {
@@ -1970,7 +1978,8 @@
       state.wallSolid = difference(state.wallSolid, solid(k1.poly));
     }
     makeColliders(state.baseWall, state.caps);
-    buildVisuals(layout); rebuildSpatial();
+    wingMark('wings colliders');
+    buildVisuals(layout); wingMark('wings visuals'); rebuildSpatial();
     state.built = true;
     if (state.debug) createDebugUI();
     updateCulling(true);
