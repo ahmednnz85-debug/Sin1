@@ -139,6 +139,7 @@
   let lightAssignAt = 0;
   let overlapNotes = [];
   let propsProbed = false;
+  let wingsProbed = false;
   let perfNote = '';
   const aniso = { v: 4 };
   const runtimeErrors = [];
@@ -586,16 +587,64 @@
     });
   }
 
+  // Wing models are handed to PalaceWings untouched (no tuneGLTF), exactly as
+  // its own GLTFLoader used to read them.
+  function parseRawGLB(buf) {
+    const loader = new THREE.GLTFLoader();
+    return waitDecoder().then(function (dec) {
+      if (dec) loader.setMeshoptDecoder(dec);
+      return new Promise(function (resolve, reject) {
+        loader.parse(buf, '', resolve, function (e) {
+          reject(new Error('تعذّر قراءة النموذج — ' + ((e && (e.message || e)) || 'GLB')));
+        });
+      });
+    });
+  }
+
+  // Wing (K1, K2, corridors) files join the palace loading screen so the wings
+  // never appear undressed. They are optional: a failed file falls back to the
+  // wing's own on-demand loader instead of blocking the palace.
+  function attachWingSpecs() {
+    if (wingsProbed || !CONFIG.useWings || !window.PalaceWings || typeof PalaceWings.assetList !== 'function') return;
+    wingsProbed = true;
+    PalaceWings.assetList().forEach(function (a) {
+      const url = bust(encodeURI(a.url));
+      if (specs.some(function (s) { return s.url === url; })) return; // same file as a palace asset: shared below
+      specs.push({
+        id: 'wing:' + a.url, key: 'wing:' + a.url, name: a.url.split('/').pop(), kind: a.kind === 'tex' ? 'wtex' : 'wglb',
+        wingPath: a.url, url: url, optional: true,
+        status: 'pending', loaded: 0, total: 0, error: '', attempt: 0, buf: null, result: null
+      });
+    });
+  }
+
+  async function shareWingAssets() {
+    if (!wingsProbed || !window.PalaceWings) return;
+    const jobs = PalaceWings.assetList().map(async function (a) {
+      const url = bust(encodeURI(a.url));
+      const own = specs.find(function (s) { return s.url === url && !s.wingPath; });
+      if (!own || !own.buf || own.wingShared) return;
+      try {
+        PalaceWings.provideAsset(a.url, a.kind === 'tex' ? await textureFromBytes(own.buf, own.name, false) : await parseRawGLB(own.buf));
+        own.wingShared = true;
+      } catch (e) { console.warn('تعذّر تجهيز ملف الجناح مسبقاً', a.url, e); }
+    });
+    await Promise.all(jobs);
+  }
+
   async function settle(spec) {
     if (spec.status === 'loaded' && spec.result) return spec.result;
     try {
       if (!spec.buf) spec.buf = await fetchWithRetry(spec);
       if (spec.kind === 'js') spec.result = await installDecoder(spec.buf);
       else if (spec.kind === 'tex') spec.result = await textureFromBytes(spec.buf, spec.name, spec.linear);
+      else if (spec.kind === 'wtex') spec.result = await textureFromBytes(spec.buf, spec.name, false);
+      else if (spec.kind === 'wglb') spec.result = await parseRawGLB(spec.buf);
       else {
         await waitDecoder();
         spec.result = await parseGLB(spec.buf);
       }
+      if (spec.wingPath && window.PalaceWings) PalaceWings.provideAsset(spec.wingPath, spec.result);
       spec.status = 'loaded';
       spec.error = '';
       spec.loaded = spec.buf.byteLength;
@@ -702,6 +751,7 @@
     if (!specs) specs = makeSpecs();
     loadPromise = (async function () {
       await attachExistingPropSpecs();
+      attachWingSpecs();
       const jobs = specs.map(function (s) {
         return settle(s).catch(function (err) {
           if (s.optional) {
@@ -713,6 +763,7 @@
         });
       });
       await Promise.all(jobs);
+      await shareWingAssets();
       const failed = specs.filter(function (s) { return !s.optional && (s.status !== 'loaded' || !s.result); });
       if (failed.length) {
         const err = new Error(failed.map(function (s) { return s.name + ': ' + (s.error || 'فشل'); }).join(' | '));

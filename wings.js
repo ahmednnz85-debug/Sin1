@@ -23,6 +23,82 @@
     ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null
   };
 
+  /* ---------------------------------------------------------------------------
+     Wing asset files. Heavy models and pictures use the compressed copies in
+     "ارضيات وسقوف/optimized/" (same geometry, WebP textures, meshopt where the
+     game already decodes it). PalaceInterior downloads every file in this list
+     behind its loading screen and hands the decoded result back through
+     provideAsset(), so the wings are fully dressed on the first visible frame.
+     When a file was not preloaded the old on-demand network load still runs.
+  --------------------------------------------------------------------------- */
+  const OPT_DIR = 'ارضيات وسقوف/optimized/';
+  const WING_FILES = {
+    k1: OPT_DIR + 'K1_RoyalReceptionHall.glb',
+    corridorFloor: 'assets/ارضية الممرات.JPG',
+    corridorCeiling: OPT_DIR + 'سقف-الممرات.webp',
+    corridorWall: 'assets/جدار الممرات.jpg',
+    plant: OPT_DIR + 'شتله.glb',
+    torchBlack: OPT_DIR + 'مشعل اسود.glb',
+    torchWood: OPT_DIR + 'مشعل خشب.glb',
+    k2Wall: OPT_DIR + 'جدار-المجلس.webp',
+    k2Ceiling: OPT_DIR + 'سقف-المجلس.glb',
+    k2Chandelier: OPT_DIR + 'ثريا-المجلس.glb',
+    k2Lion: OPT_DIR + 'lion_winged.glb'
+  };
+  const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
+  const deferredLoads = [];      // cached-model callbacks queued while build() runs
+  function assetList() {
+    return Object.keys(WING_FILES).map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
+      .filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
+  }
+  function provideAsset(url, value) { if (url && value) preloaded.set(url, value); }
+  function preloadReport() {
+    return assetList().map(a => ({ url: a.url, kind: a.kind, ready: preloaded.has(a.url) }));
+  }
+  function preloadedTexture(url) {
+    const t = preloaded.get(url);
+    return t && t.isTexture ? t : null;
+  }
+  function flushDeferredLoads() {
+    state.building = false;
+    while (deferredLoads.length) {
+      const run = deferredLoads.shift();
+      try { run(); } catch (e) { console.error('Wing model setup failed', e); }
+    }
+  }
+  function withMeshopt(go) {
+    const D = window.MeshoptDecoder;
+    if (D && D.ready) { D.ready.then(() => go(D), () => go(null)); return; }
+    setTimeout(() => {
+      if (window.MeshoptDecoder || document.querySelector('script[data-corridor-meshopt]')) return;
+      const sc = document.createElement('script'); sc.src = 'vendor/meshopt_decoder.js'; sc.dataset.corridorMeshopt = '1';
+      document.head.appendChild(sc);
+    }, 3000);
+    let tries = 0; const t = setInterval(() => {
+      const d = window.MeshoptDecoder;
+      if (d && d.ready) { clearInterval(t); d.ready.then(() => go(d), () => go(null)); }
+      else if (++tries > 300) { clearInterval(t); go(null); }
+    }, 100);
+  }
+  // Every wing model goes through here: a preloaded model is handed out as a
+  // fresh clone (geometry, materials and textures shared, nothing downloaded);
+  // otherwise it is fetched exactly as before.
+  function wingGLB(url, onLoad, onError) {
+    const fail = onError || (e => console.warn('Wing model failed', url, e));
+    if (!THREE.GLTFLoader) { fail(new Error('GLTFLoader not available')); return; }
+    const cached = preloaded.get(url);
+    if (cached && cached.scene) {
+      const run = () => onLoad({ scene: cached.scene.clone(true), animations: cached.animations || [] });
+      if (state.building) deferredLoads.push(run); else run();
+      return;
+    }
+    withMeshopt(dec => {
+      const loader = new THREE.GLTFLoader();
+      if (dec) loader.setMeshoptDecoder(dec);
+      loader.load(encodeURI(url), onLoad, undefined, fail);
+    });
+  }
+
   function assertDeps() {
     if (!window.THREE || !C) throw new Error('PalaceWings requires THREE and local ClipperLib');
   }
@@ -528,9 +604,8 @@
       console.warn('GLTFLoader not available for K1 model');
       return;
     }
-    const loader = new THREE.GLTFLoader();
-    const url = 'assets/K1_RoyalReceptionHall.glb';
-    loader.load(url, function (gltf) {
+    const url = WING_FILES.k1;
+    wingGLB(url, function (gltf) {
       const model = gltf.scene;
       model.name = 'K1-RoyalReceptionHall';
       // K1 is non-uniformly fitted after rotation. Disable per-mesh frustum
@@ -614,7 +689,7 @@
       console.info('K1 model loaded and fitted to both gates', state.k1ModelMetrics);
       // Add approximate wall colliders for the room (perimeter, inset for doors)
       addK1Colliders(r);
-    }, undefined, function (err) {
+    }, function (err) {
       console.error('Failed to load K1 model', err);
     });
   }
@@ -746,13 +821,14 @@
      polygon and against each other, so no surface is drawn twice. */
   const CORRIDOR_TILE = { floor: 2.0, ceiling: 3.0, wall: 3.0 };
   const CORRIDOR_ASSETS = {
-    floor: 'assets/ارضية الممرات.JPG', ceiling: 'assets/سقف الممرات.PNG',
-    wall: 'assets/جدار الممرات.jpg', plant: 'assets/شتله.glb'
+    floor: WING_FILES.corridorFloor, ceiling: WING_FILES.corridorCeiling,
+    wall: WING_FILES.corridorWall, plant: WING_FILES.plant
   };
   function corridorTexture(url) {
-    const tex = new THREE.TextureLoader().load(encodeURI(url), t => { t.needsUpdate = true; });
+    const cached = preloadedTexture(url);
+    const tex = cached || new THREE.TextureLoader().load(encodeURI(url), t => { t.needsUpdate = true; });
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.encoding = THREE.sRGBEncoding;
-    tex.anisotropy = 8; return tex;
+    tex.anisotropy = 8; if (cached) tex.needsUpdate = true; return tex;
   }
   function corridorMaterial(url, rough) {
     const m = new THREE.MeshStandardMaterial({ map: corridorTexture(url), roughness: rough, metalness: 0.02, emissive: 0x17120e, emissiveIntensity: 0.16 });
@@ -941,55 +1017,35 @@
   function loadCorridorPlants(slots) {
     if (!slots.length || !THREE.GLTFLoader) return;
     const root = state.root;
-    const go = dec => {
-      const loader = new THREE.GLTFLoader();
-      if (dec) loader.setMeshoptDecoder(dec);
-      loader.load(encodeURI(CORRIDOR_ASSETS.plant), gltf => {
-        if (state.root !== root) return; // rebuilt meanwhile
-        gltf.scene.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(gltf.scene), size = box.getSize(new THREE.Vector3());
-        const parts = [];
-        gltf.scene.traverse(o => { if (o.isMesh) parts.push(o); });
-        const byRegion = new Map();
-        slots.forEach(s => { if (!byRegion.has(s.region)) byRegion.set(s.region, []); byRegion.get(s.region).push(s); });
-        const dummy = new THREE.Object3D(), rel = new THREE.Matrix4();
-        byRegion.forEach((list, id) => {
-          const g = state.regionGroups.get(id); if (!g) return;
-          parts.forEach(part => {
-            const im = new THREE.InstancedMesh(part.geometry, part.material, list.length);
-            im.name = id + '-corridor-plants'; im.castShadow = false; im.receiveShadow = true;
-            list.forEach((s, i) => {
-              const target = Math.min(1.15, Math.max(0.75, s.width * 0.18));
-              const k = target / Math.max(1e-3, size.y);
-              dummy.position.set(s.x, -box.min.y * k, s.z); dummy.rotation.set(0, s.rot, 0); dummy.scale.setScalar(k);
-              dummy.updateMatrix();
-              rel.copy(dummy.matrix).multiply(part.matrixWorld);
-              im.setMatrixAt(i, rel);
-            });
-            im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere && im.computeBoundingSphere();
-            g.add(im);
+    wingGLB(CORRIDOR_ASSETS.plant, gltf => {
+      if (state.root !== root) return; // rebuilt meanwhile
+      gltf.scene.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(gltf.scene), size = box.getSize(new THREE.Vector3());
+      const parts = [];
+      gltf.scene.traverse(o => { if (o.isMesh) parts.push(o); });
+      const byRegion = new Map();
+      slots.forEach(s => { if (!byRegion.has(s.region)) byRegion.set(s.region, []); byRegion.get(s.region).push(s); });
+      const dummy = new THREE.Object3D(), rel = new THREE.Matrix4();
+      byRegion.forEach((list, id) => {
+        const g = state.regionGroups.get(id); if (!g) return;
+        parts.forEach(part => {
+          const im = new THREE.InstancedMesh(part.geometry, part.material, list.length);
+          im.name = id + '-corridor-plants'; im.castShadow = false; im.receiveShadow = true;
+          list.forEach((s, i) => {
+            const target = Math.min(1.15, Math.max(0.75, s.width * 0.18));
+            const k = target / Math.max(1e-3, size.y);
+            dummy.position.set(s.x, -box.min.y * k, s.z); dummy.rotation.set(0, s.rot, 0); dummy.scale.setScalar(k);
+            dummy.updateMatrix();
+            rel.copy(dummy.matrix).multiply(part.matrixWorld);
+            im.setMatrixAt(i, rel);
           });
+          im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere && im.computeBoundingSphere();
+          g.add(im);
         });
-        state.root.updateMatrixWorld(true);
-        state.corridorPlantsReady = true;
-      }, undefined, e => console.warn('Corridor plant model failed', e));
-    };
-    const D = window.MeshoptDecoder;
-    if (D && D.ready) D.ready.then(() => go(D)); else {
-      // The plant GLB is meshopt-compressed: load the repository decoder if the
-      // palace loader has not installed it yet.
-      setTimeout(() => {
-        if (window.MeshoptDecoder || document.querySelector('script[data-corridor-meshopt]')) return;
-        const sc = document.createElement('script'); sc.src = 'vendor/meshopt_decoder.js'; sc.dataset.corridorMeshopt = '1';
-        document.head.appendChild(sc);
-      }, 3000);
-      // MeshoptDecoder is installed lazily by palaceInterior; wait for it.
-      let tries = 0; const t = setInterval(() => {
-        const d = window.MeshoptDecoder;
-        if (d && d.ready) { clearInterval(t); d.ready.then(() => go(d)); }
-        else if (++tries > 300) { clearInterval(t); console.warn('MeshoptDecoder missing; corridor plants skipped'); }
-      }, 100);
-    }
+      });
+      state.root.updateMatrixWorld(true);
+      state.corridorPlantsReady = true;
+    }, e => console.warn('Corridor plant model failed', e));
   }
   /* ---------------------------------------------------------------------------
      Corridor torches: the repository models "مشعل اسود" and "مشعل خشب" replace
@@ -999,7 +1055,7 @@
      carries a fully procedural fire: domain-warped flame layers, a flickering
      halo, warm light spill on the wall behind it and rising embers.
   --------------------------------------------------------------------------- */
-  const TORCH_ASSETS = ['assets/مشعل اسود.glb', 'assets/مشعل خشب.glb'];
+  const TORCH_ASSETS = [WING_FILES.torchBlack, WING_FILES.torchWood];
   const TORCH = {
     spacing: 7.0,      // metres between torches along a wall run
     margin: 1.3,       // keep clear of run ends / corners
@@ -1222,7 +1278,7 @@
     }
     let pending = TORCH_ASSETS.length;
     TORCH_ASSETS.forEach((url, type) => {
-      new THREE.GLTFLoader().load(encodeURI(url), gltf => {
+      wingGLB(url, gltf => {
         if (state.root !== root) return; // rebuilt meanwhile
         const fit = torchFit(gltf.scene); fits[type] = fit;
         byRegion.forEach((list, id) => {
@@ -1238,25 +1294,26 @@
         });
         if (--pending === 0) { buildFire(); state.corridorTorchesReady = true; }
         state.root.updateMatrixWorld(true);
-      }, undefined, e => { console.warn('Corridor torch model failed', url, e); });
+      }, e => { console.warn('Corridor torch model failed', url, e); });
     });
   }
   /* ---------------------------------------------------------------------------
      K2 council hall (Kings wing) dressing — visuals only:
-       assets/جدار المجلس .PNG   -> mural on every wall face of the hall, repeated
+       (files: WING_FILES, compressed copies of the assets/ originals)
+       جدار المجلس               -> mural on every wall face of the hall, repeated
                                     in whole panels (2 rows) fitted to each wall
-       assets/سقف المجلس.glb      -> coffered ceiling panel tiled edge-to-edge over
+       سقف المجلس                -> coffered ceiling panel tiled edge-to-edge over
                                     the whole hall (6 m squares, no gaps)
-       assets/ثريا المجلس .glb    -> chandelier at the hall centre, its top seated
+       ثريا المجلس               -> chandelier at the hall centre, its top seated
                                     on the ceiling relief (no gap)
-       assets/lion_winged.glb.glb -> two winged lions facing each other, flanking
+       lion_winged               -> two winged lions facing each other, flanking
                                     the north doorway
-       assets/شتله.glb            -> six large potted plants, three per side wall
+       شتله                      -> six large potted plants, three per side wall
      The procedural wall torches of K2 are no longer generated (see buildVisuals).
   --------------------------------------------------------------------------- */
   const K2_ASSETS = {
-    wall: 'assets/جدار المجلس .PNG', ceiling: 'assets/سقف المجلس.glb',
-    chandelier: 'assets/ثريا المجلس .glb', lion: 'assets/lion_winged.glb.glb', plant: 'assets/شتله.glb'
+    wall: WING_FILES.k2Wall, ceiling: WING_FILES.k2Ceiling,
+    chandelier: WING_FILES.k2Chandelier, lion: WING_FILES.k2Lion, plant: WING_FILES.plant
   };
   const K2_DRESS = {
     wallPanelW: 6.75,   // mural panel width (image is 3:2), fitted to whole panels per wall
@@ -1274,27 +1331,9 @@
     plantRadius: 0.6
   };
   function k2LoadGLB(url, needsMeshopt, onLoad) {
-    if (!THREE.GLTFLoader) { console.warn('GLTFLoader not available; K2 model skipped', url); return; }
     const root = state.root;
-    const go = dec => {
-      const loader = new THREE.GLTFLoader();
-      if (dec) loader.setMeshoptDecoder(dec);
-      loader.load(encodeURI(url), gltf => { if (state.root === root) onLoad(gltf); },
-        undefined, e => { console.warn('K2 council hall model failed', url, e); if (state.root === root) onLoad(null); });
-    };
-    const D = window.MeshoptDecoder;
-    if (D && D.ready) { D.ready.then(() => go(D), () => go(null)); return; }
-    if (!needsMeshopt) { go(null); return; }
-    setTimeout(() => {
-      if (window.MeshoptDecoder || document.querySelector('script[data-corridor-meshopt]')) return;
-      const sc = document.createElement('script'); sc.src = 'vendor/meshopt_decoder.js'; sc.dataset.corridorMeshopt = '1';
-      document.head.appendChild(sc);
-    }, 3000);
-    let tries = 0; const t = setInterval(() => {
-      const d = window.MeshoptDecoder;
-      if (d && d.ready) { clearInterval(t); d.ready.then(() => go(d)); }
-      else if (++tries > 300) { clearInterval(t); console.warn('MeshoptDecoder missing; K2 model skipped', url); }
-    }, 100);
+    wingGLB(url, gltf => { if (state.root === root) onLoad(gltf); },
+      e => { console.warn('K2 council hall model failed', url, e); if (state.root === root) onLoad(null); });
   }
   // Wall faces with world-anchored UVs: U runs to the viewer's right and is
   // fitted so every wall holds whole mural panels from corner to corner.
@@ -1508,6 +1547,11 @@
   }
   function build(ctx, hall) {
     assertDeps(); dispose();
+    state.building = true; deferredLoads.length = 0;
+    try { return buildNow(ctx, hall); }
+    finally { state.building = false; deferredLoads.length = 0; }
+  }
+  function buildNow(ctx, hall) {
     state.ctx = ctx; state.hall = hall; state.debug = /(?:[?&#])debug=1(?:&|#|$)/.test(location.href);
     state.root = new THREE.Group(); state.root.name = 'PalaceWings';
     state.root.position.set(ctx.portal.x, hall.floorY || 0, ctx.portal.frontZ); ctx.scene.add(state.root);
@@ -1525,6 +1569,10 @@
     buildVisuals(layout); rebuildSpatial();
     state.built = true;
     if (state.debug) createDebugUI();
+    updateCulling(true);
+    // Models already downloaded behind the palace loading screen are attached
+    // now, in the same order the network callbacks used to run after build.
+    flushDeferredLoads();
     updateCulling(true);
     return {
       root: state.root,
@@ -2016,6 +2064,7 @@
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget,
     teleport, overview, runTests, formatReport, cameraTour, metrics, corridorReport: () => state.corridorReport,
     shortestPath,
+    assetList, provideAsset, preloadReport,
     get report() { return state.report; },
     get state() { return state; }
   };
