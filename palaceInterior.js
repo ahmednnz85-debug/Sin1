@@ -764,6 +764,7 @@
       });
       await Promise.all(jobs);
       await shareWingAssets();
+      specs.forEach(function (s) { s.buf = null; });
       const failed = specs.filter(function (s) { return !s.optional && (s.status !== 'loaded' || !s.result); });
       if (failed.length) {
         const err = new Error(failed.map(function (s) { return s.name + ': ' + (s.error || 'فشل'); }).join(' | '));
@@ -1229,7 +1230,12 @@
     group.position.set(portal.x, gy, portal.frontZ);
     ctx.scene.add(group);
     if (ctx.renderer && ctx.renderer.shadowMap) ctx.renderer.shadowMap.enabled = false;
-    try { releaseCity(ctx.scene, ctx.hero); } catch (relErr) { note('release ' + (relErr && relErr.message)); }
+    // disposeExteriorAfterEntry is off: deleting the whole city here freezes the
+    // loading screen long enough for the tab to be killed and sent back to the start.
+    // holdCull already hides the exterior while the hero is inside.
+    if (CONFIG.disposeExteriorAfterEntry) {
+      try { releaseCity(ctx.scene, ctx.hero); } catch (relErr) { note('release ' + (relErr && relErr.message)); }
+    }
     flames = [];
     slotModes = [];
     overlapNotes = [];

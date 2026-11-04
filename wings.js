@@ -43,7 +43,16 @@
     k2Wall: OPT_DIR + 'جدار-المجلس.webp',
     k2Ceiling: OPT_DIR + 'سقف-المجلس.glb',
     k2Chandelier: OPT_DIR + 'ثريا-المجلس.glb',
-    k2Lion: OPT_DIR + 'lion_winged.glb'
+    k2Lion: OPT_DIR + 'lion_winged.glb',
+    k2Floor: 'assets/ارضية المجلس.PNG'
+  };
+  // These two are intentionally NOT in the palace loading-screen list.
+  // الاستقبال.glb is an 11MB fused prop mesh; the hall only needs the column,
+  // already extracted to a small GLB. The meeting table is fetched after the
+  // column so neither file is decoded while the city is still in memory.
+  const K2_LAZY = {
+    reception: OPT_DIR + 'عمود-المجلس.glb',
+    meetings: 'assets/اجتماعات .glb'
   };
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
@@ -766,7 +775,7 @@
     let claimedFloor = [];
     ['Kings', 'Temple', 'Library', 'Shared'].forEach((wing, wi) => {
       let wingFloor = [];
-      state.regions.filter(r => r.wing === wing && r.id !== 'K1').forEach(r => { wingFloor = union(wingFloor, solid(r.poly)); });
+      state.regions.filter(r => r.wing === wing && r.id !== 'K1' && r.id !== 'K2').forEach(r => { wingFloor = union(wingFloor, solid(r.poly)); });
       layout.doors.filter(d => d.kind !== 'arch').forEach(d => {
         const target = state.regions.find(r => r.id === d.to), source = state.regions.find(r => r.id === d.from);
         if ((target && target.wing === wing) || (source && source.wing === wing)) wingFloor = union(wingFloor, solid(d.floorPoly));
@@ -774,7 +783,15 @@
       wingFloor = difference(wingFloor, claimedFloor);
       claimedFloor = union(claimedFloor, wingFloor);
       state.floorWingSolids.push({ wing, solids: wingFloor });
-      const g = extrudeSolids(offset(wingFloor, 0.3), -0.25, wi * 0.002);
+      let skirt = offset(wingFloor, 0.3);
+      if (wing === 'Kings') {
+        const k2 = state.regions.find(r => r.id === 'K2');
+        if (k2) {
+          state.k2FloorSolids = solid(k2.poly);
+          skirt = difference(skirt, state.k2FloorSolids);
+        }
+      }
+      const g = extrudeSolids(skirt, -0.25, wi * 0.002);
       state.floorMeshes.push(mesh(g, floorMats[wing], 'wings-floor-' + wing));
     });
     state.ceilings = [];
@@ -792,7 +809,7 @@
         }
       }
       if (r.id === 'K1') { /* procedural geometry removed for GLB model */ loadK1Model(r, g); }
-      if (r.id === 'K2') addColumns(r, g, columnPairs(r, 4, 4.2, 3.2), 0.68);
+      // K2 columns are the real asset extracted from الاستقبال.glb (dressK2).
       if (r.id === 'T1') addColumns(r, g, columnPairs(r, 3, 2.3, 2.2), 0.48);
       if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
       if (r.id === 'L1') addColumns(r, g, columnPairs(r, 4, 4.0, 3.4), 0.60);
@@ -1203,7 +1220,7 @@
       wall: add(TORCH_WALL_VS, TORCH_WALL_FS, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       ember: add(TORCH_EMBER_VS, TORCH_EMBER_FS)
     };
-    state.torchFireMats = [m.fire, m.glow, m.wall, m.ember];
+    state.torchFireMats = (state.torchFireMats || []).concat([m.fire, m.glow, m.wall, m.ember]);
     return m;
   }
   function torchFit(scene) {
@@ -1304,8 +1321,13 @@
                                     in whole panels (2 rows) fitted to each wall
        سقف المجلس                -> coffered ceiling panel tiled edge-to-edge over
                                     the whole hall (6 m squares, no gaps)
-       ثريا المجلس               -> chandelier at the hall centre, its top seated
-                                    on the ceiling relief (no gap)
+       ثريا المجلس               -> enlarged chandelier, top seated on the
+                                    ceiling (no gap) and the body hung lower
+       ارضية المجلس             -> one marble floor framed to the hall
+       الاستقبال (column only)  -> the upright column, instanced in place of
+                                    the procedural shafts
+       اجتماعات                  -> council table under the chandelier
+       procedural fire           -> flames in the chandelier cups
        lion_winged               -> two winged lions facing each other, flanking
                                     the north doorway
        شتله                      -> six large potted plants, three per side wall
@@ -1313,14 +1335,17 @@
   --------------------------------------------------------------------------- */
   const K2_ASSETS = {
     wall: WING_FILES.k2Wall, ceiling: WING_FILES.k2Ceiling,
-    chandelier: WING_FILES.k2Chandelier, lion: WING_FILES.k2Lion, plant: WING_FILES.plant
+    chandelier: WING_FILES.k2Chandelier, lion: WING_FILES.k2Lion, plant: WING_FILES.plant,
+    floor: WING_FILES.k2Floor, reception: K2_LAZY.reception, meetings: K2_LAZY.meetings
   };
   const K2_DRESS = {
     wallPanelW: 6.75,   // mural panel width (image is 3:2), fitted to whole panels per wall
     wallRows: 2,        // mural rows from floor to ceiling
     ceilingTile: 6.0,   // ceiling panel size (30 x 24 m hall -> 5 x 4 squares)
     ceilingDepth: 0.30, // relief depth of the ceiling panels
-    chandelierH: 3.6,   // chandelier height
+    chandelierH: 5.75,  // enlarged so the body hangs lower; the top still seats on the ceiling
+    tableSpan: 9.2,     // meeting-table long side, metres (sits under the chandelier)
+    tableHeightRatio: 0.2872, // model height / long side, measured from اجتماعات.glb
     lionH: 3.2,         // winged lion height incl. its pedestal
     lionFoot: { len: 0.824, wid: 0.386 }, // lion footprint / height (measured from the GLB)
     lionX: 4.6,         // lion centres, either side of the north door axis
@@ -1328,7 +1353,23 @@
     plantH: 2.2,        // potted plant height (large)
     plantInset: 1.15,   // plant distance from its wall
     plantSpacing: 6.0,  // plants per side: centre and +/- this distance
-    plantRadius: 0.6
+    plantRadius: 0.6,
+    // Lamp cups inside ثريا المجلس, in the model's own space (Y up, centre origin).
+    // Four large cups on the cross, eight smaller cups on the lower ring.
+    cups: [
+      { x: 0.179, y: -0.100, z: 0.000, s: 1 },
+      { x: -0.178, y: -0.100, z: 0.000, s: 1 },
+      { x: 0.000, y: -0.100, z: 0.177, s: 1 },
+      { x: 0.000, y: -0.100, z: -0.180, s: 1 },
+      { x: 0.094, y: -0.146, z: -0.214, s: 0.62 },
+      { x: -0.091, y: -0.145, z: 0.209, s: 0.62 },
+      { x: 0.211, y: -0.145, z: -0.099, s: 0.62 },
+      { x: -0.093, y: -0.146, z: -0.214, s: 0.62 },
+      { x: -0.210, y: -0.145, z: 0.094, s: 0.62 },
+      { x: -0.210, y: -0.146, z: -0.096, s: 0.62 },
+      { x: 0.212, y: -0.146, z: 0.091, s: 0.62 },
+      { x: 0.095, y: -0.145, z: 0.208, s: 0.62 }
+    ]
   };
   function k2LoadGLB(url, needsMeshopt, onLoad) {
     const root = state.root;
@@ -1364,11 +1405,342 @@
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.computeBoundingBox(); g.computeBoundingSphere(); return g;
   }
+  // One fitted copy of ارضية المجلس across the hall, gold border along the walls.
+  function k2FloorSheet(solids, y, b) {
+    const W = Math.max(1e-4, b.x1 - b.x0), D = Math.max(1e-4, b.z1 - b.z0);
+    const pos = [], uv = [], nor = [];
+    (solids || []).forEach(sol => {
+      const outer = cleanPoly(sol.outer, true), holes = (sol.holes || []).map(h => cleanPoly(h, false));
+      if (outer.length < 3) return;
+      let faces = [];
+      try { faces = THREE.ShapeUtils.triangulateShape(outer.map(pt2 => new THREE.Vector2(pt2[0], pt2[1])), holes.map(h => h.map(pt2 => new THREE.Vector2(pt2[0], pt2[1])))); }
+      catch (e) { console.error('K2 floor triangulation', e); return; }
+      const verts = outer.concat.apply(outer, holes);
+      faces.forEach(f => {
+        let a = verts[f[0]], b2 = verts[f[1]], c = verts[f[2]];
+        const cross = (b2[0] - a[0]) * (c[1] - a[1]) - (b2[1] - a[1]) * (c[0] - a[0]);
+        if (cross >= 0) { const t = b2; b2 = c; c = t; }
+        [a, b2, c].forEach(pt2 => {
+          pos.push(pt2[0], y, pt2[1]);
+          uv.push((pt2[0] - b.x0) / W, (pt2[1] - b.z0) / D);
+          nor.push(0, 1, 0);
+        });
+      });
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.computeBoundingBox(); g.computeBoundingSphere();
+    return g;
+  }
+  function k2FloorMaterial(url) {
+    const tex = corridorTexture(url);
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.repeat.set(1, 1);
+    const m = new THREE.MeshStandardMaterial({
+      map: tex, roughness: 0.55, metalness: 0.04,
+      emissive: new THREE.Color(0x120e0a), emissiveIntensity: 0.07
+    });
+    m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -2;
+    state.materials.push(m);
+    return m;
+  }
+  // الاستقبال.glb is one fused mesh of several props. Keep only the upright
+  // square column (tall, nearly square footprint) and drop the rest.
+  function extractUprightColumn(root) {
+    let src = null;
+    root.updateMatrixWorld(true);
+    root.traverse(o => { if (!src && o.isMesh && o.geometry && o.geometry.attributes && o.geometry.attributes.position) src = o; });
+    if (!src) return null;
+    const geo = src.geometry, attr = geo.attributes.position, nrm = geo.attributes.normal, uv = geo.attributes.uv;
+    const vcount = attr.count, index = geo.index;
+    const triCount = index ? index.count / 3 : Math.floor(vcount / 3);
+    const wp = new Float32Array(vcount * 3);
+    const v = new THREE.Vector3();
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < vcount; i++) {
+      v.fromBufferAttribute(attr, i).applyMatrix4(src.matrixWorld);
+      wp[i * 3] = v.x; wp[i * 3 + 1] = v.y; wp[i * 3 + 2] = v.z;
+      if (v.x < min[0]) min[0] = v.x; if (v.y < min[1]) min[1] = v.y; if (v.z < min[2]) min[2] = v.z;
+      if (v.x > max[0]) max[0] = v.x; if (v.y > max[1]) max[1] = v.y; if (v.z > max[2]) max[2] = v.z;
+    }
+    const voxel = 0.015;
+    const dims = [0, 1, 2].map(a => Math.ceil((max[a] - min[a]) / voxel) + 3);
+    const sx = dims[0], sy = dims[1];
+    const keyOf = (x, y, z) => (x + 1) + (y + 1) * sx + (z + 1) * sx * sy;
+    const vertKey = new Int32Array(vcount);
+    const occ = new Set();
+    for (let i = 0; i < vcount; i++) {
+      const x = Math.floor((wp[i * 3] - min[0]) / voxel);
+      const y = Math.floor((wp[i * 3 + 1] - min[1]) / voxel);
+      const z = Math.floor((wp[i * 3 + 2] - min[2]) / voxel);
+      const k = keyOf(x, y, z);
+      vertKey[i] = k; occ.add(k);
+    }
+    const parent = new Map();
+    function find(x) {
+      let p = parent.get(x);
+      if (p === undefined) { parent.set(x, x); return x; }
+      while (p !== parent.get(p)) { parent.set(p, parent.get(parent.get(p))); p = parent.get(p); }
+      parent.set(x, p); return p;
+    }
+    function uni(a, b) { a = find(a); b = find(b); if (a !== b) parent.set(b, a); }
+    occ.forEach(k => {
+      const z = Math.floor(k / (sx * sy)), rem = k % (sx * sy), y = Math.floor(rem / sx), x = rem % sx;
+      for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nk = keyOf(x - 1 + dx, y - 1 + dy, z - 1 + dz);
+        if (occ.has(nk)) uni(k, nk);
+      }
+    });
+    const clusters = new Map();
+    for (let i = 0; i < vcount; i++) {
+      const r = find(vertKey[i]);
+      let c = clusters.get(r);
+      if (!c) { c = { n: 0, min: [1e9, 1e9, 1e9], max: [-1e9, -1e9, -1e9] }; clusters.set(r, c); }
+      c.n++;
+      for (let a = 0; a < 3; a++) {
+        const val = wp[i * 3 + a];
+        if (val < c.min[a]) c.min[a] = val;
+        if (val > c.max[a]) c.max[a] = val;
+      }
+    }
+    let best = null, bestScore = -1, bestRoot = 0;
+    clusters.forEach((c, r) => {
+      const size = [c.max[0] - c.min[0], c.max[1] - c.min[1], c.max[2] - c.min[2]];
+      const tall = size[1], foot = Math.max(size[0], size[2]), thin = Math.min(size[0], size[2]);
+      if (tall < size[0] || tall < size[2]) return;
+      const aspect = tall / Math.max(1e-4, foot);
+      const square = thin / Math.max(1e-4, foot);
+      if (aspect < 2.2 || aspect > 6 || square < 0.72 || c.n < 800) return;
+      const score = square * 3 + Math.min(aspect, 4) + Math.log(c.n);
+      if (score > bestScore) { bestScore = score; best = c; bestRoot = r; }
+    });
+    if (!best) { console.warn('K2: no column found inside الاستقبال.glb'); return null; }
+    const keep = new Uint8Array(vcount);
+    for (let i = 0; i < vcount; i++) if (find(vertKey[i]) === bestRoot) keep[i] = 1;
+    const triAt = (t, k) => index ? index.getX(t * 3 + k) : t * 3 + k;
+    const srcIndex = [];
+    for (let t = 0; t < triCount; t++) {
+      const a = triAt(t, 0), b = triAt(t, 1), c = triAt(t, 2);
+      if (keep[a] && keep[b] && keep[c]) srcIndex.push(a, b, c);
+    }
+    if (srcIndex.length < 30) return null;
+    const mapV = new Map();
+    const positions = [], normals = [], uvs = [], indices = [];
+    const tmpN = new THREE.Vector3();
+    function pushV(i) {
+      const hit = mapV.get(i);
+      if (hit !== undefined) return hit;
+      const m = positions.length / 3;
+      mapV.set(i, m);
+      positions.push(wp[i * 3], wp[i * 3 + 1], wp[i * 3 + 2]);
+      if (nrm) { tmpN.fromBufferAttribute(nrm, i).transformDirection(src.matrixWorld); normals.push(tmpN.x, tmpN.y, tmpN.z); }
+      if (uv) uvs.push(uv.getX(i), uv.getY(i));
+      return m;
+    }
+    for (let i = 0; i < srcIndex.length; i++) indices.push(pushV(srcIndex[i]));
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    if (normals.length) out.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    else out.computeVertexNormals();
+    if (uvs.length) out.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    out.setIndex(indices);
+    out.computeBoundingBox();
+    const bb = out.boundingBox;
+    const cx = (bb.min.x + bb.max.x) * 0.5, cz = (bb.min.z + bb.max.z) * 0.5;
+    out.translate(-cx, -bb.min.y, -cz);
+    out.computeBoundingBox(); out.computeBoundingSphere();
+    const srcMat = Array.isArray(src.material) ? src.material[0] : src.material;
+    const material = srcMat ? srcMat.clone() : new THREE.MeshStandardMaterial({ color: 0xc6ae86, roughness: 0.6, metalness: 0.12 });
+    state.materials.push(material);
+    const sz = out.boundingBox.getSize(new THREE.Vector3());
+    console.info('K2 column extracted', { tris: indices.length / 3, size: sz.toArray().map(n => +n.toFixed(3)) });
+    return { geometry: out, material: material, size: sz };
+  }
+  function placeK2Columns(r, g) {
+    const pairs = columnPairs(r, 4, 4.2, 3.2);
+    const targetH = Math.max(4, r.height - K2_DRESS.ceilingDepth + 0.04);
+    const rad = 0.78;
+    pairs.forEach(p => {
+      state.colliders.push({ minx: p[0] - rad, maxx: p[0] + rad, miny: 0, maxy: targetH, minz: p[1] - rad, maxz: p[1] + rad, _wing: true, _k2Prop: true });
+    });
+    k2LoadGLB(K2_ASSETS.reception, false, gltf => {
+      try {
+        if (!gltf) return;
+        let src = null;
+        gltf.scene.updateMatrixWorld(true);
+        gltf.scene.traverse(o => { if (o.isMesh && !src) src = o; });
+        if (!src || !src.geometry) return;
+        const triN = src.geometry.index ? src.geometry.index.count / 3 : src.geometry.attributes.position.count / 3;
+        // The shipped file is only the column. The fused prop mesh is the fallback.
+        const extracted = triN > 40000 ? extractUprightColumn(gltf.scene) : (function () {
+          const geo = src.geometry.clone();
+          geo.applyMatrix4(src.matrixWorld);
+          geo.computeBoundingBox();
+          const bb = geo.boundingBox;
+          const cx = (bb.min.x + bb.max.x) * 0.5, cz = (bb.min.z + bb.max.z) * 0.5;
+          if (Math.abs(bb.min.y) > 1e-3 || Math.abs(cx) > 1e-3 || Math.abs(cz) > 1e-3) geo.translate(-cx, -bb.min.y, -cz);
+          geo.computeBoundingBox(); geo.computeBoundingSphere();
+          const srcMat = Array.isArray(src.material) ? src.material[0] : src.material;
+          const material = srcMat ? srcMat.clone() : new THREE.MeshStandardMaterial({ color: 0xc6ae86, roughness: 0.6, metalness: 0.12 });
+          state.materials.push(material);
+          return { geometry: geo, material: material, size: geo.boundingBox.getSize(new THREE.Vector3()) };
+        })();
+        if (!extracted) return;
+        const k = targetH / Math.max(1e-4, extracted.size.y);
+        const im = new THREE.InstancedMesh(extracted.geometry, extracted.material, pairs.length);
+        im.name = 'K2-majlis-columns'; im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false;
+        const dummy = new THREE.Object3D();
+        pairs.forEach((p, i) => {
+          dummy.position.set(p[0], 0, p[1]);
+          dummy.rotation.set(0, Math.atan2(r.bbox.cx - p[0], r.bbox.cz - p[1]), 0);
+          dummy.scale.setScalar(k);
+          dummy.updateMatrix();
+          im.setMatrixAt(i, dummy.matrix);
+        });
+        im.instanceMatrix.needsUpdate = true;
+        g.add(im);
+        state.k2Dress.columns = pairs.length;
+        state.k2Dress.columnH = targetH;
+        state.root.updateMatrixWorld(true);
+        rebuildSpatial();
+      } finally {
+        placeK2TableModel();
+      }
+    });
+  }
+  function placeK2Table(r, g) {
+    const b = r.bbox;
+    const k = K2_DRESS.tableSpan;
+    const tableH = k * K2_DRESS.tableHeightRatio;
+    state.k2Dress.tableH = tableH;
+    state.k2Dress._tableRoom = r;
+    state.k2Dress._tableHost = g;
+    state.colliders.push({
+      minx: b.cx - k * 0.50, maxx: b.cx + k * 0.50,
+      miny: 0, maxy: tableH,
+      minz: b.cz - k * 0.47, maxz: b.cz + k * 0.47,
+      _wing: true, _k2Prop: true
+    });
+  }
+  function placeK2TableModel() {
+    const dress = state.k2Dress;
+    if (!dress || dress._tableLoading || !dress._tableRoom) return;
+    dress._tableLoading = true;
+    const r = dress._tableRoom, g = dress._tableHost, b = r.bbox;
+    k2LoadGLB(K2_ASSETS.meetings, false, gltf => {
+      if (!gltf) return;
+      const model = gltf.scene;
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+      const long = Math.max(size.x, size.z);
+      const s = K2_DRESS.tableSpan / Math.max(1e-4, long);
+      const rot = size.z >= size.x ? Math.PI / 2 : 0;
+      model.scale.setScalar(s);
+      model.position.set(-c.x * s, -box.min.y * s, -c.z * s);
+      const holder = new THREE.Group();
+      holder.name = 'K2-council-table';
+      holder.position.set(b.cx, 0, b.cz);
+      holder.rotation.y = rot;
+      holder.add(model);
+      model.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.frustumCulled = false; } });
+      g.add(holder);
+      state.k2Dress.table = true;
+      state.k2Dress.tableH = (box.max.y - box.min.y) * s;
+      state.root.updateMatrixWorld(true);
+    });
+  }
+  // Procedural flame seated in each chandelier cup, plus a warm pool of light.
+  function addK2ChandelierFire(g, cups) {
+    if (!cups.length) return;
+    const mats = torchFireMaterials();
+    const layers = [0.72, 1.05, 1.38];
+    const baseW = 0.48, baseH = 0.92;
+    const fg = new THREE.PlaneGeometry(1, 1); fg.translate(0, 0.5, 0);
+    const cnt = cups.length * layers.length;
+    const seeds = new Float32Array(cnt), lay = new Float32Array(cnt);
+    const fire = new THREE.InstancedMesh(fg, mats.fire, cnt);
+    fire.name = 'K2-chandelier-fire'; fire.frustumCulled = false; fire.renderOrder = 4;
+    const dummy = new THREE.Object3D();
+    let k = 0;
+    layers.forEach((sc, li) => cups.forEach((c, i) => {
+      seeds[k] = c.seed + li * 2.17; lay[k] = li;
+      dummy.position.set(c.x, c.y, c.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(baseW * c.s * sc, baseH * c.s * (0.85 + li * 0.12), 1);
+      dummy.updateMatrix();
+      fire.setMatrixAt(k++, dummy.matrix);
+    }));
+    fg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
+    fg.setAttribute('aLayer', new THREE.InstancedBufferAttribute(lay, 1));
+    fire.instanceMatrix.needsUpdate = true; g.add(fire);
+    const gg = new THREE.PlaneGeometry(1, 1), gs = new Float32Array(cups.length);
+    const glow = new THREE.InstancedMesh(gg, mats.glow, cups.length);
+    glow.name = 'K2-chandelier-glow'; glow.frustumCulled = false; glow.renderOrder = 3;
+    cups.forEach((c, i) => {
+      gs[i] = c.seed;
+      dummy.position.set(c.x, c.y + 0.16 * c.s, c.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.setScalar(0.85 * c.s);
+      dummy.updateMatrix();
+      glow.setMatrixAt(i, dummy.matrix);
+    });
+    gg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(gs, 1));
+    glow.instanceMatrix.needsUpdate = true; g.add(glow);
+    const PER = 8, ep = new Float32Array(cups.length * PER * 3), es = new Float32Array(cups.length * PER);
+    cups.forEach((c, i) => {
+      for (let j = 0; j < PER; j++) {
+        const e = i * PER + j;
+        ep[e * 3] = c.x; ep[e * 3 + 1] = c.y + 0.05; ep[e * 3 + 2] = c.z;
+        es[e] = (c.seed * 0.41 + j * 0.097) % 1;
+      }
+    });
+    const eg = new THREE.BufferGeometry();
+    eg.setAttribute('position', new THREE.BufferAttribute(ep, 3));
+    eg.setAttribute('aSeed', new THREE.BufferAttribute(es, 1));
+    const embers = new THREE.Points(eg, mats.ember);
+    embers.name = 'K2-chandelier-embers'; embers.frustumCulled = false; embers.renderOrder = 5;
+    g.add(embers);
+    state.k2Dress.fires = cups.length;
+  }
+  function addK2Lights(r, g, fireY) {
+    const b = r.bbox;
+    const lights = [];
+    function add(color, intensity, dist, x, y, z) {
+      const pl = new THREE.PointLight(color, intensity, dist, 2);
+      pl.castShadow = false;
+      pl.position.set(x, y, z);
+      pl.name = 'K2-light';
+      g.add(pl); lights.push(pl);
+      return pl;
+    }
+    add(0xffb15a, 11, 24, b.cx, fireY, b.cz);
+    add(0xffc48a, 4.2, 14, b.cx, Math.max(3.2, fireY - 1.35), b.cz);
+    const ix = (b.x1 - b.x0) * 0.30, iz = (b.z1 - b.z0) * 0.30;
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+      add(0xffe2c2, 2.2, 16, b.cx + sx * ix, 4.2, b.cz + sz * iz);
+    });
+    state.k2Lights = lights;
+    state.k2LightBase = lights.map(l => l.intensity);
+  }
+
   function dressK2() {
     const r = state.rooms.find(q => q.id === 'K2'), g = state.regionGroups.get('K2');
     if (!r || !g) return;
     const b = r.bbox, W = b.x1 - b.x0, D = b.z1 - b.z0, h = r.height;
-    state.k2Dress = { walls: false, ceiling: 0, chandelier: false, lions: 0, plants: 0 };
+    state.k2Dress = { walls: false, ceiling: 0, chandelier: false, lions: 0, plants: 0, columns: 0, fires: 0, table: false, tableH: K2_DRESS.tableSpan * K2_DRESS.tableHeightRatio };
+
+    // 0) Marble floor — one copy of ارضية المجلس framed to the hall
+    const floorMat = k2FloorMaterial(K2_ASSETS.floor);
+    const floorGeo = k2FloorSheet(state.k2FloorSolids || solid(r.poly), 0.014, b);
+    const floorMesh = mesh(floorGeo, floorMat, 'K2-majlis-floor', g);
+    floorMesh.renderOrder = 2;
+    state.k2Dress.floor = true;
+    if (state.floorMeshes) state.floorMeshes.push(floorMesh);
+    placeK2Columns(r, g);
+    placeK2Table(r, g);
 
     // 1) Mural walls
     const area = solid(r.poly);
@@ -1497,14 +1869,15 @@
       if (!gltf) return;
       const model = gltf.scene; model.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
-      const k = K2_DRESS.chandelierH / Math.max(1e-4, size.y);
+      const tableH = (state.k2Dress && state.k2Dress.tableH) || (K2_DRESS.tableSpan * K2_DRESS.tableHeightRatio);
       // Highest ceiling surface over the canopy footprint, so the top touches the
       // relief everywhere (pushes into the frames rather than leaving a gap).
       let seat = ceilingMeshes.length ? h - K2_DRESS.ceilingDepth : h;
       if (ceilingMeshes.length) {
         state.root.updateMatrixWorld(true);
         const ray = new THREE.Raycaster(), up = new THREE.Vector3(0, 1, 0), o = new THREE.Vector3();
-        const canopyR = Math.max(0.05, Math.min(size.x, size.z) * k * 0.2);
+        const probeK = K2_DRESS.chandelierH / Math.max(1e-4, size.y);
+        const canopyR = Math.max(0.05, Math.min(size.x, size.z) * probeK * 0.28);
         const probes = [[0, 0]];
         for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; probes.push([Math.cos(a) * canopyR, Math.sin(a) * canopyR]); }
         let best = -Infinity;
@@ -1516,12 +1889,42 @@
         });
         if (Number.isFinite(best)) seat = Math.min(h, best);
       }
+      // Bigger than before, and hung as low as the council table allows, while
+      // the canopy stays seated in the ceiling (no gap above it).
+      let chH = Math.min(h * 0.74, Math.max(K2_DRESS.chandelierH, seat - (tableH + 0.48)));
+      chH = Math.min(chH, Math.max(3.2, seat - tableH - 0.42));
+      const k = chH / Math.max(1e-4, size.y);
       model.scale.setScalar(k);
       model.position.set(b.cx - c.x * k, seat - box.max.y * k, b.cz - c.z * k);
       model.name = 'K2-majlis-chandelier';
-      model.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+      model.traverse(o => {
+        if (!o.isMesh) return;
+        o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach(m => {
+          if (!m || !m.emissive) return;
+          if (!m.userData.k2Glow) {
+            m.emissive = new THREE.Color(0xffb15a);
+            m.emissiveIntensity = Math.max(m.emissiveIntensity || 0, 0.22);
+            m.userData.k2Glow = true;
+          }
+        });
+      });
       g.add(model);
-      state.k2Dress.chandelier = true; state.k2Dress.chandelierTop = seat;
+      const cups = K2_DRESS.cups.map((cup, i) => ({
+        x: b.cx + (cup.x - c.x) * k,
+        y: seat + (cup.y - box.max.y) * k + 0.02,
+        z: b.cz + (cup.z - c.z) * k,
+        s: cup.s,
+        seed: 0.37 + i * 0.618
+      }));
+      addK2ChandelierFire(g, cups);
+      const fireY = cups.reduce((s0, cup) => s0 + cup.y, 0) / cups.length;
+      addK2Lights(r, g, fireY);
+      state.k2Dress.chandelier = true;
+      state.k2Dress.chandelierTop = seat;
+      state.k2Dress.chandelierH = chH;
+      state.k2Dress.fireY = fireY;
       state.root.updateMatrixWorld(true);
     });
   }
@@ -1543,6 +1946,7 @@
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
+    state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
   }
   function build(ctx, hall) {
@@ -1630,6 +2034,14 @@
     if (!state.built) return;
     updateCulling(false);
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
+    if (state.k2Lights && state.k2Lights.length) {
+      const t = performance.now() * 0.001;
+      const flick = 0.84 + 0.11 * Math.sin(t * 6.4) + 0.07 * Math.sin(t * 13.1) + 0.04 * Math.sin(t * 22.4);
+      state.k2Lights.forEach((l, i) => {
+        const base = state.k2LightBase[i] || l.intensity;
+        l.intensity = base * (i < 2 ? flick : 0.94 + 0.06 * Math.sin(t * 1.7 + i));
+      });
+    }
     if (state.debug && state.ui && performance.now() - state.minimapAt > 120) { state.minimapAt = performance.now(); drawMinimap(); }
   }
   function floorAt(x, z) {
