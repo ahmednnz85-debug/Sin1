@@ -3144,13 +3144,13 @@
   // of one when it would otherwise end up inside it. Every wing box (walls, door
   // jambs, columns, lions, plants) is a full obstacle.
   const CAM_RADIUS = 0.3;      // clearance kept around the lens (m)
-  const CAM_PIVOT = 1.5;       // pivot height above the hero's feet (= main follow rig)
+  const CAM_PIVOT = 1.18;      // look height; matches index.html CAM_LOOK so the body stays framed
   const CAM_MIN = 0.35;        // closest the lens may get to the pivot (m)
   const CAM_OUT = 2.4;         // ease-out rate after an obstruction clears (1/s)
   const CAM_ZOOM = 4;          // ease rate for requested distance changes (1/s)
   const CAM_TURN = 10;         // yaw/pitch smoothing (1/s) — light, keeps touch drag responsive
-  const FOLLOW_DIST = 4.6, FOLLOW_PITCH = 0.2;                  // = index.html follow defaults
-  const ENTRY_DIST = 4.6, ENTRY_PITCH = 0.3, ENTRY_LOOK = 1.2; // entrance: fixed shot in front of the hero
+  const FOLLOW_DIST = 3.45, FOLLOW_PITCH = 0.22;                // = index.html CAM_DIST / CAM_PITCH
+  const ENTRY_DIST = 3.85, ENTRY_PITCH = 0.24, ENTRY_LOOK = 1.12; // entrance: doorway shot, same cinematic scale
   let entryCam = null, entryCut = false;
   const rig = { d: -1, ds: FOLLOW_DIST, yaw: 0, pitch: FOLLOW_PITCH, idle: 0, fresh: false };
   const camBox = { minx: 0, maxx: 0, miny: 0, maxy: 0, minz: 0, maxz: 0 };
