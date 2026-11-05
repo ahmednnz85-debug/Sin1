@@ -1,0 +1,128 @@
+original_name,path,type,scene,stage,original_position,size_and_scale,materials,animations,unreal_name,transfer_status,parity_notes
+index.html,index.html,code,shared / tooling,none — one continuous world,,6.44 MB,,,,not-started,referenced in runtime
+palaceInterior.js,palaceInterior.js,code,shared / tooling,none — one continuous world,,0.14 MB,,,,not-started,referenced in runtime
+static-server.mjs,static-server.mjs,code,shared / tooling,none — one continuous world,,0.00 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+clipper.js,vendor/clipper.js,code,shared / tooling,none — one continuous world,,0.19 MB,,,,not-started,referenced in runtime
+DRACOLoader.js,vendor/draco/DRACOLoader.js,code,shared / tooling,none — one continuous world,,0.01 MB,,,,not-started,referenced in runtime
+draco_wasm_wrapper.js,vendor/draco/draco_wasm_wrapper.js,code,shared / tooling,none — one continuous world,,0.05 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+meshopt_decoder.js,vendor/meshopt_decoder.js,code,shared / tooling,none — one continuous world,,0.02 MB,,,,not-started,referenced in runtime
+wings-test.html,wings-test.html,code,shared / tooling,none — one continuous world,,0.00 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+wings.js,wings.js,code,shared / tooling,none — one continuous world,,0.15 MB,,,,not-started,referenced in runtime
+palace-manifest.json,ارضيات وسقوف/optimized/palace-manifest.json,data,see notes,none — one continuous world,,0.00 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+draco_decoder.wasm,vendor/draco/draco_decoder.wasm,decoder,shared / tooling,none — one continuous world,,0.19 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+CHANGES_corridors.md,CHANGES_corridors.md,doc,shared / tooling,none — one continuous world,,0.00 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+CHANGES_new_trees_grass.md,CHANGES_new_trees_grass.md,doc,shared / tooling,none — one continuous world,,0.00 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+CHANGES_trees_grass.md,CHANGES_trees_grass.md,doc,shared / tooling,none — one continuous world,,0.00 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+CLAUDE.md,CLAUDE.md,doc,shared / tooling,none — one continuous world,,0.01 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+PALACE_SLOTS.md,PALACE_SLOTS.md,doc,shared / tooling,none — one continuous world,,0.00 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+README.md,README.md,doc,shared / tooling,none — one continuous world,,0.00 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+‎⁨تقرير_تحسين_الأداء⁩.md,‎⁨تقرير_تحسين_الأداء⁩.md,doc,"city, throne hall, wings",player,,0.01 MB,,idle_impatient; walk_casual; sprint_loop_quaternius; push_object; push_enter_quaternius,,not-started,"runtime hero via HERO_FILE. Clips used: idle_impatient, walk_casual, sprint_loop_quaternius, push_object, push_enter_quaternius. Present but unused: walk_relaxed, climb_ladder_up, monstertransformation_quaternius, bandage_loop_quaternius. Missing from file so fight stays hidden: riposte, aerial_punch_down."
+K1_RoyalReceptionHall.glb,assets/K1_RoyalReceptionHall.glb,model,K1 reception hall,K1,,10.53 MB,,,,not-started,"Source copy. Runtime loads the optimized twin, not this file."
+babylonian_wall.glb,assets/babylonian_wall.glb,model,see notes,none — one continuous world,,7.04 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+grass_tuft_a.glb,assets/grass_tuft_a.glb,model,see notes,none — one continuous world,,1.30 MB,,,,not-started,referenced in runtime
+grass_tuft_b.glb,assets/grass_tuft_b.glb,model,see notes,none — one continuous world,,2.45 MB,,,,not-started,referenced in runtime
+houses.glb,assets/houses.glb,model,see notes,none — one continuous world,,2.27 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+kiosk.glb,assets/kiosk.glb,model,see notes,none — one continuous world,,4.27 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+lion_winged.glb.glb,assets/lion_winged.glb.glb,model,see notes,none — one continuous world,,9.32 MB,,,,not-started,referenced in runtime
+market_pot.glb,assets/market_pot.glb,model,see notes,none — one continuous world,,3.14 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+market_pots.glb,assets/market_pots.glb,model,see notes,none — one continuous world,,3.22 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+palace.glb,assets/palace.glb,model,see notes,none — one continuous world,,5.82 MB,,,,not-started,referenced in runtime
+palm.glb,assets/palm.glb,model,see notes,none — one continuous world,,0.97 MB,,,,not-started,referenced in runtime
+palm_new.glb,assets/palm_new.glb,model,see notes,none — one continuous world,,2.98 MB,,,,not-started,referenced in runtime
+stalls.glb,assets/stalls.glb,model,see notes,none — one continuous world,,3.23 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+اثاث_الخرائط.glb,assets/اثاث_الخرائط.glb,model,K3 map room,K3,,3.83 MB,,,,not-started,Referenced as K3_LAZY.furn via unicode escapes in wings.js. Split into pieces around the table. Loaded with Draco after the city is released.
+اجتماعات .glb,assets/اجتماعات .glb,model,see notes,none — one continuous world,,9.39 MB,,,,not-started,referenced in runtime
+اربع اعمده مختلفة.glb,assets/اربع اعمده مختلفة.glb,model,see notes,none — one continuous world,,22.76 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+اعمدة.glb,assets/اعمدة.glb,model,see notes,none — one continuous world,,7.45 MB,,,,not-started,referenced in runtime
+الاستقبال.glb,assets/الاستقبال.glb,model,see notes,none — one continuous world,,10.04 MB,,,,not-started,referenced in runtime
+الجدارية.glb,assets/الجدارية.glb,model,see notes,none — one continuous world,,12.32 MB,,,,not-started,referenced in runtime
+المباخر.glb,assets/المباخر.glb,model,see notes,none — one continuous world,,9.87 MB,,,,not-started,referenced in runtime
+ثريا المجلس .glb,assets/ثريا المجلس .glb,model,see notes,none — one continuous world,,6.52 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+جزيئات.glb,assets/جزيئات.glb,model,see notes,none — one continuous world,,8.01 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+درج.glb,assets/درج.glb,model,see notes,none — one continuous world,,7.73 MB,,,,not-started,referenced in runtime
+سقف المجلس.glb,assets/سقف المجلس.glb,model,see notes,none — one continuous world,,8.65 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+شتله.glb,assets/شتله.glb,model,see notes,none — one continuous world,,3.19 MB,,,,not-started,referenced in runtime
+طاولة الخرائط.glb,assets/طاولة الخرائط.glb,model,K3 map room,K3,,1.97 MB,,,,not-started,"Referenced as K3_LAZY.table. Terrain table, carved face toward the door. Draco, after the city is released."
+عرش البطل.glb,assets/عرش البطل.glb,model,see notes,none — one continuous world,,14.36 MB,,,,not-started,referenced in runtime
+غبار.glb,assets/غبار.glb,model,see notes,none — one continuous world,,9.05 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+قمر دموي.glb,assets/قمر دموي.glb,model,see notes,none — one continuous world,,2.19 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+مجسم الباب.glb,assets/مجسم الباب.glb,model,royal door,city to palace,,2.38 MB,,,,not-started,Door mesh. Opens from the hero push clip. One moving leaf.
+مجموعة غراض غير متلاصقة.glb,assets/مجموعة غراض غير متلاصقة.glb,model,see notes,none — one continuous world,,9.33 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+مجموعة غراض.glb,assets/مجموعة غراض.glb,model,see notes,none — one continuous world,,8.98 MB,,,,not-started,referenced in runtime
+مشعل اسود.glb,assets/مشعل اسود.glb,model,see notes,none — one continuous world,,2.42 MB,,,,not-started,referenced in runtime
+مشعل خشب.glb,assets/مشعل خشب.glb,model,see notes,none — one continuous world,,4.26 MB,,,,not-started,referenced in runtime
+‎⁨سين_وقوف_ساكن_سينمائي⁩.glb,assets/‎⁨سين_وقوف_ساكن_سينمائي⁩.glb,model,"city, throne hall, wings",player,,8.31 MB,,idle_impatient; walk_casual; sprint_loop_quaternius; push_object; push_enter_quaternius,,not-started,"runtime hero via HERO_FILE. Clips used: idle_impatient, walk_casual, sprint_loop_quaternius, push_object, push_enter_quaternius. Present but unused: walk_relaxed, climb_ladder_up, monstertransformation_quaternius, bandage_loop_quaternius. Missing from file so fight stays hidden: riposte, aerial_punch_down."
+K1_RoyalReceptionHall.glb,ارضيات وسقوف/optimized/K1_RoyalReceptionHall.glb,model,K1 reception hall,K1,,4.26 MB,,,,not-started,"The file the game loads (optimized). Authored about 39 m by 28 m, rotated so gates face west/east."
+lion_winged-lod1.glb,ارضيات وسقوف/optimized/lion_winged-lod1.glb,model,see notes,none — one continuous world,,0.97 MB,,,,not-started,referenced in runtime
+lion_winged.glb,ارضيات وسقوف/optimized/lion_winged.glb,model,see notes,none — one continuous world,,2.32 MB,,,,not-started,referenced in runtime
+props-set.glb,ارضيات وسقوف/optimized/props-set.glb,model,see notes,none — one continuous world,,9.33 MB,,,,not-started,referenced in runtime
+اربع اعمده مختلفة.glb,ارضيات وسقوف/optimized/اربع اعمده مختلفة.glb,model,see notes,none — one continuous world,,4.92 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+اعمدة-lod1.glb,ارضيات وسقوف/optimized/اعمدة-lod1.glb,model,see notes,none — one continuous world,,0.66 MB,,,,not-started,referenced in runtime
+اعمدة.glb,ارضيات وسقوف/optimized/اعمدة.glb,model,see notes,none — one continuous world,,1.68 MB,,,,not-started,referenced in runtime
+الجدارية.glb,ارضيات وسقوف/optimized/الجدارية.glb,model,see notes,none — one continuous world,,3.24 MB,,,,not-started,referenced in runtime
+المباخر-lod1.glb,ارضيات وسقوف/optimized/المباخر-lod1.glb,model,see notes,none — one continuous world,,1.09 MB,,,,not-started,referenced in runtime
+المباخر.glb,ارضيات وسقوف/optimized/المباخر.glb,model,see notes,none — one continuous world,,2.60 MB,,,,not-started,referenced in runtime
+ثريا-المجلس.glb,ارضيات وسقوف/optimized/ثريا-المجلس.glb,model,see notes,none — one continuous world,,2.86 MB,,,,not-started,referenced in runtime
+درج.glb,ارضيات وسقوف/optimized/درج.glb,model,see notes,none — one continuous world,,0.25 MB,,,,not-started,referenced in runtime
+سقف-المجلس.glb,ارضيات وسقوف/optimized/سقف-المجلس.glb,model,see notes,none — one continuous world,,3.08 MB,,,,not-started,referenced in runtime
+شتله.glb,ارضيات وسقوف/optimized/شتله.glb,model,see notes,none — one continuous world,,1.82 MB,,,,not-started,referenced in runtime
+عرش البطل.glb,ارضيات وسقوف/optimized/عرش البطل.glb,model,see notes,none — one continuous world,,1.56 MB,,,,not-started,referenced in runtime
+عمود-المجلس.glb,ارضيات وسقوف/optimized/عمود-المجلس.glb,model,see notes,none — one continuous world,,2.11 MB,,,,not-started,referenced in runtime
+مجسم الباب.glb,ارضيات وسقوف/optimized/مجسم الباب.glb,model,see notes,none — one continuous world,,2.38 MB,,,,not-started,referenced in runtime
+مشعل اسود.glb,ارضيات وسقوف/optimized/مشعل اسود.glb,model,see notes,none — one continuous world,,0.29 MB,,,,not-started,referenced in runtime
+مشعل خشب.glb,ارضيات وسقوف/optimized/مشعل خشب.glb,model,see notes,none — one continuous world,,0.84 MB,,,,not-started,referenced in runtime
+.gitkeep,assets/.gitkeep,other,see notes,none — one continuous world,,0.00 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+performance-optimization.patch,performance-optimization.patch,patch,shared / tooling,none — one continuous world,,0.02 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+royal-door.patch,royal-door.patch,patch,shared / tooling,none — one continuous world,,0.02 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+IMG_2962.JPG,assets/IMG_2962.JPG,texture,see notes,none — one continuous world,,0.14 MB,,,,not-started,referenced in runtime
+canal_color.jpg,assets/canal_color.jpg,texture,see notes,none — one continuous world,,0.20 MB,,,,not-started,referenced in runtime
+canal_normal.jpg,assets/canal_normal.jpg,texture,see notes,none — one continuous world,,0.21 MB,,,,not-started,referenced in runtime
+canal_rough.jpg,assets/canal_rough.jpg,texture,see notes,none — one continuous world,,0.21 MB,,,,not-started,referenced in runtime
+canal_water.jpg,assets/canal_water.jpg,texture,see notes,none — one continuous world,,0.11 MB,,,,not-started,referenced in runtime
+grass_dark.jpg,assets/grass_dark.jpg,texture,see notes,none — one continuous world,,0.38 MB,,,,not-started,referenced in runtime
+grass_lawn.jpg,assets/grass_lawn.jpg,texture,see notes,none — one continuous world,,0.55 MB,,,,not-started,referenced in runtime
+grass_moss.jpg,assets/grass_moss.jpg,texture,see notes,none — one continuous world,,0.38 MB,,,,not-started,referenced in runtime
+ground_zones.png,assets/ground_zones.png,texture,see notes,none — one continuous world,,0.13 MB,,,,not-started,referenced in runtime
+marble.webp,assets/marble.webp,texture,see notes,none — one continuous world,,0.11 MB,,,,not-started,referenced in runtime
+palace-glimpse.webp,assets/palace-glimpse.webp,texture,see notes,none — one continuous world,,0.20 MB,,,,not-started,referenced in runtime
+plaza_mosaic.jpg,assets/plaza_mosaic.jpg,texture,see notes,none — one continuous world,,0.73 MB,,,,not-started,referenced in runtime
+plaza_paving.jpg,assets/plaza_paving.jpg,texture,see notes,none — one continuous world,,0.61 MB,,,,not-started,referenced in runtime
+plaza_stone.jpg,assets/plaza_stone.jpg,texture,see notes,none — one continuous world,,0.38 MB,,,,not-started,referenced in runtime
+sky_babylon_blood.jpeg,assets/sky_babylon_blood.jpeg,texture,see notes,none — one continuous world,,0.19 MB,,,,not-started,referenced in runtime
+skyline_ring_a.jpg,assets/skyline_ring_a.jpg,texture,see notes,none — one continuous world,,0.27 MB,,,,not-started,referenced in runtime
+skyline_ring_b.jpg,assets/skyline_ring_b.jpg,texture,see notes,none — one continuous world,,0.26 MB,,,,not-started,referenced in runtime
+ارضية الخرائط.JPG,assets/ارضية الخرائط.JPG,texture,K3 map room floor,K3,,0.25 MB,,,,not-started,WING_FILES.k3Floor. One centred square copy so the sun medallion stays round.
+ارضية المجلس.PNG,assets/ارضية المجلس.PNG,texture,see notes,none — one continuous world,,3.51 MB,,,,not-started,referenced in runtime
+ارضية الممرات.JPG,assets/ارضية الممرات.JPG,texture,see notes,none — one continuous world,,0.14 MB,,,,not-started,referenced in runtime
+ارضية غرفة الملوك.PNG,assets/ارضية غرفة الملوك.PNG,texture,see notes,none — one continuous world,,4.36 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+ارضية.JPG,assets/ارضية.JPG,texture,see notes,none — one continuous world,,0.34 MB,,,,not-started,referenced in runtime
+السجاد.JPG,assets/السجاد.JPG,texture,see notes,none — one continuous world,,0.37 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+السقف.JPG,assets/السقف.JPG,texture,see notes,none — one continuous world,,0.35 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+المدالية المركزية.JPG,assets/المدالية المركزية.JPG,texture,see notes,none — one continuous world,,0.36 MB,,,,not-started,referenced in runtime
+جدار الخرائط 2.JPG,assets/جدار الخرائط 2.JPG,texture,K3 far wall,K3,,0.24 MB,,,,not-started,WING_FILES.k3WallFar. The large map on the west wall.
+جدار الخرائط.JPG,assets/جدار الخرائط.JPG,texture,K3 other walls,K3,,0.24 MB,,,,not-started,WING_FILES.k3Wall. Shelves-and-maps mural on the remaining walls.
+جدار المجلس .PNG,assets/جدار المجلس .PNG,texture,see notes,none — one continuous world,,3.91 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+جدار الممرات.jpg,assets/جدار الممرات.jpg,texture,see notes,none — one continuous world,,0.29 MB,,,,not-started,referenced in runtime
+جدار خلف عرش البطل.PNG,assets/جدار خلف عرش البطل.PNG,texture,see notes,none — one continuous world,,3.91 MB,,,,not-started,referenced in runtime
+جدران الباب.PNG,assets/جدران الباب.PNG,texture,see notes,none — one continuous world,,4.19 MB,,,,not-started,referenced in runtime
+سجاد الارضية.jpg,assets/سجاد الارضية.jpg,texture,see notes,none — one continuous world,,0.72 MB,,,,not-started,referenced in runtime
+سجاد الاستقبال.jpg,assets/سجاد الاستقبال.jpg,texture,see notes,none — one continuous world,,1.36 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+سقف القصر .PNG,assets/سقف القصر .PNG,texture,see notes,none — one continuous world,,3.27 MB,,,,not-started,referenced in runtime
+سقف الممرات.PNG,assets/سقف الممرات.PNG,texture,see notes,none — one continuous world,,3.62 MB,,,,not-started,referenced in runtime
+نقوش جدارية 2.JPG,assets/نقوش جدارية 2.JPG,texture,see notes,none — one continuous world,,0.32 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+نقوش جدارية.JPG,assets/نقوش جدارية.JPG,texture,see notes,none — one continuous world,,0.37 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+wings-engine-first-stage.png,wings-engine-first-stage.png,texture,shared / tooling,none — one continuous world,,0.08 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+floor-orm.webp,ارضيات وسقوف/optimized/floor-orm.webp,texture,see notes,none — one continuous world,,0.00 MB,,,,not-started,referenced in runtime
+marble.webp,ارضيات وسقوف/optimized/marble.webp,texture,see notes,none — one continuous world,,0.11 MB,,,,not-started,referenced in runtime
+ارضية.webp,ارضيات وسقوف/optimized/ارضية.webp,texture,see notes,none — one continuous world,,0.32 MB,,,,not-started,referenced in runtime
+السجاد.webp,ارضيات وسقوف/optimized/السجاد.webp,texture,see notes,none — one continuous world,,0.33 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+المدالية المركزية.webp,ارضيات وسقوف/optimized/المدالية المركزية.webp,texture,see notes,none — one continuous world,,0.34 MB,,,,not-started,referenced in runtime
+جدار-المجلس.webp,ارضيات وسقوف/optimized/جدار-المجلس.webp,texture,see notes,none — one continuous world,,0.82 MB,,,,not-started,referenced in runtime
+جدار-خلف-العرش.webp,ارضيات وسقوف/optimized/جدار-خلف-العرش.webp,texture,see notes,none — one continuous world,,0.69 MB,,,,not-started,referenced in runtime
+جدران-الباب.webp,ارضيات وسقوف/optimized/جدران-الباب.webp,texture,see notes,none — one continuous world,,0.43 MB,,,,not-started,referenced in runtime
+سجاد-الارضية.webp,ارضيات وسقوف/optimized/سجاد-الارضية.webp,texture,see notes,none — one continuous world,,0.39 MB,,,,not-started,referenced in runtime
+سقف-القصر.webp,ارضيات وسقوف/optimized/سقف-القصر.webp,texture,see notes,none — one continuous world,,0.32 MB,,,,not-started,referenced in runtime
+سقف-الممرات.webp,ارضيات وسقوف/optimized/سقف-الممرات.webp,texture,see notes,none — one continuous world,,0.63 MB,,,,not-started,referenced in runtime
+لمحة-القصر.webp,ارضيات وسقوف/optimized/لمحة-القصر.webp,texture,see notes,none — one continuous world,,0.16 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+نقوش جدارية 2.webp,ارضيات وسقوف/optimized/نقوش جدارية 2.webp,texture,see notes,none — one continuous world,,0.28 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
+نقوش جدارية.webp,ارضيات وسقوف/optimized/نقوش جدارية.webp,texture,see notes,none — one continuous world,,0.31 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
