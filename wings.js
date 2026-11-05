@@ -19,6 +19,7 @@
     floors: null, floorExtended: null, wallSolid: null, baseWall: null, wallGeometry: null,
     colliders: [], spatial: new Map(), regionGroups: new Map(), ceilings: [], materials: [],
     k1FloorY: 0, k1ModelMetrics: null, k1ModelColliderCount: 0,
+    k2Dress: null, k3Dress: null, k2Queued: false, k3Queued: false,
     current: null, cutaway: false, fullbright: false, debug: false, report: null,
     ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null
   };
@@ -61,8 +62,9 @@
   };
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
-  function assetList() {
-    return Object.keys(WING_FILES).map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
+  function assetList(stage) {
+    const keys = stage === 'initial' ? ['k1'] : Object.keys(WING_FILES);
+    return keys.map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
       .filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
   }
   function provideAsset(url, value) { if (url && value) preloaded.set(url, value); }
@@ -830,10 +832,13 @@
     addSpecials();
     dressCorridors();
     wingMark('wings corridors');
-    dressK2();
-    wingMark('wings k2');
-    dressK3();
-    wingMark('wings k3');
+    // K2/K3 are deliberately not decoded while the player is entering K1.
+    // Their architectural shells remain available through the procedural room
+    // groups; detailed materials and GLB furniture stream when the player is
+    // close enough to see the room. This keeps the original assets untouched.
+    state.k2Dress = null; state.k3Dress = null;
+    state.k2Queued = false; state.k3Queued = false;
+    wingMark('wings k2/k3 deferred');
     const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
     const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
     const dummy = new THREE.Object3D();
@@ -1731,11 +1736,11 @@
       g.add(pl); lights.push(pl);
       return pl;
     }
-    add(0xffb15a, 11, 24, b.cx, fireY, b.cz);
-    add(0xffc48a, 4.2, 14, b.cx, Math.max(3.2, fireY - 1.35), b.cz);
+    add(0xffb15a, 3.8, 24, b.cx, fireY, b.cz);
+    add(0xffc48a, 1.25, 14, b.cx, Math.max(3.2, fireY - 1.35), b.cz);
     const ix = (b.x1 - b.x0) * 0.30, iz = (b.z1 - b.z0) * 0.30;
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
-      add(0xffe2c2, 2.2, 16, b.cx + sx * ix, 4.2, b.cz + sz * iz);
+      add(0xffe2c2, 0.72, 16, b.cx + sx * ix, 4.2, b.cz + sz * iz);
     });
     state.k2Lights = lights;
     state.k2LightBase = lights.map(l => l.intensity);
@@ -1964,6 +1969,7 @@
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
+    state.k2Dress = null; state.k3Dress = null; state.k2Queued = false; state.k3Queued = false;
   }
   function wingMark(msg) {
     try { if (window.PalaceInterior && PalaceInterior.mark) PalaceInterior.mark(msg); } catch (e) { /* marks are diagnostic only */ }
@@ -2027,7 +2033,25 @@
     while (q.length) { const a = q.shift(); for (const b of adj.get(a) || []) if (!dist.has(b)) { dist.set(b, dist.get(a) + 1); q.push(b); } }
     return dist;
   }
-  function updateCulling(force) {
+  function streamRoomDress(id) {
+    if (id === 'K2' && !state.k2Dress && !state.k2Queued) {
+      state.k2Queued = true;
+      setTimeout(function () {
+        if (!state.root || state.k2Dress) return;
+        try { dressK2(); wingMark('K2 streamed'); }
+        catch (e) { console.error('K2 streaming failed', e); state.k2Queued = false; }
+      }, 0);
+    }
+    if (id === 'K3' && !state.k3Dress && !state.k3Queued) {
+      state.k3Queued = true;
+      setTimeout(function () {
+        if (!state.root || state.k3Dress) return;
+        try { dressK3(); wingMark('K3 streamed'); }
+        catch (e) { console.error('K3 streaming failed', e); state.k3Queued = false; }
+      }, 0);
+    }
+  }
+  function updateCulling(force, camera) {
     if (!state.built || !state.ctx || !state.ctx.hero) return;
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
     const r = regionAt(x, z), id = r ? r.id : 'Palace';
@@ -2041,6 +2065,7 @@
       if (isArch) dist.set(id, 0);
       // Palace hall stays drawn while it is within two links (seen through the arch behind the player).
       state.palaceNear = id === 'Palace' || isArch || (dist.has('Palace') && dist.get('Palace') <= 2);
+      streamRoomDress(id);
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
         const d = dist.has(rr.id) ? dist.get(rr.id) : 99;
@@ -2049,12 +2074,32 @@
       });
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
+    // Prefetch is checked every frame, not only when the logical room changes;
+    // a long corridor can bring the player within range while regionAt() still
+    // reports the previous room.
+    const k2 = state.rooms.find(rr => rr.id === 'K2');
+    const k3 = state.rooms.find(rr => rr.id === 'K3');
+    if (k2 && Math.hypot(k2.bbox.cx - x, k2.bbox.cz - z) <= 22) streamRoomDress('K2');
+    if (k3 && Math.hypot(k3.bbox.cx - x, k3.bbox.cz - z) <= 22) streamRoomDress('K3');
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
+    if (camera && state.root.visible) {
+      const frustum = new THREE.Frustum();
+      const projection = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      frustum.setFromProjectionMatrix(projection);
+      state.regions.forEach(rr => {
+        const g = state.regionGroups.get(rr.id);
+        if (!g || !g.visible || rr.id === state.current) return;
+        const box = new THREE.Box3().setFromObject(g);
+        // A room that is outside the camera frustum cannot contribute pixels.
+        // Never cull the current room or a room directly behind an open portal.
+        if (!box.isEmpty() && !frustum.intersectsBox(box)) g.visible = false;
+      });
+    }
   }
-  function tick() {
+  function tick(dt, ctx) {
     if (!state.built) return;
-    updateCulling(false);
+    updateCulling(false, ctx && ctx.camera);
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
     if (state.k2Lights && state.k2Lights.length) {
       const t = performance.now() * 0.001;
@@ -2821,9 +2866,9 @@
       pl.name = 'K3-light';
       g.add(pl); lights.push(pl);
     }
-    addLight(0xffb15a, 6.5, 18, b.cx, 3.2, b.cz);
-    addLight(0xffc48a, 2.6, 8, b.x0 + 1.1, 1.75, b.z0 + 2.5);
-    addLight(0xffc48a, 2.6, 8, b.x0 + 1.1, 1.75, b.z0 + 9.5);
+    addLight(0xffb15a, 2.4, 18, b.cx, 3.2, b.cz);
+    addLight(0xffc48a, 0.82, 8, b.x0 + 1.1, 1.75, b.z0 + 2.5);
+    addLight(0xffc48a, 0.82, 8, b.x0 + 1.1, 1.75, b.z0 + 9.5);
     state.k3Lights = lights;
     state.k3LightBase = lights.map(l => l.intensity);
 
