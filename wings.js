@@ -44,7 +44,12 @@
     k2Ceiling: OPT_DIR + 'سقف-المجلس.glb',
     k2Chandelier: OPT_DIR + 'ثريا-المجلس.glb',
     k2Lion: OPT_DIR + 'lion_winged.glb',
-    k2Floor: 'assets/ارضية المجلس.PNG'
+    k2Floor: 'assets/ارضية المجلس.PNG',
+    // Map-room pictures only. The two Draco models stay off this list so they
+    // are not decoded while the city is still in memory (same rule as K2).
+    k3Floor: 'assets/\u0627\u0631\u0636\u064A\u0629 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.JPG',
+    k3Wall: 'assets/\u062C\u062F\u0627\u0631 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.JPG',
+    k3WallFar: 'assets/\u062C\u062F\u0627\u0631 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637 2.JPG'
   };
   // These two are intentionally NOT in the palace loading-screen list.
   // الاستقبال.glb is an 11MB fused prop mesh; the hall only needs the column,
@@ -776,7 +781,7 @@
     let claimedFloor = [];
     ['Kings', 'Temple', 'Library', 'Shared'].forEach((wing, wi) => {
       let wingFloor = [];
-      state.regions.filter(r => r.wing === wing && r.id !== 'K1' && r.id !== 'K2').forEach(r => { wingFloor = union(wingFloor, solid(r.poly)); });
+      state.regions.filter(r => r.wing === wing && r.id !== 'K1' && r.id !== 'K2' && r.id !== 'K3').forEach(r => { wingFloor = union(wingFloor, solid(r.poly)); });
       layout.doors.filter(d => d.kind !== 'arch').forEach(d => {
         const target = state.regions.find(r => r.id === d.to), source = state.regions.find(r => r.id === d.from);
         if ((target && target.wing === wing) || (source && source.wing === wing)) wingFloor = union(wingFloor, solid(d.floorPoly));
@@ -790,6 +795,11 @@
         if (k2) {
           state.k2FloorSolids = solid(k2.poly);
           skirt = difference(skirt, state.k2FloorSolids);
+        }
+        const k3 = state.regions.find(r => r.id === 'K3');
+        if (k3) {
+          state.k3FloorSolids = solid(k3.poly);
+          skirt = difference(skirt, state.k3FloorSolids);
         }
       }
       const g = extrudeSolids(skirt, -0.25, wi * 0.002);
@@ -814,14 +824,16 @@
       if (r.id === 'T1') addColumns(r, g, columnPairs(r, 3, 2.3, 2.2), 0.48);
       if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
       if (r.id === 'L1') addColumns(r, g, columnPairs(r, 4, 4.0, 3.4), 0.60);
-      // K2 no longer gets the procedural wall torches (council hall dressing).
-      if (r.id !== 'K1') { addFutureZones(r, g); if (r.id !== 'K2') addTorches(r); }
+      // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
+      if (r.id !== 'K1') { addFutureZones(r, g); if (r.id !== 'K2' && r.id !== 'K3') addTorches(r); }
     });
     addSpecials();
     dressCorridors();
     wingMark('wings corridors');
     dressK2();
     wingMark('wings k2');
+    dressK3();
+    wingMark('wings k3');
     const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
     const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
     const dummy = new THREE.Object3D();
@@ -1950,6 +1962,7 @@
     if (state.label) { state.label.remove(); state.label = null; }
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
+    state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
   }
   function wingMark(msg) {
@@ -2049,6 +2062,13 @@
       state.k2Lights.forEach((l, i) => {
         const base = state.k2LightBase[i] || l.intensity;
         l.intensity = base * (i < 2 ? flick : 0.94 + 0.06 * Math.sin(t * 1.7 + i));
+      });
+    }
+    if (state.k3Lights && state.k3Lights.length) {
+      const t = performance.now() * 0.001;
+      state.k3Lights.forEach((l, i) => {
+        const base = state.k3LightBase[i] || l.intensity;
+        l.intensity = base * (0.9 + 0.1 * Math.sin(t * 6.2 + i * 1.8));
       });
     }
     if (state.debug && state.ui && performance.now() - state.minimapAt > 120) { state.minimapAt = performance.now(); drawMinimap(); }
@@ -2478,6 +2498,378 @@
       if (visible) { visibleMeshes++; visibleTriangles += count * instances; }
     });
     return { meshes, triangles, visibleMeshes, visibleTriangles, colliders: state.colliders.length, k1ModelColliders: state.k1ModelColliderCount, k1FloorY: state.k1FloorY, k1Model: state.k1ModelMetrics, rooms: state.rooms.length, regions: state.regions.length };
+  }
+
+  /* ---------------------------------------------------------------------------
+     K3 map room. Only the files named for this room:
+       ارضية الخرائط     -> one square copy, centred, so the sun stays round
+       جدار الخرائط 2    -> the single great map, on the far (west) wall
+       جدار الخرائط      -> shelves-and-maps mural, on the other walls
+       طاولة الخرائط     -> the terrain table, carved face toward the door
+       اثاث الخرائط      -> chairs, arch, shelves, scrolls, easel, braziers
+     Nothing else in the wing is touched.
+  --------------------------------------------------------------------------- */
+  const K3_LAZY = {
+    table: 'assets/\u0637\u0627\u0648\u0644\u0629 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.glb',
+    furn: 'assets/\u0627\u062B\u0627\u062B_\u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.glb'
+  };
+  let k3Draco = null;
+  const k3DracoWait = [];
+  function k3EnsureDraco(cb) {
+    if (k3Draco) { cb(k3Draco); return; }
+    k3DracoWait.push(cb);
+    if (k3DracoWait.length > 1) return;
+    const finish = loader => {
+      k3Draco = loader;
+      const q = k3DracoWait.splice(0);
+      q.forEach(fn => fn(loader));
+    };
+    const make = () => {
+      if (!THREE.DRACOLoader) { finish(null); return; }
+      const d = new THREE.DRACOLoader();
+      d.setDecoderPath('vendor/draco/');
+      d.setDecoderConfig({ type: 'wasm' });
+      d.setWorkerLimit(2);
+      finish(d);
+    };
+    if (THREE.DRACOLoader) { make(); return; }
+    const sc = document.createElement('script');
+    sc.src = 'vendor/draco/DRACOLoader.js';
+    sc.onload = make;
+    sc.onerror = () => { console.warn('K3 DRACOLoader failed'); finish(null); };
+    document.head.appendChild(sc);
+  }
+  function k3LoadGLB(url, onLoad) {
+    const root = state.root;
+    const fail = e => { console.warn('K3 map room model failed', url, e); if (state.root === root) onLoad(null); };
+    k3EnsureDraco(draco => {
+      if (!draco || !THREE.GLTFLoader) { fail(new Error('DRACOLoader unavailable')); return; }
+      withMeshopt(dec => {
+        const loader = new THREE.GLTFLoader();
+        loader.setDRACOLoader(draco);
+        if (dec) loader.setMeshoptDecoder(dec);
+        loader.load(encodeURI(url), gltf => { if (state.root === root) onLoad(gltf); else onLoad(null); }, undefined, fail);
+      });
+    });
+  }
+  function k3ClampedMap(url) {
+    const tex = corridorTexture(url);
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.repeat.set(1, 1);
+    return tex;
+  }
+  // Square sun: the texture is mapped by the short side of the room and the
+  // extra length clamps to the border instead of stretching the medallion.
+  function k3FloorSheet(solids, y, b) {
+    const span = Math.max(1e-4, Math.min(b.x1 - b.x0, b.z1 - b.z0));
+    const cx = (b.x0 + b.x1) * 0.5, cz = (b.z0 + b.z1) * 0.5;
+    const pos = [], uv = [], nor = [];
+    (solids || []).forEach(sol => {
+      const outer = cleanPoly(sol.outer, true), holes = (sol.holes || []).map(h => cleanPoly(h, false));
+      if (outer.length < 3) return;
+      let faces = [];
+      try { faces = THREE.ShapeUtils.triangulateShape(outer.map(pt2 => new THREE.Vector2(pt2[0], pt2[1])), holes.map(h => h.map(pt2 => new THREE.Vector2(pt2[0], pt2[1])))); }
+      catch (e) { console.error('K3 floor triangulation', e); return; }
+      const verts = outer.concat.apply(outer, holes);
+      faces.forEach(f => {
+        let a = verts[f[0]], b2 = verts[f[1]], c = verts[f[2]];
+        const cross = (b2[0] - a[0]) * (c[1] - a[1]) - (b2[1] - a[1]) * (c[0] - a[0]);
+        if (cross >= 0) { const t = b2; b2 = c; c = t; }
+        [a, b2, c].forEach(pt2 => {
+          pos.push(pt2[0], y, pt2[1]);
+          uv.push((pt2[0] - cx) / span + 0.5, (pt2[1] - cz) / span + 0.5);
+          nor.push(0, 1, 0);
+        });
+      });
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.computeBoundingBox(); g.computeBoundingSphere();
+    return g;
+  }
+  // One copy of a mural across a whole wall. U runs to the viewer's right
+  // when they face that wall, so the picture is not mirrored.
+  function k3WallQuads(segs, b, h) {
+    const pos = [], uv = [], nor = [];
+    segs.forEach(r => {
+      if (r.s1 - r.s0 < 1.2) return;
+      const y0 = r.door ? Math.min(r.door.height, h) : 0, y1 = h;
+      if (y1 - y0 < 0.02) return;
+      const ix = -r.nx * r.inset, iz = -r.nz * r.inset;
+      const P = s => [r.a[0] + r.tx * s + ix, r.a[1] + r.tz * s + iz];
+      const p0 = P(r.s0), p1 = P(r.s1);
+      const along = p => {
+        // corridorWallRuns stores the outward normal (away from the room).
+        if (Math.abs(r.nx) >= Math.abs(r.nz)) {
+          const len = Math.max(1e-4, b.z1 - b.z0);
+          return r.nx > 0 ? (p[1] - b.z0) / len : (b.z1 - p[1]) / len;
+        }
+        const len = Math.max(1e-4, b.x1 - b.x0);
+        return r.nz > 0 ? (b.x1 - p[0]) / len : (p[0] - b.x0) / len;
+      };
+      const u0 = along(p0), u1 = along(p1);
+      const A = [p0[0], y0, p0[1]], B = [p1[0], y0, p1[1]], Cq = [p1[0], y1, p1[1]], D = [p0[0], y1, p0[1]];
+      const uA = [u0, y0 / h], uB = [u1, y0 / h], uC = [u1, y1 / h], uD = [u0, y1 / h];
+      const fx = -r.nx, fz = -r.nz;
+      const e1 = [B[0] - A[0], 0, B[2] - A[2]];
+      const want = (-e1[2]) * fx + e1[0] * fz > 0;
+      const tri = want ? [A, B, Cq, A, Cq, D] : [A, Cq, B, A, D, Cq];
+      const tuv = want ? [uA, uB, uC, uA, uC, uD] : [uA, uC, uB, uA, uD, uC];
+      tri.forEach((p, i) => { pos.push(p[0], p[1], p[2]); uv.push(tuv[i][0], tuv[i][1]); nor.push(fx, 0, fz); });
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.computeBoundingBox(); geo.computeBoundingSphere();
+    return geo;
+  }
+  function k3WallMaterial(url) {
+    const m = new THREE.MeshStandardMaterial({
+      map: k3ClampedMap(url), roughness: 0.72, metalness: 0.06,
+      emissive: new THREE.Color(0x1a140c), emissiveIntensity: 0.12
+    });
+    state.materials.push(m);
+    return m;
+  }
+  // اثاث الخرائط is one fused mesh. The six objects sit apart, so a small
+  // gap in the vertex cloud is enough to separate them.
+  function k3SplitFurniture(root) {
+    let src = null;
+    root.updateMatrixWorld(true);
+    root.traverse(o => { if (!src && o.isMesh && o.geometry && o.geometry.attributes && o.geometry.attributes.position) src = o; });
+    if (!src) return [];
+    const g = src.geometry.clone();
+    g.applyMatrix4(src.matrixWorld);
+    const pos = g.attributes.position, n = pos.count, eps = 0.008;
+    let minx = 1e9, miny = 1e9, minz = 1e9;
+    for (let i = 0; i < n; i++) {
+      if (pos.getX(i) < minx) minx = pos.getX(i);
+      if (pos.getY(i) < miny) miny = pos.getY(i);
+      if (pos.getZ(i) < minz) minz = pos.getZ(i);
+    }
+    const cell = new Map();
+    const keyOf = i => Math.floor((pos.getX(i) - minx) / eps) + ',' + Math.floor((pos.getY(i) - miny) / eps) + ',' + Math.floor((pos.getZ(i) - minz) / eps);
+    for (let i = 0; i < n; i++) { const k = keyOf(i); if (!cell.has(k)) cell.set(k, i); }
+    const parent = new Map();
+    const find = a => {
+      let p = parent.has(a) ? parent.get(a) : a;
+      if (!parent.has(a)) parent.set(a, a);
+      while (p !== parent.get(p)) { parent.set(p, parent.get(parent.get(p))); p = parent.get(p); }
+      parent.set(a, p); return p;
+    };
+    const uni = (a, b) => { a = find(a); b = find(b); if (a !== b) parent.set(b, a); };
+    cell.forEach((vi, k) => {
+      const parts = k.split(',');
+      const x = +parts[0], y = +parts[1], z = +parts[2];
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        const nk = (x + dx) + ',' + (y + dy) + ',' + (z + dz);
+        if (cell.has(nk)) uni(k, nk);
+      }
+    });
+    const idx = g.index;
+    if (!idx) return [];
+    const triCount = idx.count / 3;
+    const rootOf = new Map(), groups = new Map();
+    for (let t = 0; t < triCount; t++) {
+      const a = idx.getX(t * 3), k = keyOf(a), r = find(k);
+      let id = rootOf.get(r);
+      if (id == null) { id = rootOf.size; rootOf.set(r, id); }
+      let bucket = groups.get(id);
+      if (!bucket) groups.set(id, bucket = []);
+      bucket.push(idx.getX(t * 3), idx.getX(t * 3 + 1), idx.getX(t * 3 + 2));
+    }
+    const pieces = [];
+    groups.forEach(list => {
+      if (list.length < 800 * 3) return;
+      const map = new Map(), arr = [], iarr = [];
+      const push = vi => {
+        let m = map.get(vi);
+        if (m != null) return m;
+        m = map.size; map.set(vi, m);
+        arr.push(pos.getX(vi), pos.getY(vi), pos.getZ(vi));
+        return m;
+      };
+      for (let i = 0; i < list.length; i++) iarr.push(push(list[i]));
+      const ng = new THREE.BufferGeometry();
+      ng.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+      ng.setIndex(iarr);
+      if (g.attributes.normal) {
+        const nr = g.attributes.normal, narr = new Float32Array(map.size * 3);
+        map.forEach((m, vi) => { narr[m * 3] = nr.getX(vi); narr[m * 3 + 1] = nr.getY(vi); narr[m * 3 + 2] = nr.getZ(vi); });
+        ng.setAttribute('normal', new THREE.BufferAttribute(narr, 3));
+      } else ng.computeVertexNormals();
+      if (g.attributes.uv) {
+        const uv = new Float32Array(map.size * 2);
+        map.forEach((m, vi) => { uv[m * 2] = g.attributes.uv.getX(vi); uv[m * 2 + 1] = g.attributes.uv.getY(vi); });
+        ng.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      }
+      ng.computeBoundingBox();
+      const bb = ng.boundingBox, sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+      pieces.push({ geo: ng, mat: src.material, size: sz, center: c, min: bb.min.clone(), tris: iarr.length / 3 });
+    });
+    return pieces;
+  }
+  function k3Kind(p) {
+    const sx = p.size.x, sz = p.size.z, cy = p.center.y, cz = p.center.z;
+    if (Math.min(sx, sz) < 0.11 && Math.max(sx, sz) > 0.4) return cy < 0 ? 'shelf' : 'arch';
+    if (sz > 0.28 && sx > 0.22) return 'easel';
+    if (cz < -0.35 && cy > 0) return 'chair';
+    if (cz < -0.3) return 'brazier';
+    return 'scrolls';
+  }
+  function k3Seat(piece, targetH) {
+    const s = targetH / Math.max(1e-4, piece.size.y);
+    const geo = piece.geo;
+    geo.translate(-piece.center.x, -piece.min.y, -piece.center.z);
+    geo.computeBoundingSphere();
+    return { geo, s, size: piece.size.clone().multiplyScalar(s), mat: piece.mat };
+  }
+  function k3Put(host, seated, x, z, rot, name) {
+    const holder = new THREE.Group();
+    holder.name = name;
+    holder.position.set(x, 0, z);
+    holder.rotation.y = rot;
+    const meshObj = new THREE.Mesh(seated.geo, seated.mat);
+    meshObj.name = name + '-mesh';
+    meshObj.scale.setScalar(seated.s);
+    meshObj.castShadow = false;
+    meshObj.receiveShadow = true;
+    holder.add(meshObj);
+    host.add(holder);
+    const hx = seated.size.x * 0.5, hz = seated.size.z * 0.5;
+    const c = Math.abs(Math.cos(rot)), sn = Math.abs(Math.sin(rot));
+    const wx = hx * c + hz * sn, wz = hx * sn + hz * c;
+    state.colliders.push({
+      minx: x - wx, maxx: x + wx, miny: 0, maxy: seated.size.y,
+      minz: z - wz, maxz: z + wz, _wing: true, _k3Prop: true
+    });
+  }
+  function k3PlaceFurniture() {
+    const dress = state.k3Dress;
+    if (!dress || dress.placed || !dress.by || !dress.tableHalf || !dress.host) return;
+    const g = dress.host, b = dress.bbox, by = dress.by;
+    const need = ['shelf', 'arch', 'chair', 'easel', 'brazier', 'scrolls'];
+    if (need.some(k => !by[k])) { console.warn('K3 furniture incomplete', need.filter(k => !by[k])); return; }
+    dress.placed = true;
+    const shelf = k3Seat(by.shelf, 1.5);
+    const arch = k3Seat(by.arch, 3.5);
+    const chair = k3Seat(by.chair, 1.28);
+    const easel = k3Seat(by.easel, 1.85);
+    const braz = k3Seat(by.brazier, 1.4);
+    const scrolls = k3Seat(by.scrolls, 1.5);
+    k3Put(g, shelf, b.x0 + 5.0, b.z0 + shelf.size.x * 0.5 + 0.05, Math.PI / 2, 'K3-shelf-a');
+    k3Put(g, shelf, b.x0 + 10.6, b.z0 + shelf.size.x * 0.5 + 0.05, Math.PI / 2, 'K3-shelf-b');
+    k3Put(g, arch, b.x0 + 3.5, b.z1 - arch.size.x * 0.5 - 0.04, -Math.PI / 2, 'K3-arch');
+    k3Put(g, scrolls, b.x0 + 6.7, b.z1 - 1.35, 0.4, 'K3-scrolls');
+    k3Put(g, braz, b.x0 + 0.85, b.z0 + 2.5, 0, 'K3-brazier-s');
+    k3Put(g, braz, b.x0 + 0.85, b.z0 + 9.5, Math.PI, 'K3-brazier-n');
+    k3Put(g, easel, b.x0 + 12.4, b.z0 + 2.3, 2.4, 'K3-easel');
+    const tx = dress.tableHalf.x, tz = dress.tableHalf.z;
+    const cd = chair.size.x * 0.5 + 0.18;
+    k3Put(g, chair, b.cx - tx - cd, b.cz, 0, 'K3-chair-head');
+    k3Put(g, chair, b.cx - 1.25, b.cz + tz + cd, -Math.PI / 2, 'K3-chair-n1');
+    k3Put(g, chair, b.cx + 1.25, b.cz + tz + cd, -Math.PI / 2, 'K3-chair-n2');
+    k3Put(g, chair, b.cx - 1.25, b.cz - tz - cd, Math.PI / 2, 'K3-chair-s1');
+    k3Put(g, chair, b.cx + 1.25, b.cz - tz - cd, Math.PI / 2, 'K3-chair-s2');
+    dress.furniture = true;
+    rebuildSpatial();
+    if (state.root) state.root.updateMatrixWorld(true);
+  }
+  function dressK3() {
+    const r = state.rooms.find(q => q.id === 'K3'), g = state.regionGroups.get('K3');
+    if (!r || !g) return;
+    const b = r.bbox, h = r.height;
+    state.k3Dress = { floor: false, walls: false, table: false, furniture: false, placed: false, bbox: b, host: g, tableHalf: null, by: null };
+    const floorMat = new THREE.MeshStandardMaterial({
+      map: k3ClampedMap(WING_FILES.k3Floor), roughness: 0.45, metalness: 0.08,
+      emissive: new THREE.Color(0x120e0a), emissiveIntensity: 0.07
+    });
+    floorMat.polygonOffset = true; floorMat.polygonOffsetFactor = -2; floorMat.polygonOffsetUnits = -2;
+    state.materials.push(floorMat);
+    const floorMesh = mesh(k3FloorSheet(state.k3FloorSolids || solid(r.poly), 0.014, b), floorMat, 'K3-map-floor', g);
+    floorMesh.renderOrder = 2;
+    state.k3Dress.floor = true;
+    if (state.floorMeshes) state.floorMeshes.push(floorMesh);
+
+    const area = solid(r.poly);
+    const freeArea = difference(area, state.baseWall);
+    const wallsHere = intersection(state.baseWall, offset(area, 1.6));
+    const runs = corridorWallRuns(wallsHere, freeArea);
+    const lintelRuns = [];
+    state.doors.filter(d => d.kind !== 'arch' && d.openPoly && (d.from === 'K3' || d.to === 'K3')).forEach(d => {
+      const op = solid(d.openPoly);
+      corridorWallRuns(op, difference(freeArea, op)).forEach(l => { l.door = d; lintelRuns.push(l); });
+    });
+    const far = [], side = [];
+    // Outward normal -X is the far (west) wall, opposite the door.
+    runs.concat(lintelRuns).forEach(seg => { (seg.nx < -0.5 ? far : side).push(seg); });
+    const farGeo = k3WallQuads(far, b, h), sideGeo = k3WallQuads(side, b, h);
+    if (farGeo.attributes.position.count) mesh(farGeo, k3WallMaterial(WING_FILES.k3WallFar), 'K3-map-wall-far', g);
+    else farGeo.dispose();
+    if (sideGeo.attributes.position.count) mesh(sideGeo, k3WallMaterial(WING_FILES.k3Wall), 'K3-map-wall-side', g);
+    else sideGeo.dispose();
+    state.k3Dress.walls = true;
+
+    const lights = [];
+    function addLight(color, intensity, dist, x, y, z) {
+      const pl = new THREE.PointLight(color, intensity, dist, 2);
+      pl.castShadow = false;
+      pl.position.set(x, y, z);
+      pl.name = 'K3-light';
+      g.add(pl); lights.push(pl);
+    }
+    addLight(0xffb15a, 6.5, 18, b.cx, 3.2, b.cz);
+    addLight(0xffc48a, 2.6, 8, b.x0 + 1.1, 1.75, b.z0 + 2.5);
+    addLight(0xffc48a, 2.6, 8, b.x0 + 1.1, 1.75, b.z0 + 9.5);
+    state.k3Lights = lights;
+    state.k3LightBase = lights.map(l => l.intensity);
+
+    k3LoadGLB(K3_LAZY.table, gltf => {
+      const dress = state.k3Dress;
+      if (!dress || dress.host !== g) return;
+      if (!gltf) { dress.tableHalf = { x: 2.16, z: 2.20 }; k3PlaceFurniture(); return; }
+      const model = gltf.scene;
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+      const s = 1.12 / Math.max(1e-4, size.y);
+      model.scale.setScalar(s);
+      model.position.set(-c.x * s, -box.min.y * s, -c.z * s);
+      const holder = new THREE.Group();
+      holder.name = 'K3-map-table';
+      holder.position.set(b.cx, 0, b.cz);
+      holder.rotation.y = -Math.PI / 2;
+      holder.add(model);
+      model.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
+      g.add(holder);
+      const hx = size.z * s * 0.5, hz = size.x * s * 0.5;
+      state.colliders.push({
+        minx: b.cx - hx, maxx: b.cx + hx, miny: 0, maxy: size.y * s,
+        minz: b.cz - hz, maxz: b.cz + hz, _wing: true, _k3Prop: true
+      });
+      dress.table = true;
+      dress.tableHalf = { x: hx, z: hz };
+      dress.tableSize = size.toArray();
+      rebuildSpatial();
+      k3PlaceFurniture();
+    });
+    k3LoadGLB(K3_LAZY.furn, gltf => {
+      const dress = state.k3Dress;
+      if (!dress || dress.host !== g) return;
+      if (!gltf) return;
+      const pieces = k3SplitFurniture(gltf.scene);
+      const by = {};
+      pieces.forEach(p => {
+        const k = k3Kind(p);
+        if (!by[k] || p.tris > by[k].tris) by[k] = p;
+      });
+      dress.by = by;
+      dress.pieceReport = pieces.map(p => ({ kind: k3Kind(p), size: [p.size.x, p.size.y, p.size.z].map(n => +n.toFixed(3)) }));
+      k3PlaceFurniture();
+    });
   }
 
   window.PalaceWings = {
