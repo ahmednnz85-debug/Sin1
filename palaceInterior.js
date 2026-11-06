@@ -644,8 +644,8 @@
   }
 
   // Wing (K1, K2, corridors) files join the palace loading screen so the wings
-  // never appear undressed. They are required for the first-frame dressed
-  // experience; a failure is surfaced instead of causing a hidden late hitch.
+  // are dressed on the first frame when available. They remain optional so a
+  // single slow/broken wing asset cannot block entry to the palace.
   function attachWingSpecs() {
     if (wingsProbed || !CONFIG.useWings || !window.PalaceWings || typeof PalaceWings.assetList !== 'function') return;
     wingsProbed = true;
@@ -654,8 +654,8 @@
       if (specs.some(function (s) { return s.url === url; })) return; // same file as a palace asset: shared below
       specs.push({
         id: 'wing:' + a.url, key: 'wing:' + a.url, name: a.url.split('/').pop(),
-        kind: a.kind === 'tex' ? 'wtex' : (/طاولة|اثاث|اجتماعات/.test(a.url) ? 'wglb-draco' : 'wglb'),
-        wingPath: a.url, url: url, optional: false,
+        kind: a.kind === 'tex' ? 'wtex' : (/طاولة|اثاث/.test(a.url) ? 'wglb-draco' : 'wglb'),
+        wingPath: a.url, url: url, optional: true,
         status: 'pending', loaded: 0, total: 0, error: '', attempt: 0, buf: null, result: null
       });
     });
