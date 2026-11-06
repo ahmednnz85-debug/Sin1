@@ -14,6 +14,7 @@
     L1: 'great library', L2: 'archive', L3: 'scribes room', L4: 'observatory'
   };
   const WING_NAMES = { Kings: 'Kings', Temple: 'Temple', Library: 'Library', Shared: 'Corridor' };
+  const MEM_BUDGET_MB = 800;
   const state = {
     built: false, root: null, ctx: null, hall: null, rooms: [], connectors: [], doors: [], regions: [],
     floors: null, floorExtended: null, wallSolid: null, baseWall: null, wallGeometry: null,
@@ -22,7 +23,7 @@
     k2Dress: null, k3Dress: null, k2Queued: false, k3Queued: false,
     current: null, cutaway: false, fullbright: false, debug: false, report: null,
     ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null,
-    regionBoxes: new Map(), boundsRefreshUntil: 0, roomOccluders: new Map()
+    regionBoxes: new Map(), boundsRefreshUntil: 0, roomOccluders: new Map(), roomRegistry: new Map()
   };
 
   /* ---------------------------------------------------------------------------
@@ -241,6 +242,22 @@
       if (g) g.visible = complete;
       if (blocker) blocker.visible = !complete;
     });
+  }
+
+  function registerRoom(id, assets, doors, sizeEstimate) {
+    state.roomRegistry.set(id, { id, assets: assets || [], doors: doors || [], sizeEstimate: Number(sizeEstimate) || 0, state: 'registered', reason: 'not requested' });
+  }
+
+  function roomMayLoad(id) {
+    const room = state.roomRegistry.get(id);
+    if (!room) return true;
+    const current = gpuMetrics().texMB;
+    if (current + room.sizeEstimate > MEM_BUDGET_MB) {
+      room.state = 'blocked'; room.reason = `memory budget ${current.toFixed(1)}+${room.sizeEstimate} > ${MEM_BUDGET_MB} MB`;
+      return false;
+    }
+    room.state = 'queued'; room.reason = 'priority: current or visible portal';
+    return true;
   }
 
   function solveLayout(hall) {
@@ -1924,7 +1941,7 @@
     });
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
-    state.built = false; state.root = null; state.regionGroups.clear(); state.regionBoxes.clear(); state.roomOccluders.clear(); state.boundsRefreshUntil = 0; state.colliders = []; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
+    state.built = false; state.root = null; state.regionGroups.clear(); state.regionBoxes.clear(); state.roomOccluders.clear(); state.roomRegistry.clear(); state.boundsRefreshUntil = 0; state.colliders = []; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
@@ -1947,6 +1964,7 @@
     wingMark('wings layout');
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
     state.regions = state.rooms.concat(state.connectors); state.links = layout.links; state.sealed = layout.sealed; state.back = layout.back;
+    state.regions.forEach(r => registerRoom(r.id, [], state.doors.filter(d => d.from === r.id || d.to === r.id), r.id === 'K2' ? 220 : r.id === 'K3' ? 180 : 0));
     prepareArchitecture(layout);
     wingMark('wings architecture');
     // Remove procedural walls inside K1 so the GLB model is the only interior
@@ -1997,11 +2015,12 @@
     return dist;
   }
   function streamRoomDress(id) {
+    if (!roomMayLoad(id)) return;
     if (id === 'K2' && !state.k2Dress && !state.k2Queued) {
       state.k2Queued = true;
       setTimeout(function () {
         if (!state.root || state.k2Dress) return;
-        try { dressK2(); state.boundsRefreshUntil = performance.now() + 3000; refreshRegionBounds(state.rooms.find(r => r.id === 'K2')); updateAtomicReveals(); wingMark('K2 streamed'); }
+        try { dressK2(); state.roomRegistry.get('K2').state = 'loaded'; state.roomRegistry.get('K2').reason = 'current/portal priority'; state.boundsRefreshUntil = performance.now() + 3000; refreshRegionBounds(state.rooms.find(r => r.id === 'K2')); updateAtomicReveals(); wingMark('K2 streamed'); }
         catch (e) { console.error('K2 streaming failed', e); state.k2Queued = false; }
       }, 0);
     }
@@ -2009,7 +2028,7 @@
       state.k3Queued = true;
       setTimeout(function () {
         if (!state.root || state.k3Dress) return;
-        try { dressK3(); state.boundsRefreshUntil = performance.now() + 3000; refreshRegionBounds(state.rooms.find(r => r.id === 'K3')); updateAtomicReveals(); wingMark('K3 streamed'); }
+        try { dressK3(); state.roomRegistry.get('K3').state = 'loaded'; state.roomRegistry.get('K3').reason = 'current/portal priority'; state.boundsRefreshUntil = performance.now() + 3000; refreshRegionBounds(state.rooms.find(r => r.id === 'K3')); updateAtomicReveals(); wingMark('K3 streamed'); }
         catch (e) { console.error('K3 streaming failed', e); state.k3Queued = false; }
       }, 0);
     }
