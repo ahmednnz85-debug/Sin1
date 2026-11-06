@@ -49,16 +49,14 @@
     // are not decoded while the city is still in memory (same rule as K2).
     k3Floor: 'assets/\u0627\u0631\u0636\u064A\u0629 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.JPG',
     k3Wall: 'assets/\u062C\u062F\u0627\u0631 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.JPG',
-    k3WallFar: 'assets/\u062C\u062F\u0627\u0631 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637 2.JPG'
+    k3WallFar: 'assets/جدار الخرائط 2.JPG',
+    // Formerly lazy assets are now part of the palace manifest.
+    k2Reception: OPT_DIR + 'عمود-المجلس.glb',
+    k2Meetings: 'assets/اجتماعات .glb',
+    k3Table: 'assets/طاولة الخرائط.glb',
+    k3Furniture: 'assets/اثاث_الخرائط.glb'
   };
-  // These two are intentionally NOT in the palace loading-screen list.
-  // الاستقبال.glb is an 11MB fused prop mesh; the hall only needs the column,
-  // already extracted to a small GLB. The meeting table is fetched after the
-  // column so neither file is decoded while the city is still in memory.
-  const K2_LAZY = {
-    reception: OPT_DIR + 'عمود-المجلس.glb',
-    meetings: 'assets/اجتماعات .glb'
-  };
+  const K2_LAZY = { reception: WING_FILES.k2Reception, meetings: WING_FILES.k2Meetings };
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
   function assetList() {
@@ -2043,9 +2041,10 @@
       state.palaceNear = id === 'Palace' || isArch || (dist.has('Palace') && dist.get('Palace') <= 2);
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
-        const d = dist.has(rr.id) ? dist.get(rr.id) : 99;
-        const near = Math.hypot(rr.bbox.cx - x, rr.bbox.cz - z) <= 40;
-        g.visible = d <= 2 || near;
+        // Loading and visibility are separate. Keep all wings drawable so
+        // distant landmarks never pop in; mesh-level frustum culling still
+        // removes off-camera work without releasing or hiding resources.
+        g.visible = true;
       });
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
@@ -2542,6 +2541,11 @@
   function k3LoadGLB(url, onLoad) {
     const root = state.root;
     const fail = e => { console.warn('K3 map room model failed', url, e); if (state.root === root) onLoad(null); };
+    const cached = preloaded.get(url);
+    if (cached && cached.scene) {
+      onLoad({ scene: cached.scene.clone(true), animations: cached.animations || [] });
+      return;
+    }
     k3EnsureDraco(draco => {
       if (!draco || !THREE.GLTFLoader) { fail(new Error('DRACOLoader unavailable')); return; }
       withMeshopt(dec => {

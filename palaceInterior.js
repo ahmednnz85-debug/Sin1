@@ -7,7 +7,7 @@
   const CONFIG = {
     useOptimizedAssets: true,
     useWings: true,
-    disposeExteriorAfterEntry: false,
+    disposeExteriorAfterEntry: true,
     hallWidthH: 14,
     hallLengthH: 30,
     hallHeightH: 8,
@@ -125,6 +125,8 @@
   let hallBuilt = false;
   let warmFrame = false;
   let loadStartedAt = 0;
+  let loadStage = 0;
+  const LOAD_STAGES = ['جاري تحميل القصر الرئيسي', 'جاري تحميل جناح الملوك', 'جاري تحميل المكتبة الكبرى', 'جاري تحميل المعبد الملكي للقمر', 'جاري تجهيز الإضاءة والخامات والمؤثرات', 'جاري تجهيز الكاميرا والموارد المشتركة', 'اكتمل تحميل القصر'];
   let contextWatch = false;
   let lastDoor = false;
   let heroSnap = '—';
@@ -302,10 +304,10 @@
     if (pctEl) pctEl.textContent = pct + '%';
     if (statusEl) {
       if (state === 'FAILED') statusEl.textContent = 'توقف تحميل القصر الملكي';
-      else if (state === 'REVEAL') statusEl.textContent = 'جارٍ تجهيز القاعة';
-      else if (filesReady() && !warmFrame) statusEl.textContent = 'جارٍ بناء القاعة';
-      else if (pct >= 100) statusEl.textContent = 'القصر الملكي';
-      else statusEl.textContent = 'جارٍ تحميل: القصر الملكي';
+      else if (state === 'REVEAL') statusEl.textContent = 'جاري تجهيز الإضاءة والخامات والمؤثرات';
+      else if (filesReady() && !warmFrame) statusEl.textContent = 'جاري تجهيز الكاميرا والموارد المشتركة';
+      else if (pct >= 100) statusEl.textContent = LOAD_STAGES[6];
+      else statusEl.textContent = LOAD_STAGES[Math.max(0, Math.min(5, loadStage))];
     }
     renderDebug();
   }
@@ -619,6 +621,28 @@
     });
   }
 
+  let dracoLoaderPromise = null;
+  function waitDraco() {
+    if (window.THREE && THREE.DRACOLoader) {
+      const d = new THREE.DRACOLoader(); d.setDecoderPath('vendor/draco/'); d.setDecoderConfig({ type: 'wasm' }); d.setWorkerLimit(2);
+      return Promise.resolve(d);
+    }
+    if (dracoLoaderPromise) return dracoLoaderPromise;
+    dracoLoaderPromise = new Promise(function (resolve, reject) {
+      const sc = document.createElement('script'); sc.src = 'vendor/draco/DRACOLoader.js';
+      sc.onload = function () { try { const d = new THREE.DRACOLoader(); d.setDecoderPath('vendor/draco/'); d.setDecoderConfig({ type: 'wasm' }); d.setWorkerLimit(2); resolve(d); } catch (e) { reject(e); } };
+      sc.onerror = function () { reject(new Error('DRACOLoader لم يعمل')); };
+      document.head.appendChild(sc);
+    });
+    return dracoLoaderPromise;
+  }
+  function parseDracoGLB(buf) {
+    return Promise.all([waitDecoder(), waitDraco()]).then(function (parts) {
+      const loader = new THREE.GLTFLoader(); loader.setDRACOLoader(parts[1]); if (parts[0]) loader.setMeshoptDecoder(parts[0]);
+      return new Promise(function (resolve, reject) { loader.parse(buf, '', resolve, reject); });
+    });
+  }
+
   // Wing (K1, K2, corridors) files join the palace loading screen so the wings
   // never appear undressed. They are optional: a failed file falls back to the
   // wing's own on-demand loader instead of blocking the palace.
@@ -629,8 +653,9 @@
       const url = bust(encodeURI(a.url));
       if (specs.some(function (s) { return s.url === url; })) return; // same file as a palace asset: shared below
       specs.push({
-        id: 'wing:' + a.url, key: 'wing:' + a.url, name: a.url.split('/').pop(), kind: a.kind === 'tex' ? 'wtex' : 'wglb',
-        wingPath: a.url, url: url, optional: true,
+        id: 'wing:' + a.url, key: 'wing:' + a.url, name: a.url.split('/').pop(),
+        kind: a.kind === 'tex' ? 'wtex' : (/طاولة|اثاث/.test(a.url) ? 'wglb-draco' : 'wglb'),
+        wingPath: a.url, url: url, optional: false,
         status: 'pending', loaded: 0, total: 0, error: '', attempt: 0, buf: null, result: null
       });
     });
@@ -658,6 +683,7 @@
       else if (spec.kind === 'tex') spec.result = await textureFromBytes(spec.buf, spec.name, spec.linear);
       else if (spec.kind === 'wtex') spec.result = await textureFromBytes(spec.buf, spec.name, false);
       else if (spec.kind === 'wglb') spec.result = await parseRawGLB(spec.buf);
+      else if (spec.kind === 'wglb-draco') spec.result = await parseDracoGLB(spec.buf);
       else {
         await waitDecoder();
         spec.result = await parseGLB(spec.buf);
@@ -768,8 +794,10 @@
     if (loadPromise) return loadPromise;
     if (!specs) specs = makeSpecs();
     loadPromise = (async function () {
+      loadStage = 0; paint();
       await attachExistingPropSpecs();
       attachWingSpecs();
+      loadStage = 1; paint();
       const jobs = specs.map(function (s) {
         return settle(s).catch(function (err) {
           if (s.optional) {
@@ -781,7 +809,9 @@
         });
       });
       await Promise.all(jobs);
+      loadStage = 4; paint();
       await shareWingAssets();
+      loadStage = 5; paint();
       specs.forEach(function (s) { s.buf = null; });
       const failed = specs.filter(function (s) { return !s.optional && (s.status !== 'loaded' || !s.result); });
       if (failed.length) {
@@ -789,7 +819,9 @@
         err.file = failed[0].name;
         throw err;
       }
-      return assembleFromSpecs();
+      const result = assembleFromSpecs();
+      loadStage = 6; paint();
+      return result;
     })().catch(function (err) { loadPromise = null; throw err; });
     return loadPromise;
   }
