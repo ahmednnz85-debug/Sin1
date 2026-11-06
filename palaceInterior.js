@@ -644,8 +644,8 @@
   }
 
   // Wing (K1, K2, corridors) files join the palace loading screen so the wings
-  // never appear undressed. They are optional: a failed file falls back to the
-  // wing's own on-demand loader instead of blocking the palace.
+  // never appear undressed. They are required for the first-frame dressed
+  // experience; a failure is surfaced instead of causing a hidden late hitch.
   function attachWingSpecs() {
     if (wingsProbed || !CONFIG.useWings || !window.PalaceWings || typeof PalaceWings.assetList !== 'function') return;
     wingsProbed = true;
@@ -654,7 +654,7 @@
       if (specs.some(function (s) { return s.url === url; })) return; // same file as a palace asset: shared below
       specs.push({
         id: 'wing:' + a.url, key: 'wing:' + a.url, name: a.url.split('/').pop(),
-        kind: a.kind === 'tex' ? 'wtex' : (/طاولة|اثاث/.test(a.url) ? 'wglb-draco' : 'wglb'),
+        kind: a.kind === 'tex' ? 'wtex' : (/طاولة|اثاث|اجتماعات/.test(a.url) ? 'wglb-draco' : 'wglb'),
         wingPath: a.url, url: url, optional: false,
         status: 'pending', loaded: 0, total: 0, error: '', attempt: 0, buf: null, result: null
       });
@@ -1310,9 +1310,8 @@
     group.position.set(portal.x, gy, portal.frontZ);
     ctx.scene.add(group);
     if (ctx.renderer && ctx.renderer.shadowMap) ctx.renderer.shadowMap.enabled = false;
-    // disposeExteriorAfterEntry is off: deleting the whole city here freezes the
-    // loading screen long enough for the tab to be killed and sent back to the start.
-    // holdCull already hides the exterior while the hero is inside.
+    // Release the exterior once the palace is ready; holdCull already hides it
+    // during the transition, and the palace/wings remain retained.
     if (CONFIG.disposeExteriorAfterEntry) {
       try { releaseCity(ctx.scene, ctx.hero); } catch (relErr) { note('release ' + (relErr && relErr.message)); }
     }

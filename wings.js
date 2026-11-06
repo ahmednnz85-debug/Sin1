@@ -2041,10 +2041,11 @@
       state.palaceNear = id === 'Palace' || isArch || (dist.has('Palace') && dist.get('Palace') <= 2);
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
-        // Loading and visibility are separate. Keep all wings drawable so
-        // distant landmarks never pop in; mesh-level frustum culling still
-        // removes off-camera work without releasing or hiding resources.
-        g.visible = true;
+        // Keep nearby connected rooms plus a short visual buffer. This is
+        // render culling only; assets stay cached and are not re-downloaded.
+        const d = dist.has(rr.id) ? dist.get(rr.id) : 99;
+        const near = Math.hypot(rr.bbox.cx - x, rr.bbox.cz - z) <= 40;
+        g.visible = d <= 2 || near;
       });
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
