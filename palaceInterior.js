@@ -8,8 +8,6 @@
     useOptimizedAssets: true,
     useWings: true,
     disposeExteriorAfterEntry: false,
-    releaseCityAfterEntry: true,
-    releaseCityRootsPerFrame: 1,
     hallWidthH: 14,
     hallLengthH: 30,
     hallHeightH: 8,
@@ -38,7 +36,6 @@
     maxPropBytes: 3 * 1024 * 1024,
     maxPropTris: 22000,
     maxPalaceBytes: 25 * 1024 * 1024,
-    maxConcurrentAssetJobs: 3,
     archWidthRatio: 0.30,
     archHeightRatio: 0.64,
     lodDistanceH: 14
@@ -139,7 +136,6 @@
   let lodPacks = [];
   let fireList = [];
   let wingRuntime = null;
-  let cityReleaseQueued = false;
   let lightAssignAt = 0;
   let overlapNotes = [];
   let propsProbed = false;
@@ -246,8 +242,7 @@
       const pair = FILES[key];
       const name = CONFIG.useOptimizedAssets ? pair[0] : pair[1];
       if (!name) return;
-      const deferred = /Lod$/.test(key) || key === 'props';
-      list.push({ id: 'glb:' + key, key: key, name: name, kind: 'glb', url: fileURL(pair), optional: deferred || key === 'stairs' || key === 'door', deferred: deferred });
+      list.push({ id: 'glb:' + key, key: key, name: name, kind: 'glb', url: fileURL(pair), optional: /Lod$/.test(key) || key === 'stairs' || key === 'door' });
     });
     list.forEach(function (s) {
       s.status = 'pending'; s.loaded = 0; s.total = 0; s.error = ''; s.attempt = 0; s.buf = null; s.result = null;
@@ -630,7 +625,7 @@
   function attachWingSpecs() {
     if (wingsProbed || !CONFIG.useWings || !window.PalaceWings || typeof PalaceWings.assetList !== 'function') return;
     wingsProbed = true;
-    PalaceWings.assetList('initial').forEach(function (a) {
+    PalaceWings.assetList().forEach(function (a) {
       const url = bust(encodeURI(a.url));
       if (specs.some(function (s) { return s.url === url; })) return; // same file as a palace asset: shared below
       specs.push({
@@ -775,25 +770,16 @@
     loadPromise = (async function () {
       await attachExistingPropSpecs();
       attachWingSpecs();
-      // Do not fetch/decode every GLB and texture at once. The old Promise.all
-      // created a simultaneous network + parser + GPU upload spike large enough
-      // to evict WebGL on mobile and made the first K1 frame hitch.
-      const jobs = [];
-      let cursor = 0;
-      const worker = async function () {
-        while (cursor < specs.length) {
-          const s = specs[cursor++];
-          if (s.deferred) { s.status = 'skipped'; continue; }
-          try { await settle(s); }
-          catch (err) {
-            if (s.optional) {
-              s.status = 'skipped';
-              console.warn('فشل تحميل الدعامة، يُبقى الشكل المؤقت', s.name, s.error || (err && err.message) || err);
-            }
+      const jobs = specs.map(function (s) {
+        return settle(s).catch(function (err) {
+          if (s.optional) {
+            s.status = 'skipped';
+            console.warn('فشل تحميل الدعامة، يُبقى الشكل المؤقت', s.name, s.error || (err && err.message) || err);
+            return null;
           }
-        }
-      };
-      for (let i = 0; i < Math.min(CONFIG.maxConcurrentAssetJobs, specs.length); i++) jobs.push(worker());
+          return null;
+        });
+      });
       await Promise.all(jobs);
       await shareWingAssets();
       specs.forEach(function (s) { s.buf = null; });
@@ -903,56 +889,29 @@
   }
 
   function releaseCity(scene, hero) {
-    if (!scene || scene.userData.cityReleased || scene.userData.cityReleasePending) return;
-    scene.userData.cityReleasePending = true;
-    const keep = new Set(), protectedGeometry = new Set(), protectedMaterials = new Set(), protectedTextures = new Set();
+    if (!scene || scene.userData.cityReleased) return;
+    scene.userData.cityReleased = true;
+    const keep = new Set();
     function hold(root) {
       if (!root) return;
-      root.traverse(function (o) {
-        keep.add(o);
-        if (o.geometry) protectedGeometry.add(o.geometry);
-        const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-        mats.forEach(function (m) {
-          protectedMaterials.add(m);
-          ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'envMap'].forEach(function (k) {
-            if (m[k]) protectedTextures.add(m[k]);
-          });
-        });
-      });
+      root.traverse(function (o) { keep.add(o); });
     }
-    // The interior and wings can share source buffers with the avenue models.
-    // Collect their resources before disposing anything from the old stage.
     hold(hero);
     hold(group);
-    const wings = scene.getObjectByName('PalaceWings');
-    if (wings) hold(wings);
     scene.traverse(function (o) {
-      if (o.isLight || o.isCamera || o.name === 'SkyPhoto') hold(o);
+      if (o.isLight || o.isCamera || o.isPoints || o.name === 'SkyPhoto') hold(o);
     });
     const drop = [];
     scene.children.forEach(function (ch) {
-      if (keep.has(ch) || ch === group || ch === hero || ch === wings) return;
-      ch.visible = false;
-      scene.remove(ch);
+      if (keep.has(ch) || ch === group || ch === hero) return;
       drop.push(ch);
     });
-    const budget = Math.max(1, CONFIG.releaseCityRootsPerFrame | 0);
-    let cursor = 0;
-    const disposeNext = function () {
-      const end = Math.min(drop.length, cursor + budget);
-      for (; cursor < end; cursor++) {
-        try { disposeObject(drop[cursor], protectedGeometry, protectedMaterials, protectedTextures); } catch (e) { /* keep releasing the remaining roots */ }
-      }
-      if (cursor < drop.length) {
-        requestAnimationFrame(disposeNext);
-        return;
-      }
-      scene.userData.cityReleased = true;
-      scene.userData.cityReleasePending = false;
-      note('city released ' + drop.length + ' roots');
-    };
-    requestAnimationFrame(disposeNext);
-    note('city release queued ' + drop.length + ' roots');
+    drop.forEach(function (ch) {
+      scene.remove(ch);
+      try { disposeObject(ch); } catch (e) { /* keep going */ }
+    });
+    if (scene.userData) scene.userData.cityReleased = true;
+    note('city released ' + drop.length);
   }
 
   let lightsCulled = false;
@@ -1008,15 +967,15 @@
     exteriorHidden = !visible;
   }
 
-  function disposeObject(obj, protectedGeometry, protectedMaterials, protectedTextures) {
+  function disposeObject(obj) {
     obj.traverse(o => {
-      if (o.geometry && !(protectedGeometry && protectedGeometry.has(o.geometry)) && !o.geometry.userData.palaceShared && o.geometry.dispose) o.geometry.dispose();
+      if (o.geometry && !o.geometry.userData.palaceShared && o.geometry.dispose) o.geometry.dispose();
       const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
       mats.forEach(m => {
         ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'envMap'].forEach(k => {
-          if (m[k] && m[k].dispose && !(protectedTextures && protectedTextures.has(m[k])) && !m[k].userData.palaceShared) m[k].dispose();
+          if (m[k] && m[k].dispose && !m[k].userData.palaceShared) m[k].dispose();
         });
-        if (m.dispose && !(protectedMaterials && protectedMaterials.has(m)) && !m.userData.palaceShared) m.dispose();
+        if (m.dispose && !m.userData.palaceShared) m.dispose();
       });
     });
   }
@@ -3089,13 +3048,6 @@
       loadEl.style.opacity = String(1 - easeOut(u));
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
-      // The hall has already completed its material warm-up here and the fade
-      // still hides the scene. Release the previous stage now, before the first
-      // gameplay frame, so city disposal cannot compete with visible geometry.
-      if (warmFrame && CONFIG.releaseCityAfterEntry && !cityReleaseQueued) {
-        cityReleaseQueued = true;
-        try { releaseCity(ctx.scene, ctx.hero); } catch (releaseErr) { note('release queue ' + (releaseErr && releaseErr.message)); }
-      }
       if (u >= 1) {
         loadEl.style.opacity = '0';
         loadEl.style.pointerEvents = 'none';
@@ -3138,14 +3090,6 @@
       const palaceSeen = inWings && (typeof PalaceWings.palaceVisible !== 'function' || PalaceWings.palaceVisible());
       if (group) group.visible = wingRuntime ? (inHall || palaceSeen) : occupant;
       setExteriorVisible(ctx.scene, !occupant);
-      // Do not unload the avenue during the black/loading transition.  Once the
-      // hall is stable and the player is truly inside, remove the previous stage
-      // from the render graph immediately and dispose its GPU resources in small
-      // frame-sized batches so the first visible palace frame stays responsive.
-      if (occupant && CONFIG.releaseCityAfterEntry && !cityReleaseQueued) {
-        cityReleaseQueued = true;
-        try { releaseCity(ctx.scene, ctx.hero); } catch (releaseErr) { note('release queue ' + (releaseErr && releaseErr.message)); }
-      }
       if (ctx.renderer && ctx.renderer.info && ctx.renderer.info.render) {
         const inf = ctx.renderer.info.render;
         if (inf.calls) perfNote = 'calls=' + inf.calls + ' tris=' + inf.triangles;
