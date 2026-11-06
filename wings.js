@@ -1909,7 +1909,7 @@
     finally { state.building = false; deferredLoads.length = 0; }
   }
   function buildNow(ctx, hall) {
-    state.ctx = ctx; state.hall = hall; state.debug = /(?:[?&#])debug=1(?:&|#|$)/.test(location.href);
+    state.ctx = ctx; state.hall = hall; state.debug = false;
     state.root = new THREE.Group(); state.root.name = 'PalaceWings';
     state.root.position.set(ctx.portal.x, hall.floorY || 0, ctx.portal.frontZ); ctx.scene.add(state.root);
     const layout = solveLayout(hall);
@@ -1933,7 +1933,6 @@
     state.root.traverse(o => { if (o.isInstancedMesh || o.isSkinnedMesh) o.frustumCulled = false; });
     wingMark('wings visuals'); rebuildSpatial();
     state.built = true;
-    if (state.debug) createDebugUI();
     updateCulling(true);
     // Models already downloaded behind the palace loading screen are attached
     // now, in the same order the network callbacks used to run after build.
