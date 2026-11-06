@@ -162,8 +162,7 @@
   }
 
   function debugOn() {
-    const href = String(location.href || '');
-    return /(?:[?&#])debug=1(?:&|#|$)/.test(href);
+    return false;
   }
   function wingArchOpen(side, index) {
     return CONFIG.useWings && ((side < 0 && index === 2) || (side > 0 && (index === 0 || index === 2)));
@@ -172,18 +171,32 @@
   function note(msg) {
     LOG.push(Math.round(performance.now()) + ' ' + msg);
     if (LOG.length > 50) LOG.shift();
+    persistEvent('note', msg);
     renderDebug();
   }
 
+  function persistEvent(kind, msg) {
+    try {
+      const key = 'sin.internal-log';
+      const old = JSON.parse(localStorage.getItem(key) || '[]');
+      old.push({ t: Date.now(), kind: kind, message: String(msg) });
+      while (old.length > 240) old.shift();
+      localStorage.setItem(key, JSON.stringify(old));
+    } catch (_) { /* storage can be unavailable in private browsing */ }
+  }
+
   window.addEventListener('error', function (ev) {
-    runtimeErrors.push(String(ev.message || 'error') + (ev.filename ? ' @ ' + String(ev.filename).split('/').pop() + ':' + ev.lineno + ':' + ev.colno : ''));
+    const msg = String(ev.message || 'error') + (ev.filename ? ' @ ' + String(ev.filename).split('/').pop() + ':' + ev.lineno + ':' + ev.colno : '');
+    runtimeErrors.push(msg); persistEvent('error', msg);
     renderDebug();
   });
   window.addEventListener('unhandledrejection', function (ev) {
     const r = ev.reason;
-    runtimeErrors.push('unhandledrejection: ' + (r && (r.stack || r.message) || r));
+    const msg = 'unhandledrejection: ' + (r && (r.stack || r.message) || r);
+    runtimeErrors.push(msg); persistEvent('error', msg);
     renderDebug();
   });
+  window.addEventListener('pagehide', function () { persistEvent('pagehide', state); });
 
   function dir() { return CONFIG.useOptimizedAssets ? 'ارضيات وسقوف/optimized/' : 'assets/'; }
   function bust(url) { return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + BUILD; }
@@ -205,7 +218,7 @@
       '#palace-load .pl-pct{font:600 13px/1 Georgia,serif;letter-spacing:.18em;color:#e1b76f}',
       '#palace-load .pl-err{display:none;white-space:pre-wrap;font:14px/1.65 system-ui,Tahoma,sans-serif;color:#ffb4a0;direction:rtl;width:100%}',
       '#palace-load button{display:none;margin-top:4px;padding:12px 22px;border:1px solid #efce87;background:linear-gradient(100deg,#a9783e,#60421f 58%,#241b12);color:#fff2d1;font:700 16px/1 system-ui,sans-serif;cursor:pointer}',
-      '#palace-debug{display:none;position:fixed;z-index:140;left:4px;right:4px;bottom:4px;max-height:42vh;overflow:auto;background:rgba(0,0,0,.86);color:#d6ffd0;font:11px/1.35 ui-monospace,Menlo,monospace;white-space:pre-wrap;padding:8px;direction:ltr;pointer-events:auto}'
+      ''
     ].join('\n');
     document.head.appendChild(css);
     loadEl = document.createElement('div');
@@ -218,10 +231,6 @@
     errEl = loadEl.querySelector('#palace-err');
     retryBtn = loadEl.querySelector('#palace-retry');
     retryBtn.addEventListener('click', onRetry);
-    debugEl = document.createElement('div');
-    debugEl.id = 'palace-debug';
-    document.body.appendChild(debugEl);
-    if (debugOn()) debugEl.style.display = 'block';
     return loadEl;
   }
 
@@ -355,7 +364,7 @@
   let debugStamp = 0;
   let debugLast = '';
   function renderDebug() {
-    if (!debugOn()) return;
+    return;
     const now = performance.now();
     if (now - debugStamp < 200 && state !== 'FAILED' && state !== 'DONE') return;
     debugStamp = now;
@@ -1206,7 +1215,7 @@
     near.name = 'lod-near';
     far.name = 'lod-far';
     group.add(near, far);
-    lodPacks.push({ near: near, far: far, matrices: matrices, local: locals, limitH: limitH });
+    lodPacks.push({ near: near, far: far, matrices: matrices, local: locals, limitH: limitH, lodState: new Uint8Array(n) });
   }
 
   function makePalaceEnv(renderer) {
@@ -1278,13 +1287,18 @@
     const wp = new THREE.Vector3();
     for (let p = 0; p < lodPacks.length; p++) {
       const pack = lodPacks[p];
-      const lim = (pack.limitH || CONFIG.lodDistanceH) * H;
       let ni = 0;
       let fi = 0;
       for (let i = 0; i < pack.local.length; i++) {
         wp.copy(pack.local[i]);
         group.localToWorld(wp);
-        if (cam.position.distanceTo(wp) > lim) pack.far.setMatrixAt(fi++, pack.matrices[i]);
+        const distance = cam.position.distanceTo(wp);
+        const viewportH = (cam.userData && cam.userData.viewportHeight) || window.innerHeight || 800;
+        const px = viewportH * Math.max(0.25, H * 0.18) / Math.max(1, distance * 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov || 50) * 0.5));
+        let far = pack.lodState[i] === 1;
+        if (far ? px > 20 : px < 14) far = !far;
+        pack.lodState[i] = far ? 1 : 0;
+        if (far) pack.far.setMatrixAt(fi++, pack.matrices[i]);
         else pack.near.setMatrixAt(ni++, pack.matrices[i]);
       }
       pack.near.count = ni;
@@ -2827,6 +2841,7 @@
     gl.canvas.addEventListener('webglcontextlost', function (e) {
       if (e && e.preventDefault) e.preventDefault();
       runtimeErrors.push('webglcontextlost');
+      persistEvent('webglcontextlost', 'webglcontextlost');
       loadError = new Error('فُقد سياق الرسم WebGL — ذاكرة الجهاز لا تكفي لعرض القاعة');
       if (state !== 'DONE' && state !== 'IDLE') {
         state = 'FAILED';
@@ -2971,6 +2986,23 @@
       // per frame on a tiny stand-in, then draw the real hall once.
       if (!warmFrame) {
         holdCull(ctx.scene, ctx.hero);
+        // r147's compile path visits visible objects only. Initialise every
+        // texture explicitly, then warm visible materials behind the opaque
+        // loading cover before allowing the first gameplay frame.
+        const warmRoots = [group, wingRuntime && wingRuntime.root, ctx.hero];
+        warmRoots.forEach(function (root) {
+          if (!root) return;
+          root.traverse(function (o) {
+            const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+            mats.forEach(function (m) {
+              if (!m) return;
+              ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'lightMap'].forEach(function (k) {
+                const tex = m[k];
+                if (tex && ctx.renderer.initTexture) { try { ctx.renderer.initTexture(tex); } catch (_) {} }
+              });
+            });
+          });
+        });
         if (!warmMeshes) {
           const seen = new Set();
           warmMeshes = [];
