@@ -609,6 +609,7 @@
 
   function parseGLB(buf) {
     const loader = new THREE.GLTFLoader();
+    if (window.__ktx2) loader.setKTX2Loader(window.__ktx2);
     return waitDecoder().then(function (dec) {
       if (dec) loader.setMeshoptDecoder(dec);
       return new Promise(function (resolve, reject) {
@@ -623,6 +624,7 @@
   // its own GLTFLoader used to read them.
   function parseRawGLB(buf) {
     const loader = new THREE.GLTFLoader();
+    if (window.__ktx2) loader.setKTX2Loader(window.__ktx2);
     return waitDecoder().then(function (dec) {
       if (dec) loader.setMeshoptDecoder(dec);
       return new Promise(function (resolve, reject) {

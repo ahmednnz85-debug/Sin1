@@ -147,6 +147,41 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="vendor/clipper.js"></script>
+<script src="vendor/KTX2Loader.js"></script>
+<script>
+window.__ktx2 = new THREE.KTX2Loader().setTranscoderPath('vendor/basis/');
+window.__ktxFallback = {
+  'assets/sky_babylon_blood.ktx2': 'assets/sky_babylon_blood.jpeg',
+  'assets/skyline_ring_a.ktx2': 'assets/skyline_ring_a.jpg',
+  'assets/skyline_ring_b.ktx2': 'assets/skyline_ring_b.jpg',
+  'assets/grass_lawn.ktx2': 'assets/grass_lawn.jpg',
+  'assets/grass_dark.ktx2': 'assets/grass_dark.jpg',
+  'assets/grass_moss.ktx2': 'assets/grass_moss.jpg',
+  'assets/ground_zones.ktx2': 'assets/ground_zones.png',
+  'assets/canal_water.ktx2': 'assets/canal_water.jpg',
+  'assets/canal_color.ktx2': 'assets/canal_color.jpg',
+  'assets/canal_normal.ktx2': 'assets/canal_normal.jpg',
+  'assets/canal_rough.ktx2': 'assets/canal_rough.jpg',
+  'assets/palace-glimpse.ktx2': 'assets/palace-glimpse.webp',
+  'assets/marble.ktx2': 'assets/marble.webp',
+  'assets/plaza_stone.ktx2': 'assets/plaza_stone.jpg',
+  'assets/plaza_paving.ktx2': 'assets/plaza_paving.jpg',
+  'assets/plaza_mosaic.ktx2': 'assets/plaza_mosaic.jpg'
+};
+{
+  const load = THREE.TextureLoader.prototype.load;
+  THREE.TextureLoader.prototype.load = function (url, onLoad, onProgress, onError) {
+    const clean = String(url || '').split('?')[0], fallback = window.__ktxFallback[clean];
+    if (!/\.ktx2$/i.test(clean) || !window.__ktx2) return load.call(this, url, onLoad, onProgress, onError);
+    const texture = new THREE.Texture();
+    window.__ktx2.load(url, value => { texture.copy(value); texture.needsUpdate = true; if (onLoad) onLoad(texture); }, onProgress, () => {
+      if (!fallback) { if (onError) onError(new Error('KTX2 failed: ' + url)); return; }
+      load.call(this, fallback, value => { texture.copy(value); texture.needsUpdate = true; if (onLoad) onLoad(texture); }, onProgress, onError);
+    });
+    return texture;
+  };
+}
+</script>
 <script src="palaceInterior.js?v=hall21&cam=20261105a&preload=20261104d"></script>
 <script src="wings.js?corridors=20261103c&k2=20261104c&preload=20261104d&k3=20261105b"></script>
 <script>
@@ -170,6 +205,8 @@ const SUN=new THREE.Vector3(-0.45,0.30,-0.84).normalize();
 const GATE_H=16, GATE_S=GATE_H/0.502, GATE_HD=0.197*GATE_S, GATE_HW=0.5*GATE_S, PASS=1.35;
 const canvas=$('c');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+window.__ktx2.detectSupport(renderer);
+window.__ktx2Ready=window.__ktx2.init();
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.05;
@@ -365,6 +402,7 @@ panel.rotation.set(-Math.PI/2,0,Math.PI);panel.position.set(0,0.04,-17);panel.re
 
 // ---------- loading ----------
 const loader=new THREE.GLTFLoader();
+loader.setKTX2Loader(window.__ktx2);
 const b2b=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer;};
 const loadGLB=k=>new Promise((res,rej)=>{const buf=b2b(B64[k]);B64[k]=null;loader.parse(buf,'',res,rej);});
 const bar=$('bar').firstElementChild;
