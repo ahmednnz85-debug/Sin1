@@ -88,7 +88,7 @@ palace-glimpse.webp,assets/palace-glimpse.webp,texture,see notes,none — one co
 plaza_mosaic.jpg,assets/plaza_mosaic.jpg,texture,see notes,none — one continuous world,,0.73 MB,,,,not-started,referenced in runtime
 plaza_paving.jpg,assets/plaza_paving.jpg,texture,see notes,none — one continuous world,,0.61 MB,,,,not-started,referenced in runtime
 plaza_stone.jpg,assets/plaza_stone.jpg,texture,see notes,none — one continuous world,,0.38 MB,,,,not-started,referenced in runtime
-sky_babylon_blood.jpeg,assets/sky_babylon_blood.jpeg,texture,see notes,none — one continuous world,,0.19 MB,,,,not-started,referenced in runtime
+sky_sin_360.webp,assets/sky_sin_360.webp,texture,permanent Sin sky from supplied سماء سين.JPG,none — one continuous world,,1.54 MB,,,,ready,2048x1024 lossless panorama; separate calibrated linear PMREM lighting source
 skyline_ring_a.jpg,assets/skyline_ring_a.jpg,texture,see notes,none — one continuous world,,0.27 MB,,,,not-started,referenced in runtime
 skyline_ring_b.jpg,assets/skyline_ring_b.jpg,texture,see notes,none — one continuous world,,0.26 MB,,,,not-started,referenced in runtime
 ارضية الخرائط.JPG,assets/ارضية الخرائط.JPG,texture,K3 map room floor,K3,,0.25 MB,,,,not-started,WING_FILES.k3Floor. One centred square copy so the sun medallion stays round.
