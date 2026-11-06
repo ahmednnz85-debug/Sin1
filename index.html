@@ -79,7 +79,7 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
  .settings-card h2{margin:12px 0 28px;font:600 clamp(24px,4vw,38px)/1.2 Georgia,serif;color:#edd19a;letter-spacing:.07em}
  .settings-card label{display:flex;justify-content:space-between;gap:12px;margin:22px 0 10px;font-size:12px;letter-spacing:.08em;color:#e5d5b6}
  #sensitivity{width:100%;accent-color:#d1a260;touch-action:auto}
- #quality-setting{margin:20px 0 12px}
+ #quality-setting{margin:20px 0 12px}#perf-setting{min-height:44px;width:100%;margin:14px 0 4px;padding:8px 18px;border:1px solid rgba(225,183,111,.42);border-radius:2px;color:#f6e9d2;background:rgba(20,16,12,.6);font:inherit;letter-spacing:.06em}
  .settings-note{font-size:12px;line-height:1.7;color:rgba(238,224,193,.7)}
  #settings-back{width:auto;min-width:150px;justify-content:center;margin-top:14px}
  #orient-gate{display:none;position:fixed;inset:0;z-index:300;align-items:center;justify-content:center;padding:calc(24px + env(safe-area-inset-top,0px)) 24px calc(24px + env(safe-area-inset-bottom,0px));background:#0b0805;color:#f4e6cd;text-align:center}
@@ -139,6 +139,9 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
       <label for="sensitivity"><span>CAMERA / TOUCH SENSITIVITY</span><span id="sensitivity-value">5 / 10</span></label>
       <input id="sensitivity" type="range" min="1" max="10" step="1" value="5" aria-label="Camera and touch sensitivity">
       <button id="quality-setting" type="button">GRAPHICS QUALITY <span id="quality-value">HIGH</span></button>
+      <label for="fov"><span>CAMERA FOV (HORIZONTAL)</span><span id="fov-value">73°</span></label>
+      <input id="fov" type="range" min="60" max="90" step="1" value="73" aria-label="Camera field of view">
+      <button id="perf-setting" type="button" class="perf-toggle">PERFORMANCE MONITOR <span id="perf-value">OFF</span></button>
       <p class="settings-note">يُحفظ مستوى الجودة وحساسية الكاميرا محليًا إن سمح المتصفح. لا يوجد نظام صوت أو حفظ تقدّم في النسخة الحالية.</p>
       <button id="settings-back" type="button">BACK&nbsp; / &nbsp;العودة</button>
     </div>
@@ -147,6 +150,7 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="cinematic.js?v=20261106a"></script>
 <script src="vendor/clipper.js"></script>
 <script src="palaceInterior.js?v=hall21&cam=20261105a&preload=20261104d"></script>
 <script src="wings.js?corridors=20261103c&k2=20261104c&preload=20261104d&k3=20261105b"></script>
@@ -181,7 +185,7 @@ const CAM_VFOV=42,CAM_LOOK=1.18,CAM_DIST=3.45,CAM_PITCH=0.22;
 const camera=new THREE.PerspectiveCamera(CAM_VFOV,1,0.1,3000);
 let hq=readPreference('quality')!=='low';
 renderer.shadowMap.enabled=hq;
-function resize(){const w=Math.max(1,Math.round(window.visualViewport?.width||innerWidth)),h=Math.max(1,Math.round(window.visualViewport?.height||innerHeight));renderer.setPixelRatio(1);renderer.setSize(w,h,false);camera.fov=CAM_VFOV;camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();document.documentElement.classList.toggle('portrait-lock',h>w+8);}
+function resize(){const w=Math.max(1,Math.round(window.visualViewport?.width||innerWidth)),h=Math.max(1,Math.round(window.visualViewport?.height||innerHeight));renderer.setPixelRatio(window.SinGfx?SinGfx.pixelRatio():1);renderer.setSize(w,h,false);if(!window.SinGfx)camera.fov=CAM_VFOV;camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();document.documentElement.classList.toggle('portrait-lock',h>w+8);}
 let landscapeRequestAt=0;
 async function requestLandscape(force){
   if(!matchMedia('(pointer:coarse)').matches)return;
@@ -278,13 +282,17 @@ const hemi=new THREE.HemisphereLight(0x86a8dc,0x8a6a45,0.55); scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffc48a,3.1); sun.castShadow=true;
 sun.shadow.camera.left=-32;sun.shadow.camera.right=32;sun.shadow.camera.top=32;sun.shadow.camera.bottom=-32;sun.shadow.camera.near=1;sun.shadow.camera.far=170;
 sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.06; sun.shadow.camera.layers.enable(1); scene.add(sun); scene.add(sun.target);
-function setShadowRes(){const r=hq?2048:1024; if(sun.shadow.mapSize.x!==r){sun.shadow.mapSize.set(r,r); if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}}}
+function setShadowRes(){if(window.SinGfx)return;const r=hq?2048:1024; if(sun.shadow.mapSize.x!==r){sun.shadow.mapSize.set(r,r); if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}}}
 
 // ===================== EXTRAS: cinematic golden-hour lighting matched to the sky =====================
 renderer.toneMappingExposure=1.10;
 sun.color.setRGB(1.0,0.70,0.38); sun.intensity=3.6;                  // low golden sun, same direction as the sun in the sky
 hemi.color.setRGB(0.40,0.60,0.82); hemi.groundColor.setRGB(0.56,0.38,0.20); hemi.intensity=0.9; // teal-blue sky fill + golden ground bounce
 const fillL=new THREE.DirectionalLight(0x000000,0.55); fillL.color.setRGB(0.32,0.55,0.85); fillL.position.set(-SUN.x*60,38,-SUN.z*60); scene.add(fillL); // cold fill from the opposite side (teal/orange contrast)
+// ---------- cinematic quality layer (cinematic.js): tiers, adaptive governor, height fog, stable sun shadow ----------
+const isInteriorNow=()=>!!(window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround());
+if(window.SinGfx)hq=SinGfx.install({renderer,scene,camera,sun,hemi,fill:fillL,sunDir:SUN,interiorFov:CAM_VFOV,isInterior:isInteriorNow,resize:()=>resize(),
+  onTier:(h)=>{hq=h;const g=document.getElementById('grade');if(g)g.style.display=hq?'':'none';if(window.__syncQualityLabels)window.__syncQualityLabels();if(typeof dust!=='undefined'&&dust)dust.geometry.setDrawRange(0,SinGfx.dustCount());_shx=1e9;}});
 
 // ---------- procedural ground textures (no ground model was supplied) ----------
 function cnv(w,h,f){const c=document.createElement('canvas');c.width=w;c.height=h;f(c.getContext('2d'),w,h);return c;}
@@ -384,7 +392,7 @@ const loader=new THREE.GLTFLoader();
 const b2b=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer;};
 const loadGLB=k=>new Promise((res,rej)=>{const buf=b2b(B64[k]);B64[k]=null;loader.parse(buf,'',res,rej);});
 const bar=$('bar').firstElementChild;
-function prep(root,{cast=false,recv=true}={}){root.traverse(o=>{if(o.isMesh){o.castShadow=cast;o.receiveShadow=recv;if(o.isSkinnedMesh)o.frustumCulled=false;const m=o.material;if(m){m.envMapIntensity=.7;['map','normalMap','metalnessMap','roughnessMap'].forEach(n=>{if(m[n])m[n].anisotropy=8;});}}});}
+function prep(root,{cast=false,recv=true}={}){root.traverse(o=>{if(o.isMesh){o.castShadow=cast;o.receiveShadow=recv;if(o.isSkinnedMesh)o.frustumCulled=false;const m=o.material;if(m){{const ro=m.roughness==null?1:m.roughness,me=m.metalness==null?0:m.metalness;m.envMapIntensity=.45+.35*(1-ro)+.4*me;}['map','normalMap','metalnessMap','roughnessMap'].forEach(n=>{if(m[n])m[n].anisotropy=8;});}}});}
 function place(src,{h,minY,x,z,ry=0,s=1,cast=false}){ // static model: base on the ground
   const o=src.clone(true);prep(o,{cast});const sc=h*s;const g=new THREE.Group();o.scale.setScalar(sc);o.position.y=-minY*sc;g.add(o);g.position.set(x,0,z);g.rotation.y=ry;scene.add(g);return g;}
 
@@ -914,12 +922,12 @@ function updateVeg(){
   if(!vegChunks.length)return;
   camera.updateMatrixWorld();
   _vm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);_vf.setFromProjectionMatrix(_vm);
-  const cx=camera.position.x,cz=camera.position.z;
+  const cx=camera.position.x,cz=camera.position.z,vk=window.SinGfx?SinGfx.vegScale():1;
   for(let i=0;i<vegChunks.length;i++){
     const c=vegChunks[i],dx=c.x-cx,dz=c.z-cz,dn=Math.max(0,Math.sqrt(dx*dx+dz*dz)-c.r);
     let lod=-1;
-    if((hq||!c.optional)&&dn<(hq?c.maxHQ:c.maxLQ)){
-      lod=dn<c.lodD[0]?0:dn<c.lodD[1]?1:2;if(!hq&&lod<c.minLodLQ)lod=c.minLodLQ;
+    if((hq||!c.optional)&&dn<(hq?c.maxHQ:c.maxLQ)*vk){
+      lod=dn<c.lodD[0]*vk?0:dn<c.lodD[1]*vk?1:2;if(!hq&&lod<c.minLodLQ)lod=c.minLodLQ;
       _vs.center.set(c.x,c.y,c.z);_vs.radius=c.r;if(!_vf.intersectsSphere(_vs))lod=-1;}
     for(let k=0;k<3;k++){const g=c.lods[k];if(g)g.visible=(k===lod);}
   }
@@ -930,7 +938,7 @@ function updateExtras(){
   _vm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);_vf.setFromProjectionMatrix(_vm);
   for(let i=0;i<extras.length;i++){
     const e=extras[i],dx=e.x-cx,dz=e.z-cz,lim=Rm+e.r;
-    let vis=(hq||!e.optional)&&dx*dx+dz*dz<lim*lim;
+    const lim2=(e.shadow&&window.SinGfx)?Math.min(lim,SinGfx.potRange()):lim;let vis=(hq||!e.optional)&&dx*dx+dz*dz<lim2*lim2;
     if(vis){_vs.center.set(e.x,e.y==null?4:e.y,e.z);_vs.radius=Math.max(e.r*1.2,8);if(!_vf.intersectsSphere(_vs))vis=false;}
     e.g.visible=vis;
   }
@@ -943,7 +951,7 @@ function updateShadowCasters(){
   const hx=heroRoot.position.x,hz=heroRoot.position.z,dx=hx-_shx,dz=hz-_shz;
   if(dx*dx+dz*dz<9)return;
   _shx=hx;_shz=hz;
-  const R2=46*46;
+  const R2s=window.SinGfx?SinGfx.potShadowRange():46,R2=R2s*R2s;
   for(let i=0;i<extras.length;i++){
     const e=extras[i]; if(!e.shadow)continue;
     const on=(e.x-hx)*(e.x-hx)+(e.z-hz)*(e.z-hz)<R2;
@@ -1215,7 +1223,7 @@ let dust;const DN=500,DP=new Float32Array(DN*3);
 function buildDust(){for(let i=0;i<DN;i++){DP[i*3]=(rnd()-.5)*60;DP[i*3+1]=rnd()*14;DP[i*3+2]=(rnd()-.5)*60;}
   const c=cnv(64,64,(g)=>{const r=g.createRadialGradient(32,32,0,32,32,32);r.addColorStop(0,'rgba(255,205,140,1)');r.addColorStop(1,'rgba(255,205,140,0)');g.fillStyle=r;g.fillRect(0,0,64,64);});
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(DN*3),3));
-  dust=new THREE.Points(geo,new THREE.PointsMaterial({map:new THREE.CanvasTexture(c),size:.22,transparent:true,opacity:.40,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));dust.frustumCulled=false;scene.add(dust);}
+  dust=new THREE.Points(geo,new THREE.PointsMaterial({map:new THREE.CanvasTexture(c),size:.22,transparent:true,opacity:.40,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));dust.frustumCulled=false;if(window.SinGfx)geo.setDrawRange(0,SinGfx.dustCount());scene.add(dust);}
 function updateDust(t){if(!dust)return;const a=dust.geometry.attributes.position.array,cx=heroRoot.position.x,cz=heroRoot.position.z;
   for(let i=0;i<DN;i++){const x=DP[i*3]+Math.sin(t*.2+i)*.6,y=(DP[i*3+1]+t*.15+i%7*.1)%14,z=DP[i*3+2]+Math.cos(t*.17+i)*.6;
     a[i*3]=cx+((x+30)%60+60)%60-30;a[i*3+1]=y;a[i*3+2]=cz+((z+30)%60+60)%60-30;}
@@ -1248,10 +1256,12 @@ const endRun=e=>{if(runPointerId===null||e.pointerId===runPointerId){runPointerI
 ['pointerup','pointercancel','lostpointercapture'].forEach(n=>runB.addEventListener(n,endRun));
 addEventListener('keydown',e=>{inp.keys[e.code]=true;});addEventListener('keyup',e=>{inp.keys[e.code]=false;});
 addEventListener('blur',()=>{inp.x=inp.y=0;inp.run=false;runPointerId=null;const center=stickEl.offsetWidth/2-knob.offsetWidth/2;knob.style.transform='none';knob.style.left=center+'px';knob.style.top=center+'px';for(const k in inp.keys)inp.keys[k]=false;});
-function setQuality(high){hq=!!high;const label=hq?'HIGH':'LOW';$('qual').textContent='الجودة: '+(hq?'عالية':'منخفضة');$('quality-value').textContent=label;renderer.shadowMap.enabled=hq;scene.traverse(o=>{if(o.material)o.material.needsUpdate=true;});setShadowRes();resize();$('grade').style.display=hq?'':'none';savePreference('quality',hq?'high':'low');}
+function __syncQualityLabels(){const G=window.SinGfx;const lab=G?G.label():(hq?'HIGH':'LOW');$('quality-value').textContent=lab;$('qual').textContent='الجودة: '+(G?{low:'منخفضة',medium:'متوسطة',high:'عالية'}[G.tier()]+(G.mode()==='auto'?' (تلقائي)':''):(hq?'عالية':'منخفضة'));}
+window.__syncQualityLabels=__syncQualityLabels;
+function setQuality(high){if(window.SinGfx){SinGfx.cycleMode();__syncQualityLabels();scene.traverse(o=>{if(o.material)o.material.needsUpdate=true;});savePreference('quality',hq?'high':'low');return;}hq=!!high;const label=hq?'HIGH':'LOW';$('qual').textContent='الجودة: '+(hq?'عالية':'منخفضة');$('quality-value').textContent=label;renderer.shadowMap.enabled=hq;scene.traverse(o=>{if(o.material)o.material.needsUpdate=true;});setShadowRes();resize();$('grade').style.display=hq?'':'none';savePreference('quality',hq?'high':'low');}
 $('qual').addEventListener('click',()=>setQuality(!hq));
 $('quality-setting').addEventListener('click',()=>setQuality(!hq));
-$('quality-value').textContent=hq?'HIGH':'LOW';$('qual').textContent='الجودة: '+(hq?'عالية':'منخفضة');
+__syncQualityLabels();if(window.SinGfx){$('fov').value=String(SinGfx.fov());$('fov-value').textContent=SinGfx.fov()+'°';$('fov').addEventListener('input',()=>{SinGfx.setFov($('fov').value);$('fov-value').textContent=SinGfx.fov()+'°';});$('perf-setting').addEventListener('click',()=>{SinGfx.setPerf(!SinGfx.perfOn());$('perf-value').textContent=SinGfx.perfOn()?'ON':'OFF';});$('perf-value').textContent=SinGfx.perfOn()?'ON':'OFF';}
 $('settings-open').addEventListener('click',()=>{$('main-menu').style.display='none';$('settings-menu').style.display='flex';});
 $('settings-back').addEventListener('click',()=>{$('settings-menu').style.display='none';$('main-menu').style.display='block';});
 
@@ -1787,7 +1797,7 @@ async function buildRoyalDoor(gltf,heroModel){
 const blocked=(x,z)=>{if(window.PalaceInterior&&PalaceInterior.ownsGround())return PalaceInterior.blocks(x,z);if(royalDoor.blocks(x,z))return true;if(palaceBlocked(x,z))return true;if(Math.abs(z)<GATE_HD+.4&&Math.abs(x)>PASS&&Math.abs(x)<GATE_HW+.3)return true;for(const c of colliders){const dx=x-c[0],dz=z-c[1];if(dx*dx+dz*dz<c[2]*c[2])return true;}return false;};
 function clipFollowCamera(want,hx,hy,hz){
   const dx=want.x-hx,dy=want.y-hy,dz=want.z-hz,A=dx*dx+dz*dz;
-  if(A<0.08)return;
+  if(A<0.08)return 1;
   let best=1;
   for(let i=0;i<colliders.length;i++){
     const c=colliders[i],rr=c[2]+0.42,vx=hx-c[0],vz=hz-c[1];
@@ -1797,7 +1807,8 @@ function clipFollowCamera(want,hx,hy,hz){
     const t=(-B-Math.sqrt(disc))/(2*A);
     if(t>0.05&&t<best)best=t;
   }
-  if(best<0.97){const t=Math.max(0.24,best*0.9);want.x=hx+dx*t;want.y=hy+dy*t;want.z=hz+dz*t;}
+  if(best<0.97)return Math.max(0.24,best*0.9);
+  return 1;
 }
 const ease=t=>t*t*(3-2*t);
 const SKY_FADE_SECONDS=5.8,SKY_POST_GATE_DISTANCE=5.5;
@@ -1806,7 +1817,7 @@ const camStart=new THREE.Vector3(6,1.6,-56),gateTop=new THREE.Vector3(0,9,0),wan
 // cinematic intro path: start at the head of the walkway, sweep across the market stalls, then rise to the Ishtar gate, then settle behind the hero
 const cP0=new THREE.Vector3(-4.2,1.7,-71),cP1=new THREE.Vector3(3.6,2.4,-60),cP2=new THREE.Vector3(0,3.6,-46),cL0=new THREE.Vector3(-10.5,2.6,-60),cL1=new THREE.Vector3(10.5,2.6,-50),tmpP=new THREE.Vector3(),tmpL=new THREE.Vector3(),hv=new THREE.Vector3();
 const smx=(a,b,t)=>ease(Math.max(0,Math.min(1,(t-a)/(b-a))));
-function loop(ts){requestAnimationFrame(loop);try{const portraitBlocked=document.documentElement.classList.contains('portrait-lock');if(portraitBlocked&&window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl())requestLandscape();if(window.__holdSim){renderer.render(scene,camera);return;}const t=ts/1000;const qaFast=new URLSearchParams(location.search).has('qa');const insideHall=window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround();const interiorBusy=window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl();const frameDt=Math.max(0.001,Math.min(!qaFast?0.05:interiorBusy?0.05:insideHall?0.35:2,(t-last)||0.016));last=t;const steps=(qaFast&&!interiorBusy)?Math.max(1,Math.round(frameDt/0.05)):1;const dtStep=frameDt/steps;for(let __qaStep=0;__qaStep<steps;__qaStep++){const dt=dtStep;tAcc+=dt;const heroZBefore=heroRoot.position.z;
+function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';SinGfx.frame(ts,state==='loading'||ps_==='LOADING'||ps_==='SETUP'||ps_==='FADING_OUT');}const portraitBlocked=document.documentElement.classList.contains('portrait-lock');if(portraitBlocked&&window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl())requestLandscape();if(window.__holdSim){renderer.render(scene,camera);return;}const t=ts/1000;const qaFast=new URLSearchParams(location.search).has('qa');const insideHall=window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround();const interiorBusy=window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl();const frameDt=Math.max(0.001,Math.min(!qaFast?0.05:interiorBusy?0.05:insideHall?0.35:2,(t-last)||0.016));last=t;const steps=(qaFast&&!interiorBusy)?Math.max(1,Math.round(frameDt/0.05)):1;const dtStep=frameDt/steps;for(let __qaStep=0;__qaStep<steps;__qaStep++){const dt=dtStep;tAcc+=dt;const heroZBefore=heroRoot.position.z;
 
   const intro=introT>=0&&introT<INTRO;if(introT>=0&&introT<INTRO)introT+=dt;
   royalDoor.update(dt,introT>=INTRO);const doorCinematic=royalDoor.active();
@@ -1854,7 +1865,9 @@ function loop(ts){requestAnimationFrame(loop);try{const portraitBlocked=document
   if(window.PalaceInterior)PalaceInterior.tick(dt,{doorOpen:royalDoor.open(),hero:heroRoot,setFacing:v=>{heroYaw=v;yaw=v;},camera,renderer,scene,portal:royalDoor.portal()});
   // camera
   const hp=heroRoot.position,cp=Math.cos(pitch);
-  const hx=hp.x,hy=hp.y+CAM_LOOK,hz=hp.z;
+  // over-the-shoulder pivot: shifted to the hero's right along the camera's right axis (controls still use yaw)
+  const shK=window.SinGfx?SinGfx.camera.shoulder:0;
+  const hx=hp.x-Math.cos(yaw)*shK,hy=hp.y+CAM_LOOK,hz=hp.z+Math.sin(yaw)*shK;
   want.set(hx-Math.sin(yaw)*cp*dist,hy+Math.sin(pitch)*dist,hz-Math.cos(yaw)*cp*dist);
   if(Math.abs(want.z)<GATE_HD+.5&&want.y<GATE_H)want.x=Math.max(-PASS+.3,Math.min(PASS-.3,want.x));
   want.y=Math.max(.5,want.y);
@@ -1866,11 +1879,12 @@ function loop(ts){requestAnimationFrame(loop);try{const portraitBlocked=document
   else if(royalDoor.updateCamera(dt)){}
   else if(window.PalaceInterior&&PalaceInterior.ownsCamera()){}
   else if(insideHall&&window.PalaceInterior.followCamera&&PalaceInterior.followCamera(camera,hp,yaw,pitch,dist,dt)){}
-  else{if(insideHall&&window.PalaceInterior.clampFollowTarget)window.PalaceInterior.clampFollowTarget(want);else clipFollowCamera(want,hx,hy,hz);camera.position.lerp(want,introT>=0?1-Math.pow(.0008,dt):1);followCam=true;}
+  else{if(insideHall&&window.PalaceInterior.clampFollowTarget)window.PalaceInterior.clampFollowTarget(want);else{let ct=clipFollowCamera(want,hx,hy,hz);if(window.SinGfx)ct=SinGfx.smoothClip(ct,dt);if(ct<1){want.x=hx+(want.x-hx)*ct;want.y=hy+(want.y-hy)*ct;want.z=hz+(want.z-hz)*ct;}}camera.position.lerp(want,introT>=0?1-Math.pow(.0008,dt):1);followCam=true;}
   if(window.PalaceInterior&&PalaceInterior.constrainCamera)PalaceInterior.constrainCamera(camera,hp);
   if(followCam)camera.lookAt(hx,hy,hz);
   sky.position.copy(camera.position);updateSkyline();
-  sun.position.copy(hp).addScaledVector(SUN,80);sun.target.position.copy(hp);sun.target.updateMatrixWorld();
+  sun.position.copy(hp).addScaledVector(SUN,80);sun.target.position.copy(hp);if(window.SinGfx)SinGfx.snapShadow(hp);else sun.target.updateMatrixWorld();
+  if(window.SinGfx)SinGfx.update(dt,{babylon:skyTransition.started,courtyard:hp.z>PL_Z0+4&&!isInteriorNow(),running:!!run&&moving});
   updateDust(tAcc);updateWater(tAcc);if(!(window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround()))updateExtras();}if(window.PalaceInterior&&PalaceInterior.holdCull)PalaceInterior.holdCull(scene,heroRoot);const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';if(palaceState!=='FADING_OUT'&&palaceState!=='LOADING'&&palaceState!=='SETUP'&&palaceState!=='FAILED'&&palaceState!=='REVEAL')renderer.render(scene,camera);}catch(e){console.error('loop',e);}}
 init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);});
 })();
