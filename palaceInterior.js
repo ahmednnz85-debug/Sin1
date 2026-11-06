@@ -1215,7 +1215,7 @@
     near.name = 'lod-near';
     far.name = 'lod-far';
     group.add(near, far);
-    lodPacks.push({ near: near, far: far, matrices: matrices, local: locals, limitH: limitH });
+    lodPacks.push({ near: near, far: far, matrices: matrices, local: locals, limitH: limitH, lodState: new Uint8Array(n) });
   }
 
   function makePalaceEnv(renderer) {
@@ -1287,13 +1287,18 @@
     const wp = new THREE.Vector3();
     for (let p = 0; p < lodPacks.length; p++) {
       const pack = lodPacks[p];
-      const lim = (pack.limitH || CONFIG.lodDistanceH) * H;
       let ni = 0;
       let fi = 0;
       for (let i = 0; i < pack.local.length; i++) {
         wp.copy(pack.local[i]);
         group.localToWorld(wp);
-        if (cam.position.distanceTo(wp) > lim) pack.far.setMatrixAt(fi++, pack.matrices[i]);
+        const distance = cam.position.distanceTo(wp);
+        const viewportH = (cam.userData && cam.userData.viewportHeight) || window.innerHeight || 800;
+        const px = viewportH * Math.max(0.25, H * 0.18) / Math.max(1, distance * 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov || 50) * 0.5));
+        let far = pack.lodState[i] === 1;
+        if (far ? px > 20 : px < 14) far = !far;
+        pack.lodState[i] = far ? 1 : 0;
+        if (far) pack.far.setMatrixAt(fi++, pack.matrices[i]);
         else pack.near.setMatrixAt(ni++, pack.matrices[i]);
       }
       pack.near.count = ni;

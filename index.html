@@ -818,7 +818,7 @@ async function buildNewTrees(old, oldPalm, oldBox, oldHeight){
         g.add(mesh);});
       scene.add(g);return g;});
     list.forEach(t=>{if(Math.abs(t.x)<90)colliders.push([t.x,t.z,0.45+0.04*t.h]);});   // trunk collider, only where the player could ever get close
-    vegChunks.push({x:sph.center.x,y:sph.center.y,z:sph.center.z,r:sph.radius,optional:list[0].optional,lods,lodD:[48,105],maxHQ:178,maxLQ:115,minLodLQ:0});
+    vegChunks.push({x:sph.center.x,y:sph.center.y,z:sph.center.z,r:sph.radius,optional:false,lods,lodD:[48,105],maxVisible:178,lodCurrent:0});
     total+=list.length;
   }
   // Both palm kinds, compressed, screening the horizon of the distant buildings at the start of the walkway.
@@ -862,7 +862,7 @@ async function buildNewTrees(old, oldPalm, oldBox, oldHeight){
     }
     scene.add(g);
     spots.forEach(t=>{if(Math.abs(t.x)<80)colliders.push([t.x,t.z,0.55]);});
-    vegChunks.push({x:0,y:8,z:-90,r:120,optional:false,lods:[g,null,null],lodD:[240,400],maxHQ:260,maxLQ:170,minLodLQ:0});
+    vegChunks.push({x:0,y:8,z:-90,r:120,optional:false,lods:[g,null,null],lodD:[240,400],maxVisible:260,lodCurrent:0});
   }catch(e){console.warn('start horizon skipped',e);}
   return L;
 }
@@ -889,7 +889,7 @@ async function buildNewGrass(){
         mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;
         g.add(mesh);any=true;}
       if(any)scene.add(g);return any?g:null;});
-    vegChunks.push({x:ch.cx,y:0.4,z:ch.cz,r:CS*0.75,optional:false,lods,lodD:[14,34],maxHQ:95,maxLQ:55,minLodLQ:1});
+    vegChunks.push({x:ch.cx,y:0.4,z:ch.cz,r:CS*0.75,optional:false,lods,lodD:[14,34],maxVisible:95,lodCurrent:0});
   }
   return tufts.length;
 }
@@ -899,22 +899,28 @@ function updateVeg(){
   camera.updateMatrixWorld();
   _vm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);_vf.setFromProjectionMatrix(_vm);
   const cx=camera.position.x,cz=camera.position.z;
+  const viewportH=renderer.domElement.height||innerHeight, pxScale=viewportH/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov)*0.5));
   for(let i=0;i<vegChunks.length;i++){
     const c=vegChunks[i],dx=c.x-cx,dz=c.z-cz,dn=Math.max(0,Math.sqrt(dx*dx+dz*dz)-c.r);
-    let lod=-1;
-    if((hq||!c.optional)&&dn<(hq?c.maxHQ:c.maxLQ)){
-      lod=dn<c.lodD[0]?0:dn<c.lodD[1]?1:2;if(!hq&&lod<c.minLodLQ)lod=c.minLodLQ;
-      _vs.center.set(c.x,c.y,c.z);_vs.radius=c.r;if(!_vf.intersectsSphere(_vs))lod=-1;}
+    let lod=c.lodCurrent||0;
+    const px=pxScale*c.r/Math.max(1,dn);
+    if(lod===0&&px<42)lod=1;
+    else if(lod===1&&(px>50||px<14))lod=px>50?0:2;
+    else if(lod===2&&px>20)lod=px>50?0:1;
+    _vs.center.set(c.x,c.y,c.z);_vs.radius=c.r;
+    if(!_vf.intersectsSphere(_vs))lod=-1;
+    if(lod>=0)while(lod>0&&!c.lods[lod])lod--;
+    c.lodCurrent=lod<0?(c.lodCurrent||0):lod;
     for(let k=0;k<3;k++){const g=c.lods[k];if(g)g.visible=(k===lod);}
   }
 }
 function updateExtras(){
-  const Rm=hq?175:115,cx=camera.position.x,cz=camera.position.z;
+  const Rm=175,cx=camera.position.x,cz=camera.position.z;
   camera.updateMatrixWorld();
   _vm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);_vf.setFromProjectionMatrix(_vm);
   for(let i=0;i<extras.length;i++){
     const e=extras[i],dx=e.x-cx,dz=e.z-cz,lim=Rm+e.r;
-    let vis=(hq||!e.optional)&&dx*dx+dz*dz<lim*lim;
+    let vis=dx*dx+dz*dz<lim*lim;
     if(vis){_vs.center.set(e.x,e.y==null?4:e.y,e.z);_vs.radius=Math.max(e.r*1.2,8);if(!_vf.intersectsSphere(_vs))vis=false;}
     e.g.visible=vis;
   }
