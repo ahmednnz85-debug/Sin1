@@ -34,7 +34,6 @@
   --------------------------------------------------------------------------- */
   const OPT_DIR = 'ارضيات وسقوف/optimized/';
   const WING_FILES = {
-    k1: OPT_DIR + 'K1_RoyalReceptionHall.glb',
     corridorFloor: 'assets/ارضية الممرات.JPG',
     corridorCeiling: OPT_DIR + 'سقف-الممرات.webp',
     corridorWall: 'assets/جدار الممرات.jpg',
@@ -63,7 +62,7 @@
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
   function assetList(stage) {
-    const keys = stage === 'initial' ? ['k1'] : Object.keys(WING_FILES);
+    const keys = stage === 'initial' ? [] : Object.keys(WING_FILES);
     return keys.map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
       .filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
   }
@@ -220,10 +219,7 @@
       doors.push(d); links.push([a, b, id]); return d;
     }
 
-    // K1_RoyalReceptionHall.glb is authored as a 39m-long by 28m-wide hall,
-    // with its two gates on the local Z ends.  K1 is entered/exited from the
-    // west/east sides of the wing layout, so the room follows that footprint
-    // and the loader rotates the asset once to put both gates on those sides.
+    // K1 keeps the procedural reception-hall footprint and architecture.
     const K1 = addRoom(rectRegion('K1', 'Kings', ROOM_NAMES.K1, -back - 39, zK - 14, 39, 28, 8.5)); K1.ceiling = false;
     const KC12 = addCon(rectRegion('KC12', 'Kings', 'Kings corridor', K1.bbox.x0 - 8, zK - 3, 8, 6, 6, 'corridor'));
     const K2 = addRoom(rectRegion('K2', 'Kings', ROOM_NAMES.K2, KC12.bbox.x0 - 31, zK, 30, 24, 9));
@@ -615,100 +611,6 @@
     wall(b.x0 + 1, b.x1 - 1, b.z0 + 0.45, true); wall(b.x0 + 1, b.x1 - 1, b.z1 - 0.45, true);
     if (b.z1 - b.z0 > 8) { wall(b.z0 + 1, b.z1 - 1, b.x0 + 0.45, false); wall(b.z0 + 1, b.z1 - 1, b.x1 - 0.45, false); }
   }
-  function loadK1Model(r, parent) {
-    if (!window.THREE || !window.THREE.GLTFLoader) {
-      console.warn('GLTFLoader not available for K1 model');
-      return;
-    }
-    const url = WING_FILES.k1;
-    wingGLB(url, function (gltf) {
-      const model = gltf.scene;
-      model.name = 'K1-RoyalReceptionHall';
-      // K1 is non-uniformly fitted after rotation. Disable per-mesh frustum
-      // culling so stale GLTF bounds cannot make the hall disappear when the
-      // player enters from the palace alcove.
-      model.traverse(function (node) {
-        if (node.isMesh) { node.frustumCulled = false; node.visible = true; }
-      });
-      // The source GLB contains KHR_lights_punctual nodes at intensity 90-120.
-      // Three.js instantiates them during parsing; keeping them causes the
-      // white exposure spike when the player enters K1.  The game owns its
-      // lighting, so keep the visible fixtures but remove only embedded lights.
-      const embeddedLightNodes = [];
-      model.traverse(function (node) {
-        if (!node.isLight) return;
-        embeddedLightNodes.push(node);
-      });
-      embeddedLightNodes.forEach(function (node) { if (node.parent) node.parent.remove(node); });
-      const embeddedLights = embeddedLightNodes.length;
-      model.updateMatrixWorld(true);
-      // Gates are authored on Z; rotate them onto the room's west/east arches.
-      model.rotation.y = Math.PI * 0.5;
-      model.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(model);
-      const size = box.getSize(new THREE.Vector3());
-      const gateCenters = {};
-      model.traverse(function (node) {
-        if (!node.isMesh || !/^K1_Gate_(Entrance_Main|Exit_ToK2)$/.test(node.name)) return;
-        const gateBox = new THREE.Box3().setFromObject(node);
-        gateCenters[node.name] = gateBox.getCenter(new THREE.Vector3()).x;
-      });
-      // Room size from region
-      const roomD = r.bbox.z1 - r.bbox.z0;
-      const roomH = r.height;
-      // The model is rotated around Y, so the post-rotation X axis is the
-      // west/east axis. Fit that full outer axis to the real interfaces. The
-      // previous version fitted gate-center-to-gate-center, leaving the
-      // decorative wall ends protruding through both adjoining walls.
-      const westBoundary = r.bbox.x0;
-      const palaceDoor = state.doors.find(d => d.id === 'PalaceL3');
-      const eastBoundary = palaceDoor ? palaceDoor.x : r.bbox.x1;
-      const sourceGateSpan = Math.abs((gateCenters.K1_Gate_Exit_ToK2 == null ? size.z * 0.5 : gateCenters.K1_Gate_Exit_ToK2) -
-        (gateCenters.K1_Gate_Entrance_Main == null ? -size.z * 0.5 : gateCenters.K1_Gate_Entrance_Main));
-      const targetOuterSpan = Math.max(0.001, eastBoundary - westBoundary);
-      const scaleLocalX = roomD / Math.max(size.z, 0.001);
-      const scaleLocalZ = targetOuterSpan / Math.max(size.x, 0.001);
-      const scaleY = roomH / Math.max(size.y, 0.001);
-      model.scale.set(scaleLocalX, scaleY, scaleLocalZ);
-      const targetGateCenter = (westBoundary + eastBoundary) * 0.5;
-      const targetZ = r.bbox.cz;
-      model.position.set(0, -box.min.y * scaleY, 0);
-      parent.add(model);
-      state.root.updateMatrixWorld(true);
-      const fitted0 = new THREE.Box3().setFromObject(model);
-      const fittedCenter0 = fitted0.getCenter(new THREE.Vector3());
-      const fittedCenterLocalX = fittedCenter0.x - state.root.position.x;
-      model.position.x += targetGateCenter - fittedCenterLocalX;
-      model.position.z += targetZ + state.root.position.z - fittedCenter0.z;
-      model.updateMatrixWorld(true);
-      model.visible = true;
-      let floorTop = 0;
-      model.traverse(function (node) {
-        if (!node.isMesh || !/^K1_(Floor|Carpet)/.test(node.name)) return;
-        const fb = new THREE.Box3().setFromObject(node);
-        floorTop = Math.max(floorTop, fb.max.y - state.root.position.y);
-        if (state.floorMeshes && state.floorMeshes.indexOf(node) < 0) state.floorMeshes.push(node);
-      });
-      state.k1FloorY = Math.max(0, floorTop);
-      addK1ModelColliders(model);
-      const fittedBox = new THREE.Box3().setFromObject(model);
-      // Hide only palace geometry that occupies K1's already-fitted volume.
-      // This is a palace-material mask, not a transform or collider change.
-      // No other wing is inside these bounds.
-      if (window.__K1PalaceHole) {
-        window.__K1PalaceHole.min.value.copy(fittedBox.min).subScalar(0.05);
-        window.__K1PalaceHole.max.value.copy(fittedBox.max).addScalar(0.05);
-        window.__K1PalaceHole.enabled.value = 1;
-      }
-      const fitted = fittedBox.getSize(new THREE.Vector3());
-      state.k1ModelMetrics = { size: fitted.toArray(), scale: [scaleLocalX, scaleY, scaleLocalZ], outerSpan: targetOuterSpan, sourceGateSpan: sourceGateSpan, floorY: state.k1FloorY, embeddedLightsRemoved: embeddedLights };
-      console.info('K1 model loaded and fitted to both gates', state.k1ModelMetrics);
-      // Add approximate wall colliders for the room (perimeter, inset for doors)
-      addK1Colliders(r);
-    }, function (err) {
-      console.error('Failed to load K1 model', err);
-    });
-  }
   function addK1Colliders(r) {
     // Simple perimeter colliders so player doesn't fall through or walk through walls
     // Doors are on the sides; leave openings roughly matching door positions
@@ -821,7 +723,11 @@
           mesh(extrudeSolids(solid(polyCircle(r.bbox.cx, r.bbox.cz, 3.0, 32)), r.height + 3, r.height + 3.25), state.darkMat, 'L4-oculus-dark-cap', g);
         }
       }
-      if (r.id === 'K1') { /* procedural geometry removed for GLB model */ loadK1Model(r, g); }
+      if (r.id === 'K1') {
+        // K1 now uses the procedural shell built above. Keep the perimeter
+        // colliders, but do not decode or attach the reception-hall GLB.
+        addK1Colliders(r);
+      }
       // K2 columns are the real asset extracted from الاستقبال.glb (dressK2).
       if (r.id === 'T1') addColumns(r, g, columnPairs(r, 3, 2.3, 2.2), 0.48);
       if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
