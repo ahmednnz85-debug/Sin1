@@ -111,6 +111,7 @@
     }
     withMeshopt(dec => {
       const loader = new THREE.GLTFLoader();
+      if (window.__ktx2) loader.setKTX2Loader(window.__ktx2);
       if (dec) loader.setMeshoptDecoder(dec);
       loader.load(encodeURI(url), onLoad, undefined, fail);
     });
@@ -2598,6 +2599,7 @@
       if (!draco || !THREE.GLTFLoader) { fail(new Error('DRACOLoader unavailable')); return; }
       withMeshopt(dec => {
         const loader = new THREE.GLTFLoader();
+        if (window.__ktx2) loader.setKTX2Loader(window.__ktx2);
         loader.setDRACOLoader(draco);
         if (dec) loader.setMeshoptDecoder(dec);
         loader.load(encodeURI(url), gltf => { if (state.root === root) onLoad(gltf); else onLoad(null); }, undefined, fail);

@@ -147,6 +147,41 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="vendor/clipper.js"></script>
+<script src="vendor/KTX2Loader.js"></script>
+<script>
+window.__ktx2 = new THREE.KTX2Loader().setTranscoderPath('vendor/basis/');
+window.__ktxFallback = {
+  'assets/sky_babylon_blood.ktx2': 'assets/sky_babylon_blood.jpeg',
+  'assets/skyline_ring_a.ktx2': 'assets/skyline_ring_a.jpg',
+  'assets/skyline_ring_b.ktx2': 'assets/skyline_ring_b.jpg',
+  'assets/grass_lawn.ktx2': 'assets/grass_lawn.jpg',
+  'assets/grass_dark.ktx2': 'assets/grass_dark.jpg',
+  'assets/grass_moss.ktx2': 'assets/grass_moss.jpg',
+  'assets/ground_zones.ktx2': 'assets/ground_zones.png',
+  'assets/canal_water.ktx2': 'assets/canal_water.jpg',
+  'assets/canal_color.ktx2': 'assets/canal_color.jpg',
+  'assets/canal_normal.ktx2': 'assets/canal_normal.jpg',
+  'assets/canal_rough.ktx2': 'assets/canal_rough.jpg',
+  'assets/palace-glimpse.ktx2': 'assets/palace-glimpse.webp',
+  'assets/marble.ktx2': 'assets/marble.webp',
+  'assets/plaza_stone.ktx2': 'assets/plaza_stone.jpg',
+  'assets/plaza_paving.ktx2': 'assets/plaza_paving.jpg',
+  'assets/plaza_mosaic.ktx2': 'assets/plaza_mosaic.jpg'
+};
+{
+  const load = THREE.TextureLoader.prototype.load;
+  THREE.TextureLoader.prototype.load = function (url, onLoad, onProgress, onError) {
+    const clean = String(url || '').split('?')[0], fallback = window.__ktxFallback[clean];
+    if (!/\.ktx2$/i.test(clean) || !window.__ktx2) return load.call(this, url, onLoad, onProgress, onError);
+    const texture = new THREE.Texture();
+    window.__ktx2.load(url, value => { texture.copy(value); texture.needsUpdate = true; if (onLoad) onLoad(texture); }, onProgress, () => {
+      if (!fallback) { if (onError) onError(new Error('KTX2 failed: ' + url)); return; }
+      load.call(this, fallback, value => { texture.copy(value); texture.needsUpdate = true; if (onLoad) onLoad(texture); }, onProgress, onError);
+    });
+    return texture;
+  };
+}
+</script>
 <script src="palaceInterior.js?v=hall21&cam=20261105a&preload=20261104d"></script>
 <script src="wings.js?corridors=20261103c&k2=20261104c&preload=20261104d&k3=20261105b"></script>
 <script>
@@ -170,6 +205,8 @@ const SUN=new THREE.Vector3(-0.45,0.30,-0.84).normalize();
 const GATE_H=16, GATE_S=GATE_H/0.502, GATE_HD=0.197*GATE_S, GATE_HW=0.5*GATE_S, PASS=1.35;
 const canvas=$('c');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+window.__ktx2.detectSupport(renderer);
+window.__ktx2Ready=window.__ktx2.init();
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.05;
@@ -365,6 +402,7 @@ panel.rotation.set(-Math.PI/2,0,Math.PI);panel.position.set(0,0.04,-17);panel.re
 
 // ---------- loading ----------
 const loader=new THREE.GLTFLoader();
+loader.setKTX2Loader(window.__ktx2);
 const b2b=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer;};
 const loadGLB=k=>new Promise((res,rej)=>{const buf=b2b(B64[k]);B64[k]=null;loader.parse(buf,'',res,rej);});
 const bar=$('bar').firstElementChild;
@@ -1862,7 +1900,14 @@ function loop(ts){requestAnimationFrame(loop);try{if(document.documentElement.cl
   sky.position.copy(camera.position);updateSkyline();
   sun.position.copy(hp).addScaledVector(SUN,80);sun.target.position.copy(hp);sun.target.updateMatrixWorld();
   updateDust(tAcc);updateWater(tAcc);if(!(window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround()))updateExtras();}if(window.PalaceInterior&&PalaceInterior.holdCull)PalaceInterior.holdCull(scene,heroRoot);const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';if(palaceState!=='FADING_OUT'&&palaceState!=='LOADING'&&palaceState!=='SETUP'&&palaceState!=='FAILED'&&palaceState!=='REVEAL')renderer.render(scene,camera);}catch(e){console.error('loop',e);}}
-init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);});
+ window.__sinTest=function(){
+   camera.updateMatrixWorld(true);const fr=new THREE.Frustum(),mx=new THREE.Matrix4();mx.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);fr.setFromProjectionMatrix(mx);
+   const p=heroRoot&&heroRoot.position?heroRoot.position:camera.position,violations=[];scene.updateMatrixWorld(true);
+   scene.traverse(o=>{if(!o.isMesh||!o.geometry)return;if(!o.geometry.boundingSphere)o.geometry.computeBoundingSphere();const s=o.geometry.boundingSphere.clone();s.applyMatrix4(o.matrixWorld);if(s.center.distanceTo(p)>40||!fr.intersectsSphere(s))return;if(!o.visible||!o.material)violations.push({name:o.name||'(unnamed)',reason:!o.visible?'hidden':'no-material'});});
+   const texSet=new Set();scene.traverse(o=>{const ms=o.material?(Array.isArray(o.material)?o.material:[o.material]):[];ms.forEach(m=>['map','normalMap','roughnessMap','metalnessMap','aoMap','emissiveMap','alphaMap','lightMap'].forEach(k=>{const t=m&&m[k];if(t&&t.image)texSet.add(t);}));});let texBytes=0;texSet.forEach(t=>{const w=t.image.width||t.image.videoWidth||0,h=t.image.height||t.image.videoHeight||0;texBytes+=w*h*4*1.33;});const textures=renderer.info&&renderer.info.memory?renderer.info.memory.textures:texSet.size;const result={ok:violations.length===0,violations,violationsCount:violations.length,textures,texMB:texBytes/1048576,position:{x:p.x,y:p.y,z:p.z},state:window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():''};window.__sinLastTest=result;return result;
+ };
+ if(new URLSearchParams(location.search).has('log')){const pre=document.createElement('pre');pre.style.cssText='position:fixed;inset:0;margin:0;padding:14px;overflow:auto;background:#090909;color:#d8ffd0;white-space:pre-wrap;font:12px/1.45 monospace;z-index:9999;direction:ltr';document.body.appendChild(pre);const paint=()=>{try{const a=JSON.parse(localStorage.getItem('sin.internal-log')||'[]');pre.textContent=a.slice(-80).map(x=>new Date(x.t).toISOString()+' ['+x.kind+'] '+x.message).join('\n')||'(no internal log)';}catch(e){pre.textContent=String(e);}};paint();setInterval(paint,1000);}
+ init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);});
 })();
 </script>
 </body>
