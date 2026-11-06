@@ -2986,6 +2986,23 @@
       // per frame on a tiny stand-in, then draw the real hall once.
       if (!warmFrame) {
         holdCull(ctx.scene, ctx.hero);
+        // r147's compile path visits visible objects only. Initialise every
+        // texture explicitly, then warm visible materials behind the opaque
+        // loading cover before allowing the first gameplay frame.
+        const warmRoots = [group, wingRuntime && wingRuntime.root, ctx.hero];
+        warmRoots.forEach(function (root) {
+          if (!root) return;
+          root.traverse(function (o) {
+            const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+            mats.forEach(function (m) {
+              if (!m) return;
+              ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'lightMap'].forEach(function (k) {
+                const tex = m[k];
+                if (tex && ctx.renderer.initTexture) { try { ctx.renderer.initTexture(tex); } catch (_) {} }
+              });
+            });
+          });
+        });
         if (!warmMeshes) {
           const seen = new Set();
           warmMeshes = [];

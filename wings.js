@@ -22,7 +22,7 @@
     k2Dress: null, k3Dress: null, k2Queued: false, k3Queued: false,
     current: null, cutaway: false, fullbright: false, debug: false, report: null,
     ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null,
-    regionBoxes: new Map(), boundsRefreshUntil: 0
+    regionBoxes: new Map(), boundsRefreshUntil: 0, roomOccluders: new Map()
   };
 
   /* ---------------------------------------------------------------------------
@@ -221,6 +221,26 @@
     if (box && !box.isEmpty()) return box.distanceToPoint(new THREE.Vector3(x, 0, z));
     const b = r.bbox;
     return Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1));
+  }
+
+  function dressComplete(id) {
+    if (id === 'K2') {
+      const d = state.k2Dress;
+      return !!d && d.floor && d.walls && d.ceiling > 0 && d.chandelier && d.lions >= 2 && d.plants >= 6 && d.table;
+    }
+    if (id === 'K3') {
+      const d = state.k3Dress;
+      return !!d && d.floor && d.walls && d.table && d.furniture && d.placed;
+    }
+    return true;
+  }
+
+  function updateAtomicReveals() {
+    ['K2', 'K3'].forEach(id => {
+      const complete = dressComplete(id), g = state.regionGroups.get(id), blocker = state.roomOccluders.get(id);
+      if (g) g.visible = complete;
+      if (blocker) blocker.visible = !complete;
+    });
   }
 
   function solveLayout(hall) {
@@ -757,6 +777,17 @@
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
       if (r.id !== 'K1') { addFutureZones(r, g); if (r.id !== 'K2' && r.id !== 'K3') addTorches(r); }
     });
+    ['K2', 'K3'].forEach(id => {
+      const occluder = new THREE.Group(); occluder.name = id + '-atomic-occluder';
+      state.doors.filter(d => d.from === id || d.to === id).forEach(d => {
+        const alongX = d.axis === 'x';
+        const geo = new THREE.BoxGeometry(alongX ? 0.42 : d.width, d.height, alongX ? d.width : 0.42);
+        const panel = new THREE.Mesh(geo, state.sealMat); panel.name = id + '-closed-door';
+        panel.position.set(d.x, d.height * 0.5, d.z); panel.frustumCulled = false; occluder.add(panel);
+      });
+      state.root.add(occluder); state.roomOccluders.set(id, occluder);
+    });
+    updateAtomicReveals();
     addSpecials();
     dressCorridors();
     wingMark('wings corridors');
@@ -1893,7 +1924,7 @@
     });
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
-    state.built = false; state.root = null; state.regionGroups.clear(); state.regionBoxes.clear(); state.boundsRefreshUntil = 0; state.colliders = []; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
+    state.built = false; state.root = null; state.regionGroups.clear(); state.regionBoxes.clear(); state.roomOccluders.clear(); state.boundsRefreshUntil = 0; state.colliders = []; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
@@ -1970,7 +2001,7 @@
       state.k2Queued = true;
       setTimeout(function () {
         if (!state.root || state.k2Dress) return;
-        try { dressK2(); state.boundsRefreshUntil = performance.now() + 3000; refreshRegionBounds(state.rooms.find(r => r.id === 'K2')); wingMark('K2 streamed'); }
+        try { dressK2(); state.boundsRefreshUntil = performance.now() + 3000; refreshRegionBounds(state.rooms.find(r => r.id === 'K2')); updateAtomicReveals(); wingMark('K2 streamed'); }
         catch (e) { console.error('K2 streaming failed', e); state.k2Queued = false; }
       }, 0);
     }
@@ -1978,7 +2009,7 @@
       state.k3Queued = true;
       setTimeout(function () {
         if (!state.root || state.k3Dress) return;
-        try { dressK3(); state.boundsRefreshUntil = performance.now() + 3000; refreshRegionBounds(state.rooms.find(r => r.id === 'K3')); wingMark('K3 streamed'); }
+        try { dressK3(); state.boundsRefreshUntil = performance.now() + 3000; refreshRegionBounds(state.rooms.find(r => r.id === 'K3')); updateAtomicReveals(); wingMark('K3 streamed'); }
         catch (e) { console.error('K3 streaming failed', e); state.k3Queued = false; }
       }, 0);
     }
@@ -1987,6 +2018,7 @@
     if (!state.built || !state.ctx || !state.ctx.hero) return;
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
     const r = regionAt(x, z), id = r ? r.id : 'Palace';
+    updateAtomicReveals();
     if (performance.now() < state.boundsRefreshUntil) {
       state.rooms.forEach(rr => { if (rr.id === 'K2' || rr.id === 'K3') refreshRegionBounds(rr); });
     }
