@@ -1200,6 +1200,36 @@
     lodPacks.push({ near: near, far: far, matrices: matrices, local: locals, limitH: limitH });
   }
 
+  function makePalaceEnv(renderer) {
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, 64);
+    grd.addColorStop(0, '#100e0c');
+    grd.addColorStop(0.4, '#3a2618');
+    grd.addColorStop(0.52, '#e39a45');
+    grd.addColorStop(0.64, '#5c381f');
+    grd.addColorStop(1, '#0c0a09');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 128, 64);
+    g.fillStyle = 'rgba(255,214,150,0.95)';
+    [[18, 34], [46, 36], [74, 33], [104, 35]].forEach(function (p) {
+      g.beginPath();
+      g.arc(p[0], p[1], 3.2, 0, 6.283);
+      g.fill();
+    });
+    const tex = new THREE.CanvasTexture(c);
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    tex.encoding = THREE.sRGBEncoding;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    const env = pmrem.fromEquirectangular(tex).texture;
+    pmrem.dispose();
+    tex.dispose();
+    return env;
+  }
+
   function attachFloorShader(material) {
     material.onBeforeCompile = function (shader) {
       shader.uniforms.slabSize = { value: 1.8 };
@@ -1300,9 +1330,7 @@
     Object.keys(tex).forEach(function (k) { if (tex[k]) tex[k].userData.palaceShared = true; });
     if (!assets.props) console.warn('مجموعة الأغراض غير محمّلة — القاعة بلا أثاث مفصول.');
     try {
-      // The permanent sky probe is shared: removeGroup must not dispose it.
-      // Keep the hall's existing per-material reflection strengths and lamps.
-      palaceEnv = ctx.scene && ctx.scene.environment ? ctx.scene.environment : null;
+      palaceEnv = ctx.renderer ? makePalaceEnv(ctx.renderer) : null;
       if (palaceEnv) palaceEnv.userData.palaceShared = true;
     } catch (envErr) {
       palaceEnv = null;
