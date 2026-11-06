@@ -21,7 +21,8 @@
     k1FloorY: 0, k1ModelMetrics: null, k1ModelColliderCount: 0,
     k2Dress: null, k3Dress: null, k2Queued: false, k3Queued: false,
     current: null, cutaway: false, fullbright: false, debug: false, report: null,
-    ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null
+    ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null,
+    regionBoxes: new Map(), boundsRefreshUntil: 0
   };
 
   /* ---------------------------------------------------------------------------
@@ -200,6 +201,27 @@
     return { id, wing, name: name || id, poly, height, floorY: 0, kind: kind || 'room', bbox: bbox(poly) };
   }
   function rectRegion(id, wing, name, x, z, w, d, h, kind) { return region(id, wing, name, polyRect(x, z, w, d), h, kind); }
+
+  function refreshRegionBounds(r) {
+    if (!r || !state.root) return;
+    const g = state.regionGroups.get(r.id);
+    if (!g) return;
+    state.root.updateMatrixWorld(true); g.updateMatrixWorld(true);
+    const world = new THREE.Box3().setFromObject(g);
+    if (world.isEmpty()) return;
+    const origin = state.root.position;
+    const local = world.clone();
+    local.min.x -= origin.x; local.max.x -= origin.x;
+    local.min.z -= origin.z; local.max.z -= origin.z;
+    state.regionBoxes.set(r.id, local);
+  }
+
+  function nearestRegionDistance(r, x, z) {
+    const box = state.regionBoxes.get(r.id);
+    if (box && !box.isEmpty()) return box.distanceToPoint(new THREE.Vector3(x, 0, z));
+    const b = r.bbox;
+    return Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1));
+  }
 
   function solveLayout(hall) {
     const passages = {};
@@ -1871,7 +1893,7 @@
     });
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
-    state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
+    state.built = false; state.root = null; state.regionGroups.clear(); state.regionBoxes.clear(); state.boundsRefreshUntil = 0; state.colliders = []; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
@@ -1904,7 +1926,12 @@
     }
     makeColliders(state.baseWall, state.caps);
     wingMark('wings colliders');
-    buildVisuals(layout); wingMark('wings visuals'); rebuildSpatial();
+    buildVisuals(layout);
+    // Instanced bounds in r147 do not automatically include every authored
+    // instance, and skinned bounds can move with the skeleton. Keep these
+    // objects renderable; ordinary meshes retain Three.js frustum culling.
+    state.root.traverse(o => { if (o.isInstancedMesh || o.isSkinnedMesh) o.frustumCulled = false; });
+    wingMark('wings visuals'); rebuildSpatial();
     state.built = true;
     if (state.debug) createDebugUI();
     updateCulling(true);
@@ -1944,7 +1971,7 @@
       state.k2Queued = true;
       setTimeout(function () {
         if (!state.root || state.k2Dress) return;
-        try { dressK2(); wingMark('K2 streamed'); }
+        try { dressK2(); state.boundsRefreshUntil = performance.now() + 3000; refreshRegionBounds(state.rooms.find(r => r.id === 'K2')); wingMark('K2 streamed'); }
         catch (e) { console.error('K2 streaming failed', e); state.k2Queued = false; }
       }, 0);
     }
@@ -1952,7 +1979,7 @@
       state.k3Queued = true;
       setTimeout(function () {
         if (!state.root || state.k3Dress) return;
-        try { dressK3(); wingMark('K3 streamed'); }
+        try { dressK3(); state.boundsRefreshUntil = performance.now() + 3000; refreshRegionBounds(state.rooms.find(r => r.id === 'K3')); wingMark('K3 streamed'); }
         catch (e) { console.error('K3 streaming failed', e); state.k3Queued = false; }
       }, 0);
     }
@@ -1961,6 +1988,9 @@
     if (!state.built || !state.ctx || !state.ctx.hero) return;
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
     const r = regionAt(x, z), id = r ? r.id : 'Palace';
+    if (performance.now() < state.boundsRefreshUntil) {
+      state.rooms.forEach(rr => { if (rr.id === 'K2' || rr.id === 'K3') refreshRegionBounds(rr); });
+    }
     if (force || state.current !== id) {
       state.current = id;
       // Arch thresholds are not part of the link graph: measure from the wing room
@@ -1974,9 +2004,10 @@
       streamRoomDress(id);
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
-        const d = dist.has(rr.id) ? dist.get(rr.id) : 99;
-        const near = Math.hypot(rr.bbox.cx - x, rr.bbox.cz - z) <= 40;
-        g.visible = d <= 2 || near;
+        // Architecture is never hidden by player distance or a second manual
+        // frustum test. Three.js performs the only per-object frustum culling.
+        g.visible = true;
+        refreshRegionBounds(rr);
       });
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
@@ -1985,23 +2016,12 @@
     // reports the previous room.
     const k2 = state.rooms.find(rr => rr.id === 'K2');
     const k3 = state.rooms.find(rr => rr.id === 'K3');
-    if (k2 && Math.hypot(k2.bbox.cx - x, k2.bbox.cz - z) <= 22) streamRoomDress('K2');
-    if (k3 && Math.hypot(k3.bbox.cx - x, k3.bbox.cz - z) <= 22) streamRoomDress('K3');
+    if (k2 && nearestRegionDistance(k2, x, z) <= 22) streamRoomDress('K2');
+    if (k3 && nearestRegionDistance(k3, x, z) <= 22) streamRoomDress('K3');
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
-    if (camera && state.root.visible) {
-      const frustum = new THREE.Frustum();
-      const projection = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-      frustum.setFromProjectionMatrix(projection);
-      state.regions.forEach(rr => {
-        const g = state.regionGroups.get(rr.id);
-        if (!g || !g.visible || rr.id === state.current) return;
-        const box = new THREE.Box3().setFromObject(g);
-        // A room that is outside the camera frustum cannot contribute pixels.
-        // Never cull the current room or a room directly behind an open portal.
-        if (!box.isEmpty() && !frustum.intersectsBox(box)) g.visible = false;
-      });
-    }
+    // Do not add a second visibility gate here. Object-level frustumCulled
+    // remains enabled for ordinary meshes and is evaluated by WebGLRenderer.
   }
   function tick(dt, ctx) {
     if (!state.built) return;
@@ -2089,7 +2109,7 @@
     let html = '<h3>PALACE WINGS · DEBUG</h3><div class="wg">';
     state.rooms.forEach(r => { html += `<button data-tp="${r.id}">${r.id}</button>`; }); html += '</div><div class="wg">';
     ['Palace', 'PalaceL3', 'PalaceR3', 'PalaceR1', 'REAR', 'MP1'].forEach(id => { html += `<button data-tp="${id}">${id}</button>`; }); html += '</div>';
-    html += '<button class="wide" data-act="cutaway">Cutaway / ceilings</button><button class="wide" data-act="bright">Fullbright</button><button class="wide" data-act="tests">Run geometry + graph + camera tests</button><canvas id="wings-map" width="540" height="300"></canvas><div id="wings-results">Ready. All geometry is procedural.</div>';
+    html += '<button class="wide" data-act="cutaway">Cutaway / ceilings</button><button class="wide" data-act="bright">Fullbright</button><button class="wide" data-act="tests">Run geometry + graph + camera tests</button><div id="wings-gpu">GPU metrics pending…</div><canvas id="wings-map" width="540" height="300"></canvas><div id="wings-results">Ready. All geometry is procedural.</div>';
     ui.innerHTML = html;
     ui.addEventListener('click', ev => {
       const b = ev.target.closest('button'); if (!b) return;
@@ -2109,6 +2129,11 @@
   }
   function drawMinimap() {
     if (!state.ui || !state.ctx) return;
+    const gpu = state.ui.querySelector('#wings-gpu');
+    if (gpu) {
+      const g = gpuMetrics();
+      gpu.textContent = `tex MB: ${g.texMB.toFixed(1)} · textures: ${g.textures} · programs: ${g.programs}`;
+    }
     const canvas = state.ui.querySelector('#wings-map'); if (!canvas) return;
     const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
     g.clearRect(0, 0, W, H); g.fillStyle = '#0b0a08'; g.fillRect(0, 0, W, H);
@@ -2449,6 +2474,32 @@
       if (visible) { visibleMeshes++; visibleTriangles += count * instances; }
     });
     return { meshes, triangles, visibleMeshes, visibleTriangles, colliders: state.colliders.length, k1ModelColliders: state.k1ModelColliderCount, k1FloorY: state.k1FloorY, k1Model: state.k1ModelMetrics, rooms: state.rooms.length, regions: state.regions.length };
+  }
+
+  function gpuMetrics() {
+    const seen = new Set(), textures = [];
+    const liveRoot = state.ctx && state.ctx.scene ? state.ctx.scene : state.root;
+    if (liveRoot) liveRoot.traverse(o => {
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      mats.forEach(m => {
+        if (!m) return;
+        ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'lightMap'].forEach(k => {
+          const t = m[k]; if (!t || seen.has(t.uuid)) return;
+          seen.add(t.uuid); textures.push(t);
+        });
+      });
+    });
+    let bytes = 0, counted = 0;
+    textures.forEach(t => {
+      const image = t.image || t.source && t.source.data;
+      const w = image && (image.width || image.videoWidth) || 0;
+      const h = image && (image.height || image.videoHeight) || 0;
+      if (!w || !h) return;
+      const compressed = !!(t.isCompressedTexture || t.userData && (t.userData.ktx2 || t.userData.compressed));
+      bytes += w * h * 4 * 1.33 / (compressed ? 4 : 1); counted++;
+    });
+    const programs = state.ctx && state.ctx.renderer && state.ctx.renderer.info && state.ctx.renderer.info.programs;
+    return { texMB: bytes / (1024 * 1024), textures: counted, programs: programs ? programs.length : 0 };
   }
 
   /* ---------------------------------------------------------------------------
