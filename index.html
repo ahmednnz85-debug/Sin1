@@ -82,13 +82,14 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
  #quality-setting{margin:20px 0 12px}
  .settings-note{font-size:12px;line-height:1.7;color:rgba(238,224,193,.7)}
  #settings-back{width:auto;min-width:150px;justify-content:center;margin-top:14px}
- #orient-gate{display:none;position:fixed;inset:0;z-index:40;align-items:center;justify-content:center;padding:calc(24px + env(safe-area-inset-top,0px)) 24px calc(24px + env(safe-area-inset-bottom,0px));background:#0b0805;color:#f4e6cd;text-align:center}
+ #orient-gate{display:none;position:fixed;inset:0;z-index:300;align-items:center;justify-content:center;padding:calc(24px + env(safe-area-inset-top,0px)) 24px calc(24px + env(safe-area-inset-bottom,0px));background:#0b0805;color:#f4e6cd;text-align:center}
  .orient-card{width:min(340px,100%);display:flex;flex-direction:column;align-items:center;gap:14px}
  .orient-device{width:54px;height:88px;border:2px solid #e1b76f;border-radius:10px;position:relative;animation:orientTurn 2.2s ease-in-out infinite}
  .orient-device:before{content:"";position:absolute;left:50%;bottom:7px;width:18px;height:3px;margin-left:-9px;border-radius:2px;background:#e1b76f}
  .orient-card strong{font:600 22px/1.45 Georgia,serif;color:#e1b76f}
  .orient-card p{margin:0;font-size:15px;line-height:1.7;color:rgba(244,230,205,.82)}
  @keyframes orientTurn{0%,32%{transform:rotate(0deg)}58%,100%{transform:rotate(-90deg)}}
+ .portrait-lock #orient-gate{display:flex}
  @media (orientation:portrait){#orient-gate{display:flex}}
  @media (max-width:760px),(max-height:560px){#ov{padding:calc(16px + env(safe-area-inset-top,0px)) calc(16px + env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) calc(16px + env(safe-area-inset-left,0px))}#menu-grid{grid-template-columns:minmax(0,.85fr) minmax(270px,1fr);gap:16px;min-height:0}.menu-column{padding:20px}.brand strong{font-size:clamp(56px,11vw,82px)}.menu-atmosphere{padding-left:8px}.menu-atmosphere p{font-size:14px}}
  @media (orientation:portrait) and (max-width:760px){#menu-grid{grid-template-columns:1fr;max-width:480px}.menu-atmosphere{display:none}.menu-column{justify-self:center;width:100%;border-left:0;border-top:1px solid rgba(225,183,111,.38);background:rgba(12,10,8,.58)}}
@@ -182,8 +183,9 @@ let hq=readPreference('quality')!=='low';
 renderer.shadowMap.enabled=hq;
 function resize(){const w=Math.max(1,Math.round(window.visualViewport?.width||innerWidth)),h=Math.max(1,Math.round(window.visualViewport?.height||innerHeight));renderer.setPixelRatio(1);renderer.setSize(w,h,false);camera.fov=CAM_VFOV;camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();document.documentElement.classList.toggle('portrait-lock',h>w+8);}
 let landscapeRequestAt=0;
-async function requestLandscape(){
-  if(!matchMedia('(pointer:coarse)').matches||!document.documentElement.classList.contains('portrait-lock'))return;
+async function requestLandscape(force){
+  if(!matchMedia('(pointer:coarse)').matches)return;
+  if(!force&&!document.documentElement.classList.contains('portrait-lock'))return;
   const now=performance.now();
   if(now-landscapeRequestAt<1500)return;
   landscapeRequestAt=now;
@@ -196,7 +198,7 @@ addEventListener('resize',resize);
 addEventListener('orientationchange',()=>{resize();requestLandscape();});
 addEventListener('visibilitychange',()=>{if(!document.hidden)requestLandscape();});
 if(window.visualViewport)visualViewport.addEventListener('resize',resize);
-addEventListener('pointerdown',()=>{if(!document.documentElement.classList.contains('portrait-lock'))return;requestLandscape();});
+addEventListener('pointerdown',()=>{requestLandscape(true);});
 resize();
 
 // ---------- sky (gradient dome, also used as image-based lighting) ----------
