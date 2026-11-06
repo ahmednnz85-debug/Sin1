@@ -181,8 +181,22 @@ const camera=new THREE.PerspectiveCamera(CAM_VFOV,1,0.1,3000);
 let hq=readPreference('quality')!=='low';
 renderer.shadowMap.enabled=hq;
 function resize(){const w=Math.max(1,Math.round(window.visualViewport?.width||innerWidth)),h=Math.max(1,Math.round(window.visualViewport?.height||innerHeight));renderer.setPixelRatio(1);renderer.setSize(w,h,false);camera.fov=CAM_VFOV;camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();document.documentElement.classList.toggle('portrait-lock',h>w+8);}
-addEventListener('resize',resize);addEventListener('orientationchange',resize);if(window.visualViewport)visualViewport.addEventListener('resize',resize);
-addEventListener('pointerdown',()=>{if(!matchMedia('(pointer:coarse)').matches||!document.documentElement.classList.contains('portrait-lock'))return;const el=document.documentElement;(async()=>{try{if(!document.fullscreenElement&&el.requestFullscreen)await el.requestFullscreen();}catch(e){}try{if(screen.orientation&&screen.orientation.lock)await screen.orientation.lock('landscape');}catch(e){}resize();})();});
+let landscapeRequestAt=0;
+async function requestLandscape(){
+  if(!matchMedia('(pointer:coarse)').matches||!document.documentElement.classList.contains('portrait-lock'))return;
+  const now=performance.now();
+  if(now-landscapeRequestAt<1500)return;
+  landscapeRequestAt=now;
+  const el=document.documentElement;
+  try{if(!document.fullscreenElement&&el.requestFullscreen)await el.requestFullscreen();}catch(e){}
+  try{if(screen.orientation&&screen.orientation.lock)await screen.orientation.lock('landscape');}catch(e){}
+  resize();
+}
+addEventListener('resize',resize);
+addEventListener('orientationchange',()=>{resize();requestLandscape();});
+addEventListener('visibilitychange',()=>{if(!document.hidden)requestLandscape();});
+if(window.visualViewport)visualViewport.addEventListener('resize',resize);
+addEventListener('pointerdown',()=>{if(!document.documentElement.classList.contains('portrait-lock'))return;requestLandscape();});
 resize();
 
 // ---------- sky (gradient dome, also used as image-based lighting) ----------
@@ -1790,7 +1804,7 @@ const camStart=new THREE.Vector3(6,1.6,-56),gateTop=new THREE.Vector3(0,9,0),wan
 // cinematic intro path: start at the head of the walkway, sweep across the market stalls, then rise to the Ishtar gate, then settle behind the hero
 const cP0=new THREE.Vector3(-4.2,1.7,-71),cP1=new THREE.Vector3(3.6,2.4,-60),cP2=new THREE.Vector3(0,3.6,-46),cL0=new THREE.Vector3(-10.5,2.6,-60),cL1=new THREE.Vector3(10.5,2.6,-50),tmpP=new THREE.Vector3(),tmpL=new THREE.Vector3(),hv=new THREE.Vector3();
 const smx=(a,b,t)=>ease(Math.max(0,Math.min(1,(t-a)/(b-a))));
-function loop(ts){requestAnimationFrame(loop);try{if(document.documentElement.classList.contains('portrait-lock'))return;if(window.__holdSim){renderer.render(scene,camera);return;}const t=ts/1000;const qaFast=new URLSearchParams(location.search).has('qa');const insideHall=window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround();const interiorBusy=window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl();const frameDt=Math.max(0.001,Math.min(!qaFast?0.05:interiorBusy?0.05:insideHall?0.35:2,(t-last)||0.016));last=t;const steps=(qaFast&&!interiorBusy)?Math.max(1,Math.round(frameDt/0.05)):1;const dtStep=frameDt/steps;for(let __qaStep=0;__qaStep<steps;__qaStep++){const dt=dtStep;tAcc+=dt;const heroZBefore=heroRoot.position.z;
+function loop(ts){requestAnimationFrame(loop);try{const portraitBlocked=document.documentElement.classList.contains('portrait-lock');if(portraitBlocked&&window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl())requestLandscape();if(window.__holdSim){renderer.render(scene,camera);return;}const t=ts/1000;const qaFast=new URLSearchParams(location.search).has('qa');const insideHall=window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround();const interiorBusy=window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl();const frameDt=Math.max(0.001,Math.min(!qaFast?0.05:interiorBusy?0.05:insideHall?0.35:2,(t-last)||0.016));last=t;const steps=(qaFast&&!interiorBusy)?Math.max(1,Math.round(frameDt/0.05)):1;const dtStep=frameDt/steps;for(let __qaStep=0;__qaStep<steps;__qaStep++){const dt=dtStep;tAcc+=dt;const heroZBefore=heroRoot.position.z;
 
   const intro=introT>=0&&introT<INTRO;if(introT>=0&&introT<INTRO)introT+=dt;
   royalDoor.update(dt,introT>=INTRO);const doorCinematic=royalDoor.active();
