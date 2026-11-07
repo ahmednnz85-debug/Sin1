@@ -951,6 +951,7 @@
   }
 
   let lightsCulled = false;
+  const outsideLights = [];
   function cullOutsideLights(scene, on) {
     if (window.__perfLab && window.__perfLab.flags.skipLightWork) return;
     if (!scene) return;
@@ -962,19 +963,35 @@
         p = p.parent;
       }
       if (inside) return;
-      if (on) {
-        if (o.userData._palaceLight == null) o.userData._palaceLight = o.visible;
-        o.visible = false;
-      } else if (o.userData._palaceLight != null) {
-        o.visible = o.userData._palaceLight;
-        o.userData._palaceLight = null;
-      }
+      if (o.userData._palaceIntensityBase == null) o.userData._palaceIntensityBase = o.intensity;
+      o.userData._palaceIntensityTarget = on ? 0 : o.userData._palaceIntensityBase;
+      o.userData._palaceCullActive = !!on;
+      if (outsideLights.indexOf(o) < 0) outsideLights.push(o);
     });
     lightsCulled = on;
     if (on) {
       let n = 0;
-      scene.traverse(function (o) { if (o.isLight && o.visible) n++; });
+      scene.traverse(function (o) { if (o.isLight && o.intensity > 0) n++; });
       mark('palace lights ' + n);
+    }
+  }
+  function updateOutsideLightFades(dt) {
+    if (window.__perfLab && window.__perfLab.flags.skipLightWork) return;
+    const safeDt = Math.max(0, Math.min(0.1, Number(dt) || 0));
+    const k = 1 - Math.exp(-safeDt / 0.28);
+    for (let i = outsideLights.length - 1; i >= 0; i--) {
+      const o = outsideLights[i], target = o.userData._palaceIntensityTarget;
+      if (target == null) { outsideLights.splice(i, 1); continue; }
+      o.intensity += (target - o.intensity) * k;
+      if (Math.abs(target - o.intensity) < 0.005) {
+        o.intensity = target;
+        if (!o.userData._palaceCullActive) {
+          delete o.userData._palaceIntensityBase;
+          delete o.userData._palaceIntensityTarget;
+          delete o.userData._palaceCullActive;
+          outsideLights.splice(i, 1);
+        }
+      }
     }
   }
 
@@ -982,7 +999,7 @@
     if (!scene || !group) return;
     const on = state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED' || (state === 'DONE' && occupant);
     scene.children.forEach(function (ch) {
-      if (ch === group || ch === hero || ch.name === 'SkyPhoto' || ch.name === 'PalaceInterior' || ch.name === 'PalaceWings') return;
+      if (ch === group || ch === hero || ch.isLight || ch.name === 'SkyPhoto' || ch.name === 'PalaceInterior' || ch.name === 'PalaceWings') return;
       if (on) {
         if (ch.userData._palaceWas == null) ch.userData._palaceWas = ch.visible;
         ch.visible = false;
@@ -2907,6 +2924,7 @@
   }
   function tickInner(dt, ctx) {
     lastDt = dt;
+    updateOutsideLightFades(dt);
     clock += dt;
     if (group && hallBuilt && (state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'DONE')) animateHall(dt, ctx);
     if (ctx.hero) heroSnap = ctx.hero.position.x.toFixed(2) + ', ' + ctx.hero.position.y.toFixed(2) + ', ' + ctx.hero.position.z.toFixed(2);
