@@ -2118,6 +2118,11 @@
     state.ctx = ctx; state.hall = hall; state.debug = /(?:[?&#])debug=1(?:&|#|$)/.test(location.href);
     state.root = new THREE.Group(); state.root.name = 'PalaceWings';
     state.root.position.set(ctx.portal.x, hall.floorY || 0, ctx.portal.frontZ); ctx.scene.add(state.root);
+    // One fixed ambient source serves every wing and corridor, so brightness
+    // does not jump when regional geometry is culled or the hero changes rooms.
+    state.unifiedAmbient = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.78);
+    state.unifiedAmbient.name = 'PalaceWingsUnifiedAmbient';
+    state.root.add(state.unifiedAmbient);
     const layout = solveLayout(hall);
     wingMark('wings layout');
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
@@ -2202,19 +2207,12 @@
     updateRoomDoors(Math.max(.001, Math.min(.05, Number(dt) || .016)));
     updateCulling(false);
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
-    if (state.k2Lights && state.k2Lights.length) {
+    if ((state.k2Lights && state.k2Lights.length) || (state.k3Lights && state.k3Lights.length)) {
       const t = performance.now() * 0.001;
-      const flick = 0.84 + 0.11 * Math.sin(t * 6.4) + 0.07 * Math.sin(t * 13.1) + 0.04 * Math.sin(t * 22.4);
-      state.k2Lights.forEach((l, i) => {
-        const base = state.k2LightBase[i] || l.intensity;
-        l.intensity = base * (i < 2 ? flick : 0.94 + 0.06 * Math.sin(t * 1.7 + i));
-      });
-    }
-    if (state.k3Lights && state.k3Lights.length) {
-      const t = performance.now() * 0.001;
-      state.k3Lights.forEach((l, i) => {
-        const base = state.k3LightBase[i] || l.intensity;
-        l.intensity = base * (0.9 + 0.1 * Math.sin(t * 6.2 + i * 1.8));
+      const sharedFlicker = 0.98 + 0.02 * Math.sin(t * 2.4);
+      [state.k2Lights, state.k3Lights].forEach(function (list, region) {
+        const bases = region === 0 ? state.k2LightBase : state.k3LightBase;
+        (list || []).forEach(function (l, i) { l.intensity = (bases[i] == null ? l.intensity : bases[i]) * sharedFlicker; });
       });
     }
     if (state.debug && state.ui && performance.now() - state.minimapAt > 120) { state.minimapAt = performance.now(); drawMinimap(); }

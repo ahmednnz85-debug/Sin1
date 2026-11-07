@@ -24,7 +24,7 @@
   // ---------- quality tiers ----------
   const TIERS = {
     //        render scale | shadows | map | half-extent(m) | soft | veg dist | pot cull(m) | pot shadow r(m) | dust
-    low:    { scale: 0.80, shadow: false, res: 1024, extent: 24, soft: false, veg: 0.60, pots: 48,  potShadow: 0,  dust: 180 },
+    low:    { scale: 0.88, shadow: true,  res: 1024, extent: 24, soft: false, veg: 0.70, pots: 58,  potShadow: 18, dust: 220 },
     medium: { scale: 0.92, shadow: true,  res: 1024, extent: 26, soft: false, veg: 0.78, pots: 70,  potShadow: 22, dust: 320 },
     high:   { scale: 1.00, shadow: true,  res: 2048, extent: 32, soft: true,  veg: 1.00, pots: 110, potShadow: 46, dust: 500 }
   };
@@ -45,15 +45,16 @@
   try { if (!store.get('tier') && localStorage.getItem('sin.quality') === 'low') mode = 'low'; } catch (_) {}
   let base = mode === 'auto' ? detectTier() : mode;
   let pressure = 0;                                  // 0..3 adaptive degradation level
-  const dynamicResolution = window.SinDynamicResolution ? window.SinDynamicResolution.create({ min: 0.55, max: 0.80, initial: 0.80, downStep: 0.04, upStep: 0.02, lowerFps: 52, upperFps: 58, recoveryMs: 3000 }) : null;
+  const dynamicResolution = window.SinDynamicResolution ? window.SinDynamicResolution.create({ min: 0.82, max: 1.00, initial: 1.00, downStep: 0.02, upStep: 0.01, lowerFps: 52, upperFps: 58, recoveryMs: 3000 }) : null;
   let fovH = Number(store.get('fov')) || 73;         // horizontal FOV (degrees), 73 = test starting point
 
   function eff() {                                   // effective settings = tier ∘ pressure
     const t = Object.assign({}, TIERS[base]);
-    if (pressure >= 1) t.scale *= 0.85;
-    if (pressure >= 2) { t.res = Math.min(t.res, 1024); t.soft = false; t.veg *= 0.8; t.pots *= 0.8; t.potShadow *= 0.6; }
-    if (pressure >= 3) { t.scale = Math.min(t.scale, 0.7); t.shadow = false; t.veg *= 0.85; }
-    t.scale = dynamicResolution ? dynamicResolution.value() : Math.max(0.55, Math.min(0.80, t.scale));
+    // Keep the chosen visual tier stable. Only render resolution adapts; never
+    // drop shadows, change shadow filtering, or cull scene detail as a reaction
+    // to a short frame-time spike.
+    t.shadow = true;
+    t.scale = dynamicResolution ? Math.min(t.scale, dynamicResolution.value()) : t.scale;
     return t;
   }
   let E = eff();
@@ -190,15 +191,10 @@
       const change = dynamicResolution.sample(1000 / avg, sampleMs, false);
       if (change.changed) { E = eff(); if (ctx.resize) ctx.resize(); }
     }
-    if (ts - lastChange < 2500) return;
-    if (avg > 19.5) {                                    // < ~51 fps
-      if (++slowWins >= 2 && pressure < 3) { pressure++; slowWins = 0; fastT = 0; lastChange = ts; refresh(); }
-      else if (slowWins >= 2 && mode === 'auto' && ORDER.indexOf(base) > 0) { base = ORDER[ORDER.indexOf(base) - 1]; pressure = 1; slowWins = 0; lastChange = ts; refresh(); }
-    } else {
-      slowWins = 0;
-      if (avg < 14.5) { fastT += 1500; if (fastT >= 8000 && pressure > 0) { pressure--; fastT = 0; lastChange = ts; refresh(); } }
-      else fastT = 0;
-    }
+    // Keep shadow policy, material layout, LOD distances and grade fixed during
+    // play. Resolution-only changes use small, hysteretic steps above.
+    slowWins = 0;
+    fastT = 0;
   }
 
   // ---------- perf HUD ----------
@@ -283,7 +279,12 @@
     },
     hq() { return base !== 'low'; },
     settings() { return E; },
-    pixelRatio() { return E.scale; },
+    pixelRatio() {
+      // Scale the CSS-pixel render target by the display DPR for sharper texturing,
+      // but cap the device multiplier to control mobile fill-rate and memory.
+      const dpr = Number(window.devicePixelRatio) || 1;
+      return Math.min(1.25, Math.max(1, dpr)) * E.scale;
+    },
     mode() { return mode; },
     tier() { return base; },
     setMode(m) {

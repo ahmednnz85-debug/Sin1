@@ -17,7 +17,7 @@ test('light budget stays fixed at eight and outside culling uses intensity, not 
   assert.match(culling, /_palaceIntensityTarget\s*=\s*on\s*\?\s*0/);
   assert.doesNotMatch(culling, /\.visible\s*=\s*false/);
   assert.match(palace, /1\s*-\s*Math\.exp\(-safeDt\s*\/\s*0\.28\)/);
-  assert.match(palace, /function tickInner\(dt, ctx\)\s*\{\s*lastDt = dt;\s*updateOutsideLightFades\(dt\);/);
+  assert.match(palace, /function tickInner\(dt, ctx\)\s*\{\s*lastContext = ctx;\s*lastDt = dt;\s*updateOutsideLightFades\(dt\);/);
 });
 
 test('torch InstancedMesh and K1 meshes remain explicitly uncullable', () => {
