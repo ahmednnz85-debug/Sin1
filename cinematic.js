@@ -237,14 +237,29 @@
     while (perf.frames.length && ts - perf.frames[0] > 1000) perf.frames.shift();
     if (ts - perf.t < 400) return; perf.t = ts;
     const fr = perf.frames.length > 1 ? (perf.frames.length - 1) * 1000 / (ts - perf.frames[0]) : 0;
+    const mapOn = !!(R && R.shadowMap && R.shadowMap.enabled);
     perf.el.textContent =
       'FPS ' + fr.toFixed(0) + '   ' + (fr ? (1000 / fr).toFixed(1) : '-') + ' ms\n' +
       'Draws ' + perf.calls + '   Tris ' + (perf.tris / 1000).toFixed(0) + 'k\n' +
       'GPU ' + (perf.gpu == null ? 'n/a' : perf.gpu.toFixed(1) + ' ms') + '\n' +
       'Tier ' + (mode === 'auto' ? 'AUTO:' : '') + base.toUpperCase() + '  P' + pressure + '  x' + E.scale.toFixed(2) + '\n' +
-      'Shadow ' + (E.shadow ? E.res + (E.soft ? ' soft' : ' pcf') : 'off') + '  Zone ' + zoneName;
+      'Renderer shadowMap ' + (mapOn ? ((sun && sun.shadow && sun.shadow.mapSize ? sun.shadow.mapSize.x : 0) + 'px') : 'OFF') + ' (policy ' + (E.shadow ? 'ON' : 'OFF') + ')  Zone ' + zoneName;
   }
 
+  // On-demand diagnostic: distinguishes the live renderer shadow map from baked/AO light maps.
+  function shadowSnapshot() {
+    const snap = { mapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), policyEnabled: !!E.shadow,
+      mapSize: sun && sun.shadow && sun.shadow.mapSize ? sun.shadow.mapSize.x : 0, shadowLights: [], shadowCasters: 0,
+      bakedLightingMaterials: 0 };
+    if (scene) scene.traverse(function (o) {
+      if (o.isLight && o.castShadow) snap.shadowLights.push({ name: o.name || '(unnamed)', intensity: o.intensity });
+      if (!o.isMesh) return;
+      if (o.castShadow) snap.shadowCasters++;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      if (mats.some(function (m) { return !!(m && (m.lightMap || m.aoMap)); })) snap.bakedLightingMaterials++;
+    });
+    return snap;
+  }
   // ---------- public API ----------
   function refresh() {
     E = eff();
@@ -283,6 +298,7 @@
     setPerf(on) { perf.on = !!on; store.set('perf', on ? '1' : '0'); },
     perfOn() { return perf.on; },
     snapShadow,
+    shadowSnapshot,
     vegScale() { return E.veg; },
     potRange() { return E.pots; },
     potShadowRange() { return E.potShadow; },
@@ -291,7 +307,7 @@
     frame(ts, busy) { govern(ts, busy); hud(ts); },
     // called once per simulation step, after the camera has been placed
     update(dt, info) { updateAtmo(dt, info); cameraFrame(dt, ctx.interior(), info && info.running); },
-    status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg }; }
+    status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, shadowPolicy: !!E.shadow, shadowMapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg }; }
   };
   window.SinGfx = API;
 })();

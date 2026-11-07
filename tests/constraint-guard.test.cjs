@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const palace = fs.readFileSync(path.join(__dirname, '..', 'palaceInterior.js'), 'utf8');
 const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
+const cinematic = fs.readFileSync(path.join(__dirname, '..', 'cinematic.js'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
 test('light budget stays fixed at eight and outside culling uses intensity, not visibility', () => {
@@ -30,4 +31,12 @@ test('frame loop does not run PMREM generation or asynchronous shader compilatio
   assert.ok(start >= 0 && end > start);
   const loop = index.slice(start, end);
   assert.doesNotMatch(loop, /PMREM|compileAsync/);
+});
+
+test('shadow HUD and diagnostics expose live renderer state, not only the tier policy', () => {
+  assert.match(cinematic, /Renderer shadowMap '\s*\+ \(mapOn/);
+  assert.match(cinematic, /shadowMapEnabled:\s*!!\(R && R\.shadowMap && R\.shadowMap\.enabled\)/);
+  assert.match(cinematic, /function shadowSnapshot\(\)/);
+  assert.doesNotMatch(cinematic, /R\.shadowMap\.mapSize/);
+  assert.match(cinematic, /sun && sun\.shadow && sun\.shadow\.mapSize/);
 });
