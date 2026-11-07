@@ -37,6 +37,7 @@ test('shadow HUD and diagnostics expose live renderer state, not only the tier p
   assert.match(cinematic, /Renderer shadowMap '\s*\+ \(mapOn/);
   assert.match(cinematic, /shadowMapEnabled:\s*!!\(R && R\.shadowMap && R\.shadowMap\.enabled\)/);
   assert.match(cinematic, /function shadowSnapshot\(\)/);
+  assert.match(cinematic, /shadowFrustum: camera \?/);
   assert.doesNotMatch(cinematic, /R\.shadowMap\.mapSize/);
   assert.match(cinematic, /sun && sun\.shadow && sun\.shadow\.mapSize/);
 });

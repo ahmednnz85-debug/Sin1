@@ -248,13 +248,16 @@
 
   // On-demand diagnostic: distinguishes the live renderer shadow map from baked/AO light maps.
   function shadowSnapshot() {
+    const camera = sun && sun.shadow ? sun.shadow.camera : null;
     const snap = { mapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), policyEnabled: !!E.shadow,
-      mapSize: sun && sun.shadow && sun.shadow.mapSize ? sun.shadow.mapSize.x : 0, shadowLights: [], shadowCasters: 0,
-      bakedLightingMaterials: 0 };
+      mapSize: sun && sun.shadow && sun.shadow.mapSize ? sun.shadow.mapSize.x : 0, extent: E.extent,
+      shadowFrustum: camera ? { left: camera.left, right: camera.right, top: camera.top, bottom: camera.bottom, near: camera.near, far: camera.far } : null,
+      shadowLights: [], shadowCasters: 0, shadowReceivers: 0, bakedLightingMaterials: 0 };
     if (scene) scene.traverse(function (o) {
       if (o.isLight && o.castShadow) snap.shadowLights.push({ name: o.name || '(unnamed)', intensity: o.intensity });
       if (!o.isMesh) return;
       if (o.castShadow) snap.shadowCasters++;
+      if (o.receiveShadow) snap.shadowReceivers++;
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       if (mats.some(function (m) { return !!(m && (m.lightMap || m.aoMap)); })) snap.bakedLightingMaterials++;
     });
