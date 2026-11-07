@@ -952,6 +952,7 @@
 
   let lightsCulled = false;
   function cullOutsideLights(scene, on) {
+    if (window.__perfLab && window.__perfLab.flags.skipLightWork) return;
     if (!scene) return;
     scene.traverse(function (o) {
       if (!o.isLight) return;
@@ -1306,6 +1307,7 @@
   }
 
   function updatePalaceLights(dt, hero) {
+    if (window.__perfLab && window.__perfLab.flags.skipLightWork) return;
     if (!lights.length || !fireList.length || !group) return;
     const p = hero && hero.position;
     if (p && clock >= lightAssignAt) {
