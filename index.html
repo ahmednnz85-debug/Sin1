@@ -28,7 +28,7 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 #msg{max-width:440px;font-size:13px;color:#ffb4a0;direction:ltr;white-space:pre-wrap}
 #vig{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(6,14,30,.50) 100%)}
 #grade{position:fixed;inset:0;pointer-events:none;mix-blend-mode:soft-light;background:linear-gradient(to bottom,rgba(28,78,140,.30) 0%,rgba(0,0,0,0) 48%,rgba(255,150,60,.26) 100%)}
-#interact{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));min-width:112px;height:52px;border-radius:12px;border:1px solid rgba(225,183,111,.9);background:rgba(20,14,9,.9);color:#f6e8d0;font-weight:700;z-index:4}#interact.on{background:#a9783e;color:#201208}#fight{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(134px + env(safe-area-inset-bottom,0px));width:84px;height:84px;border-radius:50%;border:2px solid #ff7a5c;background:var(--ui-bg);color:var(--ui-fg);font-size:17px;font-weight:700}
+#fight{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(134px + env(safe-area-inset-bottom,0px));width:84px;height:84px;border-radius:50%;border:2px solid #ff7a5c;background:var(--ui-bg);color:var(--ui-fg);font-size:17px;font-weight:700}
 #fight.on{background:#ff7a5c;color:#201208}
 #fight.off{opacity:.45}
 #fmenu{position:fixed;right:calc(118px + env(safe-area-inset-right,0px));bottom:calc(134px + env(safe-area-inset-bottom,0px));display:none;flex-direction:column;gap:10px}
@@ -104,7 +104,6 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 <div id="stick"><div id="knob"></div></div>
 <button id="run" style="display:none" aria-label="Sprint"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="22" cy="5" r="2.5"></circle><path d="m16 11 4-2 4 3 4 1M17 11l-4 6 5 3 4-4M13 17l-5 1-3 5m12-3-4 5m8-10 4 2 2 5"></path></svg><span>ركض</span></button>
 <button id="fight" style="display:none" aria-label="قتال">قتال</button>
-<button id="interact" style="display:none" aria-label="تفاعل">فتح الباب</button>
 <div id="fmenu"><button id="f-counter">رد (هجوم مضاد)</button><button id="f-air">لكمة السيف الهوائية</button></div>
 <div id="hud" style="display:none"><button id="skip">تخطي المشهد السينمائي</button><button id="qual">الجودة: عالية</button></div>
 <div id="hint" style="display:none">استخدم العصا أسفل اليسار للحركة، واسحب في الجهة اليمنى لتدوير الكاميرا</div>
@@ -1251,7 +1250,6 @@ const up=e=>{if(e.pointerId===sId){sId=null;inp.x=inp.y=0;const center=stickEl.o
 touch.addEventListener('pointerup',up);touch.addEventListener('pointercancel',up);
 touch.addEventListener('wheel',e=>{camManualAt=performance.now();dist=Math.max(2.35,Math.min(5.2,dist+e.deltaY*.004));},{passive:true});
 const runB=$('run');const rs=v=>{inp.run=v;runB.classList.toggle('on',v);};
-const interactB=$('interact');interactB.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();if(window.PalaceWings&&PalaceWings.interact())interactB.classList.add('on');});
 let runPointerId=null;
 runB.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();runPointerId=e.pointerId;try{runB.setPointerCapture(e.pointerId);}catch(_){}rs(true);});
 const endRun=e=>{if(runPointerId===null||e.pointerId===runPointerId){runPointerId=null;rs(false);}};
@@ -1269,7 +1267,7 @@ $('settings-back').addEventListener('click',()=>{$('settings-menu').style.displa
 
 // ---------- game loop ----------
 let introT=-1,last=0,heroYaw=0,tAcc=0;const INTRO=12;
-$('go').addEventListener('click',()=>{$('ov').style.display='none';document.body.classList.add('playing');['run','hud','hint','interact'].forEach(i=>$(i).style.display='');introT=0;setTimeout(()=>{$('hint').style.opacity=0;},7000);});
+$('go').addEventListener('click',()=>{$('ov').style.display='none';document.body.classList.add('playing');['run','hud','hint'].forEach(i=>$(i).style.display='');introT=0;setTimeout(()=>{$('hint').style.opacity=0;},7000);});
 $('skip').addEventListener('click',()=>{if(introT>=0&&introT<INTRO)introT=INTRO;else royalDoor.skip();});
 // ===================== HERO v2: Animation State Machine + combat button =====================
 // Hero mesh is assets/سين_وقوف_ساكن_سينمائي.glb (Mixamo rig). Loaded once; locomotion clips are the ones embedded in THAT file.
@@ -1713,7 +1711,7 @@ async function buildRoyalDoor(gltf,heroModel){
       combat.step(1/60,false,false,!interiorLock);
       postAnimation();
       // PALACE INTERIOR HOOK — same clock as the game, so the fade stays frame-accurate in tests.
-      if(window.PalaceInterior)PalaceInterior.tick(1/60,{doorOpen:phase==='done',hero:heroRoot,setFacing:v=>{heroYaw=v;yaw=v;},camera,renderer,scene,portal:{x:ARCH.x,frontZ,width:ARCH.width,yaw:0}});
+      if(window.PalaceInterior)PalaceInterior.tick(1/60,{doorOpen:phase==='done',hero:heroRoot,setFacing:v=>{heroYaw=v;yaw=v;},camera,renderer,scene,portal:{x:ARCH.x,frontZ,width:ARCH.width,yaw:0},combat});
       if(!(window.PalaceInterior&&PalaceInterior.ownsCamera()))updateCamera(1/60);
       const p=heroRoot.position;
       if(window.PalaceInterior&&PalaceInterior.ownsGround())p.y=PalaceInterior.floorAt(p.x,p.z);
@@ -1859,12 +1857,12 @@ function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=wi
       }
     }
   }
-  if(!doorCinematic){const wingDoorReady=window.PalaceWings&&PalaceWings.canInteract&&PalaceWings.canInteract();$('interact').style.display=wingDoorReady?'':'none';$('interact').classList.toggle('on',!!wingDoorReady);const hz_=heroRoot.position.z,h_=$('hint');if(wingDoorReady){h_.style.display='';h_.style.opacity=.95;h_.textContent='اقتربت من الباب — اضغط فتح الباب';}else if(hz_>PL_FRONT-14){h_.style.display='';h_.style.opacity=.9;h_.textContent=royalDoor.open()?'القصر الملكي — الطريق مفتوح':'القصر الملكي — الباب ينتظرك';}else if(hz_>60){h_.style.display='';h_.style.opacity=.9;h_.textContent='تابع المسير نحو القصر الملكي';}else if(introT>=INTRO+7)h_.style.opacity=0;}
+  if(!doorCinematic){const hz_=heroRoot.position.z,h_=$('hint');if(hz_>PL_FRONT-14){h_.style.display='';h_.style.opacity=.9;h_.textContent=royalDoor.open()?'القصر الملكي — الطريق مفتوح':'القصر الملكي — الباب ينتظرك';}else if(hz_>60){h_.style.display='';h_.style.opacity=.9;h_.textContent='تابع المسير نحو القصر الملكي';}else if(introT>=INTRO+7)h_.style.opacity=0;}
   if(combat.setWalkScale)combat.setWalkScale(hallWalk?0.62:(doorWalk?1.05:ANIM_CFG.walkTS));
   const animMove=!!paced||(!(doorCinematic||interiorLock)&&wantMove);
   const animRun=animMove&&!!run&&!paced;
   heroRoot.rotation.y=heroYaw;combat.step(dt,animMove,animRun,introT>=INTRO&&!doorCinematic&&!interiorLock);royalDoor.postAnimation();
-  if(window.PalaceInterior)PalaceInterior.tick(dt,{doorOpen:royalDoor.open(),hero:heroRoot,setFacing:v=>{heroYaw=v;yaw=v;},camera,renderer,scene,portal:royalDoor.portal()});
+  if(window.PalaceInterior)PalaceInterior.tick(dt,{doorOpen:royalDoor.open(),hero:heroRoot,setFacing:v=>{heroYaw=v;yaw=v;},camera,renderer,scene,portal:royalDoor.portal(),combat});
   // camera
   const hp=heroRoot.position,cp=Math.cos(pitch);
   // over-the-shoulder pivot: shifted to the hero's right along the camera's right axis (controls still use yaw)

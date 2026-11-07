@@ -1977,7 +1977,7 @@
     if (!openClip) return;
     const om = new THREE.AnimationMixer(model), oa = om.clipAction(openClip); oa.setLoop(THREE.LoopOnce, 1); oa.clampWhenFinished = true; oa.play(); oa.paused = true; oa.time = 0; om.update(0);
     const cm = closeClip === openClip ? om : new THREE.AnimationMixer(model), ca = cm.clipAction(closeClip); ca.setLoop(THREE.LoopOnce, 1); ca.clampWhenFinished = true; ca.play(); ca.paused = true; ca.enabled = false; ca.time = closeClip === openClip ? closeClip.duration : 0; cm.update(0);
-    d.model = model; d.openMixer = om; d.openAction = oa; d.openClip = openClip; d.closeMixer = cm; d.closeAction = ca; d.closeClip = closeClip; d.progress = 0; d.target = 0; d.state = 'Closed'; model.userData.roomDoor = d.id;
+    d.model = model; d.openMixer = om; d.openAction = oa; d.openClip = openClip; d.closeMixer = cm; d.closeAction = ca; d.closeClip = closeClip; d.progress = 0; d.target = 0; d.state = 'Closed'; d.autoCloseTimer = 0; d.crossed = false; d.approachSide = 0; d.autoRearm = true; model.userData.roomDoor = d.id;
     rebuildDoorColliders();
   }
   function loadRoomDoors() {
@@ -1993,18 +1993,54 @@
       });
     }, err => { console.warn('تعذّر تحميل باب الأجنحة', err); wingDoorLoadStarted = false; });
   }
-  function nearestRoomDoor() {
-    if (!state.ctx || !state.ctx.hero) return null;
-    const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z; let best = null, bd = 3.15;
-    state.doors.forEach(d => { if (!d._roomDoor || !d.model || d.state === 'Opening' || d.state === 'Closing') return; const dist = Math.hypot(x - d.x, z - d.z); const side = d.axis === 'x' ? Math.abs(x - d.x) : Math.abs(z - d.z); if (dist <= bd && side <= 2.35) { bd = dist; best = d; } }); return best;
+  function doorCoordinates(d, p) {
+    const x = p.x - state.root.position.x, z = p.z - state.root.position.z;
+    return { x, z, signed: d.axis === 'x' ? x - d.x : z - d.z,
+      lateral: d.axis === 'x' ? z - d.z : x - d.x,
+      distance: Math.hypot(x - d.x, z - d.z) };
   }
-  function doorOccupied(d) { if (!state.ctx || !state.ctx.hero) return false; const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z; return d.axis === 'x' ? Math.abs(x-d.x)<.9 && Math.abs(z-d.z)<d.width*.5+.45 : Math.abs(z-d.z)<.9 && Math.abs(x-d.x)<d.width*.5+.45; }
-  function interact() { const d = state.interactDoor || nearestRoomDoor(); if (!d) return false; if (d.state === 'Open' && doorOccupied(d)) return false; if (d.state === 'Closed' || d.state === 'Open') { d.target = d.state === 'Closed' ? 1 : 0; d.state = d.target ? 'Opening' : 'Closing'; state.activeDoor = d; return true; } return false; }
+  function nearDoor(d, c) { return c.distance <= 3.15 && Math.abs(c.signed) <= 2.55 && Math.abs(c.lateral) <= d.width * 0.5 + 0.5; }
+  function doorOccupied(d) {
+    if (!state.ctx || !state.ctx.hero) return false;
+    const c = doorCoordinates(d, state.ctx.hero.position);
+    return Math.abs(c.signed) < 0.9 && Math.abs(c.lateral) < d.width * 0.5 + 0.45;
+  }
+  function beginDoorMotion(d, opening, c) {
+    d.target = opening ? 1 : 0; d.state = opening ? 'Opening' : 'Closing';
+    if (opening) { d.approachSide = Math.sign(c.signed) || d.approachSide || 1; d.crossed = false; d.autoCloseTimer = 0; d.autoRearm = false; }
+    state.activeDoor = d;
+  }
+  // Kept as no-op compatibility methods: wing doors are intentionally not manually interactable.
+  function interact() { return false; }
   function updateRoomDoors(dt) {
-    if (!state.built) return; state.interactDoor = nearestRoomDoor();
-    state.doors.forEach(d => { if (!d._roomDoor || !d.model || d.progress === d.target) return; const opening = d.target > d.progress; d.progress = Math.max(0, Math.min(1, d.progress + (opening ? 1 : -1) * dt * (opening ? .58 : .72))); const a = opening ? d.openAction : d.closeAction, other = opening ? d.closeAction : d.openAction, m = opening ? d.openMixer : d.closeMixer, c = opening ? d.openClip : d.closeClip; other.enabled = false; a.enabled = true; a.paused = false; a.time = opening ? c.duration * d.progress : c.duration * (1 - d.progress); m.update(0); a.paused = true; if (d.progress <= .001) { d.progress = 0; d.state = 'Closed'; } else if (d.progress >= .999) { d.progress = 1; d.state = 'Open'; } }); rebuildDoorColliders();
+    if (!state.built || !state.ctx || !state.ctx.hero || !state.root) return;
+    const hero = state.ctx.hero.position;
+    state.doors.forEach(d => {
+      if (!d._roomDoor || !d.model) return;
+      const c = doorCoordinates(d, hero), near = nearDoor(d, c);
+      if (c.distance > 4.0) d.autoRearm = true;
+      if (d.state === 'Closed' && near && d.autoRearm) beginDoorMotion(d, true, c);
+      else if (d.state === 'Closing' && near && c.signed * (d.approachSide || 1) >= -1.0) beginDoorMotion(d, true, c);
+      if (d.state === 'Open') {
+        const passed = d.approachSide && c.signed * d.approachSide < -1.15 && Math.abs(c.lateral) < d.width * 0.5 - 0.3;
+        if (passed) { d.crossed = true; d.autoCloseTimer += dt; }
+        else if (!d.crossed || c.signed * d.approachSide >= -0.75) { d.crossed = false; d.autoCloseTimer = 0; }
+        if (d.crossed && d.autoCloseTimer >= 1.0 && !doorOccupied(d)) beginDoorMotion(d, false, c);
+      }
+      if (d.progress === d.target) return;
+      const opening = d.target > d.progress;
+      d.progress = Math.max(0, Math.min(1, d.progress + (opening ? 1 : -1) * dt * (opening ? .58 : .72)));
+      const a = opening ? d.openAction : d.closeAction, other = opening ? d.closeAction : d.openAction;
+      const m = opening ? d.openMixer : d.closeMixer, cclip = opening ? d.openClip : d.closeClip;
+      other.enabled = false; a.enabled = true; a.paused = false;
+      a.time = opening ? cclip.duration * d.progress : cclip.duration * (1 - d.progress);
+      m.update(0); a.paused = true;
+      if (d.progress <= .001) { d.progress = 0; d.state = 'Closed'; d.crossed = false; d.autoCloseTimer = 0; }
+      else if (d.progress >= .999) { d.progress = 1; d.state = 'Open'; }
+    });
+    rebuildDoorColliders();
   }
-  function canInteract() { return !!state.interactDoor && (state.interactDoor.state === 'Closed' || state.interactDoor.state === 'Open'); }
+  function canInteract() { return false; }
   function doorLocked() { return !!state.activeDoor && (state.activeDoor.state === 'Opening' || state.activeDoor.state === 'Closing'); }
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
