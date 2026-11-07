@@ -18,7 +18,9 @@
     minBlackHoldSeconds: 0.35,
     revealHoldSeconds: 0.45,
     autoWalkH: 1.5,
-    lightCount: 6,
+    // Keep the renderer light layout stable while the hero crosses room groups.
+    // Sources are repositioned smoothly; K2/K3 no longer add/remove point lights.
+    lightCount: 8,
     torchFlicker: 0,
     stallMs: 30000,
     retries: 3,
@@ -105,6 +107,8 @@
   let approachY = null;
   let colliders = [];
   let lights = [];
+  let lightTargets = [];
+  const lightCandidates = [];
   let clock = 0;
   let loadEl = null;
   let barFill = null;
@@ -1023,6 +1027,7 @@
     group = null;
     colliders = [];
     lights = [];
+    lightTargets = [];
     ramp = null;
     flames = [];
     fireMats = [];
@@ -1291,7 +1296,42 @@
     if (!group) return;
     const cam = ctx.camera;
     if (cam) updateLODs(cam);
+    updatePalaceLights(dt, ctx.hero);
     if (wingRuntime && window.PalaceWings) PalaceWings.tick(dt, ctx);
+  }
+
+  function updatePalaceLights(dt, hero) {
+    if (!lights.length || !fireList.length || !group) return;
+    const p = hero && hero.position;
+    if (p && clock >= lightAssignAt) {
+      const hx = p.x - group.position.x, hz = p.z - group.position.z;
+      lightCandidates.length = 0;
+      for (let i = 0; i < fireList.length; i++) lightCandidates.push(fireList[i]);
+      lightCandidates.sort(function (a, b) {
+        const da = (a.x - hx) * (a.x - hx) + (a.z - hz) * (a.z - hz);
+        const db = (b.x - hx) * (b.x - hx) + (b.z - hz) * (b.z - hz);
+        return da - db;
+      });
+      lightAssignAt = clock + 0.12;
+      for (let i = 0; i < lights.length; i++) {
+        const f = lightCandidates[Math.min(i, lightCandidates.length - 1)];
+        const target = lightTargets[i] || (lightTargets[i] = { x: 0, y: 0, z: 0, intensity: 2.15 });
+        target.x = f.x;
+        target.y = Math.min(hallLen * 0.46, 3.1 * H);
+        target.z = f.z;
+        target.intensity = 2.15 * Math.max(0.72, Math.min(1.15, Number(f.intensity) || 1));
+      }
+    }
+    const k = 1 - Math.exp(-Math.max(0.001, dt) * 7);
+    for (let i = 0; i < lights.length; i++) {
+      const l = lights[i], t = lightTargets[i];
+      if (!t) continue;
+      l.position.x += (t.x - l.position.x) * k;
+      l.position.y += (t.y - l.position.y) * k;
+      l.position.z += (t.z - l.position.z) * k;
+      l.intensity += (t.intensity - l.intensity) * k;
+      l.distance = 16 * H;
+    }
   }
 
 
@@ -2273,13 +2313,14 @@
       fireMats.forEach(function (m) {
         if (m.uniforms && m.uniforms.uTime) m.uniforms.uTime.value = 1.15;
       });
-      const sorted = fireList.filter(function (f) { return !f._wing; }).sort(function (a, b) { return a.z - b.z || a.x - b.x; });
+      const sorted = fireList.slice().sort(function (a, b) { return a.z - b.z || a.x - b.x; });
       const ly = Math.min(CH * 0.46, 3.1 * H);
       for (let i = 0; i < lights.length; i++) {
         const f = sorted[Math.min(sorted.length - 1, Math.round(i * (sorted.length - 1) / Math.max(1, lights.length - 1)))];
         lights[i].position.set(f.x, ly, f.z);
         lights[i].intensity = 2.15;
         lights[i].distance = 16 * H;
+        lightTargets[i] = { x: f.x, y: ly, z: f.z, intensity: 2.15 };
       }
     }
 

@@ -1724,25 +1724,12 @@
     g.add(embers);
     state.k2Dress.fires = cups.length;
   }
-  function addK2Lights(r, g, fireY) {
-    const b = r.bbox;
-    const lights = [];
-    function add(color, intensity, dist, x, y, z) {
-      const pl = new THREE.PointLight(color, intensity, dist, 2);
-      pl.castShadow = false;
-      pl.position.set(x, y, z);
-      pl.name = 'K2-light';
-      g.add(pl); lights.push(pl);
-      return pl;
-    }
-    add(0xffb15a, 11, 24, b.cx, fireY, b.cz);
-    add(0xffc48a, 4.2, 14, b.cx, Math.max(3.2, fireY - 1.35), b.cz);
-    const ix = (b.x1 - b.x0) * 0.30, iz = (b.z1 - b.z0) * 0.30;
-    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
-      add(0xffe2c2, 2.2, 16, b.cx + sx * ix, 4.2, b.cz + sz * iz);
-    });
-    state.k2Lights = lights;
-    state.k2LightBase = lights.map(l => l.intensity);
+  // PalaceInterior owns a fixed light budget. Keeping room-specific PointLights
+  // out of the scene prevents the renderer's lighting program layout changing
+  // when K2 is culled or revealed.
+  function addK2Lights() {
+    state.k2Lights = [];
+    state.k2LightBase = [];
   }
 
   function dressK2() {
@@ -1959,14 +1946,29 @@
   // Room-only Babylonian doors. Uses the supplied باب الاجنحة.glb unchanged.
   const ROOM_DOOR_ROOMS = new Set(['K1', 'K2', 'K3', 'K4', 'K5']);
   function isRoomDoor(d) { return d && d.kind !== 'arch' && (ROOM_DOOR_ROOMS.has(d.from) || ROOM_DOOR_ROOMS.has(d.to)); }
-  function doorBox(d) {
+  function doorBox(d, out) {
     const half = d.width * 0.5, span = d.state === 'Open' ? 0 : Math.max(0.42, half * (1 - d.progress) + 0.12);
-    return d.axis === 'x' ? { minx: d.x - 0.6, maxx: d.x + 0.6, miny: 0, maxy: d.height * .94, minz: d.z - span, maxz: d.z + span, _door: true } : { minx: d.x - span, maxx: d.x + span, miny: 0, maxy: d.height * .94, minz: d.z - .6, maxz: d.z + .6, _door: true };
+    const b = out || { _door: true, _doorRef: d };
+    b.minx = d.axis === 'x' ? d.x - 0.6 : d.x - span;
+    b.maxx = d.axis === 'x' ? d.x + 0.6 : d.x + span;
+    b.miny = 0; b.maxy = d.height * .94;
+    b.minz = d.axis === 'x' ? d.z - span : d.z - 0.6;
+    b.maxz = d.axis === 'x' ? d.z + span : d.z + 0.6;
+    return b;
   }
-  function rebuildDoorColliders() { state.dynamicDoorBoxes = state.doors.filter(d => d._roomDoor && d.state !== 'Open').map(doorBox); }
+  function rebuildDoorColliders() {
+    const boxes = state.dynamicDoorBoxes || (state.dynamicDoorBoxes = []);
+    let w = 0;
+    state.doors.forEach(d => {
+      if (!d._roomDoor || d.state === 'Open') return;
+      const box = doorBox(d, d._colliderBox || (d._colliderBox = { _door: true, _doorRef: d }));
+      boxes[w++] = box;
+    });
+    boxes.length = w;
+  }
   function fitWingDoor(gltf, d, host) {
     const model = gltf.scene; model.name = 'BabylonianWingDoor-' + d.id;
-    model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
+    model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = true; } });
     model.rotation.y = d.axis === 'x' ? Math.PI * .5 : 0; model.updateMatrixWorld(true);
     const raw = new THREE.Box3().setFromObject(model), rs = raw.getSize(new THREE.Vector3());
     const span = d.axis === 'x' ? rs.z : rs.x;
@@ -2959,19 +2961,10 @@
     else sideGeo.dispose();
     state.k3Dress.walls = true;
 
-    const lights = [];
-    function addLight(color, intensity, dist, x, y, z) {
-      const pl = new THREE.PointLight(color, intensity, dist, 2);
-      pl.castShadow = false;
-      pl.position.set(x, y, z);
-      pl.name = 'K3-light';
-      g.add(pl); lights.push(pl);
-    }
-    addLight(0xffb15a, 6.5, 18, b.cx, 3.2, b.cz);
-    addLight(0xffc48a, 2.6, 8, b.x0 + 1.1, 1.75, b.z0 + 2.5);
-    addLight(0xffc48a, 2.6, 8, b.x0 + 1.1, 1.75, b.z0 + 9.5);
-    state.k3Lights = lights;
-    state.k3LightBase = lights.map(l => l.intensity);
+    // K3 fire positions are exported to PalaceInterior and served by its
+    // fixed light budget; do not add room-local PointLights here.
+    state.k3Lights = [];
+    state.k3LightBase = [];
 
     k3LoadGLB(K3_LAZY.table, gltf => {
       const dress = state.k3Dress;
