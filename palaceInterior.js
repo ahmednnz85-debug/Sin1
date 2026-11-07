@@ -3051,11 +3051,11 @@
           }
           if (warmProxy) { ctx.scene.remove(warmProxy); warmProxy.geometry.dispose(); warmProxy = null; }
           if (warmProxyI) { ctx.scene.remove(warmProxyI); warmProxyI.geometry.dispose(); warmProxyI = null; }
-          const tFull = performance.now();
-          try { ctx.renderer.render(ctx.scene, ctx.camera); }
-          catch (renderErr) { mark('render ' + (renderErr && renderErr.message)); }
+          // Do not render the entire palace here. The next normal game-loop frame
+          // will draw it after the fade transition; rendering it synchronously at
+          // 99% can spike GPU memory and reset the mobile tab.
           warmFrame = true;
-          mark('warm slices max=' + Math.round(warmSlow) + 'ms full=' + Math.round(performance.now() - tFull) + 'ms n=' + warmMeshes.length);
+          mark('warm slices max=' + Math.round(warmSlow) + 'ms deferred-full n=' + warmMeshes.length);
           warmMeshes = null;
           renderUI();
         }

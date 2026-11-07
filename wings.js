@@ -54,9 +54,10 @@
     k2Reception: OPT_DIR + 'عمود-المجلس.glb',
     k2Meetings: 'assets/اجتماعات .glb',
     k3Table: 'assets/طاولة الخرائط.glb',
-    k3Furniture: 'assets/اثاث_الخرائط.glb',
-    door: 'assets/باب الاجنحة.glb'
+    k3Furniture: 'assets/اثاث_الخرائط.glb'
   };
+  const WING_DOOR_FILE = 'assets/باب الاجنحة.glb';
+  let wingDoorLoadStarted = false;
   const K2_LAZY = { reception: WING_FILES.k2Reception, meetings: WING_FILES.k2Meetings };
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
@@ -1969,7 +1970,7 @@
     model.rotation.y = d.axis === 'x' ? Math.PI * .5 : 0; model.updateMatrixWorld(true);
     const raw = new THREE.Box3().setFromObject(model), rs = raw.getSize(new THREE.Vector3());
     const span = d.axis === 'x' ? rs.z : rs.x;
-    model.scale.setScalar(Math.min((d.width - .08) / Math.max(.001, span), (d.height - .08) / Math.max(.001, rs.y)));
+    model.scale.setScalar(Math.min(d.width / Math.max(.001, span), d.height / Math.max(.001, rs.y)));
     model.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(model), c = box.getCenter(new THREE.Vector3());
     model.position.x += d.x - c.x; model.position.z += d.z - c.z; model.position.y += -box.min.y - .06; host.add(model);
     const clips = gltf.animations || [], openClip = clips.find(c => /opendoors/i.test(c.name || '')) || clips[0], closeClip = clips.find(c => /closedoors/i.test(c.name || '')) || openClip;
@@ -1980,8 +1981,17 @@
     rebuildDoorColliders();
   }
   function loadRoomDoors() {
-    if (!THREE.GLTFLoader || !state.root) return;
-    state.doors.filter(isRoomDoor).forEach(d => { d._roomDoor = true; d.state = 'Closed'; d.progress = 0; d.target = 0; const room = ROOM_DOOR_ROOMS.has(d.to) ? d.to : d.from; wingGLB(WING_FILES.door, g => { if (state.root) fitWingDoor(g, d, state.regionGroups.get(room) || state.root); }); });
+    if (!THREE.GLTFLoader || !state.root || wingDoorLoadStarted) return;
+    wingDoorLoadStarted = true;
+    const roomDoors = state.doors.filter(isRoomDoor);
+    roomDoors.forEach(d => { d._roomDoor = true; d.state = 'Closed'; d.progress = 0; d.target = 0; });
+    wingGLB(WING_DOOR_FILE, template => {
+      if (!state.root) return;
+      roomDoors.forEach(d => {
+        const room = ROOM_DOOR_ROOMS.has(d.to) ? d.to : d.from;
+        fitWingDoor({ scene: template.scene.clone(true), animations: template.animations || [] }, d, state.regionGroups.get(room) || state.root);
+      });
+    }, err => { console.warn('تعذّر تحميل باب الأجنحة', err); wingDoorLoadStarted = false; });
   }
   function nearestRoomDoor() {
     if (!state.ctx || !state.ctx.hero) return null;
@@ -2006,6 +2016,7 @@
     });
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
+    wingDoorLoadStarted = false;
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null;
