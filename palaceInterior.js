@@ -99,6 +99,7 @@
   let fadeT = 0;
   let holdT = 0;
   let loadPromise = null;
+  let palaceLoadStarted = false;
   let loadOk = null;
   let loadError = null;
   let H = 1.8;
@@ -404,10 +405,11 @@
     warmMeshes = null;
     loadOk = null;
     loadError = null;
+    palaceLoadStarted = false;
     holdT = CONFIG.minBlackHoldSeconds;
     state = 'LOADING';
     renderUI();
-    loadPalaceAssets().then(function () { loadOk = true; }, function (e) { loadError = e; loadOk = false; });
+    startPalaceLoad(lastContext);
   }
 
   function srgb(tex) {
@@ -926,28 +928,64 @@
 
   function releaseCity(scene, hero) {
     if (!scene || scene.userData.cityReleased) return;
-    scene.userData.cityReleased = true;
-    const keep = new Set();
+    const keptNodes = new Set(), retainedResources = new Set();
     function hold(root) {
       if (!root) return;
-      root.traverse(function (o) { keep.add(o); });
+      root.traverse(function (o) { keptNodes.add(o); });
     }
-    hold(hero);
-    hold(group);
+    function retainResource(value) { if (value && typeof value === 'object') retainedResources.add(value); }
+    function collectResources(root, target) {
+      root.traverse(function (o) {
+        retainResource(o.geometry);
+        const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        mats.forEach(function (m) {
+          if (!m) return;
+          retainResource(m);
+          ['map','normalMap','roughnessMap','metalnessMap','aoMap','emissiveMap','envMap','lightMap','alphaMap','bumpMap','displacementMap'].forEach(function (k) { retainResource(m[k]); });
+          if (m.uniforms) Object.keys(m.uniforms).forEach(function (k) { retainResource(m.uniforms[k] && m.uniforms[k].value); });
+        });
+      });
+    }
+    hold(hero); hold(group);
+    // Preserve only explicitly tagged renderer lights. Do not retain every Points,
+    // camera, sky or city light node: those belong to the exterior scene being freed.
     scene.traverse(function (o) {
-      if (o.isLight || o.isCamera || o.isPoints || o.name === 'SkyPhoto') hold(o);
+      if (!o.userData || !o.userData.keepDuringPalace) return;
+      let root = o;
+      while (root.parent && root.parent !== scene) root = root.parent;
+      if (root.parent === scene) hold(root);
     });
-    const drop = [];
-    scene.children.forEach(function (ch) {
-      if (keep.has(ch) || ch === group || ch === hero) return;
-      drop.push(ch);
+    scene.children.forEach(function (ch) { if (keptNodes.has(ch) || ch === hero || ch === group) collectResources(ch, retainedResources); });
+    retainResource(scene.environment); retainResource(scene.background);
+    const drop = scene.children.filter(function (ch) { return !keptNodes.has(ch) && ch !== hero && ch !== group; });
+    const geometries = new Set(), materials = new Set(), textures = new Set();
+    drop.forEach(function (root) {
+      root.traverse(function (o) {
+        if (o.geometry) geometries.add(o.geometry);
+        const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        mats.forEach(function (m) {
+          if (!m) return; materials.add(m);
+          ['map','normalMap','roughnessMap','metalnessMap','aoMap','emissiveMap','envMap','lightMap','alphaMap','bumpMap','displacementMap'].forEach(function (k) { if (m[k]) textures.add(m[k]); });
+          if (m.uniforms) Object.keys(m.uniforms).forEach(function (k) { const v = m.uniforms[k] && m.uniforms[k].value; if (v && v.isTexture) textures.add(v); });
+        });
+      });
     });
-    drop.forEach(function (ch) {
-      scene.remove(ch);
-      try { disposeObject(ch); } catch (e) { /* keep going */ }
-    });
-    if (scene.userData) scene.userData.cityReleased = true;
-    note('city released ' + drop.length);
+    drop.forEach(function (root) { scene.remove(root); });
+    geometries.forEach(function (g) { if (!retainedResources.has(g) && !g.userData.palaceShared && g.dispose) g.dispose(); });
+    materials.forEach(function (m) { if (!retainedResources.has(m) && !m.userData.palaceShared && m.dispose) m.dispose(); });
+    textures.forEach(function (t) { if (!retainedResources.has(t) && !t.userData.palaceShared && t.dispose) t.dispose(); });
+    scene.userData.cityReleased = true;
+    try { if (window.__releaseExteriorStage) window.__releaseExteriorStage(); } catch (e) { note('exterior refs ' + (e && e.message || e)); }
+    note('city released ' + drop.length + ' roots, ' + geometries.size + ' geometries, ' + materials.size + ' materials, ' + textures.size + ' textures');
+  }
+
+  function startPalaceLoad(ctx) {
+    if (palaceLoadStarted) return;
+    palaceLoadStarted = true;
+    loadStartedAt = performance.now();
+    try { releaseCity(ctx && ctx.scene, ctx && ctx.hero); }
+    catch (e) { note('city release failed ' + (e && e.message || e)); }
+    loadPalaceAssets().then(function () { loadOk = true; note('assets ready'); }, function (err) { loadError = err; loadOk = false; note('assets failed ' + (err && err.message)); });
   }
 
   let lightsCulled = false;
@@ -2922,7 +2960,9 @@
       }
     }
   }
+  let lastContext = null;
   function tickInner(dt, ctx) {
+    lastContext = ctx;
     lastDt = dt;
     updateOutsideLightFades(dt);
     clock += dt;
@@ -2961,10 +3001,10 @@
         warmFrame = false;
     warmMeshes = null;
         occupant = true;
-        loadStartedAt = performance.now();
+        palaceLoadStarted = false;
+        loadStartedAt = 0;
         note('threshold x=' + p.x.toFixed(2) + ' z=' + p.z.toFixed(2) + ' door=' + ctx.doorOpen);
         renderUI();
-        loadPalaceAssets().then(function () { loadOk = true; note('assets ready'); }, function (err) { loadError = err; loadOk = false; note('assets failed ' + (err && err.message)); });
       }
       return;
     }
@@ -2981,6 +3021,7 @@
     }
     if (state === 'LOADING') {
       holdT += dt;
+      if (!palaceLoadStarted) startPalaceLoad(ctx);
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
       renderUI();
