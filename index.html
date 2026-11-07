@@ -28,7 +28,7 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 #msg{max-width:440px;font-size:13px;color:#ffb4a0;direction:ltr;white-space:pre-wrap}
 #vig{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(6,14,30,.50) 100%)}
 #grade{position:fixed;inset:0;pointer-events:none;mix-blend-mode:soft-light;background:linear-gradient(to bottom,rgba(28,78,140,.30) 0%,rgba(0,0,0,0) 48%,rgba(255,150,60,.26) 100%)}
-#fight{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(134px + env(safe-area-inset-bottom,0px));width:84px;height:84px;border-radius:50%;border:2px solid #ff7a5c;background:var(--ui-bg);color:var(--ui-fg);font-size:17px;font-weight:700}
+#interact{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));min-width:112px;height:52px;border-radius:12px;border:1px solid rgba(225,183,111,.9);background:rgba(20,14,9,.9);color:#f6e8d0;font-weight:700;z-index:4}#interact.on{background:#a9783e;color:#201208}#fight{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(134px + env(safe-area-inset-bottom,0px));width:84px;height:84px;border-radius:50%;border:2px solid #ff7a5c;background:var(--ui-bg);color:var(--ui-fg);font-size:17px;font-weight:700}
 #fight.on{background:#ff7a5c;color:#201208}
 #fight.off{opacity:.45}
 #fmenu{position:fixed;right:calc(118px + env(safe-area-inset-right,0px));bottom:calc(134px + env(safe-area-inset-bottom,0px));display:none;flex-direction:column;gap:10px}
@@ -104,6 +104,7 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 <div id="stick"><div id="knob"></div></div>
 <button id="run" style="display:none" aria-label="Sprint"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="22" cy="5" r="2.5"></circle><path d="m16 11 4-2 4 3 4 1M17 11l-4 6 5 3 4-4M13 17l-5 1-3 5m12-3-4 5m8-10 4 2 2 5"></path></svg><span>ركض</span></button>
 <button id="fight" style="display:none" aria-label="قتال">قتال</button>
+<button id="interact" style="display:none" aria-label="تفاعل">فتح الباب</button>
 <div id="fmenu"><button id="f-counter">رد (هجوم مضاد)</button><button id="f-air">لكمة السيف الهوائية</button></div>
 <div id="hud" style="display:none"><button id="skip">تخطي المشهد السينمائي</button><button id="qual">الجودة: عالية</button></div>
 <div id="hint" style="display:none">استخدم العصا أسفل اليسار للحركة، واسحب في الجهة اليمنى لتدوير الكاميرا</div>
@@ -1199,23 +1200,11 @@ async function init(){
   heroRoot=new THREE.Group();heroRoot.add(model);heroRoot.position.set(0,0,-30);scene.add(heroRoot);
   mixer=new THREE.AnimationMixer(model);
   combat.attach(mixer,hg.animations);                                         // Animation State Machine (idle/walk/run + 2 combat moves)
-  $('st').textContent='جارٍ تركيب الباب الملكي';
-  royalDoor=await buildRoyalDoor(await loadX('مجسم الباب'),model);
+  $('st').textContent='جارٍ تجهيز الأجنحة الملكية';
   buildDust();
   state='ready';$('st').textContent='جاهز';$('loading-pane').style.display='none';$('main-menu').style.display='block';$('bar').style.display='none';
   camera.position.copy(cP0);camera.lookAt(cL0);
   requestAnimationFrame(loop);
-  if(new URLSearchParams(location.search).has('startInHall'))setTimeout(async()=>{
-    const pause=()=>new Promise(r=>setTimeout(r,0));
-    try{
-      $('go').click();window.__royalDoorTest.place();
-      for(let i=0;i<20&&!royalDoor.open();i++){window.__royalDoorTest.advance(1);await pause();}
-      if(!royalDoor.open())window.__royalDoorTest.cross();
-      for(let i=0;i<90&&PalaceInterior.state()!=='DONE'&&PalaceInterior.state()!=='FAILED';i++){window.__royalDoorTest.advance(1);await pause();}
-      if(PalaceInterior.state()==='FAILED')throw new Error('Palace transition failed: '+PalaceInterior.debugText());
-      window.__holdSim=false;
-    }catch(e){window.__holdSim=true;showErr(e);console.error(e);}
-  },0);
 }
 
 // ---------- dust ----------
@@ -1250,6 +1239,7 @@ const up=e=>{if(e.pointerId===sId){sId=null;inp.x=inp.y=0;const center=stickEl.o
 touch.addEventListener('pointerup',up);touch.addEventListener('pointercancel',up);
 touch.addEventListener('wheel',e=>{camManualAt=performance.now();dist=Math.max(2.35,Math.min(5.2,dist+e.deltaY*.004));},{passive:true});
 const runB=$('run');const rs=v=>{inp.run=v;runB.classList.toggle('on',v);};
+const interactB=$('interact');interactB.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();if(window.PalaceWings&&PalaceWings.interact())interactB.classList.add('on');});
 let runPointerId=null;
 runB.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();runPointerId=e.pointerId;try{runB.setPointerCapture(e.pointerId);}catch(_){}rs(true);});
 const endRun=e=>{if(runPointerId===null||e.pointerId===runPointerId){runPointerId=null;rs(false);}};
@@ -1267,7 +1257,7 @@ $('settings-back').addEventListener('click',()=>{$('settings-menu').style.displa
 
 // ---------- game loop ----------
 let introT=-1,last=0,heroYaw=0,tAcc=0;const INTRO=12;
-$('go').addEventListener('click',()=>{$('ov').style.display='none';document.body.classList.add('playing');['run','hud','hint'].forEach(i=>$(i).style.display='');introT=0;setTimeout(()=>{$('hint').style.opacity=0;},7000);});
+$('go').addEventListener('click',()=>{$('ov').style.display='none';document.body.classList.add('playing');['run','hud','hint','interact'].forEach(i=>$(i).style.display='');introT=0;setTimeout(()=>{$('hint').style.opacity=0;},7000);});
 $('skip').addEventListener('click',()=>{if(introT>=0&&introT<INTRO)introT=INTRO;else royalDoor.skip();});
 // ===================== HERO v2: Animation State Machine + combat button =====================
 // Hero mesh is assets/سين_وقوف_ساكن_سينمائي.glb (Mixamo rig). Loaded once; locomotion clips are the ones embedded in THAT file.
@@ -1472,328 +1462,8 @@ const combat=(function(){
     pushClipRef:()=>pushClip
   };
 })();
-function buildDoorGlimpse(frontZ){
-  const g=new THREE.Group();g.name='DoorGlimpse';g.visible=false;scene.add(g);
-  const map=new THREE.TextureLoader().load('assets/palace-glimpse.webp?v=4');
-  map.encoding=THREE.sRGBEncoding;map.anisotropy=8;
-  map.wrapS=map.wrapT=THREE.ClampToEdgeWrapping;
-  const doorX=1, doorW=4.42, doorH=8.18, doorY=3.86+doorH*0.5;
-  let wallZ=frontZ+5.2;
-  const ext=scene.getObjectByName('PalaceExterior');
-  if(ext){
-    let nearest=1e9;
-    [-1.4,0,1.4].forEach(function(ox){
-      [-2.2,0,2.2].forEach(function(oy){
-        const ray=new THREE.Raycaster(new THREE.Vector3(doorX+ox, doorY+oy, frontZ+0.9), new THREE.Vector3(0,0,1), 0, 40);
-        const hits=ray.intersectObject(ext, true);
-        if(hits.length&&hits[0].point.z<nearest) nearest=hits[0].point.z;
-      });
-    });
-    if(nearest<1e8) wallZ=nearest-0.06;
-  }
-  const camZ=frontZ-6.8, doorZ=frontZ+0.25;
-  const scale=Math.max(1,(wallZ-camZ)/Math.max(0.8,doorZ-camZ));
-  const pw=doorW*scale, ph=doorH*scale;
-  const imgA=1280/721, planeA=pw/ph;
-  if(imgA>planeA){const r=planeA/imgA; map.repeat.set(r,1); map.offset.set((1-r)*0.5,0);}
-  else{const r=imgA/planeA; map.repeat.set(1,r); map.offset.set(0,(1-r)*0.5);}
-  const plane=new THREE.Mesh(new THREE.PlaneGeometry(pw,ph), new THREE.MeshBasicMaterial({map:map,side:THREE.DoubleSide}));
-  plane.position.set(doorX, doorY, wallZ);
-  plane.rotation.y=Math.PI;
-  plane.frustumCulled=false;
-  plane.renderOrder=4;
-  g.add(plane);
-  // Marble sits on the palace-mesh floor seen through the door. The glimpse image is not modified.
-  const marbleMap=new THREE.TextureLoader().load('assets/marble.webp?v=1');
-  marbleMap.encoding=THREE.sRGBEncoding;marbleMap.anisotropy=8;marbleMap.wrapS=marbleMap.wrapT=THREE.RepeatWrapping;
-  let floorY=3.86;
-  if(ext){
-    const down=new THREE.Raycaster(),dir=new THREE.Vector3(0,-1,0);
-    let best=-1;
-    for(let ix=-2;ix<=2;ix++)for(let iz=0;iz<=4;iz++){
-      down.set(new THREE.Vector3(doorX+ix*1.15,6.4,frontZ-0.4+iz*Math.max(0.45,(wallZ-frontZ)/4)),dir);
-      down.far=6.2;
-      const hits=down.intersectObject(ext,true);
-      if(hits.length&&hits[0].point.y>0.4&&hits[0].point.y<5.7&&hits[0].point.y>best)best=hits[0].point.y;
-    }
-    if(best>0.4)floorY=best;
-  }
-  const z0=frontZ-1.6,z1=wallZ-0.05,floorLen=Math.max(2.8,z1-z0),floorW=12;
-  marbleMap.repeat.set(floorW/1.8,floorLen/1.8);
-  const marble=new THREE.Mesh(new THREE.PlaneGeometry(floorW,floorLen),new THREE.MeshBasicMaterial({map:marbleMap,polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8}));
-  marble.rotation.x=-Math.PI/2;
-  marble.position.set(doorX,floorY+0.06,(z0+z1)*0.5);
-  marble.frustumCulled=false;marble.renderOrder=6;marble.name='glimpse-marble-floor';
-  g.add(marble);
-  g.userData.wallZ=wallZ;
-  return g;
-}
-// ---------- Royal palace door: original leaf clip scrubbed in time with push_object ----------
-// Arch measurements were taken from palace.glb after its existing world transform (PAL.s/PAL.ry).
-// The supplied door keeps its mesh, materials, placement and original open clip. No procedural bone posing.
-async function buildRoyalDoor(gltf,heroModel){
-  const ARCH={x:1.0,y:3.86,z:183.85,width:4.42,height:8.18,depth:.38};
-  const root=new THREE.Group();root.name='RoyalDoorRig';scene.add(root);
-  const model=gltf.scene;prep(model,{cast:true});root.add(model);model.rotation.y=Math.PI; // original +90 deg clip now opens inward
-  const pivot=model.getObjectByName('Cube.004')||model.getObjectByName('Cube004');
-  if(!pivot||!gltf.animations.length)throw new Error('مجسم الباب لا يحتوي الضلفة أو أنيميشن الفتح الأصلي');
-  const doorMixer=new THREE.AnimationMixer(model),clip=gltf.animations[0],doorAction=doorMixer.clipAction(clip);
-  doorAction.setLoop(THREE.LoopOnce,1);doorAction.clampWhenFinished=true;doorAction.play();doorAction.paused=true;doorAction.time=0;doorMixer.update(0);
-  model.updateMatrixWorld(true);
-  const leafBox=new THREE.Box3().setFromObject(pivot),leafSize=leafBox.getSize(new THREE.Vector3());
-  model.scale.set(ARCH.width/leafSize.x,ARCH.height/leafSize.y,ARCH.depth/leafSize.z);model.updateMatrixWorld(true);
-  leafBox.setFromObject(pivot);const leafCenter=leafBox.getCenter(new THREE.Vector3());
-  model.position.x+=ARCH.x-leafCenter.x;model.position.y+=ARCH.y-leafBox.min.y;model.position.z+=ARCH.z-leafCenter.z;
-  root.updateMatrixWorld(true);leafBox.setFromObject(pivot);
-  const frontZ=leafBox.min.z,basePivotZ=pivot.position.z;
-  const glimpse=buildDoorGlimpse(frontZ);
-  doorHole.uHoleMin.value.set(ARCH.x-ARCH.width*0.52, ARCH.y-0.05, frontZ+0.02);
-  doorHole.uHoleMax.value.set(ARCH.x+ARCH.width*0.52, ARCH.y+ARCH.height+0.15, (glimpse.userData.wallZ||frontZ+6)+0.4);
-
-  // How far the untouched push_object clip carries the hands ahead of heroRoot. Sample a clone, then restore the bind pose.
-  const pushReach=(()=>{
-    const src=combat.pushClipRef&&combat.pushClipRef();
-    if(!src)return .48;
-    const saved=[];
-    heroModel.traverse(o=>{if(o.isBone)saved.push([o,o.quaternion.clone(),o.position.clone()]);});
-    const mx=new THREE.AnimationMixer(heroModel);
-    const act=mx.clipAction(src.clone());
-    act.setLoop(THREE.LoopOnce,1);act.clampWhenFinished=true;act.play();
-    const hands=['LeftHand','RightHand'].map(n=>heroModel.getObjectByName(n)).filter(Boolean);
-    const v=new THREE.Vector3(),rig=heroModel.parent||heroModel;
-    const sample=frac=>{
-      mx.setTime(src.duration*frac);heroModel.updateMatrixWorld(true);let z=.2;
-      for(const h of hands){h.getWorldPosition(v);rig.worldToLocal(v);if(v.z>z)z=v.z;}
-      return z;
-    };
-    const plant=sample(.667);
-    act.stop();
-    for(const [o,q,pos] of saved){o.quaternion.copy(q);o.position.copy(pos);}
-    heroModel.updateMatrixWorld(true);
-    return plant;
-  })();
-  const standZ=frontZ-pushReach-.02,triggerZ=standZ-1.85;
-  let phase='idle',elapsed=0,progress=0,audio=null,creak=null,dolly=0;
-
-  function doorFromPush(st){
-    if(!st||st.mode==='enter'||st.mode==='blend'||!(st.duration>0))return 0;
-    const u=Math.max(0,Math.min(1,st.time/st.duration));
-    // Hand-forward curve of the untouched push_object clip: the palms load on a shut door, then drive it open.
-    const keys=[[0,0],[.64,0],[.708,.036],[.751,.107],[.792,.202],[.832,.274],[.876,.429],[.917,.631],[.957,.821],[1,1]];
-    let hand=1;
-    for(let i=1;i<keys.length;i++){
-      if(u<=keys[i][0]){const a=keys[i-1],b=keys[i],k=(u-a[0])/((b[0]-a[0])||1);hand=a[1]+(b[1]-a[1])*k;break;}
-    }
-    return Math.pow(Math.max(0,Math.min(1,hand)),1.2);
-  }
-  const vA=new THREE.Vector3();
-  const camWant=new THREE.Vector3(),camLook=new THREE.Vector3();
-
-  function thump(freq,volume){
-    if(!audio)return;const t=audio.currentTime,o=audio.createOscillator(),g=audio.createGain();
-    o.type='sine';o.frequency.setValueAtTime(freq,t);o.frequency.exponentialRampToValueAtTime(Math.max(25,freq*.45),t+.42);
-    g.gain.setValueAtTime(volume,t);g.gain.exponentialRampToValueAtTime(.0001,t+.48);o.connect(g).connect(audio.destination);o.start(t);o.stop(t+.5);
-  }
-  function startAudio(){
-    if(audio)return;const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
-    try{audio=new AC();audio.resume();}catch(_){audio=null;}
-  }
-  function startCreak(){
-    if(!audio||creak)return;const t=audio.currentTime,master=audio.createGain();master.gain.setValueAtTime(.0001,t);master.gain.linearRampToValueAtTime(.12,t+.5);master.connect(audio.destination);
-    const low=audio.createOscillator(),metal=audio.createOscillator(),lg=audio.createGain(),mg=audio.createGain();
-    low.type='sawtooth';low.frequency.value=58;metal.type='square';metal.frequency.value=117;lg.gain.value=.32;mg.gain.value=.035;
-    low.connect(lg).connect(master);metal.connect(mg).connect(master);low.start();metal.start();
-    const len=audio.sampleRate*2,buf=audio.createBuffer(1,len,audio.sampleRate),data=buf.getChannelData(0);let last=0;
-    for(let i=0;i<len;i++){last=(last+(rnd()*2-1)*.055)/1.055;data[i]=last;}
-    const noise=audio.createBufferSource(),filter=audio.createBiquadFilter(),ng=audio.createGain();noise.buffer=buf;noise.loop=true;filter.type='bandpass';filter.frequency.value=190;filter.Q.value=2.8;ng.gain.value=.42;
-    noise.connect(filter).connect(ng).connect(master);noise.start();creak={master,low,metal,noise,filter};
-  }
-  function stopCreak(){
-    if(!creak||!audio)return;const t=audio.currentTime,c=creak;creak=null;c.master.gain.cancelScheduledValues(t);c.master.gain.setTargetAtTime(.0001,t,.12);
-    for(const n of[c.low,c.metal,c.noise]){try{n.stop(t+.7);}catch(_){}}
-  }
-  function setDoor(p){
-    progress=Math.max(0,Math.min(1,p));
-    doorAction.paused=false;doorAction.time=clip.duration*progress;doorMixer.update(0);doorAction.paused=true;
-    pivot.position.z=basePivotZ;root.updateMatrixWorld(true);
-  }
-  function begin(){
-    if(phase!=='idle')return;phase='approach';elapsed=0;startAudio();
-    $('hint').style.display='';$('hint').style.opacity=.95;
-  }
-  function update(dt,canTrigger){
-    const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'IDLE';
-    const palaceUp=palaceState==='SETUP'||palaceState==='REVEAL'||palaceState==='FADING_IN'||palaceState==='DONE'||palaceState==='FAILED';
-    if(phase==='done'){
-      glimpse.visible=!palaceUp;
-      doorHole.uDoorHole.value=glimpse.visible?1:0;
-      return;
-    }
-    if(phase==='idle'){
-      if(canTrigger&&heroRoot.position.z>=triggerZ&&heroRoot.position.z<frontZ&&Math.abs(heroRoot.position.x-ARCH.x)<2.7)begin();
-      else return;
-    }
-    elapsed+=dt;
-    const dollyGoal=(phase==='push'||phase==='enter'||phase==='recover')?2.8:0;
-    dolly+=(dollyGoal-dolly)*(1-Math.exp(-dt*0.7));
-    const showGlimpse=!palaceUp&&((phase==='push'&&progress>0.04)||phase==='enter'||phase==='recover');
-    glimpse.visible=showGlimpse;
-    doorHole.uDoorHole.value=showGlimpse?1:0;
-    if(phase==='approach'){
-      const p=heroRoot.position,dx=ARCH.x-p.x,dz=standZ-p.z,dist=Math.hypot(dx,dz);
-      const step=Math.min(dist,1.28*dt);
-      if(dist>1e-4){p.x+=dx/dist*step;p.z+=dz/dist*step;}
-      let d=-heroYaw;d=Math.atan2(Math.sin(d),Math.cos(d));heroYaw+=d*Math.min(1,dt*4);
-      $('hint').textContent='SÎN  /  الباب الملكي';
-      if(dist<0.04){p.x=ARCH.x;p.z=standZ;heroYaw=0;phase='contact';elapsed=0;combat.startPush();thump(72,.18);}
-    }else if(phase==='contact'){
-      $('hint').textContent='سين يضع يديه على الباب';
-    }else if(phase==='push'){
-      if(creak&&audio){const t=audio.currentTime,p=progress;creak.low.frequency.setTargetAtTime(58-18*p+Math.sin(elapsed*4.1)*3,t,.05);creak.metal.frequency.setTargetAtTime(117-31*p,t,.07);creak.filter.frequency.setTargetAtTime(190-75*p,t,.08);}
-      $('hint').textContent=progress<.08?'سين يسند يديه على الباب الثقيل':'الباب الملكي يُفتح';
-    }else if(phase==='enter'){
-      if(progress<1)setDoor(Math.min(1,progress+dt*0.7));
-      if(window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl()){phase='done';$('hint').style.opacity=0;return;}
-      const p=heroRoot.position,nz=p.z+1.28*dt;
-      if(!blocked(p.x,nz))p.z=nz;
-      heroYaw=0;
-      $('hint').textContent='سين يدخل القصر';
-      if(p.z>frontZ+2.6){phase='done';$('hint').style.opacity=0;}
-    }else if(phase==='recover'){
-      $('hint').textContent='الطريق إلى القصر أصبح مفتوحاً';
-      if(!combat.pushing()){phase='done';pivot.position.z=basePivotZ;$('hint').style.opacity=0;}
-    }
-  }
-  function postAnimation(){
-    const st=combat.pushState();
-    if(phase==='contact'){
-      setDoor(0);
-      if(st&&st.mode==='play'){phase='push';elapsed=0;startCreak();thump(48,.26);}
-      return;
-    }
-    if(phase==='push'){
-      if(!st||!(st.duration>0)||st.mode!=='play')return;
-      const p=doorFromPush(st);
-      setDoor(p);
-      if(st.time/st.duration>=.86){phase='enter';elapsed=0;combat.releasePush();stopCreak();thump(42,.16);}
-      return;
-    }
-    if(phase==='recover')setDoor(1);
-  }
-  function updateCamera(dt){
-    if(phase==='idle'||phase==='done')return false;
-    const hp=heroRoot.position,closing=phase==='push'?progress*.2:0;
-    camWant.set(hp.x-1.05-closing*.1,hp.y+2.25,hp.z-2.7-dolly);
-    camera.position.lerp(camWant,1-Math.exp(-dt*1.6));
-    camLook.set(hp.x,hp.y+1.45,hp.z+2.4);camera.lookAt(camLook);return true;
-  }
-  function blocks(x,z){
-    return phase!=='done'&&phase!=='enter'&&Math.abs(x-ARCH.x)<ARCH.width*.5+.24&&z>frontZ-.28&&z<frontZ+ARCH.depth+.45;
-  }
-  function skip(){
-    if(phase==='idle'||phase==='done')return;
-    stopCreak();setDoor(1);if(combat.pushing())combat.releasePush();phase='enter';elapsed=0;pivot.position.z=basePivotZ;
-  }
-  function probe(){
-    const st=combat.pushState();
-    return{phase,progress,doorTime:doorAction.time,clipDuration:clip.duration,clipName:clip.name,push:st,standZ,frontZ,triggerZ,pushReach,loco:combat.state(),
-      hero:{x:heroRoot.position.x,y:heroRoot.position.y,z:heroRoot.position.z},
-      door:{x:ARCH.x,y:ARCH.y,z:ARCH.z,width:ARCH.width,height:ARCH.height,frontZ},
-      blockedAtDoor:blocks(ARCH.x,frontZ),active:phase!=='idle'&&phase!=='done'};
-  }
-  function advance(seconds){
-    window.__holdSim=true;
-    const n=Math.max(1,Math.round(Math.max(0,seconds)*60));
-    for(let i=0;i<n;i++){
-      update(1/60,true);
-      heroRoot.rotation.y=heroYaw;
-      const interiorLock=window.PalaceInterior&&PalaceInterior.locksControl();
-      combat.step(1/60,false,false,!interiorLock);
-      postAnimation();
-      // PALACE INTERIOR HOOK — same clock as the game, so the fade stays frame-accurate in tests.
-      if(window.PalaceInterior)PalaceInterior.tick(1/60,{doorOpen:phase==='done',hero:heroRoot,setFacing:v=>{heroYaw=v;yaw=v;},camera,renderer,scene,portal:{x:ARCH.x,frontZ,width:ARCH.width,yaw:0}});
-      if(!(window.PalaceInterior&&PalaceInterior.ownsCamera()))updateCamera(1/60);
-      const p=heroRoot.position;
-      if(window.PalaceInterior&&PalaceInterior.ownsGround())p.y=PalaceInterior.floorAt(p.x,p.z);
-      else p.y+=(palGround(p.x,p.z,p.y)-p.y)*Math.min(1,(1/60)*12);
-      if(window.PalaceInterior&&PalaceInterior.constrainCamera)PalaceInterior.constrainCamera(camera,heroRoot);
-    }
-    renderer.render(scene,camera);
-  }
-  const qs=new URLSearchParams(location.search);
-  if(qs.has('royalDoorDebug')||qs.has('royalDoorTest'))window.__royalDoorProbe=probe;
-  if(qs.has('royalDoorTest')||qs.has('startInHall'))window.__royalDoorTest={
-    place(){window.__holdSim=true;introT=INTRO;const z=triggerZ+.05;heroRoot.position.set(ARCH.x,palGround(ARCH.x,z,ARCH.y),z);heroYaw=0;renderer.render(scene,camera);},
-    run(seconds){
-      window.__holdSim=true;
-      const n=Math.max(1,Math.round(Math.max(0,seconds)*60)),samples=[];
-      for(let i=0;i<n;i++){combat.step(1/60,true,true,true);if(i%8===0)samples.push(combat.runSample());}
-      renderer.render(scene,camera);return samples;
-    },
-    advance,state:probe,
-    cross(){window.__holdSim=true;heroRoot.position.set(ARCH.x,heroRoot.position.y,frontZ+0.2);heroYaw=0;yaw=0;},
-    look(mode){
-      window.__holdSim=true;
-      const m=PalaceInterior.metrics();
-      const y=PalaceInterior.floorY();
-      const z=mode==='throne'?m.front+m.length-8:mode==='mid'?m.front+m.length*0.5-5:mode==='aisle'?m.front+m.length*0.45:mode==='door'?m.front+8:m.front+m.H*3;
-      const x=mode==='aisle'?m.x+m.width*0.30:m.x;
-      heroRoot.position.set(x,y,z);heroYaw=0;yaw=0;
-      const hp=heroRoot.position;
-      if(mode==='door'){camera.position.set(m.x,y+1.7,m.front+12);camera.lookAt(m.x,y+1.35,m.front-1);}
-      else{camera.position.set(hp.x,hp.y+1.7,hp.z-4.6);camera.lookAt(hp.x,hp.y+1.2,hp.z+18);}
-      PalaceInterior.constrainCamera(camera,heroRoot);
-      renderer.render(scene,camera);
-      const gl=renderer.getContext(),px=new Uint8Array(4);
-      gl.readPixels((gl.drawingBufferWidth/2)|0,(gl.drawingBufferHeight/2)|0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);
-      const ext=scene.getObjectByName('PalaceExterior');
-      const info=renderer.info.render;
-      return{mode,x:hp.x,y:hp.y,z:hp.z,cam:[camera.position.x,camera.position.y,camera.position.z],calls:info.calls,triangles:info.triangles,px:[px[0],px[1],px[2],px[3]],ext:!!(ext&&ext.visible),metrics:m};
-    },
-    approachThrone(){
-      window.__holdSim=true;
-      const throne=scene.getObjectByName('throne')||scene.getObjectByName('throne-stand-in');
-      if(!throne)return{error:'no throne',state:PalaceInterior.state()};
-      const b=new THREE.Box3().setFromObject(throne);
-      const m=PalaceInterior.metrics();
-      const y=PalaceInterior.floorY();
-      heroRoot.position.set(m.x,y,m.front+3.2);heroYaw=0;yaw=0;
-      let stopped='end';
-      for(let i=0;i<900;i++){
-        const nz=heroRoot.position.z+0.1;
-        if(nz>=b.min.z-0.55){stopped='near';break;}
-        if(PalaceInterior.blocks(heroRoot.position.x,nz)){stopped='collider';break;}
-        heroRoot.position.z=nz;
-      }
-      const hp=heroRoot.position;
-      const cx=(b.min.x+b.max.x)/2,cy=(b.min.y+b.max.y)/2,cz=(b.min.z+b.max.z)/2;
-      const stop={x:+hp.x.toFixed(3),y:+hp.y.toFixed(3),z:+hp.z.toFixed(3)};
-      heroRoot.position.x=cx-2.15;
-      camera.position.set(cx,hp.y+1.85,stop.z-6.4);
-      camera.lookAt(cx,b.min.y+(b.max.y-b.min.y)*0.46,cz);
-      PalaceInterior.constrainCamera(camera,heroRoot);
-      renderer.render(scene,camera);
-      return{
-        name:throne.name,stopped,
-        hero:stop,
-        throne:{cx:+cx.toFixed(3),cy:+cy.toFixed(3),cz:+cz.toFixed(3),h:+(b.max.y-b.min.y).toFixed(3),w:+(b.max.x-b.min.x).toFixed(3),d:+(b.max.z-b.min.z).toFixed(3),baseY:+b.min.y.toFixed(3)},
-        blocksCenter:PalaceInterior.blocks(cx,cz),
-        blocksHero:PalaceInterior.blocks(stop.x,stop.z),
-        expectH:+(PalaceInterior.CONFIG.throneHeightH*m.H).toFixed(3),
-        heroH:+m.H.toFixed(3),
-        state:PalaceInterior.state()
-      };
-    },
-    bench(){
-      const t0=performance.now();
-      for(let i=0;i<20;i++)renderer.render(scene,camera);
-      const ms=(performance.now()-t0)/20;
-      const info=renderer.info.render;
-      return{ms,calls:info.calls,triangles:info.triangles};
-    }
-  };
-  return{update,postAnimation,updateCamera,blocks,skip,active:()=>phase!=='idle'&&phase!=='done',open:()=>phase==='done',passing:()=>phase==='enter'||phase==='done',wantsWalk:()=>phase==='approach'||phase==='enter',probe,portal:()=>({x:ARCH.x,frontZ,width:ARCH.width,yaw:0})};
-}
+const PALACE_PORTAL={x:1,frontZ:183.85,width:4.42,yaw:0};
+royalDoor={active:()=>false,open:()=>true,blocks:()=>false,update:()=>{},postAnimation:()=>{},updateCamera:()=>false,skip:()=>{},passing:()=>false,wantsWalk:()=>false,portal:()=>PALACE_PORTAL};
 const blocked=(x,z)=>{if(window.PalaceInterior&&PalaceInterior.ownsGround())return PalaceInterior.blocks(x,z);if(royalDoor.blocks(x,z))return true;if(palaceBlocked(x,z))return true;if(Math.abs(z)<GATE_HD+.4&&Math.abs(x)>PASS&&Math.abs(x)<GATE_HW+.3)return true;for(const c of colliders){const dx=x-c[0],dz=z-c[1];if(dx*dx+dz*dz<c[2]*c[2])return true;}return false;};
 function clipFollowCamera(want,hx,hy,hz){
   const dx=want.x-hx,dy=want.y-hy,dz=want.z-hz,A=dx*dx+dz*dz;
@@ -1836,7 +1506,7 @@ function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=wi
   const camManual=cId!==null||!!k.KeyQ||!!k.KeyE||performance.now()-camManualAt<900;
   let moveYaw=yaw;
   if(rigOn){const sl=Math.hypot(fw,st);if(sl<.1||camManual){ctrlStick=null;ctrlYaw=yaw;}else{const a=Math.atan2(st,fw);if(ctrlStick===null||Math.abs(Math.atan2(Math.sin(a-ctrlStick),Math.cos(a-ctrlStick)))>.6){ctrlStick=a;ctrlYaw=yaw;}}moveYaw=ctrlYaw;}
-  const sy=Math.sin(moveYaw),cy=Math.cos(moveYaw);let mx=sy*fw-cy*st,mz=cy*fw+sy*st;const len=Math.hypot(mx,mz);const interiorLock=window.PalaceInterior&&PalaceInterior.locksControl();const wantMove=len>.1,moving=wantMove&&!combat.locked()&&!doorCinematic&&!interiorLock;
+  const sy=Math.sin(moveYaw),cy=Math.cos(moveYaw);let mx=sy*fw-cy*st,mz=cy*fw+sy*st;const len=Math.hypot(mx,mz);const interiorLock=window.PalaceInterior&&PalaceInterior.locksControl();const wantMove=len>.1,moving=wantMove&&!combat.locked()&&!doorCinematic&&!interiorLock&&!(window.PalaceWings&&PalaceWings.locked&&PalaceWings.locked());
   if(moving){if(len>1){mx/=len;mz/=len;}const sp=run?7.15:1.7,p=heroRoot.position;const nx=p.x+mx*sp*dt;if(!blocked(nx,p.z))p.x=nx;const nz=p.z+mz*sp*dt;if(!blocked(p.x,nz))p.z=nz;
     let d=Math.atan2(mx,mz)-heroYaw;d=Math.atan2(Math.sin(d),Math.cos(d));heroYaw+=d*Math.min(1,dt*10);}
   if(rigOn&&moving&&!camManual){let d=heroYaw-yaw;d=Math.atan2(Math.sin(d),Math.cos(d));yaw+=d*(1-Math.exp(-dt*(run?3.4:2.6)));pitch+=(CAM_PITCH-pitch)*(1-Math.exp(-dt*.8));}
@@ -1857,7 +1527,7 @@ function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=wi
       }
     }
   }
-  if(!doorCinematic){const hz_=heroRoot.position.z,h_=$('hint');if(hz_>PL_FRONT-14){h_.style.display='';h_.style.opacity=.9;h_.textContent=royalDoor.open()?'القصر الملكي — الطريق مفتوح':'القصر الملكي — الباب ينتظرك';}else if(hz_>60){h_.style.display='';h_.style.opacity=.9;h_.textContent='تابع المسير نحو القصر الملكي';}else if(introT>=INTRO+7)h_.style.opacity=0;}
+  if(!doorCinematic){const wingDoorReady=window.PalaceWings&&PalaceWings.canInteract&&PalaceWings.canInteract();$('interact').style.display=wingDoorReady?'':'none';$('interact').classList.toggle('on',!!wingDoorReady);const hz_=heroRoot.position.z,h_=$('hint');if(wingDoorReady){h_.style.display='';h_.style.opacity=.95;h_.textContent='اقتربت من الباب — اضغط فتح الباب';}else if(hz_>PL_FRONT-14){h_.style.display='';h_.style.opacity=.9;h_.textContent=royalDoor.open()?'القصر الملكي — الطريق مفتوح':'القصر الملكي — الباب ينتظرك';}else if(hz_>60){h_.style.display='';h_.style.opacity=.9;h_.textContent='تابع المسير نحو القصر الملكي';}else if(introT>=INTRO+7)h_.style.opacity=0;}
   if(combat.setWalkScale)combat.setWalkScale(hallWalk?0.62:(doorWalk?1.05:ANIM_CFG.walkTS));
   const animMove=!!paced||(!(doorCinematic||interiorLock)&&wantMove);
   const animRun=animMove&&!!run&&!paced;

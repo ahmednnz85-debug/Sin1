@@ -20,7 +20,7 @@
     colliders: [], spatial: new Map(), regionGroups: new Map(), ceilings: [], materials: [],
     k1FloorY: 0, k1ModelMetrics: null, k1ModelColliderCount: 0,
     current: null, cutaway: false, fullbright: false, debug: false, report: null,
-    ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null
+    ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null, dynamicDoorBoxes: [], activeDoor: null, interactDoor: null
   };
 
   /* ---------------------------------------------------------------------------
@@ -54,7 +54,8 @@
     k2Reception: OPT_DIR + 'عمود-المجلس.glb',
     k2Meetings: 'assets/اجتماعات .glb',
     k3Table: 'assets/طاولة الخرائط.glb',
-    k3Furniture: 'assets/اثاث_الخرائط.glb'
+    k3Furniture: 'assets/اثاث_الخرائط.glb',
+    door: OPT_DIR + 'مجسم الباب.glb'
   };
   const K2_LAZY = { reception: WING_FILES.k2Reception, meetings: WING_FILES.k2Meetings };
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
@@ -485,6 +486,10 @@
   }
   function capsuleBlocked(x, z, radius) {
     const r = radius == null ? 0.32 : radius;
+    for (const b of state.dynamicDoorBoxes) {
+      const qx = Math.max(b.minx, Math.min(x, b.maxx)), qz = Math.max(b.minz, Math.min(z, b.maxz));
+      if ((x - qx) * (x - qx) + (z - qz) * (z - qz) < r * r) return true;
+    }
     for (const b of nearbyBoxes(x, z)) {
       if (b.miny > 1.65 || b.maxy < 0.08) continue;
       const qx = Math.max(b.minx, Math.min(x, b.maxx)), qz = Math.max(b.minz, Math.min(z, b.maxz));
@@ -1950,6 +1955,113 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Babylonian room doors. Only entrances whose room endpoint is K1-K5 are
+  // dressed; corridor/arch/shared entrances remain architectural openings.
+  // The source GLB and its original OpenDoors clip are never edited.
+  // ---------------------------------------------------------------------------
+  const ROOM_DOOR_ROOMS = new Set(['K1', 'K2', 'K3', 'K4', 'K5']);
+  function isRoomDoor(d) {
+    return d && d.kind !== 'arch' && (ROOM_DOOR_ROOMS.has(d.from) || ROOM_DOOR_ROOMS.has(d.to));
+  }
+  function doorLocalPosition(d) { return new THREE.Vector3(d.x, 0, d.z); }
+  function doorWorldBox(d, open) {
+    const half = d.width * 0.5;
+    const gap = open ? Math.max(0.42, half * (1 - d.progress) + 0.12) : half;
+    if (d.axis === 'x') return { minx: d.x - 0.58, maxx: d.x + 0.58, miny: 0, maxy: d.height * 0.92, minz: d.z - gap, maxz: d.z + gap, _door: true };
+    return { minx: d.x - gap, maxx: d.x + gap, miny: 0, maxy: d.height * 0.92, minz: d.z - 0.58, maxz: d.z + 0.58, _door: true };
+  }
+  function rebuildDoorBoxes() {
+    state.dynamicDoorBoxes = [];
+    state.doors.forEach(d => { if (d._roomDoor && d.state !== 'Open') state.dynamicDoorBoxes.push(doorWorldBox(d, d.progress > 0.03)); });
+    rebuildSpatial();
+  }
+  function fitRoomDoor(gltf, d, host) {
+    const model = gltf.scene;
+    model.name = 'BabylonianDoor-' + d.id;
+    model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
+    const axisRot = d.axis === 'x' ? Math.PI * 0.5 : 0;
+    model.rotation.y = axisRot;
+    model.updateMatrixWorld(true);
+    const raw = new THREE.Box3().setFromObject(model), rawSize = raw.getSize(new THREE.Vector3());
+    const span = d.axis === 'x' ? rawSize.z : rawSize.x;
+    const scale = Math.min((d.width - 0.08) / Math.max(span, 0.001), (d.height - 0.08) / Math.max(rawSize.y, 0.001));
+    model.scale.setScalar(Math.max(0.001, scale));
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model), center = box.getCenter(new THREE.Vector3());
+    model.position.x += d.x - center.x;
+    model.position.z += d.z - center.z;
+    // Sink only the authored lower protrusion below the floor; no mesh edits.
+    model.position.y += -box.min.y - 0.055;
+    host.add(model);
+    const clip = gltf.animations && gltf.animations[0];
+    if (clip) {
+      const mixer = new THREE.AnimationMixer(model), action = mixer.clipAction(clip);
+      action.setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; action.play(); action.paused = true; action.time = 0; mixer.update(0);
+      d.mixer = mixer; d.action = action; d.clip = clip;
+    }
+    d.model = model; d.progress = 0; d.state = 'Closed'; d.target = 0; d.openAngle = 0;
+    model.userData.roomDoor = d.id;
+    rebuildDoorBoxes();
+  }
+  function loadRoomDoors() {
+    if (!THREE.GLTFLoader || !state.root) return;
+    const targets = state.doors.filter(isRoomDoor);
+    targets.forEach(d => {
+      d._roomDoor = true; d.state = 'Closed'; d.progress = 0; d.target = 0; d.model = null;
+      const room = ROOM_DOOR_ROOMS.has(d.to) ? d.to : d.from;
+      const host = state.regionGroups.get(room) || state.root;
+      wingGLB(WING_FILES.door, gltf => { if (state.root) fitRoomDoor(gltf, d, host); });
+    });
+  }
+  function nearestRoomDoor() {
+    if (!state.ctx || !state.ctx.hero) return null;
+    const p = state.ctx.hero.position, lx = p.x - state.root.position.x, lz = p.z - state.root.position.z;
+    let best = null, bd = Infinity;
+    state.doors.forEach(d => {
+      if (!d._roomDoor || d.state === 'Opening' || d.state === 'Closing') return;
+      const dx = lx - d.x, dz = lz - d.z, dist = Math.hypot(dx, dz);
+      if (dist > 3.15 || dist < bd) return;
+      // Require the hero to be on one of the two doorway sides, not in a corridor wall.
+      const side = d.axis === 'x' ? Math.abs(dx) : Math.abs(dz);
+      if (side > 2.35) return;
+      bd = dist; best = d;
+    });
+    return best;
+  }
+  function doorOccupied(d) {
+    if (!state.ctx || !state.ctx.hero) return false;
+    const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
+    return d.axis === 'x' ? Math.abs(x - d.x) < 0.9 && Math.abs(z - d.z) < d.width * 0.5 + 0.45 : Math.abs(z - d.z) < 0.9 && Math.abs(x - d.x) < d.width * 0.5 + 0.45;
+  }
+  function interact() {
+    const d = state.interactDoor || nearestRoomDoor();
+    if (!d || !d.model) return false;
+    if (d.state === 'Closed' || d.state === 'Open') {
+      if (d.state === 'Open' && doorOccupied(d)) return false;
+      d.target = d.state === 'Closed' ? 1 : 0; d.state = d.target ? 'Opening' : 'Closing'; state.activeDoor = d; return true;
+    }
+    return false;
+  }
+  function updateRoomDoors(dt) {
+    if (!state.built) return;
+    const near = nearestRoomDoor(); state.interactDoor = near;
+    state.doors.forEach(d => {
+      if (!d._roomDoor || !d.mixer) return;
+      const speed = d.target > d.progress ? 0.58 : 0.72;
+      if (d.progress !== d.target) {
+        const dir = d.target > d.progress ? 1 : -1;
+        d.progress = Math.max(0, Math.min(1, d.progress + dir * dt * speed));
+        d.action.paused = false; d.action.time = d.clip.duration * d.progress; d.mixer.update(0); d.action.paused = true;
+        if (d.progress <= 0.001) { d.progress = 0; d.state = 'Closed'; }
+        else if (d.progress >= 0.999) { d.progress = 1; d.state = 'Open'; }
+      }
+    });
+    rebuildDoorBoxes();
+  }
+  function roomDoorCanInteract() { return !!state.interactDoor && !!state.interactDoor.model && (state.interactDoor.state === 'Closed' || state.interactDoor.state === 'Open'); }
+  function roomDoorLocked() { return !!state.activeDoor && (state.activeDoor.state === 'Opening' || state.activeDoor.state === 'Closing'); }
+
   function dispose() {
     if (state.root && state.root.parent) state.root.parent.remove(state.root);
     if (state.root) state.root.traverse(o => {
@@ -1958,7 +2070,7 @@
     });
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
-    state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
+    state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
@@ -1990,7 +2102,7 @@
     }
     makeColliders(state.baseWall, state.caps);
     wingMark('wings colliders');
-    buildVisuals(layout); wingMark('wings visuals'); rebuildSpatial();
+    buildVisuals(layout); wingMark('wings visuals'); rebuildSpatial(); loadRoomDoors();
     state.built = true;
     if (state.debug) createDebugUI();
     updateCulling(true);
@@ -2052,8 +2164,9 @@
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
   }
-  function tick() {
+  function tick(dt) {
     if (!state.built) return;
+    updateRoomDoors(Math.max(0.001, Math.min(0.05, Number(dt) || 0.016)));
     updateCulling(false);
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
     if (state.k2Lights && state.k2Lights.length) {
@@ -2129,6 +2242,9 @@
     return true;
   }
 
+  function doorReport() {
+    return state.doors.filter(d => d._roomDoor).map(d => ({ id: d.id, room: ROOM_DOOR_ROOMS.has(d.to) ? d.to : d.from, axis: d.axis, x: d.x, z: d.z, width: d.width, height: d.height, state: d.state || 'pending', progress: +(d.progress || 0).toFixed(3), collision: d.state !== 'Open', loaded: !!d.model }));
+  }
   function createDebugUI() {
     const style = document.createElement('style');
     style.textContent = `#wings-label{position:fixed;z-index:155;top:calc(8px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);padding:7px 13px;background:rgba(8,6,4,.82);border:1px solid #a7854d;color:#f4dfba;font:600 12px/1.2 system-ui;pointer-events:none;white-space:nowrap}#wings-ui{position:fixed;z-index:156;right:8px;top:52px;width:min(290px,86vw);max-height:60vh;overflow:auto;background:rgba(7,6,5,.91);border:1px solid #80683f;color:#f3e5c9;padding:8px;direction:ltr;font:11px/1.35 system-ui;touch-action:pan-y}#wings-ui h3{margin:0 0 7px;color:#eac989;font-size:13px}#wings-ui .wg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:5px 0 9px}#wings-ui button{border:1px solid #66563c;background:#241c13;color:#f4e3c2;padding:6px 4px;min-height:29px;font-size:10px}#wings-ui button:hover{background:#5b4226}#wings-ui .wide{width:100%;margin-top:4px}#wings-map{display:block;width:100%;height:150px;background:#0b0a08;border:1px solid #493c2a;margin-top:7px}#wings-results{white-space:pre-wrap;max-height:180px;overflow:auto;color:#cce8bd;margin-top:7px}`;
@@ -2879,7 +2995,7 @@
 
   window.PalaceWings = {
     palaceVisible: function () { return state.palaceNear !== false; },
-    build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget,
+    build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract: roomDoorCanInteract, locked: roomDoorLocked, doorReport,
     teleport, overview, runTests, formatReport, cameraTour, metrics, corridorReport: () => state.corridorReport,
     shortestPath,
     assetList, provideAsset, preloadReport,
