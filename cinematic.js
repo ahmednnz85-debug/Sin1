@@ -100,7 +100,7 @@
       sun.shadow.mapSize.set(E.res, E.res);
       if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
     }
-    if (!ctx.interior()) {
+    if (!ctx.interior() && force) {
       const wantType = E.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
       let recompile = false;
       if (R.shadowMap.enabled !== E.shadow) { R.shadowMap.enabled = E.shadow; recompile = true; }

@@ -1271,7 +1271,7 @@
   function updateLODs(cam) {
     if (!cam || !group || !lodPacks.length) return;
     group.updateMatrixWorld(true);
-    const wp = new THREE.Vector3();
+    const wp = updateLODs._wp || (updateLODs._wp = new THREE.Vector3());
     for (let p = 0; p < lodPacks.length; p++) {
       const pack = lodPacks[p];
       const lim = (pack.limitH || CONFIG.lodDistanceH) * H;
@@ -1280,7 +1280,12 @@
       for (let i = 0; i < pack.local.length; i++) {
         wp.copy(pack.local[i]);
         group.localToWorld(wp);
-        if (cam.position.distanceTo(wp) > lim) pack.far.setMatrixAt(fi++, pack.matrices[i]);
+        const dist = cam.position.distanceTo(wp);
+        if (!pack.nearState) pack.nearState = new Array(pack.local.length).fill(false);
+        const wasNear = pack.nearState[i];
+        const isNear = wasNear ? dist < lim * 1.12 : dist < lim;
+        pack.nearState[i] = isNear;
+        if (!isNear) pack.far.setMatrixAt(fi++, pack.matrices[i]);
         else pack.near.setMatrixAt(ni++, pack.matrices[i]);
       }
       pack.near.count = ni;
@@ -1312,7 +1317,7 @@
         const db = (b.x - hx) * (b.x - hx) + (b.z - hz) * (b.z - hz);
         return da - db;
       });
-      lightAssignAt = clock + 0.12;
+      lightAssignAt = clock + 0.8;
       for (let i = 0; i < lights.length; i++) {
         const f = lightCandidates[Math.min(i, lightCandidates.length - 1)];
         const target = lightTargets[i] || (lightTargets[i] = { x: 0, y: 0, z: 0, intensity: 2.15 });

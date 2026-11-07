@@ -2186,8 +2186,11 @@
         // Keep nearby connected rooms plus a short visual buffer. This is
         // render culling only; assets stay cached and are not re-downloaded.
         const d = dist.has(rr.id) ? dist.get(rr.id) : 99;
-        const near = Math.hypot(rr.bbox.cx - x, rr.bbox.cz - z) <= 40;
-        g.visible = d <= 2 || near;
+        const distM = Math.hypot(rr.bbox.cx - x, rr.bbox.cz - z);
+        if (!rr._visState) rr._visState = false;
+        const show = rr._visState ? distM < 48 : distM < 40;
+        rr._visState = show;
+        g.visible = d <= 2 || show;
       });
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
