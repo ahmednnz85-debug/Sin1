@@ -1972,11 +1972,20 @@
     const span = d.axis === 'x' ? rs.z : rs.x;
     model.scale.setScalar(Math.min(d.width / Math.max(.001, span), d.height / Math.max(.001, rs.y)));
     model.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(model), c = box.getCenter(new THREE.Vector3());
-    model.position.x += d.x - c.x; model.position.z += d.z - c.z; model.position.y += -box.min.y; host.add(model);
+    model.position.x += -c.x; model.position.z += -c.z; model.position.y += -box.min.y;
+    // Pivot on the door plane: mirroring it across the plane flips the swing so the leaves always open away from the hero.
+    const pivot = new THREE.Group(); pivot.name = 'WingDoorPivot-' + d.id; pivot.position.set(d.x, 0, d.z); pivot.add(model); host.add(pivot); d.pivot = pivot;
+    d.leafHalf = Math.max(.04, (d.axis === 'x' ? box.max.x - box.min.x : box.max.z - box.min.z) * .5);
     const clips = gltf.animations || [], openClip = clips.find(c => /opendoors/i.test(c.name || '')) || clips[0], closeClip = clips.find(c => /closedoors/i.test(c.name || '')) || openClip;
     if (!openClip) return;
     const om = new THREE.AnimationMixer(model), oa = om.clipAction(openClip); oa.setLoop(THREE.LoopOnce, 1); oa.clampWhenFinished = true; oa.play(); oa.paused = true; oa.time = 0; om.update(0);
     const cm = closeClip === openClip ? om : new THREE.AnimationMixer(model), ca = cm.clipAction(closeClip); ca.setLoop(THREE.LoopOnce, 1); ca.clampWhenFinished = true; ca.play(); ca.paused = true; ca.enabled = false; ca.time = closeClip === openClip ? closeClip.duration : 0; cm.update(0);
+    // Which side of the door plane the original open clip swings the leaves to (+1 / -1 along the door normal).
+    { const b0 = new THREE.Box3().setFromObject(model), c0 = b0.getCenter(new THREE.Vector3());
+      oa.time = openClip.duration; om.update(0); model.updateMatrixWorld(true);
+      const c1 = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
+      oa.time = 0; om.update(0); model.updateMatrixWorld(true);
+      const n = d.axis === 'x' ? c1.x - c0.x : c1.z - c0.z; d.swingSign = n < 0 ? -1 : 1; }
     d.model = model; d.openMixer = om; d.openAction = oa; d.openClip = openClip; d.closeMixer = cm; d.closeAction = ca; d.closeClip = closeClip; d.progress = 0; d.target = 0; d.state = 'Closed'; d.autoCloseTimer = 0; d.crossed = false; d.approachSide = 0; d.autoRearm = true; model.userData.roomDoor = d.id;
     rebuildDoorColliders();
   }
@@ -2008,8 +2017,15 @@
   function beginDoorMotion(d, opening, c) {
     if (opening) {
       const anim = state.ctx && state.ctx.combat;
-      if (!anim || !anim.startPush || !anim.startPush()) return false;
+      if (!anim || !anim.startPush || !anim.startPush({ skipEnter: true, timeScale: DOOR_PUSH_SPEED, startFrac: DOOR_PUSH_START })) return false;
       d.heroPushActive = true;
+      const side = Math.sign(c.signed) || 1;
+      // Swing away from the hero: leaves travel to -side. Mirror the pivot across the door plane if the clip goes the other way.
+      if (d.pivot && d.state === 'Closed') { const flip = d.swingSign === -side ? 1 : -1; if (d.axis === 'x') d.pivot.scale.x = flip; else d.pivot.scale.z = flip; }
+      // Stand point: palms on the leaf surface.
+      const reach = (anim.handReach || .48), off = side * ((d.leafHalf || .1) + reach - .03);
+      d.standLocal = d.axis === 'x' ? { x: d.x + off, z: d.z + Math.max(-.6, Math.min(.6, c.lateral)) * .3 } : { x: d.x + Math.max(-.6, Math.min(.6, c.lateral)) * .3, z: d.z + off };
+      d.faceYaw = d.axis === 'x' ? (side > 0 ? -Math.PI / 2 : Math.PI / 2) : (side > 0 ? Math.PI : 0);
     } else d.heroPushActive = false;
     d.target = opening ? 1 : 0; d.state = opening ? 'Opening' : 'Closing';
     if (opening) { d.approachSide = Math.sign(c.signed) || d.approachSide || 1; d.crossed = false; d.autoCloseTimer = 0; d.autoRearm = false; }
@@ -2026,6 +2042,14 @@
       if (u <= keys[i][0]) { const a = keys[i-1], b = keys[i], k = (u-a[0]) / ((b[0]-a[0]) || 1); hand = a[1] + (b[1]-a[1])*k; break; }
     }
     return Math.pow(Math.max(0, Math.min(1, hand)), 1.2);
+  }
+  const DOOR_PUSH_SPEED = 1.15, DOOR_PUSH_START = .5, DOOR_CLOSE_SPEED = 1.1;
+  function alignHeroToDoor(d, dt) {
+    if (!d.standLocal || !state.ctx || !state.ctx.hero) return;
+    const p = state.ctx.hero.position, k = 1 - Math.exp(-dt * 14);
+    const tx = d.standLocal.x + state.root.position.x, tz = d.standLocal.z + state.root.position.z;
+    p.x += (tx - p.x) * k; p.z += (tz - p.z) * k;
+    if (state.ctx.setFacing) { const r = state.ctx.hero.rotation.y; let dy = d.faceYaw - r; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); state.ctx.setFacing(r + dy * k); }
   }
   // Kept as no-op compatibility methods: wing doors are intentionally not manually interactable.
   function interact() { return false; }
@@ -2048,8 +2072,9 @@
       if (d.progress === d.target) return;
       const opening = d.target > d.progress;
       if (opening && d.heroPushActive) {
+        alignHeroToDoor(d, dt);
         d.progress = Math.max(d.progress, heroDoorOpenProgress(d));
-      } else d.progress = Math.max(0, Math.min(1, d.progress + (opening ? 1 : -1) * dt * (opening ? .58 : .72)));
+      } else d.progress = Math.max(0, Math.min(1, d.progress + (opening ? 1 : -1) * dt * (opening ? 1.3 : DOOR_CLOSE_SPEED)));
       const a = opening ? d.openAction : d.closeAction, other = opening ? d.closeAction : d.openAction;
       const m = opening ? d.openMixer : d.closeMixer, cclip = opening ? d.openClip : d.closeClip;
       other.enabled = false; a.enabled = true; a.paused = false;

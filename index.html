@@ -1348,17 +1348,18 @@ function heroFSM(T,mixer,clips,cfg){
     else if(W[k]>.05)return false;               // the same move is still fading out: refuse (prevents a visible pop)
     atk={k,t:0,free:false};restart(k);return true;
   }
-  let pushAct=null,pushAlt=null,pushW=0,pushMode=null,pushMain=null,pushBlend=0;
+  let pushAct=null,pushAlt=null,pushW=0,pushMode=null,pushMain=null,pushBlend=0,pushScale=.52;
   function takeClip(clip){
     const a=mixer.clipAction(clip);
     a.setLoop(T.LoopOnce,1);a.clampWhenFinished=true;a.enabled=true;a.reset();a.setEffectiveWeight(0);a.paused=false;a.play();
     return a;
   }
   function stopAct(a){if(!a)return;a.stop();a.enabled=false;}
-  function startPush(enterClip,clip){
+  function startPush(enterClip,clip,opts){
     if(!clip||pushMode)return false;
-    atk=null;pushMain=clip;
+    atk=null;pushMain=clip;pushScale=(opts&&opts.timeScale)||.52;
     pushAct=takeClip(enterClip||clip);
+    if(!enterClip&&opts&&opts.startFrac)pushAct.time=clip.duration*opts.startFrac;
     pushAlt=null;pushW=0;pushBlend=0;pushMode=enterClip?'enter':'play';
     return true;
   }
@@ -1377,13 +1378,13 @@ function heroFSM(T,mixer,clips,cfg){
           pushAct.setEffectiveTimeScale(0.62);
           if(pushAct.time>=pushAct.getClip().duration-.02){
             pushAlt=pushAct;pushAlt.paused=true;
-            pushAct=takeClip(pushMain);pushAct.setEffectiveTimeScale(0.52);pushBlend=1;pushMode='blend';
+            pushAct=takeClip(pushMain);pushAct.setEffectiveTimeScale(pushScale);pushBlend=1;pushMode='blend';
           }
         }else if(pushMode==='blend'){
           pushBlend=Math.max(0,pushBlend-dt/.28);
           if(pushBlend<=0){stopAct(pushAlt);pushAlt=null;pushMode='play';}
         }else if(pushMode==='play'){
-          pushAct.setEffectiveTimeScale(0.52);
+          pushAct.setEffectiveTimeScale(pushScale);
         }else if(pushMode==='out'){pushAct.paused=true;if(pushAlt)pushAlt.paused=true;}
         if(pushMode==='out'){
           const locoKey=wantMove?(wantRun?'run':'walk'):'idle';
@@ -1463,7 +1464,7 @@ const combat=(function(){
     },
     locked:()=>!!fsm&&fsm.locked(),
     state:()=>fsm?fsm.state():'loading',
-    startPush(){return !!(fsm&&pushClip&&fsm.startPush(enterClip,pushClip));},
+    startPush(opts){return !!(fsm&&pushClip&&fsm.startPush(opts&&opts.skipEnter?null:enterClip,pushClip,opts));},
     releasePush(){if(fsm)fsm.releasePush();},
     pushing:()=>!!fsm&&fsm.pushing(),
     pushState:()=>fsm?fsm.pushState():null,
@@ -1572,6 +1573,7 @@ async function buildRoyalDoor(gltf,heroModel){
     heroModel.updateMatrixWorld(true);
     return plant;
   })();
+  combat.handReach=pushReach;
   const standZ=frontZ-pushReach-.02,triggerZ=standZ-1.85;
   let phase='idle',elapsed=0,progress=0,audio=null,creak=null,dolly=0;
 
