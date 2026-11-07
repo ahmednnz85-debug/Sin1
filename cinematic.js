@@ -45,6 +45,7 @@
   try { if (!store.get('tier') && localStorage.getItem('sin.quality') === 'low') mode = 'low'; } catch (_) {}
   let base = mode === 'auto' ? detectTier() : mode;
   let pressure = 0;                                  // 0..3 adaptive degradation level
+  const dynamicResolution = window.SinDynamicResolution ? window.SinDynamicResolution.create({ min: 0.55, max: 0.80, initial: 0.80, downStep: 0.04, upStep: 0.02, lowerFps: 52, upperFps: 58, recoveryMs: 3000 }) : null;
   let fovH = Number(store.get('fov')) || 73;         // horizontal FOV (degrees), 73 = test starting point
 
   function eff() {                                   // effective settings = tier ∘ pressure
@@ -52,7 +53,7 @@
     if (pressure >= 1) t.scale *= 0.85;
     if (pressure >= 2) { t.res = Math.min(t.res, 1024); t.soft = false; t.veg *= 0.8; t.pots *= 0.8; t.potShadow *= 0.6; }
     if (pressure >= 3) { t.scale = Math.min(t.scale, 0.7); t.shadow = false; t.veg *= 0.85; }
-    t.scale = Math.max(0.6, t.scale);
+    t.scale = dynamicResolution ? dynamicResolution.value() : Math.max(0.55, Math.min(0.80, t.scale));
     return t;
   }
   let E = eff();
@@ -177,11 +178,18 @@
   let acc = 0, n = 0, winT = 0, slowWins = 0, fastT = 0, lastChange = 0, lastTs = 0;
   function govern(ts, busy) {
     const dt = lastTs ? ts - lastTs : 16.7; lastTs = ts;
-    if (dt > 250 || busy || document.hidden) { acc = n = winT = 0; return; }   // stalls / loading: not a perf signal
+    if (dt > 250 || busy || document.hidden) {
+      if (dynamicResolution) dynamicResolution.sample(0, dt, true);
+      acc = n = winT = 0; return;
+    }   // stalls / loading / transitions are not a performance signal
     acc += dt; n++; winT += dt;
     if (winT < 1500) return;
-    const avg = acc / n; acc = n = winT = 0;
+    const avg = acc / n, sampleMs = winT; acc = n = winT = 0;
     perf.avg = avg;
+    if (dynamicResolution) {
+      const change = dynamicResolution.sample(1000 / avg, sampleMs, false);
+      if (change.changed) { E = eff(); if (ctx.resize) ctx.resize(); }
+    }
     if (ts - lastChange < 2500) return;
     if (avg > 19.5) {                                    // < ~51 fps
       if (++slowWins >= 2 && pressure < 3) { pressure++; slowWins = 0; fastT = 0; lastChange = ts; refresh(); }
@@ -283,7 +291,7 @@
     frame(ts, busy) { govern(ts, busy); hud(ts); },
     // called once per simulation step, after the camera has been placed
     update(dt, info) { updateAtmo(dt, info); cameraFrame(dt, ctx.interior(), info && info.running); },
-    status() { return { mode, tier: base, pressure, scale: E.scale, shadow: E.shadow ? E.res : 0, zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg }; }
+    status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg }; }
   };
   window.SinGfx = API;
 })();
