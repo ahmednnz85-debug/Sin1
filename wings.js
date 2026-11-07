@@ -1972,12 +1972,12 @@
     const span = d.axis === 'x' ? rs.z : rs.x;
     model.scale.setScalar(Math.min(d.width / Math.max(.001, span), d.height / Math.max(.001, rs.y)));
     model.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(model), c = box.getCenter(new THREE.Vector3());
-    model.position.x += d.x - c.x; model.position.z += d.z - c.z; model.position.y += -box.min.y - .06; host.add(model);
+    model.position.x += d.x - c.x; model.position.z += d.z - c.z; model.position.y += -box.min.y; host.add(model);
     const clips = gltf.animations || [], openClip = clips.find(c => /opendoors/i.test(c.name || '')) || clips[0], closeClip = clips.find(c => /closedoors/i.test(c.name || '')) || openClip;
     if (!openClip) return;
     const om = new THREE.AnimationMixer(model), oa = om.clipAction(openClip); oa.setLoop(THREE.LoopOnce, 1); oa.clampWhenFinished = true; oa.play(); oa.paused = true; oa.time = 0; om.update(0);
     const cm = closeClip === openClip ? om : new THREE.AnimationMixer(model), ca = cm.clipAction(closeClip); ca.setLoop(THREE.LoopOnce, 1); ca.clampWhenFinished = true; ca.play(); ca.paused = true; ca.enabled = false; ca.time = closeClip === openClip ? closeClip.duration : 0; cm.update(0);
-    d.model = model; d.openMixer = om; d.openAction = oa; d.openClip = openClip; d.closeMixer = cm; d.closeAction = ca; d.closeClip = closeClip; d.progress = 0; d.target = 0; d.state = 'Closed'; model.userData.roomDoor = d.id;
+    d.model = model; d.openMixer = om; d.openAction = oa; d.openClip = openClip; d.closeMixer = cm; d.closeAction = ca; d.closeClip = closeClip; d.progress = 0; d.target = 0; d.state = 'Closed'; d.autoCloseTimer = 0; d.crossed = false; d.approachSide = 0; d.autoRearm = true; model.userData.roomDoor = d.id;
     rebuildDoorColliders();
   }
   function loadRoomDoors() {
@@ -1993,18 +1993,74 @@
       });
     }, err => { console.warn('تعذّر تحميل باب الأجنحة', err); wingDoorLoadStarted = false; });
   }
-  function nearestRoomDoor() {
-    if (!state.ctx || !state.ctx.hero) return null;
-    const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z; let best = null, bd = 3.15;
-    state.doors.forEach(d => { if (!d._roomDoor || !d.model || d.state === 'Opening' || d.state === 'Closing') return; const dist = Math.hypot(x - d.x, z - d.z); const side = d.axis === 'x' ? Math.abs(x - d.x) : Math.abs(z - d.z); if (dist <= bd && side <= 2.35) { bd = dist; best = d; } }); return best;
+  function doorCoordinates(d, p) {
+    const x = p.x - state.root.position.x, z = p.z - state.root.position.z;
+    return { x, z, signed: d.axis === 'x' ? x - d.x : z - d.z,
+      lateral: d.axis === 'x' ? z - d.z : x - d.x,
+      distance: Math.hypot(x - d.x, z - d.z) };
   }
-  function doorOccupied(d) { if (!state.ctx || !state.ctx.hero) return false; const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z; return d.axis === 'x' ? Math.abs(x-d.x)<.9 && Math.abs(z-d.z)<d.width*.5+.45 : Math.abs(z-d.z)<.9 && Math.abs(x-d.x)<d.width*.5+.45; }
-  function interact() { const d = state.interactDoor || nearestRoomDoor(); if (!d) return false; if (d.state === 'Open' && doorOccupied(d)) return false; if (d.state === 'Closed' || d.state === 'Open') { d.target = d.state === 'Closed' ? 1 : 0; d.state = d.target ? 'Opening' : 'Closing'; state.activeDoor = d; return true; } return false; }
+  function nearDoor(d, c) { return c.distance <= 1.15 && Math.abs(c.signed) <= 1.05 && Math.abs(c.lateral) <= d.width * 0.5 - 0.35; }
+  function doorOccupied(d) {
+    if (!state.ctx || !state.ctx.hero) return false;
+    const c = doorCoordinates(d, state.ctx.hero.position);
+    return Math.abs(c.signed) < 0.9 && Math.abs(c.lateral) < d.width * 0.5 + 0.45;
+  }
+  function beginDoorMotion(d, opening, c) {
+    if (opening) {
+      const anim = state.ctx && state.ctx.combat;
+      if (!anim || !anim.startPush || !anim.startPush()) return false;
+      d.heroPushActive = true;
+    } else d.heroPushActive = false;
+    d.target = opening ? 1 : 0; d.state = opening ? 'Opening' : 'Closing';
+    if (opening) { d.approachSide = Math.sign(c.signed) || d.approachSide || 1; d.crossed = false; d.autoCloseTimer = 0; d.autoRearm = false; }
+    state.activeDoor = d;
+    return true;
+  }
+  function heroDoorOpenProgress(d) {
+    const anim = state.ctx && state.ctx.combat, st = anim && anim.pushState && anim.pushState();
+    if (!st || st.name !== 'push_object' || st.mode === 'enter' || st.mode === 'blend' || !(st.duration > 0)) return 0;
+    const u = Math.max(0, Math.min(1, st.time / st.duration));
+    const keys = [[0,0],[.64,0],[.708,.036],[.751,.107],[.792,.202],[.832,.274],[.876,.429],[.917,.631],[.957,.821],[1,1]];
+    let hand = 1;
+    for (let i = 1; i < keys.length; i++) {
+      if (u <= keys[i][0]) { const a = keys[i-1], b = keys[i], k = (u-a[0]) / ((b[0]-a[0]) || 1); hand = a[1] + (b[1]-a[1])*k; break; }
+    }
+    return Math.pow(Math.max(0, Math.min(1, hand)), 1.2);
+  }
+  // Kept as no-op compatibility methods: wing doors are intentionally not manually interactable.
+  function interact() { return false; }
   function updateRoomDoors(dt) {
-    if (!state.built) return; state.interactDoor = nearestRoomDoor();
-    state.doors.forEach(d => { if (!d._roomDoor || !d.model || d.progress === d.target) return; const opening = d.target > d.progress; d.progress = Math.max(0, Math.min(1, d.progress + (opening ? 1 : -1) * dt * (opening ? .58 : .72))); const a = opening ? d.openAction : d.closeAction, other = opening ? d.closeAction : d.openAction, m = opening ? d.openMixer : d.closeMixer, c = opening ? d.openClip : d.closeClip; other.enabled = false; a.enabled = true; a.paused = false; a.time = opening ? c.duration * d.progress : c.duration * (1 - d.progress); m.update(0); a.paused = true; if (d.progress <= .001) { d.progress = 0; d.state = 'Closed'; } else if (d.progress >= .999) { d.progress = 1; d.state = 'Open'; } }); rebuildDoorColliders();
+    if (!state.built || !state.ctx || !state.ctx.hero || !state.root) return;
+    const hero = state.ctx.hero.position;
+    let busyDoor = state.doors.find(d => d._roomDoor && (d.state === 'Opening' || d.state === 'Closing')) || null;
+    state.doors.forEach(d => {
+      if (!d._roomDoor || !d.model) return;
+      const c = doorCoordinates(d, hero), near = nearDoor(d, c);
+      if (c.distance > 4.0) d.autoRearm = true;
+      if (d.state === 'Closed' && near && d.autoRearm && !busyDoor && beginDoorMotion(d, true, c)) busyDoor = d;
+      else if (d.state === 'Closing' && near && c.signed * (d.approachSide || 1) >= -1.0 && beginDoorMotion(d, true, c)) busyDoor = d;
+      if (d.state === 'Open') {
+        const passed = d.approachSide && c.signed * d.approachSide < -1.15 && Math.abs(c.lateral) < d.width * 0.5 - 0.3;
+        if (passed) { d.crossed = true; d.autoCloseTimer += dt; }
+        else if (!d.crossed || c.signed * d.approachSide >= -0.75) { d.crossed = false; d.autoCloseTimer = 0; }
+        if (d.crossed && d.autoCloseTimer >= 1.0 && !doorOccupied(d) && (!busyDoor || busyDoor === d) && beginDoorMotion(d, false, c)) busyDoor = d;
+      }
+      if (d.progress === d.target) return;
+      const opening = d.target > d.progress;
+      if (opening && d.heroPushActive) {
+        d.progress = Math.max(d.progress, heroDoorOpenProgress(d));
+      } else d.progress = Math.max(0, Math.min(1, d.progress + (opening ? 1 : -1) * dt * (opening ? .58 : .72)));
+      const a = opening ? d.openAction : d.closeAction, other = opening ? d.closeAction : d.openAction;
+      const m = opening ? d.openMixer : d.closeMixer, cclip = opening ? d.openClip : d.closeClip;
+      other.enabled = false; a.enabled = true; a.paused = false;
+      a.time = opening ? cclip.duration * d.progress : cclip.duration * (1 - d.progress);
+      m.update(0); a.paused = true;
+      if (!opening && d.progress <= .001) { d.progress = 0; d.state = 'Closed'; d.crossed = false; d.autoCloseTimer = 0; d.heroPushActive = false; }
+      else if (opening && d.progress >= .999) { d.progress = 1; d.state = 'Open'; if (d.heroPushActive) { const anim = state.ctx && state.ctx.combat; if (anim && anim.releasePush) anim.releasePush(); d.heroPushActive = false; } }
+    });
+    rebuildDoorColliders();
   }
-  function canInteract() { return !!state.interactDoor && (state.interactDoor.state === 'Closed' || state.interactDoor.state === 'Open'); }
+  function canInteract() { return false; }
   function doorLocked() { return !!state.activeDoor && (state.activeDoor.state === 'Opening' || state.activeDoor.state === 'Closing'); }
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
