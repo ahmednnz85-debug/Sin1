@@ -2038,7 +2038,12 @@
       if (d.progress <= .001) { d.progress = 0; d.state = 'Closed'; d.crossed = false; d.autoCloseTimer = 0; }
       else if (d.progress >= .999) { d.progress = 1; d.state = 'Open'; }
     });
-    rebuildDoorColliders();
+    let boxesDirty = state._doorBoxRef !== state.dynamicDoorBoxes;
+    for (let i = 0; i < state.doors.length; i++) {
+      const d = state.doors[i]; if (!d._roomDoor) continue;
+      if (d._boxS !== d.state || d._boxP !== d.progress) { d._boxS = d.state; d._boxP = d.progress; boxesDirty = true; }
+    }
+    if (boxesDirty) { rebuildDoorColliders(); state._doorBoxRef = state.dynamicDoorBoxes; }
   }
   function canInteract() { return false; }
   function doorLocked() { return !!state.activeDoor && (state.activeDoor.state === 'Opening' || state.activeDoor.state === 'Closing'); }

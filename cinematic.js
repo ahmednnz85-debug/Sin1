@@ -174,22 +174,38 @@
   }
 
   // ---------- adaptive governor ----------
+  // Fixes vs. the original: (1) quality could only be restored when the average frame time was < 14.5 ms (> 69 fps), which a
+  // 60 fps display / the 60 fps cap can never reach, so one temporary dip degraded quality until the page was reloaded;
+  // (2) shader-compile / loading hitches right after a transition counted as "slow", so entering the palace could lower
+  // the resolution for good. Now: grace period after loads, hitches are clamped, restore works at a steady ~60 fps, and
+  // repeated degrade/restore cycles back off exponentially (no visible resolution "breathing").
   let acc = 0, n = 0, winT = 0, slowWins = 0, fastT = 0, lastChange = 0, lastTs = 0;
+  let restoreNeed = 8000, lastRestore = -1e9, graceUntil = 0;
   function govern(ts, busy) {
-    const dt = lastTs ? ts - lastTs : 16.7; lastTs = ts;
-    if (dt > 250 || busy || document.hidden) { acc = n = winT = 0; return; }   // stalls / loading: not a perf signal
-    acc += dt; n++; winT += dt;
+    const raw = lastTs ? ts - lastTs : 16.7; lastTs = ts;
+    if (busy) graceUntil = ts + 2500;                    // first frames after a load / transition carry one-off hitches
+    if (raw > 250 || busy || ts < graceUntil || document.hidden) { acc = n = winT = 0; return; }   // stalls / loading: not a perf signal
+    const dt = Math.min(raw, 50);                        // a lone hitch (GC, upload, compile) must not look like sustained load
+    acc += dt; n++; winT += raw;
     if (winT < 1500) return;
     const avg = acc / n; acc = n = winT = 0;
     perf.avg = avg;
     if (ts - lastChange < 2500) return;
     if (avg > 19.5) {                                    // < ~51 fps
-      if (++slowWins >= 2 && pressure < 3) { pressure++; slowWins = 0; fastT = 0; lastChange = ts; refresh(); }
+      fastT = 0;
+      if (++slowWins >= 2 && pressure < 3) {
+        pressure++; slowWins = 0; lastChange = ts;
+        if (ts - lastRestore < 30000) restoreNeed = Math.min(restoreNeed * 2, 64000);   // restored too early: wait longer next time
+        refresh();
+      }
       else if (slowWins >= 2 && mode === 'auto' && ORDER.indexOf(base) > 0) { base = ORDER[ORDER.indexOf(base) - 1]; pressure = 1; slowWins = 0; lastChange = ts; refresh(); }
     } else {
       slowWins = 0;
-      if (avg < 14.5) { fastT += 1500; if (fastT >= 8000 && pressure > 0) { pressure--; fastT = 0; lastChange = ts; refresh(); } }
-      else fastT = 0;
+      if (avg <= 17.6) {                                 // holding ~57+ fps (the 60 fps cap gives ~16.7 ms)
+        fastT += 1500;
+        if (fastT >= restoreNeed && pressure > 0) { pressure--; fastT = 0; lastChange = ts; lastRestore = ts; refresh(); }
+      } else fastT = 0;
+      if (pressure === 0) restoreNeed = 8000;
     }
   }
 
