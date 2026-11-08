@@ -7,6 +7,7 @@ const root = path.join(__dirname, '..');
 const wings = fs.readFileSync(path.join(root, 'wings.js'), 'utf8');
 const palace = fs.readFileSync(path.join(root, 'palaceInterior.js'), 'utf8');
 const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const cinematic = fs.readFileSync(path.join(root, 'cinematic.js'), 'utf8');
 
 test('corridor carpet asset remains centered, clipped and fitted to corridor width', () => {
   assert.ok(fs.existsSync(path.join(root, 'assets', 'سجاد الممرات.JPG')));
@@ -67,4 +68,17 @@ test('palace braziers retain fixed warm lighting without traveling glow, and out
   assert.match(index, /hemi\.intensity=0\.9/);
   assert.match(index, /new THREE\.DirectionalLight\(0x000000,0\.55\)/);
   assert.match(index, /renderer\.toneMappingExposure=1\.02;/);
+});
+
+test('outdoor sun position and intensity do not follow the hero or region transitions', () => {
+  assert.match(index, /sun\.target\.position\.set\(0,0,93\);sun\.position\.set\(0,0,93\)\.addScaledVector\(SUN,80\)/);
+  assert.doesNotMatch(index, /sun\.position\.copy\(hp\)/);
+  assert.match(cinematic, /babylon:\s*\{[^\n]*sun: 1\.00/);
+  assert.match(cinematic, /courtyard:\s*\{[^\n]*sun: 1\.00/);
+});
+
+test('opening intro and palace-entry cinematics are bypassed', () => {
+  assert.match(index, /\$\('go'\)\.addEventListener\(\s*'click',[^\n]*introT=INTRO/);
+  assert.match(index, /function begin\(\)\{\s*if\(phase!=='idle'\)return;\s*\/\/ Open immediately[^\n]*\n\s*setDoor\(1\);phase='done'/);
+  assert.match(palace, /state = 'DONE';\s*fadeT = 0;\s*entranceLeft = 0;/);
 });

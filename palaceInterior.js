@@ -3136,10 +3136,12 @@
       if (u >= 1) {
         loadEl.style.opacity = '0';
         loadEl.style.pointerEvents = 'none';
-        state = 'ENTRANCE';
+        // Finish the load fade directly into gameplay; skip the scripted entrance walk/camera shot.
+        state = 'DONE';
         fadeT = 0;
-        entranceLeft = 1.7;
-        note('entrance');
+        entranceLeft = 0;
+        entryCut = true;
+        note('done (entrance cinematic skipped)');
         renderDebug();
       }
       return;

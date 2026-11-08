@@ -1301,7 +1301,7 @@ $('settings-back').addEventListener('click',()=>{$('settings-menu').style.displa
 
 // ---------- game loop ----------
 let introT=-1,last=0,heroYaw=0,tAcc=0;const INTRO=12;
-$('go').addEventListener('click',()=>{$('ov').style.display='none';document.body.classList.add('playing');['run','hud','hint'].forEach(i=>$(i).style.display='');introT=0;setTimeout(()=>{$('hint').style.opacity=0;},7000);});
+$('go').addEventListener('click',()=>{$('ov').style.display='none';document.body.classList.add('playing');['run','hud','hint'].forEach(i=>$(i).style.display='');introT=INTRO;setTimeout(()=>{$('hint').style.opacity=0;},7000);});
 $('skip').addEventListener('click',()=>{if(introT>=0&&introT<INTRO)introT=INTRO;else royalDoor.skip();});
 // ===================== HERO v2: Animation State Machine + combat button =====================
 // Hero mesh is assets/سين_وقوف_ساكن_سينمائي.glb (Mixamo rig). Loaded once; locomotion clips are the ones embedded in THAT file.
@@ -1654,8 +1654,9 @@ async function buildRoyalDoor(gltf,heroModel){
     pivot.position.z=basePivotZ;root.updateMatrixWorld(true);
   }
   function begin(){
-    if(phase!=='idle')return;phase='approach';elapsed=0;startAudio();
-    $('hint').style.display='';$('hint').style.opacity=.95;
+    if(phase!=='idle')return;
+    // Open immediately instead of starting the scripted approach/push/camera shot.
+    setDoor(1);phase='done';elapsed=0;glimpse.visible=true;doorHole.uDoorHole.value=1;
   }
   function update(dt,canTrigger){
     const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'IDLE';
