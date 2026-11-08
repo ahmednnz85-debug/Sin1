@@ -2867,6 +2867,13 @@
     });
     return resized;
   }
+  function k4TextureEdge() {
+    const nav = window.navigator || {};
+    const touchDevice = (nav.maxTouchPoints || 0) > 1 && Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 1024;
+    const mobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent || '') || touchDevice;
+    const lowMemory = Number(nav.deviceMemory || 0) > 0 && Number(nav.deviceMemory) <= 4;
+    return mobileDevice || lowMemory ? 512 : 1024;
+  }
   function k4PlaceAsset(dress, spec, onSettled) {
     const rootAtRequest = state.root;
     let settled = false;
@@ -2910,7 +2917,7 @@
       holder.name = spec.name;
       holder.position.set(spec.x, spec.y || 0, spec.z);
       holder.rotation.y = spec.rotation || 0;
-      const resizedTextures = limitK4TextureSize(model, 1024);
+      const resizedTextures = limitK4TextureSize(model, k4TextureEdge());
       holder.add(model);
       dress.host.add(holder);
       rootAtRequest.updateMatrixWorld(true);
@@ -2948,7 +2955,11 @@
     function next() {
       if (state.k4Dress !== dress || nextIndex >= dress.assetSpecs.length) return;
       const spec = dress.assetSpecs[nextIndex++];
-      k4PlaceAsset(dress, spec, next);
+      k4PlaceAsset(dress, spec, function () {
+        // Let the renderer upload the preceding model before decoding the next
+        // embedded texture set; otherwise several GLBs can land in one frame.
+        requestAnimationFrame(function () { setTimeout(next, 120); });
+      });
     }
     next();
   }

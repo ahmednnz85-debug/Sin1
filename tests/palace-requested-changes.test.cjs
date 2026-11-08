@@ -123,6 +123,8 @@ test('K4 GLBs are deferred until entry and their embedded textures are bounded f
   const dress = wings.slice(dressStart, dressEnd);
   assert.match(dress, /assetSpecs = \[/);
   assert.doesNotMatch(dress, /k4PlaceAsset\(/);
-  assert.match(wings, /k4PlaceAsset\(dress, spec, next\)/);
-  assert.match(wings, /limitK4TextureSize\(model, 1024\)/);
+  assert.match(wings, /k4PlaceAsset\(dress, spec, function \(\)/);
+  assert.match(wings, /limitK4TextureSize\(model, k4TextureEdge\(\)\)/);
+  assert.match(wings, /return mobileDevice \|\| lowMemory \? 512 : 1024/);
+  assert.match(wings, /requestAnimationFrame\(function \(\) \{ setTimeout\(next, 120\); \}\)/);
 });
