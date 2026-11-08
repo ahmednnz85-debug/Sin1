@@ -23,8 +23,7 @@ test('resolution stays crisp and varies only in small bounded steps', () => {
   assert.match(cinematic, /t\.shadow\s*=\s*true/);
   assert.doesNotMatch(cinematic, /t\.shadow\s*=\s*false/);
   assert.match(resolution, /var min = Number\.isFinite\(options\.min\) \? options\.min : 0\.82/);
-  assert.match(cinematic, /const cap = MOBILE_DEVICE \? 1\.0 : 1\.25/);
-  assert.match(cinematic, /Math\.min\(cap, Math\.max\(1, dpr\)\) \* E\.scale/);
+  assert.match(cinematic, /Math\.min\(1\.25, Math\.max\(1, dpr\)\) \* E\.scale/);
 });
 
 test('cinematic grade/fog are restrained and exposure is consistent', () => {
