@@ -108,3 +108,21 @@ test('K4 royal treasury uses its full-room artwork, supplied GLBs and no procedu
   assert.match(dress, /k4Furniture1[\s\S]*k4Furniture2[\s\S]*k4Furniture3/);
   assert.doesNotMatch(dress, /futureZone|addTorches|addColumns|boxAt/);
 });
+
+test('K4 GLBs are deferred until entry and their embedded textures are bounded for WebGL memory', () => {
+  assert.match(wings, /const K4_DEFERRED_MODELS = new Set\([\s\S]{0,180}WING_FILES\.k4FrontWall/);
+  const listStart = wings.indexOf('function assetList()');
+  const listEnd = wings.indexOf('function provideAsset', listStart);
+  assert.ok(listStart >= 0 && listEnd > listStart);
+  assert.match(wings.slice(listStart, listEnd), /filter\(k => !K4_DEFERRED_MODELS\.has\(WING_FILES\[k\]\)\)/);
+  const cullStart = wings.indexOf('function updateCulling(force)');
+  const cullEnd = wings.indexOf('function tick(dt)', cullStart);
+  assert.match(wings.slice(cullStart, cullEnd), /if \(id === 'K4'\) loadK4Assets\(\)/);
+  const dressStart = wings.indexOf('function dressK4()');
+  const dressEnd = wings.indexOf('// اثاث الخرائط is one fused mesh', dressStart);
+  const dress = wings.slice(dressStart, dressEnd);
+  assert.match(dress, /assetSpecs = \[/);
+  assert.doesNotMatch(dress, /k4PlaceAsset\(/);
+  assert.match(wings, /k4PlaceAsset\(dress, spec, next\)/);
+  assert.match(wings, /limitK4TextureSize\(model, 1024\)/);
+});
