@@ -52,6 +52,14 @@
     k3Wall: 'assets/\u062C\u062F\u0627\u0631 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.JPG',
     k3WallFar: 'assets/جدار الخرائط 2.JPG',
     k3Ceiling: 'assets/سقف الخرائط .JPG',
+    // K4 uses the user's treasury surfaces and the three authored furniture sets.
+    k4Floor: 'assets/ارضية الخزانة.JPG',
+    k4Ceiling: 'assets/سقف الخزانة .JPG',
+    k4SideWall: 'assets/جدارية ايمن الخزانة.JPG',
+    k4Furniture1: 'assets/اثاث الخزانة.glb',
+    k4Furniture2: 'assets/اثاث الخزانة 2.glb',
+    k4Furniture3: 'assets/اثاث الخزانة 3.glb',
+    k4FrontWall: 'assets/جدارية الخزانة.glb',
     // Formerly lazy assets are now part of the palace manifest.
     k2Reception: OPT_DIR + 'عمود-المجلس.glb',
     k2Meetings: 'assets/اجتماعات .glb',
@@ -243,7 +251,9 @@
     const K3 = addRoom(rectRegion('K3', 'Kings', ROOM_NAMES.K3, KC1.bbox.x0 - 17, KC1.bbox.z0 + 5, 16, 12, 5.5));
     const KC3 = addCon(rectRegion('KC3', 'Kings', 'Map corridor', K3.bbox.x1, K3.bbox.cz - 3, KC1.bbox.x0 - K3.bbox.x1, 6, 6, 'corridor'));
     door('K3-KC3', 'K3', 'KC3', K3.bbox.x1 + 0.5, K3.bbox.cz, 'x'); links.push(['KC3', 'KC1', 'KC3-KC1']);
-    const K4 = addRoom(rectRegion('K4', 'Kings', ROOM_NAMES.K4, KC1x + 17, KC2.bbox.z1 + 3, 14, 12, 5));
+    // Match the supplied 16:9 floor/ceiling artwork while keeping K4's entrance and corridor centered.
+    const K4 = addRoom(rectRegion('K4', 'Kings', ROOM_NAMES.K4, KC1x + 17, KC2.bbox.z1 + 3, 21.322, 12, 8.5));
+    K4.ceiling = false; // The authored treasury ceiling texture replaces the generic slab.
     const KC4 = addCon(rectRegion('KC4', 'Kings', 'Treasury corridor', K4.bbox.cx - 3, KC2.bbox.z1, 6, K4.bbox.z0 - KC2.bbox.z1, 6, 'corridor'));
     door('KC4-K4', 'KC4', 'K4', K4.bbox.cx, K4.bbox.z0 - 0.5, 'z'); links.push(['KC4', 'KC2', 'KC4-KC2']);
     const KC5R = addCon(rectRegion('KC5R', 'Kings', 'Rear approach', K5.bbox.cx - 3, REAR.bbox.z1, 6, K5.bbox.z0 - REAR.bbox.z1, 6, 'corridor'));
@@ -831,7 +841,10 @@
       if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
       if (r.id === 'L1') addColumns(r, g, columnPairs(r, 4, 4.0, 3.4), 0.60);
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
-      if (r.id !== 'K1') { addFutureZones(r, g); if (r.id !== 'K2' && r.id !== 'K3') addTorches(r); }
+      if (r.id !== 'K1') {
+        if (r.id !== 'K4') addFutureZones(r, g);
+        if (r.id !== 'K2' && r.id !== 'K3' && r.id !== 'K4') addTorches(r);
+      }
     });
     addSpecials();
     dressCorridors();
@@ -840,6 +853,8 @@
     wingMark('wings k2');
     dressK3();
     wingMark('wings k3');
+    dressK4();
+    wingMark('wings k4');
     const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
     const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
     const dummy = new THREE.Object3D();
@@ -2121,7 +2136,7 @@
     wingDoorLoadStarted = false;
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
-    state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null;
+    state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
   }
   function wingMark(msg) {
@@ -2801,6 +2816,156 @@
     });
     state.materials.push(m);
     return m;
+  }
+  /* ---------------------------------------------------------------------------
+     K4 royal treasury. This room is dressed only with its repository artwork
+     and the three authored GLB groups; debug placeholders and procedural
+     dressing are intentionally excluded from K4.
+  --------------------------------------------------------------------------- */
+  function k4PlaceAsset(dress, spec) {
+    const rootAtRequest = state.root;
+    wingGLB(spec.url, function (gltf) {
+      if (!gltf || state.root !== rootAtRequest || state.k4Dress !== dress) return;
+      const model = gltf.scene;
+      model.updateMatrixWorld(true);
+      const sourceBox = new THREE.Box3().setFromObject(model);
+      const sourceSize = sourceBox.getSize(new THREE.Vector3());
+      const sourceCenter = sourceBox.getCenter(new THREE.Vector3());
+      if (!(sourceSize.x > 0 && sourceSize.y > 0 && sourceSize.z > 0)) {
+        dress.errors.push(spec.name + ': invalid model bounds');
+        return;
+      }
+      const scale = spec.fitWidth
+        ? Math.min(spec.fitWidth / sourceSize.x, spec.fitHeight / sourceSize.y)
+        : spec.fitHeight / sourceSize.y;
+      model.scale.setScalar(scale);
+      model.position.set(-sourceCenter.x * scale, -sourceBox.min.y * scale, -sourceCenter.z * scale);
+      model.name = spec.name + '-source';
+      model.traverse(function (node) {
+        if (!node.isMesh) return;
+        node.castShadow = true;
+        node.receiveShadow = true;
+        if (spec.doubleSided) {
+          const materials = Array.isArray(node.material) ? node.material : [node.material];
+          materials.forEach(function (material) {
+            if (!material) return;
+            material.side = THREE.DoubleSide;
+            material.needsUpdate = true;
+          });
+        }
+      });
+      const holder = new THREE.Group();
+      holder.name = spec.name;
+      holder.position.set(spec.x, spec.y || 0, spec.z);
+      holder.rotation.y = spec.rotation || 0;
+      holder.add(model);
+      dress.host.add(holder);
+      rootAtRequest.updateMatrixWorld(true);
+      const worldBox = new THREE.Box3().setFromObject(holder);
+      const local = {
+        minx: worldBox.min.x - rootAtRequest.position.x,
+        maxx: worldBox.max.x - rootAtRequest.position.x,
+        miny: Math.max(0, worldBox.min.y - rootAtRequest.position.y),
+        maxy: worldBox.max.y - rootAtRequest.position.y,
+        minz: worldBox.min.z - rootAtRequest.position.z,
+        maxz: worldBox.max.z - rootAtRequest.position.z
+      };
+      if (spec.collider !== false) state.colliders.push(Object.assign(local, { _wing: true, _k4Prop: true }));
+      dress.loaded[spec.key] = true;
+      if (spec.key === 'frontWall') dress.frontWall = true;
+      dress.metrics[spec.key] = {
+        size: [sourceSize.x, sourceSize.y, sourceSize.z].map(function (n) { return +n.toFixed(3); }),
+        scale: +scale.toFixed(4), fittedHeight: +(sourceSize.y * scale).toFixed(3)
+      };
+      rebuildSpatial();
+    }, function (error) {
+      if (state.root !== rootAtRequest || state.k4Dress !== dress) return;
+      const message = error && error.message ? error.message : String(error || 'load failed');
+      dress.errors.push(spec.name + ': ' + message);
+      console.error('K4 treasury asset failed', spec.url, error);
+    });
+  }
+  function dressK4() {
+    const r = state.rooms.find(function (room) { return room.id === 'K4'; });
+    const g = state.regionGroups.get('K4');
+    if (!r || !g) return;
+    const b = r.bbox, h = r.height, w = b.x1 - b.x0, d = b.z1 - b.z0;
+    const dress = state.k4Dress = {
+      host: g, bbox: b, floor: false, walls: false, ceiling: false, frontWall: false,
+      loaded: {}, metrics: {}, errors: []
+    };
+
+    // One artwork copy spans the complete room footprint: the room aspect ratio
+    // matches the supplied 1672 x 941 floor/ceiling images, leaving no bare gaps.
+    const floorMat = new THREE.MeshStandardMaterial({
+      map: k3ClampedMap(WING_FILES.k4Floor), roughness: 0.38, metalness: 0.025,
+      emissive: new THREE.Color(0x120c07), emissiveIntensity: 0.055
+    });
+    state.materials.push(floorMat);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
+    floor.name = 'K4-treasury-floor-artwork';
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(b.cx, 0.018, b.cz);
+    floor.receiveShadow = true;
+    floor.renderOrder = 2;
+    g.add(floor);
+    if (state.floorMeshes) state.floorMeshes.push(floor);
+    dress.floor = true;
+
+    const area = solid(r.poly);
+    const freeArea = difference(area, state.baseWall);
+    const wallsHere = intersection(state.baseWall, offset(area, 1.6));
+    const runs = corridorWallRuns(wallsHere, freeArea);
+    const lintels = [];
+    state.doors.filter(function (door) {
+      return door.kind !== 'arch' && door.openPoly && (door.from === 'K4' || door.to === 'K4');
+    }).forEach(function (door) {
+      const opening = solid(door.openPoly);
+      corridorWallRuns(opening, difference(freeArea, opening)).forEach(function (segment) {
+        segment.door = door;
+        lintels.push(segment);
+      });
+    });
+    const wallGeo = k3WallQuads(runs.concat(lintels), b, h);
+    if (wallGeo.attributes.position.count) {
+      mesh(wallGeo, k3WallMaterial(WING_FILES.k4SideWall), 'K4-treasury-decorated-walls', g);
+    } else wallGeo.dispose();
+    dress.walls = true;
+
+    const ceilingMap = k3ClampedMap(WING_FILES.k4Ceiling);
+    const ceilingMat = new THREE.MeshStandardMaterial({
+      map: ceilingMap, color: 0xf0dfbd, roughness: 0.82, metalness: 0.01,
+      side: THREE.DoubleSide, emissive: new THREE.Color(0x1a1007), emissiveIntensity: 0.09
+    });
+    state.materials.push(ceilingMat);
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(w, d), ceilingMat);
+    ceiling.name = 'K4-treasury-ceiling-artwork';
+    ceiling.rotation.x = -Math.PI / 2;
+    ceiling.position.set(b.cx, h - 0.045, b.cz);
+    ceiling.receiveShadow = true;
+    ceiling.userData.ceiling = true;
+    ceiling.visible = !state.cutaway;
+    g.add(ceiling);
+    state.ceilings.push(ceiling);
+    dress.ceiling = true;
+
+    // The three GLBs are kept intact as authored groups and distributed around
+    // a clear approach lane, echoing the reference's left/right displays and
+    // central treasure focal point.
+    [
+      { key: 'furniture1', url: WING_FILES.k4Furniture1, name: 'K4-treasury-display-left', x: b.x0 + 3.5, z: b.cz - 0.3, rotation: Math.PI / 2, fitHeight: 2.7 },
+      { key: 'furniture2', url: WING_FILES.k4Furniture2, name: 'K4-treasury-display-right', x: b.x1 - 3.5, z: b.cz - 0.3, rotation: -Math.PI / 2, fitHeight: 2.7 },
+      { key: 'furniture3', url: WING_FILES.k4Furniture3, name: 'K4-treasury-central-display', x: b.cx, z: b.z1 - 3.4, rotation: 0, fitHeight: 2.6 }
+    ].forEach(function (spec) { k4PlaceAsset(dress, spec); });
+
+    // The north-facing 3D panel is centered, fitted within the wall height and
+    // mounted just inside the interior face so its authored proportions remain intact.
+    const frontHeight = Math.max(1, h - 0.4);
+    k4PlaceAsset(dress, {
+      key: 'frontWall', url: WING_FILES.k4FrontWall, name: 'K4-treasury-front-mural',
+      x: b.cx, y: 0.2, z: b.z1 - 0.27, rotation: 0,
+      fitHeight: frontHeight, fitWidth: w - 1.0, doubleSided: true, collider: false
+    });
   }
   // اثاث الخرائط is one fused mesh. The six objects sit apart, so a small
   // gap in the vertex cloud is enough to separate them.
