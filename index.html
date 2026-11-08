@@ -492,6 +492,8 @@ async function buildRoadsideArchitecture(){
   if(palmSpan<=0||span<=0)throw new Error('لا توجد مساحة كافية لامتداد السور حتى واجهة القصر');
   const baseCount=Math.max(1,Math.ceil(palmSpan/(wallLength*11.2)));
   const baseSpacing=palmSpan/baseCount,wallScale=baseSpacing/wallLength;
+  // The tallest side-grove palms reach about 22 m after variation; keep both walls visibly above them.
+  const wallScaleY=Math.max(wallScale,24/wallHeight);
   const sectionCount=Math.ceil(span/baseSpacing),WALL_X=10.4;
   const wallProxyGeo=new THREE.BoxGeometry(wb.max.x-wb.min.x,wb.max.y-wb.min.y,Math.max(wb.max.z-wb.min.z,0.02));
   wallProxyGeo.translate((wb.min.x+wb.max.x)/2,(wb.min.y+wb.max.y)/2,(wb.min.z+wb.max.z)/2);
@@ -500,12 +502,12 @@ async function buildRoadsideArchitecture(){
     for(let i=0;i<sectionCount;i++){
       const segmentStart=start+i*baseSpacing,segmentLength=Math.min(baseSpacing,end-segmentStart);
       const z=segmentStart+segmentLength/2,g=new THREE.Group(),part=wall.clone(true);
-      prep(part,{cast:false});part.scale.set(wallScale*segmentLength/baseSpacing,wallScale,wallScale);part.position.y=-wb.min.y*wallScale;
+      prep(part,{cast:false});part.scale.set(wallScale*segmentLength/baseSpacing,wallScaleY,wallScale);part.position.y=-wb.min.y*wallScaleY;
       const proxy=new THREE.Mesh(wallProxyGeo,wallProxyMat);
       proxy.castShadow=true;proxy.receiveShadow=false;proxy.layers.set(1);proxy.frustumCulled=false;
       part.add(proxy);
       g.add(part);g.rotation.y=Math.PI/2;g.position.set(side*WALL_X,0,z);scene.add(g);
-      extras.push({g,x:g.position.x,z,r:segmentLength*.7+1,optional:false,y:wallHeight*wallScale*0.5});
+      extras.push({g,x:g.position.x,z,r:segmentLength*.7+1,optional:false,y:wallHeight*wallScaleY*0.5});
     }
     for(let z=start;z<end;z+=1.05)colliders.push([side*WALL_X,z,1.05]);
     colliders.push([side*WALL_X,end,1.05]);
