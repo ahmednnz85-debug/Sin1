@@ -77,8 +77,9 @@ test('outdoor sun position and intensity do not follow the hero or region transi
   assert.match(cinematic, /courtyard:\s*\{[^\n]*sun: 1\.00/);
 });
 
-test('opening intro and palace-entry cinematics are bypassed', () => {
+test('opening intro and interior-entry cinematics are bypassed while the palace-door scene remains', () => {
   assert.match(index, /\$\('go'\)\.addEventListener\(\s*'click',[^\n]*introT=INTRO/);
-  assert.match(index, /function begin\(\)\{\s*if\(phase!=='idle'\)return;\s*\/\/ Open immediately[^\n]*\n\s*setDoor\(1\);phase='done'/);
+  assert.match(index, /function begin\(\)\{\s*if\(phase!=='idle'\)return;phase='approach';elapsed=0;startAudio\(\)/);
+  assert.match(index, /phase='push'/);
   assert.match(palace, /state = 'DONE';\s*fadeT = 0;\s*entranceLeft = 0;/);
 });

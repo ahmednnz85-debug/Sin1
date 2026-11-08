@@ -1654,9 +1654,8 @@ async function buildRoyalDoor(gltf,heroModel){
     pivot.position.z=basePivotZ;root.updateMatrixWorld(true);
   }
   function begin(){
-    if(phase!=='idle')return;
-    // Open immediately instead of starting the scripted approach/push/camera shot.
-    setDoor(1);phase='done';elapsed=0;glimpse.visible=true;doorHole.uDoorHole.value=1;
+    if(phase!=='idle')return;phase='approach';elapsed=0;startAudio();
+    $('hint').style.display='';$('hint').style.opacity=.95;
   }
   function update(dt,canTrigger){
     const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'IDLE';
