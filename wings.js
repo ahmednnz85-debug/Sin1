@@ -35,6 +35,7 @@
   const WING_FILES = {
     k1: OPT_DIR + 'K1_RoyalReceptionHall.glb',
     corridorFloor: 'assets/ارضية الممرات.JPG',
+    corridorCarpet: 'assets/سجاد الممرات.JPG',
     corridorCeiling: OPT_DIR + 'سقف-الممرات.webp',
     corridorWall: 'assets/جدار الممرات.jpg',
     plant: OPT_DIR + 'شتله.glb',
@@ -694,6 +695,11 @@
       state.k1FloorY = Math.max(0, floorTop);
       addK1ModelColliders(model);
       const fittedBox = new THREE.Box3().setFromObject(model);
+      // Remove only the entrance leaf to K1; preserve the gate frame and the
+      // separate exit gate toward the Kings corridor.
+      model.traverse(function (node) {
+        if (node.isMesh && node.name === 'K1_Gate_Entrance_Main') node.visible = false;
+      });
       // Hide only palace geometry that occupies K1's already-fitted volume.
       // This is a palace-material mask, not a transform or collider change.
       // No other wing is inside these bounds.
@@ -850,6 +856,7 @@
      Temple wings (plus the shared passages that link them) is re-skinned with
      the repository corridor assets only:
        assets/ارضية الممرات.JPG  -> corridor floors (incl. the door strips)
+       assets/سجاد الممرات.JPG   -> centered, width-fitted corridor runners
        assets/سقف الممرات.PNG    -> corridor ceilings
        assets/جدار الممرات.jpg   -> corridor wall faces + door lintels
        assets/شتله.glb           -> potted plants, repeated on both sides
@@ -857,7 +864,7 @@
      polygon and against each other, so no surface is drawn twice. */
   const CORRIDOR_TILE = { floor: 2.0, ceiling: 3.0, wall: 3.0 };
   const CORRIDOR_ASSETS = {
-    floor: WING_FILES.corridorFloor, ceiling: WING_FILES.corridorCeiling,
+    floor: WING_FILES.corridorFloor, carpet: WING_FILES.corridorCarpet, ceiling: WING_FILES.corridorCeiling,
     wall: WING_FILES.corridorWall, plant: WING_FILES.plant
   };
   function corridorTexture(url) {
@@ -886,6 +893,36 @@
         // In X/Z, a negative cross gives an upward (+Y) facing triangle.
         if ((cross < 0) !== faceUp) { const t = b; b = c; c = t; }
         [a, b, c].forEach(p => { pos.push(p[0], y, p[1]); uv.push(p[0] / tile, p[1] / tile); nor.push(0, faceUp ? 1 : -1, 0); });
+      });
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.computeBoundingBox(); g.computeBoundingSphere(); return g;
+  }
+  // A clipped, narrow carpet strip follows the corridor axis. UVs are measured
+  // in metres so the supplied portrait rug repeats at its natural proportions.
+  function carpetSheet(solids, y, alongX, center, width, tileLength, alongOrigin) {
+    const pos = [], uv = [], nor = [];
+    (solids || []).forEach(s => {
+      const outer = cleanPoly(s.outer, true), holes = (s.holes || []).map(h => cleanPoly(h, false));
+      if (outer.length < 3) return;
+      let faces = [];
+      try { faces = THREE.ShapeUtils.triangulateShape(outer.map(p => new THREE.Vector2(p[0], p[1])), holes.map(h => h.map(p => new THREE.Vector2(p[0], p[1])))); }
+      catch (e) { console.error('Corridor carpet triangulation', e); return; }
+      const verts = outer.concat.apply(outer, holes);
+      faces.forEach(f => {
+        let a = verts[f[0]], b = verts[f[1]], c = verts[f[2]];
+        const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+        if (cross >= 0) { const t = b; b = c; c = t; }
+        [a, b, c].forEach(p => {
+          const across = alongX ? p[1] - center : p[0] - center;
+          const along = alongX ? p[0] : p[1];
+          pos.push(p[0], y, p[1]);
+          uv.push((across + width * 0.5) / width, (along - alongOrigin) / tileLength);
+          nor.push(0, 1, 0);
+        });
       });
     });
     const g = new THREE.BufferGeometry();
@@ -959,6 +996,9 @@
       ceiling: corridorMaterial(CORRIDOR_ASSETS.ceiling, 0.92),
       wall: corridorMaterial(CORRIDOR_ASSETS.wall, 0.9)
     };
+    const carpetTex = corridorTexture(CORRIDOR_ASSETS.carpet);
+    const carpetMat = new THREE.MeshStandardMaterial({ map: carpetTex, roughness: 0.96, metalness: 0, side: THREE.DoubleSide });
+    state.materials.push(carpetMat);
     mats.ceiling.side = THREE.FrontSide;
     let roomsSolid = []; state.rooms.forEach(r => { roomsSolid = union(roomsSolid, solid(r.poly)); });
     state.corridorCeilings = [];
@@ -1000,6 +1040,21 @@
       mesh(mergeGeometriesUV(parts), mats.wall, r.id + '-corridor-walls', g);
       const lintels = lintelRuns;
       placeCorridorTorches(r, runs, freeArea, torchSlots);
+      const rugB = r.bbox, rugDx = rugB.x1 - rugB.x0, rugDz = rugB.z1 - rugB.z0;
+      const alongX = rugDx >= rugDz;
+      const passageWidth = alongX ? rugDz : rugDx;
+      const rugWidth = Math.min(3.0, passageWidth * 0.62);
+      const rugBand = alongX
+        ? solid(polyRect(rugB.x0 - 0.05, rugB.cz - rugWidth * 0.5, rugDx + 0.1, rugWidth))
+        : solid(polyRect(rugB.cx - rugWidth * 0.5, rugB.z0 - 0.05, rugWidth, rugDz + 0.1));
+      const rugArea = intersection(area, rugBand);
+      if (rugArea.length && rugWidth > 0.1) {
+        const rugTileLength = rugWidth * 1774 / 585;
+        const rugGeo = carpetSheet(rugArea, 0.018, alongX, alongX ? rugB.cz : rugB.cx, rugWidth,
+          rugTileLength, alongX ? rugB.x0 : rugB.z0);
+        const rugMesh = mesh(rugGeo, carpetMat, r.id + '-corridor-carpet', g);
+        rugMesh.renderOrder = 3; rugMesh.castShadow = false; rugMesh.receiveShadow = true;
+      }
       // plant slots along every solid wall run, both sides
       const b = r.bbox, dx = b.x1 - b.x0, dz = b.z1 - b.z0;
       // transverse width; short wall stubs (KC3/KC4) report their long side
@@ -1671,12 +1726,18 @@
       state.root.updateMatrixWorld(true);
     });
   }
-  // Procedural flame seated in each chandelier cup, plus a warm pool of light.
+  // Small, warm flame tongues seated in each chandelier cup; no PointLights are attached.
   function addK2ChandelierFire(g, cups) {
     if (!cups.length) return;
     const mats = torchFireMaterials();
-    const layers = [0.72, 1.05, 1.38];
-    const baseW = 0.48, baseH = 0.92;
+    mats.fire.fragmentShader = mats.fire.fragmentShader
+      .replace('vec3(1.0, 0.97, 0.88)', 'vec3(1.0, 0.76, 0.38)')
+      .replace('c * a * 1.25', 'c * a * 0.72');
+    mats.glow.fragmentShader = mats.glow.fragmentShader.replace('a * 0.55', 'a * 0.18');
+    mats.ember.fragmentShader = mats.ember.fragmentShader.replace('vec3(1.0, 0.8, 0.4)', 'vec3(1.0, 0.62, 0.24)');
+    mats.fire.needsUpdate = mats.glow.needsUpdate = mats.ember.needsUpdate = true;
+    const layers = [0.72, 1.0];
+    const baseW = 0.13, baseH = 0.26;
     const fg = new THREE.PlaneGeometry(1, 1); fg.translate(0, 0.5, 0);
     const cnt = cups.length * layers.length;
     const seeds = new Float32Array(cnt), lay = new Float32Array(cnt);
@@ -1700,15 +1761,15 @@
     glow.name = 'K2-chandelier-glow'; glow.frustumCulled = false; glow.renderOrder = 3;
     cups.forEach((c, i) => {
       gs[i] = c.seed;
-      dummy.position.set(c.x, c.y + 0.16 * c.s, c.z);
+      dummy.position.set(c.x, c.y + 0.035 * c.s, c.z);
       dummy.rotation.set(0, 0, 0);
-      dummy.scale.setScalar(0.85 * c.s);
+      dummy.scale.setScalar(0.18 * c.s);
       dummy.updateMatrix();
       glow.setMatrixAt(i, dummy.matrix);
     });
     gg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(gs, 1));
     glow.instanceMatrix.needsUpdate = true; g.add(glow);
-    const PER = 8, ep = new Float32Array(cups.length * PER * 3), es = new Float32Array(cups.length * PER);
+    const PER = 2, ep = new Float32Array(cups.length * PER * 3), es = new Float32Array(cups.length * PER);
     cups.forEach((c, i) => {
       for (let j = 0; j < PER; j++) {
         const e = i * PER + j;
@@ -1905,16 +1966,8 @@
       model.name = 'K2-majlis-chandelier';
       model.traverse(o => {
         if (!o.isMesh) return;
+        // Keep the asset's authored materials and appearance; only set render flags.
         o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false;
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        mats.forEach(m => {
-          if (!m || !m.emissive) return;
-          if (!m.userData.k2Glow) {
-            m.emissive = new THREE.Color(0xffb15a);
-            m.emissiveIntensity = Math.max(m.emissiveIntensity || 0, 0.22);
-            m.userData.k2Glow = true;
-          }
-        });
       });
       g.add(model);
       const cups = K2_DRESS.cups.map((cup, i) => ({
@@ -1944,7 +1997,7 @@
   }
 
   // Room-only Babylonian doors. Uses the supplied باب الاجنحة.glb unchanged.
-  const ROOM_DOOR_ROOMS = new Set(['K1', 'K2', 'K3', 'K4', 'K5']);
+  const ROOM_DOOR_ROOMS = new Set(['K2', 'K3', 'K4']);
   function isRoomDoor(d) { return d && d.kind !== 'arch' && (ROOM_DOOR_ROOMS.has(d.from) || ROOM_DOOR_ROOMS.has(d.to)); }
   function doorBox(d, out) {
     const half = d.width * 0.5, span = d.state === 'Open' ? 0 : Math.max(0.42, half * (1 - d.progress) + 0.12);

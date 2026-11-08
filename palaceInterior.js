@@ -1377,11 +1377,11 @@
       lightAssignAt = clock + 0.8;
       for (let i = 0; i < lights.length; i++) {
         const f = lightCandidates[Math.min(i, lightCandidates.length - 1)];
-        const target = lightTargets[i] || (lightTargets[i] = { x: 0, y: 0, z: 0, intensity: 2.15 });
+        const target = lightTargets[i] || (lightTargets[i] = { x: 0, y: 0, z: 0, intensity: 1.25 });
         target.x = f.x;
         target.y = Math.min(hallLen * 0.46, 3.1 * H);
         target.z = f.z;
-        target.intensity = 2.15 * Math.max(0.72, Math.min(1.15, Number(f.intensity) || 1));
+        target.intensity = 1.25 * Math.max(0.72, Math.min(1.15, Number(f.intensity) || 1));
       }
     }
     const k = 1 - Math.exp(-Math.max(0.001, dt) * 7);
@@ -1392,7 +1392,7 @@
       l.position.y += (t.y - l.position.y) * k;
       l.position.z += (t.z - l.position.z) * k;
       l.intensity += (t.intensity - l.intensity) * k;
-      l.distance = 16 * H;
+      l.distance = 12 * H;
     }
   }
 
@@ -2258,11 +2258,11 @@
     })();
     if (!propParts.length) slotModes.push({ id: 'propsSheet', count: 0, mode: 'missing' });
 
-    const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.78);
+    const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.65);
     group.add(hemi);
-    const fill = new THREE.AmbientLight(0xffd0a4, 0.12);
+    const fill = new THREE.AmbientLight(0xffd0a4, 0.08);
     group.add(fill);
-    const wash = new THREE.DirectionalLight(0xfff0d0, 0.5);
+    const wash = new THREE.DirectionalLight(0xfff0d0, 0.32);
     wash.position.set(-0.2 * H, CH * 0.86, L * 0.18);
     wash.target.position.set(0, CH * 0.28, L * 0.66);
     wash.castShadow = false;
@@ -2270,7 +2270,7 @@
     group.add(wash.target);
     lights = [];
     for (let i = 0; i < CONFIG.lightCount; i++) {
-      const pl = new THREE.PointLight(0xffb15a, 2.15, 16 * H, 2);
+      const pl = new THREE.PointLight(0xffb15a, 1.25, 12 * H, 2);
       pl.castShadow = false;
       pl.position.set(0, 2.2 * H, L * 0.45);
       group.add(pl);
@@ -2380,9 +2380,9 @@
       for (let i = 0; i < lights.length; i++) {
         const f = sorted[Math.min(sorted.length - 1, Math.round(i * (sorted.length - 1) / Math.max(1, lights.length - 1)))];
         lights[i].position.set(f.x, ly, f.z);
-        lights[i].intensity = 2.15;
-        lights[i].distance = 16 * H;
-        lightTargets[i] = { x: f.x, y: ly, z: f.z, intensity: 2.15 };
+        lights[i].intensity = 1.25;
+        lights[i].distance = 12 * H;
+        lightTargets[i] = { x: f.x, y: ly, z: f.z, intensity: 1.25 };
       }
     }
 
