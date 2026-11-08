@@ -29,11 +29,11 @@
     high:   { scale: 1.00, shadow: true,  res: 2048, extent: 88, soft: true,  veg: 1.00, pots: 110, potShadow: 46, dust: 500 }
   };
   const ORDER = ['low', 'medium', 'high'];
+  const MOBILE_DEVICE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '') ||
+    (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent || ''));
   function detectTier() {
-    const ua = navigator.userAgent || '';
-    const mobile = /iPhone|iPad|iPod|Android/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
     const mem = navigator.deviceMemory || 8, cores = navigator.hardwareConcurrency || 4;
-    if (mobile) return (mem <= 3 || cores <= 4) ? 'low' : 'medium';
+    if (MOBILE_DEVICE) return (mem <= 3 || cores <= 4) ? 'low' : 'medium';
     return (cores <= 4) ? 'medium' : 'high';
   }
 
@@ -281,9 +281,10 @@
     settings() { return E; },
     pixelRatio() {
       // Scale the CSS-pixel render target by the display DPR for sharper texturing,
-      // but cap the device multiplier to control mobile fill-rate and memory.
+      // using a lower cap on phones to control fill-rate and memory.
       const dpr = Number(window.devicePixelRatio) || 1;
-      return Math.min(1.25, Math.max(1, dpr)) * E.scale;
+      const cap = MOBILE_DEVICE ? 1.0 : 1.25;
+      return Math.min(cap, Math.max(1, dpr)) * E.scale;
     },
     mode() { return mode; },
     tier() { return base; },
