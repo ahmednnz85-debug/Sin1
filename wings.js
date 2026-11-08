@@ -695,11 +695,6 @@
       state.k1FloorY = Math.max(0, floorTop);
       addK1ModelColliders(model);
       const fittedBox = new THREE.Box3().setFromObject(model);
-      // Remove only the entrance leaf to K1; preserve the gate frame and the
-      // separate exit gate toward the Kings corridor.
-      model.traverse(function (node) {
-        if (node.isMesh && node.name === 'K1_Gate_Entrance_Main') node.visible = false;
-      });
       // Hide only palace geometry that occupies K1's already-fitted volume.
       // This is a palace-material mask, not a transform or collider change.
       // No other wing is inside these bounds.
@@ -1633,7 +1628,8 @@
     return { geometry: out, material: material, size: sz };
   }
   function placeK2Columns(r, g) {
-    const pairs = columnPairs(r, 4, 4.2, 3.2);
+    // Three evenly spaced pairs leave the south-east entry and north exit sightlines clear.
+    const pairs = columnPairs(r, 3, 4.2, 5.2);
     const targetH = Math.max(4, r.height - K2_DRESS.ceilingDepth + 0.04);
     const rad = 0.78;
     pairs.forEach(p => {
@@ -1997,8 +1993,8 @@
   }
 
   // Room-only Babylonian doors. Uses the supplied باب الاجنحة.glb unchanged.
-  const ROOM_DOOR_ROOMS = new Set(['K2', 'K3', 'K4']);
-  function isRoomDoor(d) { return d && d.kind !== 'arch' && (ROOM_DOOR_ROOMS.has(d.from) || ROOM_DOOR_ROOMS.has(d.to)); }
+  const ROOM_DOOR_ROOMS = new Set(['K1', 'K2', 'K3', 'K4']);
+  function isRoomDoor(d) { return d && d.id !== 'KC12-K2' && d.kind !== 'arch' && (ROOM_DOOR_ROOMS.has(d.from) || ROOM_DOOR_ROOMS.has(d.to)); }
   function doorBox(d, out) {
     const half = d.width * 0.5, span = d.state === 'Open' ? 0 : Math.max(0.42, half * (1 - d.progress) + 0.12);
     const b = out || { _door: true, _doorRef: d };
@@ -2963,12 +2959,12 @@
     const braz = k3Seat(by.brazier, 1.4);
     const scrolls = k3Seat(by.scrolls, 1.5);
     k3Put(g, shelf, b.x0 + 5.0, b.z0 + shelf.size.x * 0.5 + 0.05, Math.PI / 2, 'K3-shelf-a');
-    k3Put(g, shelf, b.x0 + 10.6, b.z0 + shelf.size.x * 0.5 + 0.05, Math.PI / 2, 'K3-shelf-b');
+    k3Put(g, shelf, b.x0 + 10.6, b.z1 - shelf.size.x * 0.5 - 0.05, -Math.PI / 2, 'K3-shelf-b');
     k3Put(g, arch, b.x0 + 3.5, b.z1 - arch.size.x * 0.5 - 0.04, -Math.PI / 2, 'K3-arch');
-    k3Put(g, scrolls, b.x0 + 6.7, b.z1 - 1.35, 0.4, 'K3-scrolls');
+    k3Put(g, scrolls, b.x0 + 7.0, b.z1 - 2.2, 0.4, 'K3-scrolls');
     k3Put(g, braz, b.x0 + 0.85, b.z0 + 2.5, 0, 'K3-brazier-s');
     k3Put(g, braz, b.x0 + 0.85, b.z0 + 9.5, Math.PI, 'K3-brazier-n');
-    k3Put(g, easel, b.x0 + 12.4, b.z0 + 2.3, 2.4, 'K3-easel');
+    k3Put(g, easel, b.x0 + 13.0, b.z0 + 9.0, 2.4, 'K3-easel');
     const tx = dress.tableHalf.x, tz = dress.tableHalf.z;
     const cd = chair.size.x * 0.5 + 0.18;
     k3Put(g, chair, b.cx - tx - cd, b.cz, 0, 'K3-chair-head');
