@@ -83,3 +83,28 @@ test('opening intro and interior-entry cinematics are bypassed while the palace-
   assert.match(index, /phase='push'/);
   assert.match(palace, /state = 'DONE';\s*fadeT = 0;\s*entranceLeft = 0;/);
 });
+
+test('K4 royal treasury uses its full-room artwork, supplied GLBs and no procedural room dressing', () => {
+  assert.match(wings, /k4Floor: 'assets\/ارضية الخزانة\.JPG'/);
+  assert.match(wings, /k4Ceiling: 'assets\/سقف الخزانة \.JPG'/);
+  assert.match(wings, /k4SideWall: 'assets\/جدارية ايمن الخزانة\.JPG'/);
+  assert.match(wings, /k4FrontWall: 'assets\/جدارية الخزانة\.glb'/);
+  assert.match(wings, /k4Furniture1: 'assets\/اثاث الخزانة\.glb'/);
+  assert.match(wings, /k4Furniture2: 'assets\/اثاث الخزانة 2\.glb'/);
+  assert.match(wings, /k4Furniture3: 'assets\/اثاث الخزانة 3\.glb'/);
+  assert.match(wings, /ROOM_NAMES\.K4, KC1x \+ 17, KC2\.bbox\.z1 \+ 3, 21\.322, 12, 8\.5\)/);
+  assert.match(wings, /K4\.ceiling = false/);
+  assert.match(wings, /if \(r\.id !== 'K4'\) addFutureZones\(r, g\)/);
+  assert.match(wings, /r\.id !== 'K2' && r\.id !== 'K3' && r\.id !== 'K4'\) addTorches\(r\)/);
+  const start = wings.indexOf('function dressK4()');
+  const end = wings.indexOf('// اثاث الخرائط is one fused mesh', start);
+  const dress = wings.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(dress, /new THREE\.PlaneGeometry\(w, d\)/);
+  assert.match(dress, /WING_FILES\.k4Floor/);
+  assert.match(dress, /WING_FILES\.k4Ceiling/);
+  assert.match(dress, /WING_FILES\.k4SideWall/);
+  assert.match(dress, /WING_FILES\.k4FrontWall/);
+  assert.match(dress, /k4Furniture1[\s\S]*k4Furniture2[\s\S]*k4Furniture3/);
+  assert.doesNotMatch(dress, /futureZone|addTorches|addColumns|boxAt/);
+});
