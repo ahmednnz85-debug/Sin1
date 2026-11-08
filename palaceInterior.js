@@ -3018,9 +3018,17 @@
         if (!warmMeshes) {
           const seen = new Set();
           warmMeshes = [];
-          const consider = function (root) {
+          const consider = function (root, visibleOnly) {
             if (!root) return;
             root.traverse(function (o) {
+              if (visibleOnly) {
+                let parent = o;
+                while (parent) {
+                  if (!parent.visible) return;
+                  if (parent === root) break;
+                  parent = parent.parent;
+                }
+              }
               if (!o.isMesh && !o.isSprite && !o.isPoints) return;
               const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
               if (!mats.length || mats.every(function (m) { return !m || seen.has(m.uuid); })) return;
@@ -3032,7 +3040,9 @@
             });
           };
           consider(group);
-          if (wingRuntime && wingRuntime.root) consider(wingRuntime.root);
+          // Hidden wing rooms can contain dozens of large authored materials.
+          // Warming them all at the palace entrance caused long stalls and GPU resets.
+          if (wingRuntime && wingRuntime.root) consider(wingRuntime.root, true);
           if (ctx.hero) consider(ctx.hero);
           warmMeshes.forEach(function (e) {
             if (e.obj.userData._warmVis == null) e.obj.userData._warmVis = e.obj.visible;

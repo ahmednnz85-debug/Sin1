@@ -53,3 +53,12 @@ test('all palace wings share one stable ambient source and synchronized subtle f
   assert.match(wings, /const sharedFlicker = 0\.98 \+ 0\.02 \* Math\.sin/);
   assert.match(wings, /\[state\.k2Lights, state\.k3Lights\]/);
 });
+
+test('palace warm-up skips materials under hidden wing-room groups', () => {
+  const start = palace.indexOf('const consider = function (root, visibleOnly)');
+  const end = palace.indexOf('warmMeshes.forEach(function (e)', start);
+  assert.ok(start >= 0 && end > start);
+  const warmup = palace.slice(start, end);
+  assert.match(warmup, /if \(visibleOnly\)[\s\S]*if \(!parent\.visible\) return/);
+  assert.match(warmup, /consider\(wingRuntime\.root, true\)/);
+});

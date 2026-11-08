@@ -66,13 +66,20 @@
     k3Table: 'assets/طاولة الخرائط.glb',
     k3Furniture: 'assets/اثاث_الخرائط.glb'
   };
+  // K4's authored GLBs have large embedded textures. Keep them out of the
+  // palace-entry preload so the first WebGL warm-up fits mobile GPU budgets.
+  const K4_DEFERRED_MODELS = new Set([
+    WING_FILES.k4Furniture1, WING_FILES.k4Furniture2,
+    WING_FILES.k4Furniture3, WING_FILES.k4FrontWall
+  ]);
   const WING_DOOR_FILE = 'assets/باب الاجنحة.glb';
   let wingDoorLoadStarted = false;
   const K2_LAZY = { reception: WING_FILES.k2Reception, meetings: WING_FILES.k2Meetings };
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
   function assetList() {
-    return Object.keys(WING_FILES).map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
+    return Object.keys(WING_FILES).filter(k => !K4_DEFERRED_MODELS.has(WING_FILES[k]))
+      .map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
       .filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
   }
   function provideAsset(url, value) { if (url && value) preloaded.set(url, value); }
@@ -2233,6 +2240,7 @@
       });
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
+    if (id === 'K4') loadK4Assets();
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
   }
@@ -2822,10 +2830,53 @@
      and the three authored GLB groups; debug placeholders and procedural
      dressing are intentionally excluded from K4.
   --------------------------------------------------------------------------- */
-  function k4PlaceAsset(dress, spec) {
+  function limitK4TextureSize(root, maxEdge) {
+    const seen = new Set();
+    let resized = 0;
+    const keys = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'alphaMap', 'bumpMap'];
+    root.traverse(function (node) {
+      if (!node.isMesh || !node.material) return;
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      materials.forEach(function (material) {
+        if (!material) return;
+        keys.forEach(function (key) {
+          const texture = material[key];
+          if (!texture || seen.has(texture)) return;
+          seen.add(texture);
+          const image = texture.image || (texture.source && texture.source.data);
+          const width = image && (image.naturalWidth || image.videoWidth || image.width || 0);
+          const height = image && (image.naturalHeight || image.videoHeight || image.height || 0);
+          if (!width || !height || Math.max(width, height) <= maxEdge) return;
+          const scale = maxEdge / Math.max(width, height);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(width * scale));
+          canvas.height = Math.max(1, Math.round(height * scale));
+          const context = canvas.getContext('2d');
+          if (!context) return;
+          try {
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            texture.image = canvas;
+            if (texture.source && texture.source.data === image) texture.source.data = canvas;
+            texture.needsUpdate = true;
+            resized++;
+          } catch (error) {
+            console.warn('تعذر تصغير خامة من أصول K4', error);
+          }
+        });
+      });
+    });
+    return resized;
+  }
+  function k4PlaceAsset(dress, spec, onSettled) {
     const rootAtRequest = state.root;
+    let settled = false;
+    function finish() {
+      if (settled) return;
+      settled = true;
+      if (onSettled) onSettled();
+    }
     wingGLB(spec.url, function (gltf) {
-      if (!gltf || state.root !== rootAtRequest || state.k4Dress !== dress) return;
+      if (!gltf || state.root !== rootAtRequest || state.k4Dress !== dress) { finish(); return; }
       const model = gltf.scene;
       model.updateMatrixWorld(true);
       const sourceBox = new THREE.Box3().setFromObject(model);
@@ -2833,6 +2884,7 @@
       const sourceCenter = sourceBox.getCenter(new THREE.Vector3());
       if (!(sourceSize.x > 0 && sourceSize.y > 0 && sourceSize.z > 0)) {
         dress.errors.push(spec.name + ': invalid model bounds');
+        finish();
         return;
       }
       const scale = spec.fitWidth
@@ -2858,6 +2910,7 @@
       holder.name = spec.name;
       holder.position.set(spec.x, spec.y || 0, spec.z);
       holder.rotation.y = spec.rotation || 0;
+      const resizedTextures = limitK4TextureSize(model, 1024);
       holder.add(model);
       dress.host.add(holder);
       rootAtRequest.updateMatrixWorld(true);
@@ -2875,15 +2928,29 @@
       if (spec.key === 'frontWall') dress.frontWall = true;
       dress.metrics[spec.key] = {
         size: [sourceSize.x, sourceSize.y, sourceSize.z].map(function (n) { return +n.toFixed(3); }),
-        scale: +scale.toFixed(4), fittedHeight: +(sourceSize.y * scale).toFixed(3)
+        scale: +scale.toFixed(4), fittedHeight: +(sourceSize.y * scale).toFixed(3), resizedTextures: resizedTextures
       };
       rebuildSpatial();
+      finish();
     }, function (error) {
-      if (state.root !== rootAtRequest || state.k4Dress !== dress) return;
+      if (state.root !== rootAtRequest || state.k4Dress !== dress) { finish(); return; }
       const message = error && error.message ? error.message : String(error || 'load failed');
       dress.errors.push(spec.name + ': ' + message);
       console.error('K4 treasury asset failed', spec.url, error);
+      finish();
     });
+  }
+  function loadK4Assets() {
+    const dress = state.k4Dress;
+    if (!dress || dress.loadStarted || !dress.assetSpecs || !dress.assetSpecs.length) return;
+    dress.loadStarted = true;
+    let nextIndex = 0;
+    function next() {
+      if (state.k4Dress !== dress || nextIndex >= dress.assetSpecs.length) return;
+      const spec = dress.assetSpecs[nextIndex++];
+      k4PlaceAsset(dress, spec, next);
+    }
+    next();
   }
   function dressK4() {
     const r = state.rooms.find(function (room) { return room.id === 'K4'; });
@@ -2892,7 +2959,7 @@
     const b = r.bbox, h = r.height, w = b.x1 - b.x0, d = b.z1 - b.z0;
     const dress = state.k4Dress = {
       host: g, bbox: b, floor: false, walls: false, ceiling: false, frontWall: false,
-      loaded: {}, metrics: {}, errors: []
+      loaded: {}, metrics: {}, errors: [], loadStarted: false, assetSpecs: []
     };
 
     // One artwork copy spans the complete room footprint: the room aspect ratio
@@ -2949,23 +3016,15 @@
     state.ceilings.push(ceiling);
     dress.ceiling = true;
 
-    // The three GLBs are kept intact as authored groups and distributed around
-    // a clear approach lane, echoing the reference's left/right displays and
-    // central treasure focal point.
-    [
+    // Keep authored groups intact, but fetch them only when K4 becomes active.
+    // Loading them with the entire palace caused WebGL context loss on phones.
+    dress.assetSpecs = [
       { key: 'furniture1', url: WING_FILES.k4Furniture1, name: 'K4-treasury-display-left', x: b.x0 + 3.5, z: b.cz - 0.3, rotation: Math.PI / 2, fitHeight: 2.7 },
       { key: 'furniture2', url: WING_FILES.k4Furniture2, name: 'K4-treasury-display-right', x: b.x1 - 3.5, z: b.cz - 0.3, rotation: -Math.PI / 2, fitHeight: 2.7 },
-      { key: 'furniture3', url: WING_FILES.k4Furniture3, name: 'K4-treasury-central-display', x: b.cx, z: b.z1 - 3.4, rotation: 0, fitHeight: 2.6 }
-    ].forEach(function (spec) { k4PlaceAsset(dress, spec); });
+      { key: 'furniture3', url: WING_FILES.k4Furniture3, name: 'K4-treasury-central-display', x: b.cx, z: b.z1 - 3.4, rotation: 0, fitHeight: 2.6 },
+      { key: 'frontWall', url: WING_FILES.k4FrontWall, name: 'K4-treasury-front-mural', x: b.cx, y: 0.2, z: b.z1 - 0.27, rotation: 0, fitHeight: Math.max(1, h - 0.4), fitWidth: w - 1.0, doubleSided: true, collider: false }
+    ];
 
-    // The north-facing 3D panel is centered, fitted within the wall height and
-    // mounted just inside the interior face so its authored proportions remain intact.
-    const frontHeight = Math.max(1, h - 0.4);
-    k4PlaceAsset(dress, {
-      key: 'frontWall', url: WING_FILES.k4FrontWall, name: 'K4-treasury-front-mural',
-      x: b.cx, y: 0.2, z: b.z1 - 0.27, rotation: 0,
-      fitHeight: frontHeight, fitWidth: w - 1.0, doubleSided: true, collider: false
-    });
   }
   // اثاث الخرائط is one fused mesh. The six objects sit apart, so a small
   // gap in the vertex cloud is enough to separate them.
