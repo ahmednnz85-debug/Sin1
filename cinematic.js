@@ -24,9 +24,9 @@
   // ---------- quality tiers ----------
   const TIERS = {
     //        render scale | shadows | map | half-extent(m) | soft | veg dist | pot cull(m) | pot shadow r(m) | dust
-    low:    { scale: 0.88, shadow: true,  res: 1024, extent: 24, soft: false, veg: 0.70, pots: 58,  potShadow: 18, dust: 220 },
-    medium: { scale: 0.92, shadow: true,  res: 1024, extent: 26, soft: false, veg: 0.78, pots: 70,  potShadow: 22, dust: 320 },
-    high:   { scale: 1.00, shadow: true,  res: 2048, extent: 32, soft: true,  veg: 1.00, pots: 110, potShadow: 46, dust: 500 }
+    low:    { scale: 0.88, shadow: true,  res: 1024, extent: 112, soft: false, veg: 0.70, pots: 58,  potShadow: 18, dust: 220 },
+    medium: { scale: 0.92, shadow: true,  res: 1024, extent: 112, soft: false, veg: 0.78, pots: 70,  potShadow: 22, dust: 320 },
+    high:   { scale: 1.00, shadow: true,  res: 2048, extent: 112, soft: true,  veg: 1.00, pots: 110, potShadow: 46, dust: 500 }
   };
   const ORDER = ['low', 'medium', 'high'];
   function detectTier() {

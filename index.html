@@ -289,7 +289,7 @@ function setShadowRes(){if(window.SinGfx)return;const r=hq?2048:1024; if(sun.sha
 
 // ===================== EXTRAS: cinematic golden-hour lighting matched to the sky =====================
 renderer.toneMappingExposure=1.02;
-sun.color.setRGB(1.0,0.70,0.38); sun.intensity=3.6;                  // low golden sun, same direction as the sun in the sky
+sun.color.setRGB(1.0,0.70,0.38); sun.intensity=2.6;                  // softer golden sun, fixed direction and lower intensity
 hemi.color.setRGB(0.40,0.60,0.82); hemi.groundColor.setRGB(0.56,0.38,0.20); hemi.intensity=0.9; // teal-blue sky fill + golden ground bounce
 const fillL=new THREE.DirectionalLight(0x000000,0.55); fillL.color.setRGB(0.32,0.55,0.85); fillL.position.set(-SUN.x*60,38,-SUN.z*60);fillL.userData.keepDuringPalace=true;scene.add(fillL); // cold fill from the opposite side (teal/orange contrast)
 // ---------- cinematic quality layer (cinematic.js): tiers, adaptive governor, height fog, stable sun shadow ----------
@@ -1836,14 +1836,14 @@ function clipFollowCamera(want,hx,hy,hz){
   if(A<0.08)return 1;
   let best=1;
   for(let i=0;i<colliders.length;i++){
-    const c=colliders[i],rr=c[2]+0.42,vx=hx-c[0],vz=hz-c[1];
+    const c=colliders[i],rr=c[2]+0.65,vx=hx-c[0],vz=hz-c[1];
     if(vx*vx+vz*vz>A+9)continue;
     const B=2*(dx*vx+dz*vz),C=vx*vx+vz*vz-rr*rr,disc=B*B-4*A*C;
     if(disc<0)continue;
     const t=(-B-Math.sqrt(disc))/(2*A);
-    if(t>0.05&&t<best)best=t;
+    if(t>0.015&&t<best)best=t;
   }
-  if(best<0.97)return Math.max(0.24,best*0.9);
+  if(best<0.97)return Math.max(0.16,best*0.82);
   return 1;
 }
 const ease=t=>t*t*(3-2*t);
@@ -1878,6 +1878,7 @@ function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=wi
   if(moving){if(len>1){mx/=len;mz/=len;}const sp=run?7.15:1.7,p=heroRoot.position;const nx=p.x+mx*sp*dt;if(!blocked(nx,p.z))p.x=nx;const nz=p.z+mz*sp*dt;if(!blocked(p.x,nz))p.z=nz;
     let d=Math.atan2(mx,mz)-heroYaw;d=Math.atan2(Math.sin(d),Math.cos(d));heroYaw+=d*Math.min(1,dt*10);}
   if(rigOn&&moving&&!camManual){let d=heroYaw-yaw;d=Math.atan2(Math.sin(d),Math.cos(d));yaw+=d*(1-Math.exp(-dt*(run?3.4:2.6)));pitch+=(CAM_PITCH-pitch)*(1-Math.exp(-dt*.8));}
+  else if(!rigOn&&!camManual){let d=heroYaw-yaw;d=Math.atan2(Math.sin(d),Math.cos(d));yaw+=d*(1-Math.exp(-dt*2.6));pitch+=(CAM_PITCH-pitch)*(1-Math.exp(-dt*.8));}
   {const p_=heroRoot.position;if(window.PalaceInterior&&PalaceInterior.ownsGround()){const gy=PalaceInterior.floorAt(p_.x,p_.z);p_.y+=(gy-p_.y)*Math.min(1,dt*8);}else p_.y+=(palGround(p_.x,p_.z,p_.y)-p_.y)*Math.min(1,dt*12);}
   {const p_=heroRoot.position;
     if(!skyTransition.gatePassed&&heroZBefore<=GATE_HD&&p_.z>GATE_HD&&Math.abs(p_.x)<=PASS+.2)skyTransition.gatePassed=true;
@@ -1921,7 +1922,9 @@ function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=wi
   if(window.PalaceInterior&&PalaceInterior.constrainCamera)PalaceInterior.constrainCamera(camera,hp);
   if(followCam)camera.lookAt(hx,hy,hz);
   sky.position.copy(camera.position);updateSkyline();
-  sun.position.copy(hp).addScaledVector(SUN,80);sun.target.position.copy(hp);if(window.SinGfx)SinGfx.snapShadow(hp);else sun.target.updateMatrixWorld();
+  // Keep the outdoor shadow camera anchored to the gate-to-palace route; following
+  // the hero here moved the whole shadow frustum and made nearby shadows swim.
+  sun.target.position.set(0,0,93);sun.position.set(0,0,93).addScaledVector(SUN,80);sun.target.updateMatrixWorld();
   if(window.SinGfx)SinGfx.update(dt,{babylon:skyTransition.started,courtyard:hp.z>PL_Z0+4&&!isInteriorNow(),running:!!run&&moving});
   updateDust(tAcc);updateWater(tAcc);if(!(window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround()))updateExtras();}if(window.PalaceInterior&&PalaceInterior.holdCull)PalaceInterior.holdCull(scene,heroRoot);const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';if(palaceState!=='FADING_OUT'&&palaceState!=='LOADING'&&palaceState!=='SETUP'&&palaceState!=='FAILED'&&palaceState!=='REVEAL')renderer.render(scene,camera);}catch(e){console.error('loop',e);}}
 init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);});

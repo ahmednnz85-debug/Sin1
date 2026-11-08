@@ -1363,40 +1363,10 @@
 
   function updatePalaceLights(dt, hero) {
     if (window.__perfLab && window.__perfLab.flags.skipLightWork) return;
-    if (!lights.length || !fireList.length || !group) return;
-    const p = hero && hero.position;
-    if (p && clock >= lightAssignAt) {
-      const hx = p.x - group.position.x, hz = p.z - group.position.z;
-      lightCandidates.length = 0;
-      for (let i = 0; i < fireList.length; i++) lightCandidates.push(fireList[i]);
-      lightCandidates.sort(function (a, b) {
-        const da = (a.x - hx) * (a.x - hx) + (a.z - hz) * (a.z - hz);
-        const db = (b.x - hx) * (b.x - hx) + (b.z - hz) * (b.z - hz);
-        return da - db;
-      });
-      lightAssignAt = clock + 0.8;
-      for (let i = 0; i < lights.length; i++) {
-        const f = lightCandidates[Math.min(i, lightCandidates.length - 1)];
-        const target = lightTargets[i] || (lightTargets[i] = { x: 0, y: 0, z: 0, baseIntensity: 0.8, seed: i });
-        target.x = f.x;
-        target.y = Math.min(hallLen * 0.46, 3.1 * H);
-        target.z = f.z;
-        target.baseIntensity = 0.82 * Math.max(0.6, Math.min(1.7, Number(f.intensity) || 1));
-        target.seed = Number(f.seed) || i;
-      }
-    }
-    const k = 1 - Math.exp(-Math.max(0.001, dt) * 7);
-    for (let i = 0; i < lights.length; i++) {
-      const l = lights[i], t = lightTargets[i];
-      if (!t) continue;
-      l.position.x += (t.x - l.position.x) * k;
-      l.position.y += (t.y - l.position.y) * k;
-      l.position.z += (t.z - l.position.z) * k;
-      const seed = Number(t.seed) || 0;
-      const flicker = 0.92 + 0.05 * Math.sin(clock * 8.3 + seed * 1.7) + 0.03 * Math.sin(clock * 17.1 + seed * 4.1);
-      l.intensity += (t.baseIntensity * flicker - l.intensity) * k;
-      l.distance = 9 * H;
-    }
+    // Lights are assigned once to fixed braziers during build(). Re-ranking them
+    // by hero distance every 0.8 s caused visible light pools to travel across walls.
+    // Keep their baked positions and intensities unchanged while the hero moves.
+    void dt; void hero;
   }
 
 
@@ -2313,30 +2283,6 @@
       fireMesh.instanceMatrix.needsUpdate = true;
       group.add(fireMesh);
       fireMats.push(fireMat);
-
-      const ggeo = new THREE.PlaneGeometry(1, 1);
-      const gseeds = new Float32Array(fireList.length);
-      ggeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(gseeds, 1));
-      const gmat = new THREE.ShaderMaterial({
-        uniforms: { uTime: { value: 0 } },
-        vertexShader: GLOW_VS,
-        fragmentShader: GLOW_FS,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide
-      });
-      const glowMesh = new THREE.InstancedMesh(ggeo, gmat, fireList.length);
-      glowMesh.name = 'fire-glow';
-      glowMesh.frustumCulled = false;
-      glowMesh.renderOrder = 1;
-      fireList.forEach(function (f, i) {
-        gseeds[i] = f.seed;
-        glowMesh.setMatrixAt(i, pose(f.x, f.y + 0.08 * H, f.z, 0, 0.55 * H, 0.55 * H, 1));
-      });
-      glowMesh.instanceMatrix.needsUpdate = true;
-      group.add(glowMesh);
-      fireMats.push(gmat);
 
       const per = 8;
       const en = fireList.length * per;

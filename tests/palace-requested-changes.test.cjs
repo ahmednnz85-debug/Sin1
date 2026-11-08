@@ -37,13 +37,13 @@ test('K3 map room keeps the central table and far map while arranging props arou
   assert.match(wings, /b\.x0 \+ 13\.0, b\.z0 \+ 9\.0, 2\.4, 'K3-easel'/);
 });
 
-test('K2 chandelier keeps authored materials and subtle procedural flames', () => {
+test('K2 chandelier keeps subtle fire but does not add a camera-facing glow halo', () => {
   const start = wings.indexOf('function addK2ChandelierFire');
   const end = wings.indexOf('function addK2Lights', start);
   const fire = wings.slice(start, end);
   assert.ok(start >= 0 && end > start);
   assert.match(fire, /c \* a \* 0\.72/);
-  assert.match(fire, /replace\('a \* 0\.55', 'a \* 0\.18'\)/);
+  assert.doesNotMatch(fire, /K2-chandelier-glow/);
   assert.match(fire, /const baseW = 0\.13, baseH = 0\.26/);
   assert.match(fire, /const PER = 2/);
   const chandelierStart = wings.indexOf('function loadK2Chandelier');
@@ -51,7 +51,7 @@ test('K2 chandelier keeps authored materials and subtle procedural flames', () =
   assert.doesNotMatch(wings.slice(chandelierStart, chandelierEnd), /m\.emissive = new THREE\.Color/);
 });
 
-test('palace braziers animate and drive warm, localized flickering lights instead of a sun wash', () => {
+test('palace braziers retain fixed warm lighting without traveling glow, and outdoor shadows stay anchored', () => {
   assert.match(palace, /fireList\.push\(\{ x: x, y: y \+ targetMeters \* 0\.66, z: z, intensity: intensity/);
   assert.match(palace, /fireMats\.forEach\(function \(m\)[\s\S]{0,150}m\.uniforms\.uTime\.value = clock/);
   assert.doesNotMatch(palace, /m\.uniforms\.uTime\.value = 1\.15/);
@@ -59,10 +59,11 @@ test('palace braziers animate and drive warm, localized flickering lights instea
   assert.match(palace, /new THREE\.AmbientLight\(0xffd0a4, 0\.035\)/);
   assert.doesNotMatch(palace, /const wash = new THREE\.DirectionalLight/);
   assert.match(palace, /new THREE\.PointLight\(0xffb15a, 0, 9 \* H, 2\)/);
-  assert.match(palace, /target\.baseIntensity = 0\.82[\s\S]{0,150}Number\(f\.intensity\)/);
-  assert.match(palace, /const flicker = 0\.92 \+ 0\.05 \* Math\.sin/);
-  assert.match(palace, /l\.distance = 9 \* H/);
-  assert.match(index, /sun\.intensity=3\.6/);
+  assert.doesNotMatch(palace, /lightCandidates\.sort/);
+  assert.doesNotMatch(palace, /const flicker = 0\.92 \+ 0\.05 \* Math\.sin/);
+  assert.match(palace, /lights\[i\]\.distance = 9 \* H/);
+  assert.match(index, /sun\.intensity=2\.6/);
+  assert.match(index, /sun\.target\.position\.set\(0,0,93\)/);
   assert.match(index, /hemi\.intensity=0\.9/);
   assert.match(index, /new THREE\.DirectionalLight\(0x000000,0\.55\)/);
   assert.match(index, /renderer\.toneMappingExposure=1\.02;/);

@@ -51,6 +51,7 @@
     k3Floor: 'assets/\u0627\u0631\u0636\u064A\u0629 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.JPG',
     k3Wall: 'assets/\u062C\u062F\u0627\u0631 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.JPG',
     k3WallFar: 'assets/جدار الخرائط 2.JPG',
+    k3Ceiling: 'assets/سقف الخرائط .JPG',
     // Formerly lazy assets are now part of the palace manifest.
     k2Reception: OPT_DIR + 'عمود-المجلس.glb',
     k2Meetings: 'assets/اجتماعات .glb',
@@ -1285,11 +1286,9 @@
     }, extra || {}));
     const m = {
       fire: add(TORCH_FIRE_VS, TORCH_FIRE_FS, { side: THREE.DoubleSide }),
-      glow: add(TORCH_GLOW_VS, TORCH_GLOW_FS),
-      wall: add(TORCH_WALL_VS, TORCH_WALL_FS, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       ember: add(TORCH_EMBER_VS, TORCH_EMBER_FS)
     };
-    state.torchFireMats = (state.torchFireMats || []).concat([m.fire, m.glow, m.wall, m.ember]);
+    state.torchFireMats = (state.torchFireMats || []).concat([m.fire, m.ember]);
     return m;
   }
   function torchFit(scene) {
@@ -1339,21 +1338,6 @@
         fg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
         fg.setAttribute('aLayer', new THREE.InstancedBufferAttribute(lay, 1));
         fire.instanceMatrix.needsUpdate = true; g.add(fire);
-        // halo around the flame
-        const gg = new THREE.PlaneGeometry(1, 1), gs = new Float32Array(list.length);
-        const glow = new THREE.InstancedMesh(gg, mats.glow, list.length); glow.name = id + '-torch-glow'; glow.frustumCulled = false; glow.renderOrder = 2;
-        list.forEach((s, i) => { gs[i] = s.seed; dummy.position.copy(fpos[i]); dummy.position.y += 0.16; dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(1.1); dummy.updateMatrix(); glow.setMatrixAt(i, dummy.matrix); });
-        gg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(gs, 1)); glow.instanceMatrix.needsUpdate = true; g.add(glow);
-        // warm light spill on the wall behind the torch
-        const wg = new THREE.PlaneGeometry(1, 1), ws = new Float32Array(list.length);
-        const wall = new THREE.InstancedMesh(wg, mats.wall, list.length); wall.name = id + '-torch-wall-light'; wall.frustumCulled = false; wall.renderOrder = 1;
-        list.forEach((s, i) => {
-          ws[i] = s.seed;
-          dummy.position.set(s.x + s.dx * 0.006, fpos[i].y + 0.1, s.z + s.dz * 0.006);
-          dummy.rotation.set(0, Math.atan2(s.dx, s.dz), 0); dummy.scale.set(2.4, 2.8, 1); dummy.updateMatrix();
-          wall.setMatrixAt(i, dummy.matrix);
-        });
-        wg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(ws, 1)); wall.instanceMatrix.needsUpdate = true; g.add(wall);
         // rising embers
         const PER = 10, ep = new Float32Array(list.length * PER * 3), es = new Float32Array(list.length * PER);
         list.forEach((s, i) => { for (let j = 0; j < PER; j++) { const e = i * PER + j; ep[e * 3] = fpos[i].x; ep[e * 3 + 1] = fpos[i].y + 0.12; ep[e * 3 + 2] = fpos[i].z; es[e] = (s.seed * 0.37 + j * 0.1037) % 1; } });
@@ -1729,9 +1713,8 @@
     mats.fire.fragmentShader = mats.fire.fragmentShader
       .replace('vec3(1.0, 0.97, 0.88)', 'vec3(1.0, 0.76, 0.38)')
       .replace('c * a * 1.25', 'c * a * 0.72');
-    mats.glow.fragmentShader = mats.glow.fragmentShader.replace('a * 0.55', 'a * 0.18');
     mats.ember.fragmentShader = mats.ember.fragmentShader.replace('vec3(1.0, 0.8, 0.4)', 'vec3(1.0, 0.62, 0.24)');
-    mats.fire.needsUpdate = mats.glow.needsUpdate = mats.ember.needsUpdate = true;
+    mats.fire.needsUpdate = mats.ember.needsUpdate = true;
     const layers = [0.72, 1.0];
     const baseW = 0.13, baseH = 0.26;
     const fg = new THREE.PlaneGeometry(1, 1); fg.translate(0, 0.5, 0);
@@ -1752,19 +1735,6 @@
     fg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
     fg.setAttribute('aLayer', new THREE.InstancedBufferAttribute(lay, 1));
     fire.instanceMatrix.needsUpdate = true; g.add(fire);
-    const gg = new THREE.PlaneGeometry(1, 1), gs = new Float32Array(cups.length);
-    const glow = new THREE.InstancedMesh(gg, mats.glow, cups.length);
-    glow.name = 'K2-chandelier-glow'; glow.frustumCulled = false; glow.renderOrder = 3;
-    cups.forEach((c, i) => {
-      gs[i] = c.seed;
-      dummy.position.set(c.x, c.y + 0.035 * c.s, c.z);
-      dummy.rotation.set(0, 0, 0);
-      dummy.scale.setScalar(0.18 * c.s);
-      dummy.updateMatrix();
-      glow.setMatrixAt(i, dummy.matrix);
-    });
-    gg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(gs, 1));
-    glow.instanceMatrix.needsUpdate = true; g.add(glow);
     const PER = 2, ep = new Float32Array(cups.length * PER * 3), es = new Float32Array(cups.length * PER);
     cups.forEach((c, i) => {
       for (let j = 0; j < PER; j++) {
@@ -3010,6 +2980,22 @@
     if (sideGeo.attributes.position.count) mesh(sideGeo, k3WallMaterial(WING_FILES.k3Wall), 'K3-map-wall-side', g);
     else sideGeo.dispose();
     state.k3Dress.walls = true;
+    // Tile the supplied Babylonian ceiling artwork across the actual room footprint.
+    const ceilingMap = corridorTexture(WING_FILES.k3Ceiling);
+    ceilingMap.repeat.set(Math.max(1, (b.x1 - b.x0) / 4), Math.max(1, (b.z1 - b.z0) / 4));
+    const ceilingMat = new THREE.MeshStandardMaterial({ map: ceilingMap, color: 0xd8c39a, roughness: 0.88, metalness: 0.01, side: THREE.DoubleSide });
+    state.materials.push(ceilingMat);
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(b.x1 - b.x0, b.z1 - b.z0), ceilingMat);
+    ceiling.name = 'K3-map-ceiling';
+    ceiling.rotation.x = -Math.PI / 2;
+    ceiling.position.set(b.cx, h - 0.08, b.cz);
+    ceiling.receiveShadow = true;
+    ceiling.castShadow = false;
+    ceiling.userData.ceiling = true;
+    ceiling.visible = !state.cutaway;
+    g.add(ceiling);
+    state.ceilings.push(ceiling);
+    state.k3Dress.ceiling = true;
 
     // K3 fire positions are exported to PalaceInterior and served by its
     // fixed light budget; do not add room-local PointLights here.
