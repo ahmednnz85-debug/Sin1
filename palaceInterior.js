@@ -1377,11 +1377,12 @@
       lightAssignAt = clock + 0.8;
       for (let i = 0; i < lights.length; i++) {
         const f = lightCandidates[Math.min(i, lightCandidates.length - 1)];
-        const target = lightTargets[i] || (lightTargets[i] = { x: 0, y: 0, z: 0, intensity: 1.25 });
+        const target = lightTargets[i] || (lightTargets[i] = { x: 0, y: 0, z: 0, baseIntensity: 0.8, seed: i });
         target.x = f.x;
         target.y = Math.min(hallLen * 0.46, 3.1 * H);
         target.z = f.z;
-        target.intensity = 1.25 * Math.max(0.72, Math.min(1.15, Number(f.intensity) || 1));
+        target.baseIntensity = 0.82 * Math.max(0.6, Math.min(1.7, Number(f.intensity) || 1));
+        target.seed = Number(f.seed) || i;
       }
     }
     const k = 1 - Math.exp(-Math.max(0.001, dt) * 7);
@@ -1391,8 +1392,10 @@
       l.position.x += (t.x - l.position.x) * k;
       l.position.y += (t.y - l.position.y) * k;
       l.position.z += (t.z - l.position.z) * k;
-      l.intensity += (t.intensity - l.intensity) * k;
-      l.distance = 12 * H;
+      const seed = Number(t.seed) || 0;
+      const flicker = 0.92 + 0.05 * Math.sin(clock * 8.3 + seed * 1.7) + 0.03 * Math.sin(clock * 17.1 + seed * 4.1);
+      l.intensity += (t.baseIntensity * flicker - l.intensity) * k;
+      l.distance = 9 * H;
     }
   }
 
@@ -2258,19 +2261,13 @@
     })();
     if (!propParts.length) slotModes.push({ id: 'propsSheet', count: 0, mode: 'missing' });
 
-    const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.65);
+    const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.18);
     group.add(hemi);
-    const fill = new THREE.AmbientLight(0xffd0a4, 0.08);
+    const fill = new THREE.AmbientLight(0xffd0a4, 0.035);
     group.add(fill);
-    const wash = new THREE.DirectionalLight(0xfff0d0, 0.32);
-    wash.position.set(-0.2 * H, CH * 0.86, L * 0.18);
-    wash.target.position.set(0, CH * 0.28, L * 0.66);
-    wash.castShadow = false;
-    group.add(wash);
-    group.add(wash.target);
     lights = [];
     for (let i = 0; i < CONFIG.lightCount; i++) {
-      const pl = new THREE.PointLight(0xffb15a, 1.25, 12 * H, 2);
+      const pl = new THREE.PointLight(0xffb15a, 0, 9 * H, 2);
       pl.castShadow = false;
       pl.position.set(0, 2.2 * H, L * 0.45);
       group.add(pl);
@@ -2373,16 +2370,17 @@
       fireMats.push(emat);
 
       fireMats.forEach(function (m) {
-        if (m.uniforms && m.uniforms.uTime) m.uniforms.uTime.value = 1.15;
+        if (m.uniforms && m.uniforms.uTime) m.uniforms.uTime.value = clock;
       });
       const sorted = fireList.slice().sort(function (a, b) { return a.z - b.z || a.x - b.x; });
       const ly = Math.min(CH * 0.46, 3.1 * H);
       for (let i = 0; i < lights.length; i++) {
         const f = sorted[Math.min(sorted.length - 1, Math.round(i * (sorted.length - 1) / Math.max(1, lights.length - 1)))];
         lights[i].position.set(f.x, ly, f.z);
-        lights[i].intensity = 1.25;
-        lights[i].distance = 12 * H;
-        lightTargets[i] = { x: f.x, y: ly, z: f.z, intensity: 1.25 };
+        const baseIntensity = 0.82 * Math.max(0.6, Math.min(1.7, Number(f.intensity) || 1));
+        lights[i].intensity = baseIntensity;
+        lights[i].distance = 9 * H;
+        lightTargets[i] = { x: f.x, y: ly, z: f.z, baseIntensity: baseIntensity, seed: Number(f.seed) || i };
       }
     }
 
@@ -2966,6 +2964,9 @@
     lastDt = dt;
     updateOutsideLightFades(dt);
     clock += dt;
+    fireMats.forEach(function (m) {
+      if (m.uniforms && m.uniforms.uTime) m.uniforms.uTime.value = clock;
+    });
     if (group && hallBuilt && (state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'DONE')) animateHall(dt, ctx);
     if (ctx.hero) heroSnap = ctx.hero.position.x.toFixed(2) + ', ' + ctx.hero.position.y.toFixed(2) + ', ' + ctx.hero.position.z.toFixed(2);
     lastDoor = !!ctx.doorOpen;
