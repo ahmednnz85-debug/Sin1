@@ -660,9 +660,7 @@
       if (specs.some(function (s) { return s.url === url; })) return; // same file as a palace asset: shared below
       specs.push({
         id: 'wing:' + a.url, key: 'wing:' + a.url, name: a.url.split('/').pop(),
-        // K4 treasury GLBs are ordinary GLBs with embedded textures. Only the
-        // known map-room/table files use Draco decoding.
-        kind: a.kind === 'tex' ? 'wtex' : (/اثاث_الخرائط|طاولة/.test(a.url) ? 'wglb-draco' : 'wglb'),
+        kind: a.kind === 'tex' ? 'wtex' : (/طاولة|اثاث/.test(a.url) ? 'wglb-draco' : 'wglb'),
         wingPath: a.url, url: url, optional: true,
         status: 'pending', loaded: 0, total: 0, error: '', attempt: 0, buf: null, result: null
       });
