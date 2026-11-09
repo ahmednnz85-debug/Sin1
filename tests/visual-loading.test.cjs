@@ -18,12 +18,14 @@ test('startup waits for all scene textures and decodes them before opening the m
   assert.match(index, /جارٍ تجهيز جميع الخامات/);
 });
 
-test('resolution stays crisp and varies only in small bounded steps', () => {
-  assert.match(cinematic, /min:\s*0\.82,\s*max:\s*1\.00,\s*initial:\s*1\.00,\s*downStep:\s*0\.02,\s*upStep:\s*0\.01/);
+test('resolution governor recovers severe mobile frame stalls and remains bounded', () => {
+  assert.match(cinematic, /min:\s*0\.58,\s*max:\s*1\.00,\s*initial:\s*1\.00,\s*downStep:\s*0\.08,\s*upStep:\s*0\.01/);
   assert.match(cinematic, /t\.shadow\s*=\s*true/);
   assert.doesNotMatch(cinematic, /t\.shadow\s*=\s*false/);
-  assert.match(resolution, /var min = Number\.isFinite\(options\.min\) \? options\.min : 0\.82/);
-  assert.match(cinematic, /Math\.min\(1\.25, Math\.max\(1, dpr\)\) \* E\.scale/);
+  assert.match(resolution, /var min = Number\.isFinite\(options\.min\) \? options\.min : 0\.58/);
+  assert.match(cinematic, /dt > 2000 \|\| busy \|\| document\.hidden/);
+  assert.doesNotMatch(cinematic, /dt > 250 \|\| busy/);
+  assert.match(cinematic, /Math\.min\(mobile \? 1 : 1\.25, Math\.max\(1, dpr\)\) \* E\.scale/);
 });
 
 test('cinematic grade/fog are restrained and exposure is consistent', () => {

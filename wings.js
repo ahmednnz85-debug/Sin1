@@ -22,6 +22,8 @@
     current: null, cutaway: false, fullbright: false, debug: false, report: null,
     ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null, dynamicDoorBoxes: [], activeDoor: null, interactDoor: null
   };
+  const gpuResidency = window.SinWingGpuResidency ? window.SinWingGpuResidency() : null;
+  const renderBudget = window.SinWingRenderBudget || null;
 
   /* ---------------------------------------------------------------------------
      Wing asset files. Heavy models and pictures use the compressed copies in
@@ -33,7 +35,8 @@
   --------------------------------------------------------------------------- */
   const OPT_DIR = 'ارضيات وسقوف/optimized/';
   const WING_FILES = {
-    k1: OPT_DIR + 'K1_RoyalReceptionHall.glb',
+    // LOD25 keeps the original model's nodes/materials/UVs with 75% fewer triangles.
+    k1: OPT_DIR + 'K1_RoyalReceptionHall_lod25.glb',
     corridorFloor: 'assets/ارضية الممرات.JPG',
     corridorCarpet: 'assets/سجاد الممرات.JPG',
     corridorCeiling: OPT_DIR + 'سقف-الممرات.webp',
@@ -117,16 +120,20 @@
   function wingGLB(url, onLoad, onError) {
     const fail = onError || (e => console.warn('Wing model failed', url, e));
     if (!THREE.GLTFLoader) { fail(new Error('GLTFLoader not available')); return; }
+    const deliver = gltf => {
+      onLoad(gltf);
+      if (state.built && !state.building) updateCulling(true);
+    };
     const cached = preloaded.get(url);
     if (cached && cached.scene) {
-      const run = () => onLoad({ scene: cached.scene.clone(true), animations: cached.animations || [] });
+      const run = () => deliver({ scene: cached.scene.clone(true), animations: cached.animations || [] });
       if (state.building) deferredLoads.push(run); else run();
       return;
     }
     withMeshopt(dec => {
       const loader = new THREE.GLTFLoader();
       if (dec) loader.setMeshoptDecoder(dec);
-      loader.load(encodeURI(url), onLoad, undefined, fail);
+      loader.load(encodeURI(url), deliver, undefined, fail);
     });
   }
 
@@ -2140,11 +2147,12 @@
     });
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
+    if (gpuResidency) gpuResidency.reset();
     wingDoorLoadStarted = false;
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null;
-    state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
+    state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0; state.gpuResidency = null; state.renderBudget = null;
   }
   function wingMark(msg) {
     try { if (window.PalaceInterior && PalaceInterior.mark) PalaceInterior.mark(msg); } catch (e) { /* marks are diagnostic only */ }
@@ -2192,7 +2200,7 @@
       colliders: state.colliders,
       rooms: state.rooms.length,
       drawBudget: 40,
-      triangleBudget: 150000
+      triangleBudget: 750000
     };
   }
   function contains(x, z) { return state.built && pointInSolids(x, z, state.floorExtended); }
@@ -2213,36 +2221,64 @@
     while (q.length) { const a = q.shift(); for (const b of adj.get(a) || []) if (!dist.has(b)) { dist.set(b, dist.get(a) + 1); q.push(b); } }
     return dist;
   }
+  function groupTriangleCount(g) {
+    let triangles = 0;
+    g.traverse(o => {
+      if (!o.isMesh || !o.geometry || !o.visible) return;
+      let visible = true, parent = o.parent;
+      while (visible && parent && parent !== g) { visible = parent.visible; parent = parent.parent; }
+      if (!visible) return;
+      const count = o.geometry.index ? o.geometry.index.count / 3 : (o.geometry.attributes.position ? o.geometry.attributes.position.count / 3 : 0);
+      triangles += count * (o.isInstancedMesh ? o.count : 1);
+    });
+    return triangles;
+  }
   function updateCulling(force) {
     if (!state.built || !state.ctx || !state.ctx.hero) return;
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
     const r = regionAt(x, z), id = r ? r.id : 'Palace';
-    if (force || state.current !== id) {
+    const cullingChanged = !!force || state.current !== id;
+    if (cullingChanged) {
       state.current = id;
       // Arch thresholds are not part of the link graph: measure from the wing room
-      // they open into, and always keep the palace hall drawn while standing in one
-      // (the hall is right behind the player there).
+      // they open into, and keep the palace hall only inside its doorway threshold.
       const isArch = !!(r && r.kind === 'threshold');
       const dist = distancesFrom(isArch && r.linkRoom ? r.linkRoom : id);
       if (isArch) dist.set(id, 0);
-      // Palace hall stays drawn while it is within two links (seen through the arch behind the player).
-      state.palaceNear = id === 'Palace' || isArch || (dist.has('Palace') && dist.get('Palace') <= 2);
+      // The palace hall contains a large architectural model: retain it only
+      // while the hero is in the hall or standing in its doorway threshold.
+      state.palaceNear = id === 'Palace' || isArch;
+      const candidates = [];
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
-        // Keep nearby connected rooms plus a short visual buffer. This is
-        // render culling only; assets stay cached and are not re-downloaded.
         const d = dist.has(rr.id) ? dist.get(rr.id) : 99;
         const distM = Math.hypot(rr.bbox.cx - x, rr.bbox.cz - z);
-        if (!rr._visState) rr._visState = false;
-        const show = rr._visState ? distM < 48 : distM < 40;
+        const current = rr.id === id;
+        const show = rr._visState ? distM < 22 : distM < 18;
         rr._visState = show;
-        g.visible = d <= 2 || show;
+        const adjacent = d <= 1;
+        if (!current && !adjacent && !show) { g.visible = false; return; }
+        candidates.push({ id: rr.id, current, priority: current ? 0 : adjacent ? 1 : 2, distance: distM, triangles: groupTriangleCount(g), group: g });
       });
+      if (!candidates.length && state.regions.length) {
+        let nearest = null;
+        state.regions.forEach(rr => {
+          const g = state.regionGroups.get(rr.id); if (!g) return;
+          const distance = Math.hypot(rr.bbox.cx - x, rr.bbox.cz - z);
+          if (!nearest || distance < nearest.distance) nearest = { id: rr.id, group: g, distance };
+        });
+        if (nearest) candidates.push({ id: nearest.id, current: true, priority: -1, distance: nearest.distance, triangles: groupTriangleCount(nearest.group), group: nearest.group });
+      }
+      const plan = renderBudget ? renderBudget.choose(candidates, 750000) : { ids: candidates.map(c => c.id), triangles: candidates.reduce((n, c) => n + c.triangles, 0), budget: 750000 };
+      const visibleIds = new Set(plan.ids);
+      state.regions.forEach(rr => { const g = state.regionGroups.get(rr.id); if (g) g.visible = visibleIds.has(rr.id); });
+      state.renderBudget = { triangles: Math.round(plan.triangles), budget: plan.budget, activeRegions: plan.ids.slice() };
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
     if (id === 'K4') loadK4Assets();
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
+    if (gpuResidency && cullingChanged) state.gpuResidency = gpuResidency.sync(state.ctx.scene, state.root, state.regionGroups);
   }
   function tick(dt) {
     if (!state.built) return;
@@ -2675,15 +2711,36 @@
   }
   function metrics() {
     let meshes = 0, triangles = 0, visibleMeshes = 0, visibleTriangles = 0;
+    const topVisibleMeshes = [], regionByGroup = new Map();
     if (!state.root) return { meshes: 0, triangles: 0, visibleMeshes: 0, visibleTriangles: 0 };
+    state.regionGroups.forEach((g, id) => regionByGroup.set(g, id));
     state.root.traverse(o => {
       if (!o.isMesh || !o.geometry) return;
       const count = o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3;
       const instances = o.isInstancedMesh ? o.count : 1; meshes++; triangles += count * instances;
       let visible = o.visible, p = o.parent; while (visible && p) { visible = p.visible; p = p.parent; }
-      if (visible) { visibleMeshes++; visibleTriangles += count * instances; }
+      if (visible) {
+        const n = count * instances; visibleMeshes++; visibleTriangles += n;
+        let region = o; while (region && !regionByGroup.has(region)) region = region.parent;
+        topVisibleMeshes.push({ name: o.name || o.type || 'mesh', region: regionByGroup.get(region) || 'shared', triangles: Math.round(n), instances });
+      }
     });
-    return { meshes, triangles, visibleMeshes, visibleTriangles, colliders: state.colliders.length, k1ModelColliders: state.k1ModelColliderCount, k1FloorY: state.k1FloorY, k1Model: state.k1ModelMetrics, rooms: state.rooms.length, regions: state.regions.length };
+    topVisibleMeshes.sort((a, b) => b.triangles - a.triangles);
+    const visibleRegionTriangles = {};
+    state.regionGroups.forEach((g, id) => {
+      if (!g.visible) return;
+      let n = 0;
+      g.traverse(o => {
+        if (!o.isMesh || !o.geometry || !o.visible) return;
+        let visible = true, p = o.parent;
+        while (visible && p && p !== state.root) { visible = p.visible; p = p.parent; }
+        if (!visible || !state.root.visible) return;
+        const t = o.geometry.index ? o.geometry.index.count / 3 : (o.geometry.attributes.position ? o.geometry.attributes.position.count / 3 : 0);
+        n += t * (o.isInstancedMesh ? o.count : 1);
+      });
+      visibleRegionTriangles[id] = Math.round(n);
+    });
+    return { meshes, triangles, visibleMeshes, visibleTriangles, visibleRegionTriangles, topVisibleMeshes: topVisibleMeshes.slice(0, 12), gpuResidency: state.gpuResidency || null, renderBudget: state.renderBudget || null, colliders: state.colliders.length, k1ModelColliders: state.k1ModelColliderCount, k1FloorY: state.k1FloorY, k1Model: state.k1ModelMetrics, rooms: state.rooms.length, regions: state.regions.length };
   }
 
   /* ---------------------------------------------------------------------------

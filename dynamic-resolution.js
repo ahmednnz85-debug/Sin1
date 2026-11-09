@@ -3,9 +3,9 @@
   'use strict';
   function create(options) {
     options = options || {};
-    var min = Number.isFinite(options.min) ? options.min : 0.82;
+    var min = Number.isFinite(options.min) ? options.min : 0.58;
     var max = Number.isFinite(options.max) ? options.max : 1.00;
-    var down = Number.isFinite(options.downStep) ? options.downStep : 0.02;
+    var down = Number.isFinite(options.downStep) ? options.downStep : 0.08;
     var up = Number.isFinite(options.upStep) ? options.upStep : 0.01;
     var lowerFps = Number.isFinite(options.lowerFps) ? options.lowerFps : 52;
     var upperFps = Number.isFinite(options.upperFps) ? options.upperFps : 58;

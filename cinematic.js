@@ -45,7 +45,7 @@
   try { if (!store.get('tier') && localStorage.getItem('sin.quality') === 'low') mode = 'low'; } catch (_) {}
   let base = mode === 'auto' ? detectTier() : mode;
   let pressure = 0;                                  // 0..3 adaptive degradation level
-  const dynamicResolution = window.SinDynamicResolution ? window.SinDynamicResolution.create({ min: 0.82, max: 1.00, initial: 1.00, downStep: 0.02, upStep: 0.01, lowerFps: 52, upperFps: 58, recoveryMs: 3000 }) : null;
+  const dynamicResolution = window.SinDynamicResolution ? window.SinDynamicResolution.create({ min: 0.58, max: 1.00, initial: 1.00, downStep: 0.08, upStep: 0.01, lowerFps: 52, upperFps: 58, recoveryMs: 3000 }) : null;
   let fovH = Number(store.get('fov')) || 73;         // horizontal FOV (degrees), 73 = test starting point
 
   function eff() {                                   // effective settings = tier ∘ pressure
@@ -179,7 +179,9 @@
   let acc = 0, n = 0, winT = 0, slowWins = 0, fastT = 0, lastChange = 0, lastTs = 0;
   function govern(ts, busy) {
     const dt = lastTs ? ts - lastTs : 16.7; lastTs = ts;
-    if (dt > 250 || busy || document.hidden) {
+    // Do not discard 3–4 FPS frames as "stalls": that left phones permanently
+    // rendering at full resolution. Only ignore genuine pauses/resume gaps.
+    if (!Number.isFinite(dt) || dt > 2000 || busy || document.hidden) {
       if (dynamicResolution) dynamicResolution.sample(0, dt, true);
       acc = n = winT = 0; return;
     }   // stalls / loading / transitions are not a performance signal
@@ -280,10 +282,11 @@
     hq() { return base !== 'low'; },
     settings() { return E; },
     pixelRatio() {
-      // Scale the CSS-pixel render target by the display DPR for sharper texturing,
-      // but cap the device multiplier to control mobile fill-rate and memory.
+      // Mobile retina DPR multiplies pixel work without improving the UI, so
+      // keep the game buffer at CSS resolution and let the governor scale lower.
       const dpr = Number(window.devicePixelRatio) || 1;
-      return Math.min(1.25, Math.max(1, dpr)) * E.scale;
+      const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '') || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent || ''));
+      return Math.min(mobile ? 1 : 1.25, Math.max(1, dpr)) * E.scale;
     },
     mode() { return mode; },
     tier() { return base; },

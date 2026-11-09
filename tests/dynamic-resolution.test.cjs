@@ -35,3 +35,10 @@ test('transition/loading samples do not alter scale and reset recovery hysteresi
   assert.equal(g.sample(59, 1500, false).value, 0.86);
   assert.equal(g.sample(59, 1500, false).value, 0.87);
 });
+
+test('severe 3 FPS frames drive the default render scale to its safe floor within six sample windows', () => {
+  const g = create();
+  for (let i = 0; i < 6; i++) g.sample(3, 1500, false);
+  assert.equal(g.value(), 0.58);
+  assert.equal(g.sample(59, 3000, false).value, 0.59);
+});
