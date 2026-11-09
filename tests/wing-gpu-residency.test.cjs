@@ -88,7 +88,10 @@ test('wing culling respects open portals, warms prepared regions before reveal, 
   assert.match(wings, /warmed\.set\(g, warmShape\(g\)\)/);
   assert.match(culling, /frameMs: latestFrameMs/);
   assert.match(culling, /if \(preparedIds && preparedIds\.has\('K4'\)\) loadK4Assets\(\)/);
-  assert.match(culling, /gpuResidency\.sync\(state\.ctx\.scene, state\.root, state\.regionGroups, preparedIds\)/);
+  assert.match(culling, /gpuResidency\.sync\(state\.ctx\.scene, state\.root, state\.regionGroups, residentIds\)/);
+  // A region that just left the prepared set keeps its GPU resources for a
+  // grace window instead of being disposed and re-uploaded immediately.
+  assert.match(culling, /const residentIds = new Set\(\)/);
   assert.match(wings, /visibleRegionTriangles/);
   assert.match(wings, /if \(state\.built && !state\.building\) updateCulling\(true\)/);
 });
