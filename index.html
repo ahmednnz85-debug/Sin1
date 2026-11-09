@@ -920,9 +920,17 @@ async function buildNewGrass(){
   }
   return tufts.length;
 }
+// The courtyard is a fully authored opening scene, not a streaming world.
+// All trees, walls, markets and vegetation are loaded before the menu opens
+// and remain visible together instead of popping in as the camera moves.
+const STATIC_STARTUP_WORLD=true;
 const _vf=new THREE.Frustum(),_vm=new THREE.Matrix4(),_vs=new THREE.Sphere();
 function updateVeg(){
   if(!vegChunks.length)return;
+  if(STATIC_STARTUP_WORLD){
+    vegChunks.forEach(c=>c.lods.forEach((g,k)=>{if(g)g.visible=k===0;}));
+    return;
+  }
   camera.updateMatrixWorld();
   _vm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);_vf.setFromProjectionMatrix(_vm);
   const cx=camera.position.x,cz=camera.position.z,vk=window.SinGfx?SinGfx.vegScale():1;
@@ -936,6 +944,12 @@ function updateVeg(){
   }
 }
 function updateExtras(){
+  if(STATIC_STARTUP_WORLD){
+    extras.forEach(e=>{e.g.visible=true;});
+    updateVeg();
+    updateShadowCasters();
+    return;
+  }
   const Rm=hq?175:115,cx=camera.position.x,cz=camera.position.z;
   camera.updateMatrixWorld();
   _vm.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);_vf.setFromProjectionMatrix(_vm);
@@ -1220,6 +1234,7 @@ async function init(){
   const t4=[],t5=[];
   t4.forEach(([x,z,s])=>{place(M.t4.scene,{h:11,minY:-0.501,x,z,ry:rnd()*6.28,s});colliders.push([x,z,1.3*s]);});
   t5.forEach(([x,z,s])=>{place(M.t5.scene,{h:9.7,minY:-0.463,x,z,ry:rnd()*6.28,s});colliders.push([x,z,1.2*s]);});
+  $('st').textContent='جارٍ تجهيز نماذج الأشجار والأسوار والأسواق';
   const doorTest=new URLSearchParams(location.search).has('royalDoorTest');
   if(!doorTest){
     try{await buildExtras([...t4,...t5]);}catch(e){showErr(e);}
@@ -1235,6 +1250,8 @@ async function init(){
   $('st').textContent='جارٍ تركيب الباب الملكي';
   royalDoor=await buildRoyalDoor(await loadX('مجسم الباب'),model);
   buildDust();
+  // The startup world is now complete and atomically visible before the menu.
+  updateExtras();
   await waitForSceneTextures();
   state='ready';$('st').textContent='جاهز';$('loading-pane').style.display='none';$('main-menu').style.display='block';$('bar').style.display='none';
   camera.position.copy(cP0);camera.lookAt(cL0);

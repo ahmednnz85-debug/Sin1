@@ -109,8 +109,8 @@ test('K4 royal treasury uses its full-room artwork, supplied GLBs and no procedu
   assert.doesNotMatch(dress, /futureZone|addTorches|addColumns|boxAt/);
 });
 
-test('K4 GLBs are deferred until entry and their embedded textures are bounded for WebGL memory', () => {
-  assert.match(wings, /const K4_DEFERRED_MODELS = new Set\([\s\S]{0,180}WING_FILES\.k4FrontWall/);
+test('K4 GLBs are preloaded and placed together on entry', () => {
+  assert.match(wings, /const K4_DEFERRED_MODELS = new Set\(\)/);
   const listStart = wings.indexOf('function assetList()');
   const listEnd = wings.indexOf('function provideAsset', listStart);
   assert.ok(listStart >= 0 && listEnd > listStart);
@@ -123,8 +123,23 @@ test('K4 GLBs are deferred until entry and their embedded textures are bounded f
   const dress = wings.slice(dressStart, dressEnd);
   assert.match(dress, /assetSpecs = \[/);
   assert.doesNotMatch(dress, /k4PlaceAsset\(/);
-  assert.match(wings, /k4PlaceAsset\(dress, spec, function \(\)/);
+  assert.match(wings, /k4PlaceAsset\(dress, spec\)/);
   assert.match(wings, /limitK4TextureSize\(model, k4TextureEdge\(\)\)/);
   assert.match(wings, /return mobileDevice \|\| lowMemory \? 512 : 1024/);
-  assert.match(wings, /requestAnimationFrame\(function \(\) \{ setTimeout\(next, 120\); \}\)/);
+  assert.doesNotMatch(wings, /setTimeout\(next, 120\)/);
+});
+
+test('K1 removes embedded lights and creates fire-driven torch lights', () => {
+  assert.match(wings, /embeddedLightNodes\.forEach\(function \(node\) \{ if \(node\.parent\) node\.parent\.remove\(node\); \}\)/);
+  assert.match(wings, /buildK1TorchFires\(model, parent, r\)/);
+  assert.match(wings, /new THREE\.PointLight\(0xffa23b, 1\.15, 8\.5, 2\)/);
+  assert.match(wings, /K1-torch-fire/);
+});
+
+test('opening courtyard is loaded before the menu and does not pop in by distance', () => {
+  assert.match(index, /const STATIC_STARTUP_WORLD=true/);
+  assert.match(index, /await buildExtras\(\[\.\.\.t4,\.\.\.t5\]\)/);
+  assert.match(index, /await buildRoadsideArchitecture\(\)/);
+  assert.match(index, /updateExtras\(\);\s*await waitForSceneTextures\(\)/);
+  assert.match(index, /extras\.forEach\(e=>\{e\.g\.visible=true;\}\)/);
 });

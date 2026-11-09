@@ -18,6 +18,7 @@
     built: false, root: null, ctx: null, hall: null, rooms: [], connectors: [], doors: [], regions: [],
     floors: null, floorExtended: null, wallSolid: null, baseWall: null, wallGeometry: null,
     colliders: [], spatial: new Map(), regionGroups: new Map(), ceilings: [], materials: [],
+    k1FireLights: [], k1FireMats: [],
     k1FloorY: 0, k1ModelMetrics: null, k1ModelColliderCount: 0,
     current: null, cutaway: false, fullbright: false, debug: false, report: null,
     ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null, dynamicDoorBoxes: [], activeDoor: null, interactDoor: null
@@ -66,12 +67,9 @@
     k3Table: 'assets/طاولة الخرائط.glb',
     k3Furniture: 'assets/اثاث_الخرائط.glb'
   };
-  // K4's authored GLBs have large embedded textures. Keep them out of the
-  // palace-entry preload so the first WebGL warm-up fits mobile GPU budgets.
-  const K4_DEFERRED_MODELS = new Set([
-    WING_FILES.k4Furniture1, WING_FILES.k4Furniture2,
-    WING_FILES.k4Furniture3, WING_FILES.k4FrontWall
-  ]);
+  // K4 is part of the palace loading screen. The authored room must be complete
+  // on first entry rather than appearing piece-by-piece after the door opens.
+  const K4_DEFERRED_MODELS = new Set();
   const WING_DOOR_FILE = 'assets/باب الاجنحة.glb';
   let wingDoorLoadStarted = false;
   const K2_LAZY = { reception: WING_FILES.k2Reception, meetings: WING_FILES.k2Meetings };
@@ -703,6 +701,7 @@
       model.position.z += targetZ + state.root.position.z - fittedCenter0.z;
       model.updateMatrixWorld(true);
       model.visible = true;
+      buildK1TorchFires(model, parent, r);
       let floorTop = 0;
       model.traverse(function (node) {
         if (!node.isMesh || !/^K1_(Floor|Carpet)/.test(node.name)) return;
@@ -729,6 +728,48 @@
     }, function (err) {
       console.error('Failed to load K1 model', err);
     });
+  }
+  function buildK1TorchFires(model, parent, r) {
+    const positions = [];
+    model.traverse(function (node) {
+      if (!node.isMesh || !/(torch|مشعل|sconce|brazier|lantern|fire)/i.test(String(node.name || ''))) return;
+      const box = new THREE.Box3().setFromObject(node), size = box.getSize(new THREE.Vector3()), p = box.getCenter(new THREE.Vector3());
+      p.y = box.min.y + Math.max(1.25, size.y * 0.72);
+      if ([p.x, p.y, p.z].every(Number.isFinite)) positions.push(p);
+    });
+    // A few K1 exports have unnamed torch meshes. Use the authored wall rhythm
+    // as a deterministic fallback so the room never loses its fire lighting.
+    if (!positions.length) {
+      const x0 = r.bbox.x0 + 1.0, x1 = r.bbox.x1 - 1.0;
+      [0.22, 0.50, 0.78].forEach(function (t) {
+        const z = r.bbox.z0 + (r.bbox.z1 - r.bbox.z0) * t;
+        positions.push(new THREE.Vector3(state.root.position.x + x0, state.root.position.y + 2.35, state.root.position.z + z));
+        positions.push(new THREE.Vector3(state.root.position.x + x1, state.root.position.y + 2.35, state.root.position.z + z));
+      });
+    }
+    const local = positions.map(function (p) { return parent.worldToLocal(p.clone()); });
+    const mats = torchFireMaterials(), layers = [{ w: 0.22, h: 0.38 }, { w: 0.32, h: 0.56 }, { w: 0.42, h: 0.70 }];
+    const geo = new THREE.PlaneGeometry(1, 1); geo.translate(0, 0.5, 0);
+    const count = local.length * layers.length, seeds = new Float32Array(count), layerIds = new Float32Array(count), matrices = [];
+    const dummy = new THREE.Object3D(); let k = 0;
+    layers.forEach(function (layer, li) { local.forEach(function (p, i) {
+      seeds[k] = i * 0.731 + li * 2.31 + 11; layerIds[k] = li;
+      dummy.position.copy(p); dummy.scale.set(layer.w, layer.h, 1); dummy.updateMatrix(); matrices.push(dummy.matrix.clone()); k++;
+    }); });
+    geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
+    geo.setAttribute('aLayer', new THREE.InstancedBufferAttribute(layerIds, 1));
+    const fireMesh = new THREE.InstancedMesh(geo, mats.fire, count);
+    fireMesh.name = 'K1-torch-fire'; fireMesh.frustumCulled = false; fireMesh.renderOrder = 3;
+    matrices.forEach(function (m, i) { fireMesh.setMatrixAt(i, m); }); fireMesh.instanceMatrix.needsUpdate = true; parent.add(fireMesh);
+    const emberPos = new Float32Array(local.length * 3), emberSeeds = new Float32Array(local.length);
+    local.forEach(function (p, i) { emberPos[i * 3] = p.x; emberPos[i * 3 + 1] = p.y + 0.12; emberPos[i * 3 + 2] = p.z; emberSeeds[i] = i * 0.137 + 0.19; });
+    const eg = new THREE.BufferGeometry(); eg.setAttribute('position', new THREE.BufferAttribute(emberPos, 3)); eg.setAttribute('aSeed', new THREE.BufferAttribute(emberSeeds, 1));
+    const embers = new THREE.Points(eg, mats.ember); embers.name = 'K1-torch-embers'; embers.frustumCulled = false; parent.add(embers);
+    state.k1FireLights = local.map(function (p, i) {
+      const light = new THREE.PointLight(0xffa23b, 1.15, 8.5, 2); light.position.copy(p); light.castShadow = false; light.name = 'K1-torch-fire-light-' + i; parent.add(light);
+      return { light: light, base: 1.15, seed: i * 0.731 + 0.4 };
+    });
+    state.k1FireMats = [mats.fire, mats.ember]; parent.userData.k1FireCount = local.length;
   }
   function addK1Colliders(r) {
     // Simple perimeter colliders so player doesn't fall through or walk through walls
@@ -2141,7 +2182,7 @@
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
     wingDoorLoadStarted = false;
-    state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
+    state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.k1FireLights = []; state.k1FireMats = []; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0;
@@ -2249,6 +2290,10 @@
     updateRoomDoors(Math.max(.001, Math.min(.05, Number(dt) || .016)));
     updateCulling(false);
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
+    if (state.k1FireLights.length) {
+      const t = performance.now() * 0.001;
+      state.k1FireLights.forEach(function (f) { f.light.intensity = f.base * (0.88 + 0.08 * Math.sin(t * 7.1 + f.seed * 11) + 0.04 * Math.sin(t * 15.3 + f.seed)); });
+    }
     if ((state.k2Lights && state.k2Lights.length) || (state.k3Lights && state.k3Lights.length)) {
       const t = performance.now() * 0.001;
       const sharedFlicker = 0.98 + 0.02 * Math.sin(t * 2.4);
@@ -2951,17 +2996,10 @@
     const dress = state.k4Dress;
     if (!dress || dress.loadStarted || !dress.assetSpecs || !dress.assetSpecs.length) return;
     dress.loadStarted = true;
-    let nextIndex = 0;
-    function next() {
-      if (state.k4Dress !== dress || nextIndex >= dress.assetSpecs.length) return;
-      const spec = dress.assetSpecs[nextIndex++];
-      k4PlaceAsset(dress, spec, function () {
-        // Let the renderer upload the preceding model before decoding the next
-        // embedded texture set; otherwise several GLBs can land in one frame.
-        requestAnimationFrame(function () { setTimeout(next, 120); });
-      });
-    }
-    next();
+    // All four authored pieces are already decoded behind the palace loading
+    // screen. Place them together on the first K4 frame so the room never
+    // appears as a bare procedural shell.
+    dress.assetSpecs.forEach(function (spec) { k4PlaceAsset(dress, spec); });
   }
   function dressK4() {
     const r = state.rooms.find(function (room) { return room.id === 'K4'; });
@@ -3030,9 +3068,11 @@
     // Keep authored groups intact, but fetch them only when K4 becomes active.
     // Loading them with the entire palace caused WebGL context loss on phones.
     dress.assetSpecs = [
-      { key: 'furniture1', url: WING_FILES.k4Furniture1, name: 'K4-treasury-display-left', x: b.x0 + 3.5, z: b.cz - 0.3, rotation: Math.PI / 2, fitHeight: 2.7 },
-      { key: 'furniture2', url: WING_FILES.k4Furniture2, name: 'K4-treasury-display-right', x: b.x1 - 3.5, z: b.cz - 0.3, rotation: -Math.PI / 2, fitHeight: 2.7 },
-      { key: 'furniture3', url: WING_FILES.k4Furniture3, name: 'K4-treasury-central-display', x: b.cx, z: b.z1 - 3.4, rotation: 0, fitHeight: 2.6 },
+      // Side cabinets frame the view, while the third authored set becomes the
+      // central altar/display below the rear mural, matching the reference.
+      { key: 'furniture1', url: WING_FILES.k4Furniture1, name: 'K4-treasury-display-left', x: b.x0 + 2.5, z: b.cz, rotation: Math.PI / 2, fitHeight: 4.1 },
+      { key: 'furniture2', url: WING_FILES.k4Furniture2, name: 'K4-treasury-display-right', x: b.x1 - 2.5, z: b.cz, rotation: -Math.PI / 2, fitHeight: 4.1 },
+      { key: 'furniture3', url: WING_FILES.k4Furniture3, name: 'K4-treasury-central-display', x: b.cx, z: b.z1 - 2.5, rotation: 0, fitHeight: 3.5 },
       { key: 'frontWall', url: WING_FILES.k4FrontWall, name: 'K4-treasury-front-mural', x: b.cx, y: 0.2, z: b.z1 - 0.27, rotation: 0, fitHeight: Math.max(1, h - 0.4), fitWidth: w - 1.0, doubleSided: true, collider: false }
     ];
 
