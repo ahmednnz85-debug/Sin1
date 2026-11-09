@@ -21,7 +21,20 @@ test('palace loading manifest includes every wing asset and the wing doors befor
   assert.match(palace, /Every K1-K4 room, corridor and door asset joins the palace loading screen/);
   assert.match(palace, /url: url, optional: false/);
   assert.match(palace, /optional: \/Lod\$\/\.test\(key\)/);
-  assert.match(palace, /LOAD_STAGES = \[[^\]]*جميع أجنحة القصر/);
+  assert.match(palace, /LOAD_STAGES = \[[^\]]*جميع الأجنحة/);
+});
+
+test('bulk wing preload keeps non-entry textures and models compressed until their room is needed', () => {
+  assert.match(wings, /eager: WING_FILES\[k\] === WING_FILES\.k1/);
+  assert.match(wings, /function provideAssetBytes\(url, bytes, kind\)/);
+  assert.match(wings, /assetList, provideAsset, provideAssetBytes, preloadReport/);
+  assert.match(wings, /if \(!cached \|\| !cached\.bytes \|\| cached\.kind !== 'tex'\) return null/);
+  assert.match(wings, /URL\.createObjectURL\(new Blob\(\[cached\.bytes\]/);
+  assert.match(wings, /if \(cached && cached\.bytes\)[\s\S]{0,360}parseCachedWing\(url, cached\)/);
+  assert.match(wings, /cached\.bytes = null/);
+  assert.match(palace, /'wtex-buffer'/);
+  assert.match(palace, /'wglb-buffer'/);
+  assert.match(palace, /PalaceWings\.provideAssetBytes\(spec\.wingPath, spec\.buf/);
 });
 
 test('corridor carpet asset remains centered, clipped and fitted to corridor width', () => {

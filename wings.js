@@ -93,16 +93,35 @@
     const entryAssets = new Set([WING_FILES.k1]);
     Object.keys(WING_FILES).forEach(k => entryAssets.add(WING_FILES[k]));
     return Object.keys(WING_FILES).filter(k => entryAssets.has(WING_FILES[k]))
-      .map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
+      .map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex', eager: WING_FILES[k] === WING_FILES.k1 }))
       .filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
   }
   function provideAsset(url, value) { if (url && value) preloaded.set(url, value); }
+  function provideAssetBytes(url, bytes, kind) {
+    if (url && bytes) preloaded.set(url, { bytes: bytes, kind: kind || 'glb' });
+  }
   function preloadReport() {
     return assetList().map(a => ({ url: a.url, kind: a.kind, ready: preloaded.has(a.url) }));
   }
   function preloadedTexture(url) {
-    const t = preloaded.get(url);
-    return t && t.isTexture ? t : null;
+    const cached = preloaded.get(url);
+    if (cached && cached.isTexture) return cached;
+    if (!cached || !cached.bytes || cached.kind !== 'tex') return null;
+    const ext = String(url).split('?')[0].split('.').pop().toLowerCase();
+    const mime = ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/webp');
+    const objectUrl = URL.createObjectURL(new Blob([cached.bytes], { type: mime }));
+    const texture = new THREE.Texture();
+    const image = new Image();
+    texture.image = image;
+    preloaded.set(url, texture);
+    image.onload = function () { texture.needsUpdate = true; URL.revokeObjectURL(objectUrl); };
+    image.onerror = function () {
+      URL.revokeObjectURL(objectUrl);
+      if (preloaded.get(url) === texture) preloaded.set(url, cached);
+      console.warn('Preloaded wing texture decode failed', url);
+    };
+    image.src = objectUrl;
+    return texture;
   }
   function flushDeferredLoads() {
     state.building = false;
@@ -125,9 +144,31 @@
       else if (++tries > 300) { clearInterval(t); go(null); }
     }, 100);
   }
+  function parseCachedWing(url, cached) {
+    if (cached.promise) return cached.promise;
+    cached.promise = new Promise(function (resolve, reject) {
+      k3EnsureDraco(function (draco) {
+        withMeshopt(function (decoder) {
+          const loader = new THREE.GLTFLoader();
+          if (draco) loader.setDRACOLoader(draco);
+          if (decoder) loader.setMeshoptDecoder(decoder);
+          loader.parse(cached.bytes, '', resolve, reject);
+        });
+      });
+    }).then(function (gltf) {
+      cached.scene = gltf.scene;
+      cached.animations = gltf.animations || [];
+      cached.bytes = null;
+      return gltf;
+    }).catch(function (error) {
+      cached.promise = null;
+      throw error;
+    });
+    return cached.promise;
+  }
   // Every wing model goes through here: a preloaded model is handed out as a
-  // fresh clone (geometry, materials and textures shared, nothing downloaded);
-  // otherwise it is fetched exactly as before.
+  // fresh clone (geometry, materials and textures shared). Buffered assets are
+  // parsed only when a room needs them; no second network request is made.
   function wingGLB(url, onLoad, onError) {
     const fail = onError || (e => console.warn('Wing model failed', url, e));
     if (!THREE.GLTFLoader) { fail(new Error('GLTFLoader not available')); return; }
@@ -138,6 +179,13 @@
     const cached = preloaded.get(url);
     if (cached && cached.scene) {
       const run = () => deliver({ scene: cached.scene.clone(true), animations: cached.animations || [] });
+      if (state.building) deferredLoads.push(run); else run();
+      return;
+    }
+    if (cached && cached.bytes) {
+      const run = () => parseCachedWing(url, cached).then(function (gltf) {
+        deliver({ scene: gltf.scene.clone(true), animations: gltf.animations || [] });
+      }).catch(fail);
       if (state.building) deferredLoads.push(run); else run();
       return;
     }
@@ -2904,6 +2952,10 @@
       onLoad({ scene: cached.scene.clone(true), animations: cached.animations || [] });
       return;
     }
+    if (cached && cached.bytes) {
+      wingGLB(url, gltf => { if (state.root === root) onLoad(gltf); else onLoad(null); }, fail);
+      return;
+    }
     k3EnsureDraco(draco => {
       if (!draco || !THREE.GLTFLoader) { fail(new Error('DRACOLoader unavailable')); return; }
       withMeshopt(dec => {
@@ -3503,7 +3555,7 @@
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
     teleport, overview, runTests, formatReport, cameraTour, metrics, corridorReport: () => state.corridorReport,
     shortestPath,
-    assetList, provideAsset, preloadReport,
+    assetList, provideAsset, provideAssetBytes, preloadReport,
     get report() { return state.report; },
     get state() { return state; }
   };

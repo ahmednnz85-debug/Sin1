@@ -131,7 +131,7 @@
   let warmFrame = false;
   let loadStartedAt = 0;
   let loadStage = 0;
-  const LOAD_STAGES = ['جاري إعداد موارد القصر', 'جاري تحميل القاعة وجميع أجنحة القصر', 'جاري تحليل موارد القصر', 'جاري تحليل موارد الأجنحة', 'جاري تجهيز الإضاءة والخامات والمؤثرات', 'جاري تجهيز الكاميرا والموارد المشتركة', 'اكتمل تحميل القصر'];
+  const LOAD_STAGES = ['جاري إعداد موارد القصر', 'جاري تنزيل موارد القاعة وجميع الأجنحة', 'جاري فك نماذج القاعة المطلوبة', 'جاري تجهيز cache الأجنحة المضغوط', 'جاري تجهيز الإضاءة والخامات والمؤثرات', 'جاري تجهيز الكاميرا والموارد المشتركة', 'اكتمل تحميل القصر'];
   let contextWatch = false;
   let lastDoor = false;
   let heroSnap = '—';
@@ -660,7 +660,7 @@
       if (specs.some(function (s) { return s.url === url; })) return; // same file as a palace asset: shared below
       specs.push({
         id: 'wing:' + a.url, key: 'wing:' + a.url, name: a.url.split('/').pop(),
-        kind: a.kind === 'tex' ? 'wtex' : (/طاولة|اثاث/.test(a.url) ? 'wglb-draco' : 'wglb'),
+        kind: a.kind === 'tex' ? 'wtex-buffer' : (a.eager ? 'wglb' : 'wglb-buffer'),
         wingPath: a.url, url: url, optional: false,
         status: 'pending', loaded: 0, total: 0, error: '', attempt: 0, buf: null, result: null
       });
@@ -674,7 +674,9 @@
       const own = specs.find(function (s) { return s.url === url && !s.wingPath; });
       if (!own || !own.buf || own.wingShared) return;
       try {
-        PalaceWings.provideAsset(a.url, a.kind === 'tex' ? await textureFromBytes(own.buf, own.name, false) : await parseRawGLB(own.buf));
+        if (a.kind === 'tex') PalaceWings.provideAssetBytes(a.url, own.buf, 'tex');
+        else if (own.result) PalaceWings.provideAsset(a.url, own.result);
+        else PalaceWings.provideAssetBytes(a.url, own.buf, 'glb');
         own.wingShared = true;
       } catch (e) { throw new Error('تعذّر تجهيز ملف الجناح مسبقاً — ' + a.url + ': ' + ((e && e.message) || e)); }
     });
@@ -687,14 +689,18 @@
       if (!spec.buf) spec.buf = await fetchWithRetry(spec);
       if (spec.kind === 'js') spec.result = await installDecoder(spec.buf);
       else if (spec.kind === 'tex') spec.result = await textureFromBytes(spec.buf, spec.name, spec.linear);
-      else if (spec.kind === 'wtex') spec.result = await textureFromBytes(spec.buf, spec.name, false);
+      else if (spec.kind === 'wtex-buffer' || spec.kind === 'wglb-buffer') spec.result = { buffered: true };
       else if (spec.kind === 'wglb') spec.result = await parseRawGLB(spec.buf);
       else if (spec.kind === 'wglb-draco') spec.result = await parseDracoGLB(spec.buf);
       else {
         await waitDecoder();
         spec.result = await parseGLB(spec.buf);
       }
-      if (spec.wingPath && window.PalaceWings) PalaceWings.provideAsset(spec.wingPath, spec.result);
+      if (spec.wingPath && window.PalaceWings) {
+        if (spec.kind === 'wtex-buffer' || spec.kind === 'wglb-buffer') {
+          PalaceWings.provideAssetBytes(spec.wingPath, spec.buf, spec.kind === 'wtex-buffer' ? 'tex' : 'glb');
+        } else PalaceWings.provideAsset(spec.wingPath, spec.result);
+      }
       spec.status = 'loaded';
       spec.error = '';
       spec.loaded = spec.buf.byteLength;
