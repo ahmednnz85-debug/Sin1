@@ -29,6 +29,14 @@ test('room behind a wall with no doorway is never drawn even if in front of the 
   assert.equal(out.visible.has('S'), false);
 });
 
+test('a nearby side room is not visible just because the hero is standing near it', () => {
+  const p = createPlanner();
+  const side = { id: 'D', bbox: box(3, -5, 8, -1) };
+  const out = p.plan(regions.concat(side), links.concat([['A', 'D']]), 'A', lookNorth, 0);
+  assert.equal(out.visible.has('D'), false);
+  assert.equal(out.prepared.has('D'), false);
+});
+
 test('room behind the camera is neither drawn nor kept in memory, and is drawn on turning around', () => {
   const p = createPlanner();
   const ahead = p.plan(regions, links, 'A', lookNorth, 0);

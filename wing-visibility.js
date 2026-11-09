@@ -18,12 +18,12 @@
 
   const DEFAULTS = {
     viewDistance: 400,     // the camera's full sight line (everything it can see is drawn)
-    frustumMargin: 0.6,    // radians added to each side of the half-FOV (fast turns)
-    prefetchMargin: 0.7,   // extra radians beyond the drawn wedge: uploaded BEFORE it enters view
+    frustumMargin: 0.22,   // tight camera gate: do not treat side rooms as visible through walls
+    prefetchMargin: 0.55,  // wider hidden look-ahead; it never makes a room visible
     prefetchDistance: 25,  // extra metres beyond the sight line that are uploaded ahead
-    nearPad: 4,            // anything this close to the camera is always drawn
-    maxHops: 8,            // portal hops from the camera's region that can be seen
-    linger: 1.5,           // seconds a region stays drawn after leaving the view
+    nearPad: 1.25,         // only the immediate camera volume bypasses the wedge
+    maxHops: 6,            // portal hops from the camera's region that can be seen
+    linger: 0.45,          // short hysteresis prevents stale rooms after a turn
     memory: 0              // regions outside the prefetch wedge are released from GPU memory
   };
 
