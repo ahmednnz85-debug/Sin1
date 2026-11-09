@@ -84,47 +84,43 @@ test('opening intro and interior-entry cinematics are bypassed while the palace-
   assert.match(palace, /state = 'DONE';\s*fadeT = 0;\s*entranceLeft = 0;/);
 });
 
-test('K4 royal treasury uses its full-room artwork, supplied GLBs and no procedural room dressing', () => {
-  assert.match(wings, /k4Floor: 'assets\/ارضية الخزانة\.JPG'/);
-  assert.match(wings, /k4Ceiling: 'assets\/سقف الخزانة \.JPG'/);
-  assert.match(wings, /k4SideWall: 'assets\/جدارية ايمن الخزانة\.JPG'/);
-  assert.match(wings, /k4FrontWall: 'assets\/جدارية الخزانة\.glb'/);
-  assert.match(wings, /k4Furniture1: 'assets\/اثاث الخزانة\.glb'/);
-  assert.match(wings, /k4Furniture2: 'assets\/اثاث الخزانة 2\.glb'/);
-  assert.match(wings, /k4Furniture3: 'assets\/اثاث الخزانة 3\.glb'/);
+test('K4 old asset files are deleted and the room is rebuilt from the split, compressed kits', () => {
+  ['اثاث الخزانة.glb', 'اثاث الخزانة 2.glb', 'اثاث الخزانة 3.glb', 'جدارية الخزانة.glb',
+    'ارضية الخزانة.JPG', 'سقف الخزانة .JPG', 'جدارية ايمن الخزانة.JPG'].forEach(f => {
+    assert.equal(fs.existsSync(path.join(root, 'assets', f)), false, f + ' must be deleted');
+  });
+  ['k4_kit_a.glb', 'k4_kit_b.glb', 'k4_kit_c.glb', 'k4_front_mural.glb',
+    'ارضية-الخزانة.jpg', 'سقف-الخزانة.jpg', 'جدارية-ايمن-الخزانة.jpg'].forEach(f => {
+    assert.ok(fs.existsSync(path.join(root, 'ارضيات وسقوف', 'optimized', 'k4', f)), f + ' must exist');
+  });
   assert.match(wings, /ROOM_NAMES\.K4, KC1x \+ 17, KC2\.bbox\.z1 \+ 3, 21\.322, 12, 8\.5\)/);
   assert.match(wings, /K4\.ceiling = false/);
-  assert.match(wings, /if \(r\.id !== 'K4'\) addFutureZones\(r, g\)/);
-  assert.match(wings, /r\.id !== 'K2' && r\.id !== 'K3' && r\.id !== 'K4'\) addTorches\(r\)/);
   const start = wings.indexOf('function dressK4()');
   const end = wings.indexOf('// اثاث الخرائط is one fused mesh', start);
   const dress = wings.slice(start, end);
   assert.ok(start >= 0 && end > start);
-  assert.match(dress, /new THREE\.PlaneGeometry\(w, d\)/);
-  assert.match(dress, /WING_FILES\.k4Floor/);
-  assert.match(dress, /WING_FILES\.k4Ceiling/);
-  assert.match(dress, /WING_FILES\.k4SideWall/);
-  assert.match(dress, /WING_FILES\.k4FrontWall/);
-  assert.match(dress, /k4Furniture1[\s\S]*k4Furniture2[\s\S]*k4Furniture3/);
   assert.doesNotMatch(dress, /futureZone|addTorches|addColumns|boxAt/);
 });
 
-test('K4 GLBs are deferred until entry and their embedded textures are bounded for WebGL memory', () => {
+test('K4 layout follows the reference picture: mural at the back, altar centre, shelves on the right, king statue on the left', () => {
+  const start = wings.indexOf('function dressK4()');
+  const dress = wings.slice(start, wings.indexOf('// اثاث الخرائط is one fused mesh', start));
+  const spec = item => dress.match(new RegExp("at\\([^,]+, '" + item + "', ([-\\w.+ /]+), ([\\d.]+),", 'g')) || [];
+  assert.equal(spec('k4_frontMural').length, 1);
+  assert.equal(spec('k4_column').length, 2);
+  assert.equal(spec('k4_shelfCabinet').length, 2);
+  assert.match(dress, /'k4_altarTable', 0, /);
+  assert.match(dress, /'k4_chandelier', 0, /);
+  assert.match(dress, /'k4_kingStatue', L \+/);
+  assert.match(dress, /'k4_shelfCabinet', R - /);
+  assert.match(dress, /'k4_lionSphinx', R - /);
+});
+
+test('K4 kits are deferred until entry and each kit is downloaded once', () => {
   assert.match(wings, /const K4_DEFERRED_MODELS = new Set\([\s\S]{0,180}WING_FILES\.k4FrontWall/);
-  const listStart = wings.indexOf('function assetList()');
-  const listEnd = wings.indexOf('function provideAsset', listStart);
-  assert.ok(listStart >= 0 && listEnd > listStart);
-  assert.match(wings.slice(listStart, listEnd), /filter\(k => !K4_DEFERRED_MODELS\.has\(WING_FILES\[k\]\)\)/);
   const cullStart = wings.indexOf('function updateCulling(force)');
   const cullEnd = wings.indexOf('function tick(dt)', cullStart);
   assert.match(wings.slice(cullStart, cullEnd), /if \(id === 'K4'\) loadK4Assets\(\)/);
-  const dressStart = wings.indexOf('function dressK4()');
-  const dressEnd = wings.indexOf('// اثاث الخرائط is one fused mesh', dressStart);
-  const dress = wings.slice(dressStart, dressEnd);
-  assert.match(dress, /assetSpecs = \[/);
-  assert.doesNotMatch(dress, /k4PlaceAsset\(/);
-  assert.match(wings, /k4PlaceAsset\(dress, spec, function \(\)/);
-  assert.match(wings, /limitK4TextureSize\(model, k4TextureEdge\(\)\)/);
-  assert.match(wings, /return mobileDevice \|\| lowMemory \? 512 : 1024/);
-  assert.match(wings, /requestAnimationFrame\(function \(\) \{ setTimeout\(next, 120\); \}\)/);
+  assert.match(wings, /if \(kits\.indexOf\(spec\.url\) < 0\) kits\.push\(spec\.url\)/);
+  assert.match(wings, /gltf\.scene\.getObjectByName\(spec\.item\)/);
 });

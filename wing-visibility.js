@@ -17,14 +17,14 @@
   'use strict';
 
   const DEFAULTS = {
-    viewDistance: 60,      // metres the camera can see down a corridor
-    prepareDistance: 75,   // metres around the camera kept GPU-resident
+    viewDistance: 400,     // the camera's full sight line (everything it can see is drawn)
     frustumMargin: 0.6,    // radians added to each side of the half-FOV (fast turns)
+    prefetchMargin: 0.7,   // extra radians beyond the drawn wedge: uploaded BEFORE it enters view
+    prefetchDistance: 25,  // extra metres beyond the sight line that are uploaded ahead
     nearPad: 4,            // anything this close to the camera is always drawn
-    maxHops: 5,            // portal hops from the camera's region that can be seen
-    prepareHops: 6,        // portal hops kept prepared
+    maxHops: 8,            // portal hops from the camera's region that can be seen
     linger: 1.5,           // seconds a region stays drawn after leaving the view
-    memory: 10             // recently drawn regions kept prepared (turning back)
+    memory: 0              // regions outside the prefetch wedge are released from GPU memory
   };
 
   function hops(links, startId, limit) {
@@ -90,7 +90,7 @@
        cam: {x,z,dirX,dirZ,halfFov}, now: seconds */
     function plan(regions, links, currentId, cam, now) {
       const t = Number.isFinite(now) ? now : 0;
-      const reach = hops(links, currentId, Math.max(opt.maxHops, opt.prepareHops));
+      const reach = hops(links, currentId, opt.maxHops);
       const half = (cam.halfFov || 0.6) + opt.frustumMargin;
       const visible = new Set(), prepared = new Set(), meta = new Map();
       regions.forEach(r => {
@@ -102,10 +102,13 @@
         if (seen) lastSeen.set(r.id, t);
         const lingering = lastSeen.has(r.id) && t - lastSeen.get(r.id) <= opt.linger && h <= opt.maxHops;
         if (seen || lingering) { visible.add(r.id); touch(r.id); }
-        if (visible.has(r.id) || h <= 1 || (h <= opt.prepareHops && near <= opt.prepareDistance)) prepared.add(r.id);
+        // Prepared = GPU-resident. Only what is drawn or about to enter the view
+        // (wider prefetch wedge, slightly past the sight line) stays in memory;
+        // everything else is released until it approaches the view again.
+        if (visible.has(r.id) || (h <= opt.maxHops && inWedge(r.bbox, cam, half + opt.prefetchMargin, opt.viewDistance + opt.prefetchDistance))) prepared.add(r.id);
         meta.set(r.id, { hops: h, distance: near, inView: seen });
       });
-      recent.forEach(id => prepared.add(id));
+      if (opt.memory > 0) recent.forEach(id => prepared.add(id));
       return { visible, prepared, meta };
     }
     function reset() { lastSeen.clear(); recent.length = 0; }

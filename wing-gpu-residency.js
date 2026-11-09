@@ -77,6 +77,9 @@
       candidates[kind].forEach(resource => {
         if (active[kind].has(resource)) return;
         if (disposed.get(resource) === true) return;
+        // Render-target / GPU-only textures (environment maps, shadow maps)
+        // cannot be re-uploaded from CPU data, so they are never released.
+        if (kind === 'textures' && (resource.isRenderTargetTexture || resource.isFramebufferTexture || !resource.image)) return;
         if (typeof resource.dispose === 'function') {
           resource.dispose();
           disposed.set(resource, true);

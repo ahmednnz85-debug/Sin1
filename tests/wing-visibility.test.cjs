@@ -29,19 +29,29 @@ test('room behind a wall with no doorway is never drawn even if in front of the 
   assert.equal(out.visible.has('S'), false);
 });
 
-test('room behind the camera is not drawn but stays prepared, and is drawn on turning around', () => {
+test('room behind the camera is neither drawn nor kept in memory, and is drawn on turning around', () => {
   const p = createPlanner();
   const ahead = p.plan(regions, links, 'A', lookNorth, 0);
   assert.equal(ahead.visible.has('B'), false);
-  assert.ok(ahead.prepared.has('B'));
+  assert.equal(ahead.prepared.has('B'), false);
   const back = p.plan(regions, links, 'A', lookSouth, 0.1);
   assert.ok(back.visible.has('B'));
 });
 
-test('a room seen earlier stays prepared after the camera turns away', () => {
+test('a room just outside the drawn view is prepared before it enters the view', () => {
+  const p = createPlanner();
+  // Looking east: room R (north-east, ~45 deg off axis at 40m) is outside the
+  // drawn wedge but inside the wider prefetch wedge.
+  const cam = { x: 0, z: 0, dirX: Math.cos(0.15), dirZ: Math.sin(0.15) * -1, halfFov: 0.1 };
+  const out = p.plan([{ id: 'A', bbox: box(-3, -6, 3, 0) }, { id: 'Q', bbox: box(20, 18, 24, 22) }], [['A', 'Q']], 'A', cam, 0);
+  assert.equal(out.visible.has('Q'), false);
+  assert.ok(out.prepared.has('Q'));
+});
+
+test('a room seen earlier is released from memory after the camera turns away', () => {
   const p = createPlanner();
   p.plan(regions, links, 'A', lookNorth, 0);
   const later = p.plan(regions, links, 'A', lookSouth, 10);
   assert.equal(later.visible.has('R'), false);
-  assert.ok(later.prepared.has('R'));
+  assert.equal(later.prepared.has('R'), false);
 });

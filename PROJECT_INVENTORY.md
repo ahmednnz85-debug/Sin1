@@ -54,7 +54,7 @@
 | K1 | الملوك | reception hall | نموذج `K1_RoyalReceptionHall.glb`، حوالي 39×28 م |
 | K2 | الملوك | council hall | جدار وسقف وثريا وأرضية وأعمدة وطاولة اجتماعات |
 | K3 | الملوك | map room | أرضية الخرائط، جدارا الخرائط، طاولة الخرائط، أثاث الخرائط |
-| K4 | الملوك | royal treasury | غرفة معمارية فقط، علامة `ROYAL CHESTS` / `TOOLS` |
+| K4 | الملوك | royal treasury | أُعيد بناؤها: أصول مقسّمة ومضغوطة في `ارضيات وسقوف/optimized/k4/` وترتيب مطابق للصورة المرجعية |
 | K5 | الملوك | king private wing | غرفة معمارية فقط |
 | T1 | المعبد | sacred entrance | غرفة معمارية فقط |
 | T2 | المعبد | purification hall | علامة `PURIFICATION BASIN` |

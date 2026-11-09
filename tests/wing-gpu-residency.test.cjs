@@ -16,10 +16,10 @@ function mesh(geometry, material, extra = {}) {
 
 test('hidden room GPU resources are disposed, shared resources are retained, and re-entry rehydrates safely', () => {
   const sharedGeometry = resource();
-  const sharedTexture = resource({ isTexture: true });
+  const sharedTexture = resource({ isTexture: true, image: {} });
   const sharedMaterial = resource({ map: sharedTexture });
   const hiddenGeometry = resource();
-  const shaderTexture = resource({ isTexture: true });
+  const shaderTexture = resource({ isTexture: true, image: {} });
   const hiddenMaterial = resource({ uniforms: { uMap: { value: [shaderTexture] } } });
   const instancedDispose = resource();
   const scene = group();
@@ -70,7 +70,7 @@ test('hidden room GPU resources are disposed, shared resources are retained, and
   assert.equal(sharedTexture.disposed, 0);
 });
 
-test('wing culling calls GPU residency synchronization and is camera-driven, budgeted, and keeps prepared rooms resident', () => {
+test('wing culling calls GPU residency synchronization and is camera-driven, draws everything in sight, and keeps prepared rooms resident', () => {
   const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
   const cullingAt = wings.indexOf('function updateCulling(force)');
   const tickAt = wings.indexOf('function tick(dt)', cullingAt);
@@ -78,7 +78,7 @@ test('wing culling calls GPU residency synchronization and is camera-driven, bud
   const culling = wings.slice(cullingAt, tickAt);
   assert.match(culling, /visibilityPlanner\.plan\(state\.regions, state\.links, origin, view/);
   assert.doesNotMatch(culling, /distM < 18/);
-  assert.match(culling, /renderBudget\.choose\(candidates, 750000\)/);
+  assert.doesNotMatch(culling, /renderBudget\.choose\(/);
   assert.match(culling, /state\.palaceNear = id === 'Palace' \|\| isArch/);
   assert.match(culling, /gpuResidency\.sync\(state\.ctx\.scene, state\.root, state\.regionGroups, preparedIds\)/);
   assert.match(wings, /visibleRegionTriangles/);

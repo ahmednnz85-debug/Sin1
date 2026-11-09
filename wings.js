@@ -55,14 +55,17 @@
     k3Wall: 'assets/\u062C\u062F\u0627\u0631 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.JPG',
     k3WallFar: 'assets/جدار الخرائط 2.JPG',
     k3Ceiling: 'assets/سقف الخرائط .JPG',
-    // K4 uses the user's treasury surfaces and the three authored furniture sets.
-    k4Floor: 'assets/ارضية الخزانة.JPG',
-    k4Ceiling: 'assets/سقف الخزانة .JPG',
-    k4SideWall: 'assets/جدارية ايمن الخزانة.JPG',
-    k4Furniture1: 'assets/اثاث الخزانة.glb',
-    k4Furniture2: 'assets/اثاث الخزانة 2.glb',
-    k4Furniture3: 'assets/اثاث الخزانة 3.glb',
-    k4FrontWall: 'assets/جدارية الخزانة.glb',
+    // K4 royal treasury (rebuilt): the original treasury GLBs were split into
+    // one named node per object (origin = base centre, front = +Z), simplified
+    // with a tight geometric error bound (shape kept) and stored as meshopt +
+    // WebP. Surfaces are the same pictures (already smaller as JPEG than as WebP).
+    k4Floor: OPT_DIR + 'k4/ارضية-الخزانة.jpg',
+    k4Ceiling: OPT_DIR + 'k4/سقف-الخزانة.jpg',
+    k4SideWall: OPT_DIR + 'k4/جدارية-ايمن-الخزانة.jpg',
+    k4KitA: OPT_DIR + 'k4/k4_kit_a.glb',
+    k4KitB: OPT_DIR + 'k4/k4_kit_b.glb',
+    k4KitC: OPT_DIR + 'k4/k4_kit_c.glb',
+    k4FrontWall: OPT_DIR + 'k4/k4_front_mural.glb',
     // Formerly lazy assets are now part of the palace manifest.
     k2Reception: OPT_DIR + 'عمود-المجلس.glb',
     k2Meetings: 'assets/اجتماعات .glb',
@@ -72,8 +75,8 @@
   // K4's authored GLBs have large embedded textures. Keep them out of the
   // palace-entry preload so the first WebGL warm-up fits mobile GPU budgets.
   const K4_DEFERRED_MODELS = new Set([
-    WING_FILES.k4Furniture1, WING_FILES.k4Furniture2,
-    WING_FILES.k4Furniture3, WING_FILES.k4FrontWall
+    WING_FILES.k4KitA, WING_FILES.k4KitB,
+    WING_FILES.k4KitC, WING_FILES.k4FrontWall
   ]);
   const WING_DOOR_FILE = 'assets/باب الاجنحة.glb';
   let wingDoorLoadStarted = false;
@@ -2308,7 +2311,9 @@
         const current = rid === id || rid === origin;
         candidates.push({ id: rid, current, priority: current ? 0 : m.hops <= 1 ? 1 : 2, distance: m.distance, triangles: cachedTriangles(rid, g, false) });
       });
-      const plan = renderBudget ? renderBudget.choose(candidates, 750000) : { ids: candidates.map(c => c.id), triangles: candidates.reduce((n, c) => n + c.triangles, 0), budget: 750000 };
+      // Everything inside the camera's sight is drawn: no triangle budget may
+      // drop a region the camera can actually see.
+      const plan = { ids: candidates.map(c => c.id), triangles: candidates.reduce((n, c) => n + c.triangles, 0), budget: Infinity };
       visibleIds = new Set(plan.ids); preparedIds = planned.prepared;
       state.renderBudget = { triangles: Math.round(plan.triangles), budget: plan.budget, activeRegions: plan.ids.slice() };
       // Seeing into the palace hall from a wing keeps the hall drawn.
@@ -2992,90 +2997,87 @@
     const lowMemory = Number(nav.deviceMemory || 0) > 0 && Number(nav.deviceMemory) <= 4;
     return mobileDevice || lowMemory ? 512 : 1024;
   }
-  function k4PlaceAsset(dress, spec, onSettled) {
-    const rootAtRequest = state.root;
-    let settled = false;
-    function finish() {
-      if (settled) return;
-      settled = true;
-      if (onSettled) onSettled();
+  // Places one object of a K4 kit. `source` is the named node from the kit
+  // (shared geometry/material/texture; only the transform is cloned).
+  function k4PlaceAsset(dress, spec, source, rootAtRequest) {
+    if (!source || state.root !== rootAtRequest || state.k4Dress !== dress) return;
+    const model = new THREE.Group();
+    model.add(source.clone(true));
+    model.updateMatrixWorld(true);
+    const sourceBox = new THREE.Box3().setFromObject(model);
+    const sourceSize = sourceBox.getSize(new THREE.Vector3());
+    const sourceCenter = sourceBox.getCenter(new THREE.Vector3());
+    if (!(sourceSize.x > 0 && sourceSize.y > 0 && sourceSize.z > 0)) {
+      dress.errors.push(spec.name + ': invalid model bounds');
+      return;
     }
-    wingGLB(spec.url, function (gltf) {
-      if (!gltf || state.root !== rootAtRequest || state.k4Dress !== dress) { finish(); return; }
-      const model = gltf.scene;
-      model.updateMatrixWorld(true);
-      const sourceBox = new THREE.Box3().setFromObject(model);
-      const sourceSize = sourceBox.getSize(new THREE.Vector3());
-      const sourceCenter = sourceBox.getCenter(new THREE.Vector3());
-      if (!(sourceSize.x > 0 && sourceSize.y > 0 && sourceSize.z > 0)) {
-        dress.errors.push(spec.name + ': invalid model bounds');
-        finish();
-        return;
-      }
-      const scale = spec.fitWidth
-        ? Math.min(spec.fitWidth / sourceSize.x, spec.fitHeight / sourceSize.y)
-        : spec.fitHeight / sourceSize.y;
-      model.scale.setScalar(scale);
-      model.position.set(-sourceCenter.x * scale, -sourceBox.min.y * scale, -sourceCenter.z * scale);
-      model.name = spec.name + '-source';
-      model.traverse(function (node) {
-        if (!node.isMesh) return;
-        node.castShadow = true;
-        node.receiveShadow = true;
-        if (spec.doubleSided) {
-          const materials = Array.isArray(node.material) ? node.material : [node.material];
-          materials.forEach(function (material) {
-            if (!material) return;
-            material.side = THREE.DoubleSide;
-            material.needsUpdate = true;
-          });
-        }
-      });
-      const holder = new THREE.Group();
-      holder.name = spec.name;
-      holder.position.set(spec.x, spec.y || 0, spec.z);
-      holder.rotation.y = spec.rotation || 0;
-      const resizedTextures = limitK4TextureSize(model, k4TextureEdge());
-      holder.add(model);
-      dress.host.add(holder);
-      rootAtRequest.updateMatrixWorld(true);
+    const scale = spec.fitWidth
+      ? Math.min(spec.fitWidth / sourceSize.x, spec.fitHeight / sourceSize.y)
+      : spec.fitHeight / sourceSize.y;
+    model.scale.setScalar(scale);
+    model.position.set(-sourceCenter.x * scale, -sourceBox.min.y * scale, -sourceCenter.z * scale);
+    model.name = spec.name + '-source';
+    model.traverse(function (node) {
+      if (!node.isMesh) return;
+      node.castShadow = spec.collider !== false;
+      node.receiveShadow = true;
+    });
+    const holder = new THREE.Group();
+    holder.name = spec.name;
+    holder.position.set(spec.x, spec.y || 0, spec.z);
+    holder.rotation.y = spec.rotation || 0;
+    const resizedTextures = limitK4TextureSize(model, k4TextureEdge());
+    holder.add(model);
+    dress.host.add(holder);
+    rootAtRequest.updateMatrixWorld(true);
+    if (spec.collider !== false) {
       const worldBox = new THREE.Box3().setFromObject(holder);
-      const local = {
+      state.colliders.push({
         minx: worldBox.min.x - rootAtRequest.position.x,
         maxx: worldBox.max.x - rootAtRequest.position.x,
         miny: Math.max(0, worldBox.min.y - rootAtRequest.position.y),
         maxy: worldBox.max.y - rootAtRequest.position.y,
         minz: worldBox.min.z - rootAtRequest.position.z,
-        maxz: worldBox.max.z - rootAtRequest.position.z
-      };
-      if (spec.collider !== false) state.colliders.push(Object.assign(local, { _wing: true, _k4Prop: true }));
-      dress.loaded[spec.key] = true;
-      if (spec.key === 'frontWall') dress.frontWall = true;
-      dress.metrics[spec.key] = {
-        size: [sourceSize.x, sourceSize.y, sourceSize.z].map(function (n) { return +n.toFixed(3); }),
-        scale: +scale.toFixed(4), fittedHeight: +(sourceSize.y * scale).toFixed(3), resizedTextures: resizedTextures
-      };
-      rebuildSpatial();
-      finish();
-    }, function (error) {
-      if (state.root !== rootAtRequest || state.k4Dress !== dress) { finish(); return; }
-      const message = error && error.message ? error.message : String(error || 'load failed');
-      dress.errors.push(spec.name + ': ' + message);
-      console.error('K4 treasury asset failed', spec.url, error);
-      finish();
-    });
+        maxz: worldBox.max.z - rootAtRequest.position.z,
+        _wing: true, _k4Prop: true
+      });
+    }
+    dress.loaded[spec.name] = true;
+    if (spec.item === 'k4_frontMural') dress.frontWall = true;
+    dress.metrics[spec.name] = {
+      item: spec.item, scale: +scale.toFixed(4),
+      fittedHeight: +(sourceSize.y * scale).toFixed(3), resizedTextures: resizedTextures
+    };
   }
+  // Each kit file is fetched once (only when K4 becomes active) and every
+  // placement that uses it is cloned from that single decoded copy.
   function loadK4Assets() {
     const dress = state.k4Dress;
     if (!dress || dress.loadStarted || !dress.assetSpecs || !dress.assetSpecs.length) return;
     dress.loadStarted = true;
+    const rootAtRequest = state.root;
+    const kits = [];
+    dress.assetSpecs.forEach(function (spec) { if (kits.indexOf(spec.url) < 0) kits.push(spec.url); });
     let nextIndex = 0;
     function next() {
-      if (state.k4Dress !== dress || nextIndex >= dress.assetSpecs.length) return;
-      const spec = dress.assetSpecs[nextIndex++];
-      k4PlaceAsset(dress, spec, function () {
-        // Let the renderer upload the preceding model before decoding the next
-        // embedded texture set; otherwise several GLBs can land in one frame.
+      if (state.k4Dress !== dress || nextIndex >= kits.length) return;
+      const url = kits[nextIndex++];
+      wingGLB(url, function (gltf) {
+        if (gltf && state.root === rootAtRequest && state.k4Dress === dress) {
+          gltf.scene.updateMatrixWorld(true);
+          dress.assetSpecs.forEach(function (spec) {
+            if (spec.url !== url) return;
+            const src = gltf.scene.getObjectByName(spec.item);
+            if (!src) { dress.errors.push(spec.name + ': missing node ' + spec.item); return; }
+            k4PlaceAsset(dress, spec, src, rootAtRequest);
+          });
+          rebuildSpatial();
+        }
+        // Let the renderer upload this kit before decoding the next one.
+        requestAnimationFrame(function () { setTimeout(next, 120); });
+      }, function (error) {
+        dress.errors.push(url + ': ' + (error && error.message ? error.message : String(error || 'load failed')));
+        console.error('K4 treasury asset failed', url, error);
         requestAnimationFrame(function () { setTimeout(next, 120); });
       });
     }
@@ -3101,6 +3103,9 @@
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
     floor.name = 'K4-treasury-floor-artwork';
     floor.rotation.x = -Math.PI / 2;
+    // Turned 180 deg so, as in the reference picture, the carpet lies under the
+    // altar table at the back and the winged-lion medallion is nearest the door.
+    floor.rotation.z = Math.PI;
     floor.position.set(b.cx, 0.018, b.cz);
     floor.receiveShadow = true;
     floor.renderOrder = 2;
@@ -3145,14 +3150,54 @@
     state.ceilings.push(ceiling);
     dress.ceiling = true;
 
-    // Keep authored groups intact, but fetch them only when K4 becomes active.
-    // Loading them with the entire palace caused WebGL context loss on phones.
+    // Layout copied from the treasury reference picture, seen from the K4
+    // entrance (door at z0, looking +Z toward the mural on the back wall z1).
+    // X = offset from the room centre (negative = left), Z = metres in front
+    // of the back wall. Objects face +Z in their kit; rotation PI faces the
+    // door, PI/2 faces +X (left wall), -PI/2 faces -X (right wall).
+    const P = Math.PI, A = WING_FILES.k4KitA, B = WING_FILES.k4KitB, Cc = WING_FILES.k4KitC;
+    const at = function (url, item, X, Z, rotation, fitHeight, extra) {
+      // Looking from the door toward +Z, the viewer's left is +X, so X is mirrored
+      // (and so are the yaw angles) to keep the picture's left/right exactly.
+      return Object.assign({ url: url, item: item, x: b.cx - X, z: b.z1 - Z, rotation: -rotation, fitHeight: fitHeight }, extra || {});
+    };
+    const L = -w / 2, R = w / 2;
     dress.assetSpecs = [
-      { key: 'furniture1', url: WING_FILES.k4Furniture1, name: 'K4-treasury-display-left', x: b.x0 + 3.5, z: b.cz - 0.3, rotation: Math.PI / 2, fitHeight: 2.7 },
-      { key: 'furniture2', url: WING_FILES.k4Furniture2, name: 'K4-treasury-display-right', x: b.x1 - 3.5, z: b.cz - 0.3, rotation: -Math.PI / 2, fitHeight: 2.7 },
-      { key: 'furniture3', url: WING_FILES.k4Furniture3, name: 'K4-treasury-central-display', x: b.cx, z: b.z1 - 3.4, rotation: 0, fitHeight: 2.6 },
-      { key: 'frontWall', url: WING_FILES.k4FrontWall, name: 'K4-treasury-front-mural', x: b.cx, y: 0.2, z: b.z1 - 0.27, rotation: 0, fitHeight: Math.max(1, h - 0.4), fitWidth: w - 1.0, doubleSided: true, collider: false }
-    ];
+      // Back wall: winged-disc mural with its arch, statues, vases and chest.
+      at(WING_FILES.k4FrontWall, 'k4_frontMural', 0, 0.2, 0, Math.max(1, h - 0.4), { y: 0.05, fitWidth: 12.0, collider: false }),
+      // Two tiled columns framing the mural, each carrying a hanging banner.
+      at(Cc, 'k4_column', -6.9, 1.2, P, h - 0.05),
+      at(Cc, 'k4_column', 6.9, 1.2, P, h - 0.05),
+      at(A, 'k4_banner', -6.9, 2.75, P, 3.6, { y: 3.0, collider: false }),
+      at(B, 'k4_bannerB', 6.9, 2.75, P, 3.6, { y: 3.0, collider: false }),
+      // Potted palms between the columns and the mural.
+      at(Cc, 'k4_palmPot', -4.4, 1.5, P, 2.5),
+      at(Cc, 'k4_palmPot', 4.4, 1.5, P, 2.5),
+      at(Cc, 'k4_palmPot', L + 1.0, 3.2, P / 2, 2.6),
+      // Chandelier hanging over the altar table.
+      at(B, 'k4_chandelier', 0, 3.8, 0, 3.0, { y: h - 3.3, collider: false }),
+      // Centre: lion-legged altar table with the crown and gold vessels.
+      at(A, 'k4_altarTable', 0, 3.8, P, 1.7),
+      // Left side: crowned king statue on its plinth, brazier, chests and vases.
+      at(B, 'k4_kingStatue', L + 2.6, 2.4, P * 0.82, 4.4),
+      at(B, 'k4_brazier', -5.3, 3.2, P, 1.9),
+      at(A, 'k4_goldChest', L + 1.4, 8.8, P / 2, 1.45),
+      at(A, 'k4_goldChest', L + 1.3, 6.6, P / 2, 1.3),
+      at(A, 'k4_vaseA', L + 0.9, 10.9, P * 0.75, 1.15),
+      at(B, 'k4_vaseB', L + 0.8, 4.6, P / 2, 1.0),
+      at(A, 'k4_vaseA', -3.6, 2.2, P, 1.2),
+      // Right side: two arched treasure shelves on the wall, candelabrum,
+      // reclining lion, brazier, chests and vases.
+      at(A, 'k4_shelfCabinet', R - 0.9, 3.4, -P / 2, 3.4),
+      at(A, 'k4_shelfCabinet', R - 0.9, 6.0, -P / 2, 3.4),
+      at(A, 'k4_candelabra', 4.3, 4.2, P, 2.3),
+      at(B, 'k4_lionSphinx', R - 2.4, 7.4, -P / 2, 1.6),
+      at(B, 'k4_brazier', R - 0.9, 8.2, -P / 2, 2.1),
+      at(A, 'k4_goldChest', R - 1.4, 9.4, -P / 2, 1.35),
+      at(A, 'k4_goldChest', 5.4, 8.6, P * 1.1, 1.2),
+      at(B, 'k4_vaseB', 5.6, 10.2, P, 0.85),
+      at(A, 'k4_vaseA', 3.6, 2.2, P, 1.2)
+    ].map(function (spec, i) { spec.name = 'K4-' + spec.item.replace('k4_', '') + '-' + i; return spec; });
 
   }
   // اثاث الخرائط is one fused mesh. The six objects sit apart, so a small
