@@ -2233,52 +2233,113 @@
     });
     return triangles;
   }
+  const visibilityPlanner = window.SinWingVisibility ? window.SinWingVisibility.createPlanner() : null;
+  const triCache = new Map();
+  const warmed = new WeakSet();
+  const warmQueue = [];
+  let camDir = null;
+  function cachedTriangles(id, g, force) {
+    if (force || !triCache.has(id)) {
+      // Count all meshes regardless of current visibility so the budget does
+      // not change just because a room was hidden last frame.
+      const was = g.visible; g.visible = true;
+      triCache.set(id, groupTriangleCount(g));
+      g.visible = was;
+    }
+    return triCache.get(id);
+  }
+  // Preparation step: compile shaders and upload textures for a prepared room
+  // before it is drawn, at most one room per frame so there is no hitch.
+  function warmNext() {
+    const ctx = state.ctx;
+    if (!warmQueue.length || !ctx || !ctx.renderer || !ctx.camera) return;
+    const g = warmQueue.shift();
+    if (!g || warmed.has(g)) return;
+    warmed.add(g);
+    const was = g.visible;
+    try {
+      g.visible = true;
+      if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(g, ctx.camera);
+      if (typeof ctx.renderer.initTexture === 'function') {
+        g.traverse(o => {
+          const list = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+          list.forEach(m => { ['map', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'metalnessMap'].forEach(k => { if (m && m[k] && m[k].isTexture && m[k].image) ctx.renderer.initTexture(m[k]); }); });
+        });
+      }
+    } catch (e) { /* warming is best-effort */ }
+    g.visible = was;
+  }
+  function cameraView(rootX, rootZ) {
+    const cam = state.ctx && state.ctx.camera;
+    if (!cam || !cam.getWorldDirection) return null;
+    if (!camDir) camDir = new THREE.Vector3();
+    cam.getWorldDirection(camDir);
+    let dx = camDir.x, dz = camDir.z; const len = Math.hypot(dx, dz);
+    if (len < 1e-4) { dx = 0; dz = 1; } else { dx /= len; dz /= len; }
+    const vfov = (cam.fov || 60) * Math.PI / 180, aspect = cam.aspect || 1;
+    const halfFov = Math.atan(Math.tan(vfov / 2) * aspect);
+    return { x: cam.position.x - rootX, z: cam.position.z - rootZ, dirX: dx, dirZ: dz, halfFov };
+  }
   function updateCulling(force) {
     if (!state.built || !state.ctx || !state.ctx.hero) return;
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
     const r = regionAt(x, z), id = r ? r.id : 'Palace';
-    const cullingChanged = !!force || state.current !== id;
-    if (cullingChanged) {
+    const regionChanged = !!force || state.current !== id;
+    if (force) triCache.clear();
+    if (regionChanged) {
       state.current = id;
-      // Arch thresholds are not part of the link graph: measure from the wing room
-      // they open into, and keep the palace hall only inside its doorway threshold.
-      const isArch = !!(r && r.kind === 'threshold');
-      const dist = distancesFrom(isArch && r.linkRoom ? r.linkRoom : id);
-      if (isArch) dist.set(id, 0);
-      // The palace hall contains a large architectural model: retain it only
-      // while the hero is in the hall or standing in its doorway threshold.
-      state.palaceNear = id === 'Palace' || isArch;
-      const candidates = [];
-      state.regions.forEach(rr => {
-        const g = state.regionGroups.get(rr.id); if (!g) return;
-        const d = dist.has(rr.id) ? dist.get(rr.id) : 99;
-        const distM = Math.hypot(rr.bbox.cx - x, rr.bbox.cz - z);
-        const current = rr.id === id;
-        const show = rr._visState ? distM < 22 : distM < 18;
-        rr._visState = show;
-        const adjacent = d <= 1;
-        if (!current && !adjacent && !show) { g.visible = false; return; }
-        candidates.push({ id: rr.id, current, priority: current ? 0 : adjacent ? 1 : 2, distance: distM, triangles: groupTriangleCount(g), group: g });
-      });
-      if (!candidates.length && state.regions.length) {
-        let nearest = null;
-        state.regions.forEach(rr => {
-          const g = state.regionGroups.get(rr.id); if (!g) return;
-          const distance = Math.hypot(rr.bbox.cx - x, rr.bbox.cz - z);
-          if (!nearest || distance < nearest.distance) nearest = { id: rr.id, group: g, distance };
-        });
-        if (nearest) candidates.push({ id: nearest.id, current: true, priority: -1, distance: nearest.distance, triangles: groupTriangleCount(nearest.group), group: nearest.group });
-      }
-      const plan = renderBudget ? renderBudget.choose(candidates, 750000) : { ids: candidates.map(c => c.id), triangles: candidates.reduce((n, c) => n + c.triangles, 0), budget: 750000 };
-      const visibleIds = new Set(plan.ids);
-      state.regions.forEach(rr => { const g = state.regionGroups.get(rr.id); if (g) g.visible = visibleIds.has(rr.id); });
-      state.renderBudget = { triangles: Math.round(plan.triangles), budget: plan.budget, activeRegions: plan.ids.slice() };
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
+    const isArch = !!(r && r.kind === 'threshold');
+    state.palaceNear = id === 'Palace' || isArch;
+    const origin = isArch && r.linkRoom ? r.linkRoom : id;
+    const view = cameraView(state.root.position.x, state.root.position.z);
+    let visibleIds, preparedIds, meta = null;
+    if (visibilityPlanner && view) {
+      // Camera-driven: what the camera can see (through open portals) is drawn,
+      // what it could see after a turn stays prepared.
+      const planned = visibilityPlanner.plan(state.regions, state.links, origin, view, performance.now() / 1000);
+      if (isArch) planned.visible.add(id);
+      meta = planned.meta;
+      const candidates = [];
+      planned.visible.forEach(rid => {
+        const g = state.regionGroups.get(rid); if (!g) return;
+        const m = meta.get(rid) || { hops: 9, distance: 0 };
+        const current = rid === id || rid === origin;
+        candidates.push({ id: rid, current, priority: current ? 0 : m.hops <= 1 ? 1 : 2, distance: m.distance, triangles: cachedTriangles(rid, g, false) });
+      });
+      const plan = renderBudget ? renderBudget.choose(candidates, 750000) : { ids: candidates.map(c => c.id), triangles: candidates.reduce((n, c) => n + c.triangles, 0), budget: 750000 };
+      visibleIds = new Set(plan.ids); preparedIds = planned.prepared;
+      state.renderBudget = { triangles: Math.round(plan.triangles), budget: plan.budget, activeRegions: plan.ids.slice() };
+      // Seeing into the palace hall from a wing keeps the hall drawn.
+      if (!state.palaceNear && meta && state.links.some(l => (l[0] === 'Palace' && visibleIds.has(l[1])) || (l[1] === 'Palace' && visibleIds.has(l[0])))) {
+        const hallBox = { x0: -state.hall.width / 2, x1: state.hall.width / 2, z0: 0, z1: state.hall.length };
+        if (window.SinWingVisibility.inWedge(hallBox, view, view.halfFov + 0.6, 60)) state.palaceNear = true;
+      }
+    } else if (regionChanged) {
+      const dist = distancesFrom(origin);
+      visibleIds = new Set(); preparedIds = new Set();
+      state.regions.forEach(rr => { const d = dist.has(rr.id) ? dist.get(rr.id) : 99; if (d <= 2) { visibleIds.add(rr.id); preparedIds.add(rr.id); } });
+    }
+    if (visibleIds) {
+      state.regions.forEach(rr => {
+        const g = state.regionGroups.get(rr.id); if (!g) return;
+        g.visible = visibleIds.has(rr.id);
+        if (preparedIds.has(rr.id) && !warmed.has(g) && warmQueue.indexOf(g) < 0) warmQueue.push(g);
+      });
+      const key = Array.from(preparedIds).sort().join(',');
+      if (gpuResidency && (force || key !== state._preparedKey)) {
+        state._preparedKey = key;
+        state.gpuResidency = gpuResidency.sync(state.ctx.scene, state.root, state.regionGroups, preparedIds);
+        // Anything the residency manager released must be re-warmed next time.
+        state.regions.forEach(rr => { const g = state.regionGroups.get(rr.id); if (g && !preparedIds.has(rr.id)) warmed.delete(g); });
+      }
+      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: warmQueue.length };
+    }
+    warmNext();
     if (id === 'K4') loadK4Assets();
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
-    if (gpuResidency && cullingChanged) state.gpuResidency = gpuResidency.sync(state.ctx.scene, state.root, state.regionGroups);
   }
   function tick(dt) {
     if (!state.built) return;
@@ -2740,7 +2801,7 @@
       });
       visibleRegionTriangles[id] = Math.round(n);
     });
-    return { meshes, triangles, visibleMeshes, visibleTriangles, visibleRegionTriangles, topVisibleMeshes: topVisibleMeshes.slice(0, 12), gpuResidency: state.gpuResidency || null, renderBudget: state.renderBudget || null, colliders: state.colliders.length, k1ModelColliders: state.k1ModelColliderCount, k1FloorY: state.k1FloorY, k1Model: state.k1ModelMetrics, rooms: state.rooms.length, regions: state.regions.length };
+    return { meshes, triangles, visibleMeshes, visibleTriangles, visibleRegionTriangles, topVisibleMeshes: topVisibleMeshes.slice(0, 12), gpuResidency: state.gpuResidency || null, visibility: state.visibility || null, renderBudget: state.renderBudget || null, colliders: state.colliders.length, k1ModelColliders: state.k1ModelColliderCount, k1FloorY: state.k1FloorY, k1Model: state.k1ModelMetrics, rooms: state.rooms.length, regions: state.regions.length };
   }
 
   /* ---------------------------------------------------------------------------

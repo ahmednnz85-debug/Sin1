@@ -88,7 +88,8 @@
     return released;
   }
 
-  function sync(scene, wingRoot, regionGroups) {
+  function sync(scene, wingRoot, regionGroups, preparedIds) {
+    const keep = preparedIds instanceof Set ? preparedIds : null;
     const groups = regionGroups || new Map();
     const regionSet = new Set();
     groups.forEach(group => { if (group) regionSet.add(group); });
@@ -111,6 +112,9 @@
       if (group.visible !== false) {
         activeIds.push(id);
         walk(group, active, true, true);
+      } else if (keep && keep.has(id)) {
+        // Prepared (camera may look at it any moment): keep GPU-resident.
+        walk(group, active, false, true);
       } else {
         walk(group, candidates, false, true);
       }
