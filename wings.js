@@ -25,7 +25,11 @@
   };
   const gpuResidency = window.SinWingGpuResidency ? window.SinWingGpuResidency() : null;
   const renderBudget = window.SinWingRenderBudget || null;
-  const smartMemory = window.SinSmartMemory ? window.SinSmartMemory.create() : null;
+  // SinWorldStreaming owns the residency budget. Running SinSmartMemory next to
+  // it meant two policies trimmed the same prepared set with different
+  // thresholds, so a room was released by one and re-added by the other about
+  // once a second: dispose -> re-upload churn, far worse than keeping it.
+  const smartMemory = (window.SinSmartMemory && !window.SinWorldStreaming) ? window.SinSmartMemory.create() : null;
 
   /* ---------------------------------------------------------------------------
      Wing asset files. Heavy models and pictures use the compressed copies in
@@ -2215,6 +2219,7 @@
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
     if (gpuResidency) gpuResidency.reset();
+    state._preparedKey = ''; state._residentUntil = null;
     wingDoorLoadStarted = false;
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
@@ -2331,9 +2336,18 @@
   }
   // Spread room shader/texture warm-up across frames and reveal neighbours only
   // after their current scene contents have completed preparation.
+  // Preparing a group links its programs and uploads its textures: the most
+  // expensive thing in this file. It ran on every single frame, so the palace
+  // spent its budget compiling instead of drawing. Same end state, fixed cadence.
+  const WARM_MIN_INTERVAL_MS = 90;
+  const WARM_RETRY_BASE_MS = 500;
+  const warmAttempts = new WeakMap();
+  let warmNextAt = 0;
   function warmNext() {
     const ctx = state.ctx;
     if (!warmQueue.length || !ctx || !ctx.renderer || !ctx.camera) return;
+    if (performance.now() < warmNextAt) return;
+    warmNextAt = performance.now() + WARM_MIN_INTERVAL_MS;
     const g = warmQueue.shift();
     if (!g || isWarmed(g)) return;
     const was = g.visible;
@@ -2350,8 +2364,16 @@
       } else g.traverse(o => { const list = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; if (list.some(m => m && ['map', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'metalnessMap'].some(k => m[k] && m[k].isTexture))) ready = false; });
     } catch (e) { ready = false; }
     g.visible = was;
-    if (ready) warmed.set(g, warmShape(g));
-    else if (warmQueue.indexOf(g) < 0) warmQueue.push(g);
+    if (ready) { warmed.set(g, warmShape(g)); warmAttempts.delete(g); }
+    else {
+      // Not ready yet (textures still decoding). Back off instead of retrying
+      // the same compile on the next frame; the room is shown as soon as it
+      // really is prepared, and a late decode still gets prepared.
+      const attempt = warmAttempts.get(g) || 0;
+      warmAttempts.set(g, attempt + 1);
+      warmNextAt = Math.max(warmNextAt, performance.now() + Math.min(4000, WARM_RETRY_BASE_MS * Math.pow(1.6, attempt)));
+      if (warmQueue.indexOf(g) < 0) warmQueue.push(g);
+    }
   }
   function cameraView(rootX, rootZ) {
     const cam = state.ctx && state.ctx.camera;
@@ -2468,12 +2490,24 @@
       })).filter(item => item.group && !isWarmed(item.group) && warmQueue.indexOf(item.group) < 0)
         .sort((a, b) => a.distance - b.distance)
         .forEach(item => warmQueue.push(item.group));
-      const key = Array.from(preparedIds).sort().join(',');
+      // A region that just left the prepared set is usually still on the
+      // camera's way back. Releasing it at once disposed textures the next plan
+      // had to upload again; that churn is what pushed iOS past its memory
+      // limit at 99% and reloaded the game. Hold them for a short grace window.
+      const GRACE_MS = 1500, nowMs = performance.now();
+      if (!state._residentUntil) state._residentUntil = new Map();
+      preparedIds.forEach(rid => state._residentUntil.set(rid, nowMs + GRACE_MS));
+      const residentIds = new Set();
+      state._residentUntil.forEach((until, rid) => {
+        if (until > nowMs || preparedIds.has(rid)) residentIds.add(rid);
+        else state._residentUntil.delete(rid);
+      });
+      const key = Array.from(residentIds).sort().join(',');
       if (gpuResidency && (force || key !== state._preparedKey)) {
         state._preparedKey = key;
-        state.gpuResidency = gpuResidency.sync(state.ctx.scene, state.root, state.regionGroups, preparedIds);
+        state.gpuResidency = gpuResidency.sync(state.ctx.scene, state.root, state.regionGroups, residentIds);
         // Anything the residency manager released must be re-warmed next time.
-        state.regions.forEach(rr => { const g = state.regionGroups.get(rr.id); if (g && !preparedIds.has(rr.id)) warmed.delete(g); });
+        state.regions.forEach(rr => { const g = state.regionGroups.get(rr.id); if (g && !residentIds.has(rr.id)) warmed.delete(g); });
       }
       state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: warmQueue.length, memory: smartMemory ? smartMemory.state() : null };
     }
