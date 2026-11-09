@@ -104,10 +104,10 @@
       var mem = (info && info.memory) || {};
       var g = ratio(mem.geometries, profile.geometryBudget);
       var t = ratio(mem.textures, profile.textureBudget);
-      var ms = Number.isFinite(frameMs) && frameMs > 0 ? frameMs : frameEma;
+      var ms = Number.isFinite(frameMs) && frameMs > 0 ? Math.min(frameMs, 1000) : frameEma;
       frameEma = frameEma * 0.88 + ms * 0.12;
       var pressure = Math.max(g, t);
-      var step = Number.isFinite(dtMs) ? dtMs : 16.7;
+      var step = Number.isFinite(dtMs) && dtMs > 0 ? Math.min(dtMs, 250) : Math.min(ms, 250);
       var critical = pressure >= 0.97 || frameEma >= profile.hardFrameMs || !!(info && info.__oomRisk);
       var watch = pressure >= 0.84 || frameEma >= profile.frameTargetMs * 1.28;
       if (critical) { level = 'critical'; stableMs = 0; }

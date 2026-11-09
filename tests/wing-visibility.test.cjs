@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createPlanner } = require('../wing-visibility.js');
+const Vis = require('../wing-visibility.js');
+const { createPlanner } = Vis;
 
 const box = (x0, z0, x1, z1) => ({ x0, z0, x1, z1, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2 });
 // A long corridor C (0..40m) with a room R at its far end, room B behind the
@@ -21,6 +22,17 @@ test('room 42m away at the end of a corridor is drawn when the camera looks down
   const out = p.plan(regions, links, 'A', lookNorth, 0);
   assert.ok(out.visible.has('C'));
   assert.ok(out.visible.has('R'));
+});
+
+test('closed room doors block visibility links while opening/open doors and arches remain prefetchable', () => {
+  const links = [['A', 'B', 'door-closed'], ['A', 'C', 'door-opening'], ['A', 'D', 'door-open'], ['A', 'E', 'arch']];
+  const doors = [
+    { id: 'door-closed', state: 'Closed' },
+    { id: 'door-opening', state: 'Opening' },
+    { id: 'door-open', state: 'Open' },
+    { id: 'arch', state: 'Closed', kind: 'arch' }
+  ];
+  assert.deepEqual(Vis.openLinks(links, doors), [links[1], links[2], links[3]]);
 });
 
 test('room behind a wall with no doorway is never drawn even if in front of the camera', () => {

@@ -100,6 +100,7 @@
   let holdT = 0;
   let loadPromise = null;
   let palaceLoadStarted = false;
+  let palacePrefetchStarted = false;
   let loadOk = null;
   let loadError = null;
   let H = 1.8;
@@ -992,6 +993,22 @@
     try { releaseCity(ctx && ctx.scene, ctx && ctx.hero); }
     catch (e) { note('city release failed ' + (e && e.message || e)); }
     loadPalaceAssets().then(function () { loadOk = true; note('assets ready'); }, function (err) { loadError = err; loadOk = false; note('assets failed ' + (err && err.message)); });
+  }
+
+  function prefetchPalaceAssets() {
+    if (palacePrefetchStarted || palaceLoadStarted) return;
+    palacePrefetchStarted = true;
+    // Download and parse while the player is still outside; keep the exterior
+    // intact until entry actually begins (startPalaceLoad owns its release).
+    loadPalaceAssets().then(function () {
+      loadOk = true;
+      note('assets prewarmed before entry');
+    }, function (err) {
+      palacePrefetchStarted = false;
+      loadError = err;
+      loadOk = false;
+      note('prefetch failed ' + (err && err.message));
+    });
   }
 
   let lightsCulled = false;
@@ -2930,6 +2947,7 @@
     if (!portal) return;
     if (debugOn()) renderDebug();
     if (state === 'IDLE') {
+      if (ctx.doorOpen) prefetchPalaceAssets();
       if (!ctx.doorOpen || busy) return;
       const p = ctx.hero.position;
       if (p.z <= portal.frontZ + 0.02) approachY = p.y;

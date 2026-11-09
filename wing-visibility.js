@@ -44,6 +44,16 @@
     return dist;
   }
 
+  function openLinks(links, doors) {
+    const byId = new Map((doors || []).filter(d => d && d.id != null).map(d => [d.id, d]));
+    return (links || []).filter(link => {
+      if (!link || link.length < 3) return true;
+      const door = byId.get(link[2]);
+      if (!door) return true;
+      return door.kind === 'arch' || door.state === 'Open' || door.state === 'Opening';
+    });
+  }
+
   function nearestDistance(b, x, z) {
     const dx = Math.max(b.x0 - x, 0, x - b.x1);
     const dz = Math.max(b.z0 - z, 0, z - b.z1);
@@ -115,7 +125,7 @@
     return { plan, reset, options: opt };
   }
 
-  const api = { createPlanner, inWedge, hops, nearestDistance, DEFAULTS };
+  const api = { createPlanner, inWedge, hops, openLinks, nearestDistance, DEFAULTS };
   root.SinWingVisibility = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

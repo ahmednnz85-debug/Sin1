@@ -23,6 +23,7 @@
 
   var lastFrame = 0, frameNo = 0, texTick = 0;
   var texKeys = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'];
+  var appliedGroups = new WeakMap(), queuedTextures = new WeakSet();
   var tmpDir = { x: 0, y: 0, z: 0 };
   var stats = {
     frames: 0, lead: 0, visible: 0, prepared: 0,
@@ -124,6 +125,17 @@
       var prio = visible.has(id) ? 0 : (m.hops <= 1 ? 1 : 2);
       var L = texPolicy.level(dist, prio);
       var lod = lodPolicy.level(id, dist);
+      var signature = L.anisotropy + ':' + lod;
+      var previous = appliedGroups.get(g);
+      var sameContents = !!previous && previous.signature === signature && previous.children.length === g.children.length;
+      if (sameContents) {
+        for (var ci = 0; ci < g.children.length; ci++) {
+          var child = g.children[ci];
+          if (previous.children[ci] !== child || previous.childCounts[ci] !== (child.children ? child.children.length : 0)) { sameContents = false; break; }
+        }
+      }
+      if (sameContents) return;
+      appliedGroups.set(g, { signature: signature, children: g.children.slice(), childCounts: g.children.map(function (child) { return child.children ? child.children.length : 0; }) });
       g.traverse(function (o) {
         if (!o.isMesh) return;
         if (o.userData && o.userData.lods) applyLod(o, lod);
@@ -133,8 +145,15 @@
           texKeys.forEach(function (k) {
             var t = mat[k];
             if (t && t.isTexture && t.anisotropy !== L.anisotropy) { t.anisotropy = L.anisotropy; stats.textureTouches++; }
-            if (t && t.isTexture && L.deferUpload && !t.__streamQueued) {
-              t.__streamQueued = true;   // upload happens through the scheduler, not this frame
+            if (t && t.isTexture && L.deferUpload) {
+              // Three.js uploads textures as part of render(); there is no portable
+              // public API for uploading one texture safely outside that render pass.
+              // Queue only the safe flag update, bounded by the existing frame scheduler.
+              if (!queuedTextures.has(t)) {
+                var texture = t;
+                queuedTextures.add(texture);
+                scheduler.push({ run: function () { texture.needsUpdate = true; } }, 2);
+              }
             }
           });
         });

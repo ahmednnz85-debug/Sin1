@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 function makeEnv(search = '?debug=1') {
-  const inputs = ['fireOff', 'lightsOff', 'gradeFogOff', 'skipLightWork'].map((flag) => ({
+  const inputs = ['fireOff', 'lightsOff', 'gradeFogOff'].map((flag) => ({
     dataset: { flag }, checked: false, addEventListener(type, fn) { this['on' + type] = fn; }
   }));
   const elements = new Map();
@@ -74,9 +74,7 @@ test('debug controls instrument frames and restore transient render state', () =
   e.inputs[0].checked = true; e.inputs[0].onchange();
   e.inputs[1].checked = true; e.inputs[1].onchange();
   e.inputs[2].checked = true; e.inputs[2].onchange();
-  assert.equal(e.window.__perfLab.flags.skipLightWork, false);
-  e.inputs[3].checked = true; e.inputs[3].onchange();
-  assert.equal(e.window.__perfLab.flags.skipLightWork, true);
+  assert.equal(Object.prototype.hasOwnProperty.call(e.window.__perfLab.flags, 'skipLightWork'), false);
 
   const runFrame = (ts) => {
     e.window.requestAnimationFrame(() => e.renderer.render(e.scene, {}));

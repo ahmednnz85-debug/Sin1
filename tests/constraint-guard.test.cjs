@@ -7,6 +7,7 @@ const palace = fs.readFileSync(path.join(__dirname, '..', 'palaceInterior.js'), 
 const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
 const cinematic = fs.readFileSync(path.join(__dirname, '..', 'cinematic.js'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const compatibility = fs.readFileSync(path.join(__dirname, '..', 'three-compat.js'), 'utf8');
 
 test('light budget stays fixed at eight and outside culling uses intensity, not visibility', () => {
   assert.match(palace, /lightCount:\s*8\b/);
@@ -31,6 +32,27 @@ test('frame loop does not run PMREM generation or asynchronous shader compilatio
   assert.ok(start >= 0 && end > start);
   const loop = index.slice(start, end);
   assert.doesNotMatch(loop, /PMREM|compileAsync/);
+});
+
+test('raw frame duration reaches the palace managers while simulation delta stays clamped', () => {
+  const start = index.indexOf('function loop(ts)');
+  const end = index.indexOf('init().catch', start);
+  const loop = index.slice(start, end);
+  assert.match(loop, /rawFrameMs=Math\.min\(1000/);
+  assert.match(loop, /frameDt=Math\.max\(0\.001,Math\.min/);
+  assert.match(loop, /doorOpen:royalDoor\.open\(\),frameMs:rawFrameMs/);
+});
+
+test('r187 light compatibility caches traversal and avoids per-frame allocations', () => {
+  const start = compatibility.indexOf('ThreeModule.WebGLRenderer.prototype.render = function');
+  const end = compatibility.indexOf('\n};', start);
+  assert.ok(start >= 0 && end > start);
+  const renderWrapper = compatibility.slice(start, end);
+  assert.match(compatibility, /const lightCacheByScene = new WeakMap\(\)/);
+  assert.match(compatibility, /function lightsFor\(scene\)/);
+  assert.match(compatibility, /intensities: new Array\(lights.length\)/);
+  assert.doesNotMatch(renderWrapper, /scene\.traverse|\[\]|new Array/);
+  assert.match(renderWrapper, /finally/);
 });
 
 test('shadow HUD and diagnostics expose live renderer state, not only the tier policy', () => {

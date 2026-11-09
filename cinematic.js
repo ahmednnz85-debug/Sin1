@@ -97,6 +97,7 @@
     _r.set(0, 1, 0).cross(_d); if (_r.lengthSq() < 1e-6) _r.set(1, 0, 0); _r.normalize();
     _u.copy(_d).cross(_r).normalize();
   }
+  let appliedShadowTier = null;
   function applyShadowSettings(force) {
     if (!sun) return;
     const c = sun.shadow.camera, ex = E.extent;
@@ -105,11 +106,12 @@
       sun.shadow.mapSize.set(E.res, E.res);
       if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
     }
-    if (!ctx.interior() && force) {
+    if (!ctx.interior() && (force || appliedShadowTier !== base)) {
       const wantType = E.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
       let recompile = false;
       if (R.shadowMap.enabled !== E.shadow) { R.shadowMap.enabled = E.shadow; recompile = true; }
       if (R.shadowMap.type !== wantType) { R.shadowMap.type = wantType; recompile = true; }
+      appliedShadowTier = base;
       if (recompile) scene.traverse(o => { if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); } });
     }
   }

@@ -2302,9 +2302,23 @@
   }
   const visibilityPlanner = window.SinWingVisibility ? window.SinWingVisibility.createPlanner() : null;
   const triCache = new Map();
-  const warmed = new WeakSet();
+  const warmed = new WeakMap();
   const warmQueue = [];
   let camDir = null;
+  let latestFrameMs = null;
+  let latestStepMs = 16.7;
+  function warmShape(group) {
+    const children = group.children || [];
+    return { children: children.slice(), childCounts: children.map(child => child.children ? child.children.length : 0) };
+  }
+  function isWarmed(group) {
+    const previous = warmed.get(group), children = group.children || [];
+    if (!previous || previous.children.length !== children.length) return false;
+    for (let i = 0; i < children.length; i++) {
+      if (previous.children[i] !== children[i] || previous.childCounts[i] !== (children[i].children ? children[i].children.length : 0)) return false;
+    }
+    return true;
+  }
   function cachedTriangles(id, g, force) {
     if (force || !triCache.has(id)) {
       // Count all meshes regardless of current visibility so the budget does
@@ -2315,26 +2329,29 @@
     }
     return triCache.get(id);
   }
-  // Preparation step: compile shaders and upload textures for a prepared room
-  // before it is drawn, at most one room per frame so there is no hitch.
+  // Spread room shader/texture warm-up across frames and reveal neighbours only
+  // after their current scene contents have completed preparation.
   function warmNext() {
     const ctx = state.ctx;
     if (!warmQueue.length || !ctx || !ctx.renderer || !ctx.camera) return;
     const g = warmQueue.shift();
-    if (!g || warmed.has(g)) return;
-    warmed.add(g);
+    if (!g || isWarmed(g)) return;
     const was = g.visible;
+    let ready = true;
     try {
       g.visible = true;
       if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(g, ctx.camera);
+      else ready = false;
       if (typeof ctx.renderer.initTexture === 'function') {
         g.traverse(o => {
           const list = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-          list.forEach(m => { ['map', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'metalnessMap'].forEach(k => { if (m && m[k] && m[k].isTexture && m[k].image) ctx.renderer.initTexture(m[k]); }); });
+          list.forEach(m => { ['map', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'metalnessMap'].forEach(k => { if (m && m[k] && m[k].isTexture) { const tex = m[k], image = tex.image; if (!image || image.complete === false || (typeof HTMLImageElement !== 'undefined' && image instanceof HTMLImageElement && (!image.complete || !image.naturalWidth))) { ready = false; return; } ctx.renderer.initTexture(tex); } }); });
         });
-      }
-    } catch (e) { /* warming is best-effort */ }
+      } else g.traverse(o => { const list = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; if (list.some(m => m && ['map', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'metalnessMap'].some(k => m[k] && m[k].isTexture))) ready = false; });
+    } catch (e) { ready = false; }
     g.visible = was;
+    if (ready) warmed.set(g, warmShape(g));
+    else if (warmQueue.indexOf(g) < 0) warmQueue.push(g);
   }
   function cameraView(rootX, rootZ) {
     const cam = state.ctx && state.ctx.camera;
@@ -2375,7 +2392,9 @@
     if (visibilityPlanner && view) {
       // Camera-driven: what the camera can see (through open portals) is drawn,
       // what it could see after a turn stays prepared.
-      const planned = visibilityPlanner.plan(state.regions, state.links, origin, view, performance.now() / 1000);
+      // Door records are [from,to,doorId]. Closed animated doors are opaque portals.
+      const openLinks = window.SinWingVisibility.openLinks(state.links || [], state.doors || []);
+      const planned = visibilityPlanner.plan(state.regions, openLinks, origin, view, performance.now() / 1000);
       if (isArch) planned.visible.add(id);
       meta = planned.meta;
       const candidates = [];
@@ -2385,23 +2404,36 @@
         const current = rid === id || rid === origin;
         candidates.push({ id: rid, current, priority: current ? 0 : m.hops <= 1 ? 1 : 2, distance: m.distance, triangles: cachedTriangles(rid, g, false) });
       });
-      // Everything inside the camera's sight is drawn: no triangle budget may
-      // drop a region the camera can actually see.
-      const plan = { ids: candidates.map(c => c.id), triangles: candidates.reduce((n, c) => n + c.triangles, 0), budget: Infinity };
-      visibleIds = new Set(plan.ids); preparedIds = planned.prepared;
+      // Preserve every region the camera can see; the soft triangle budget is
+      // applied to optional prepared residency after prediction/cache expansion.
+      const mandatory = new Set(candidates.map(c => c.id));
+      visibleIds = new Set(mandatory);
+      preparedIds = new Set(planned.prepared);
+      const reserve = candidates.reduce((n, c) => n + c.triangles, 0);
       // World streaming: refine residency (prediction + persistent cache +
       // memory budget + texture/LOD priority) without touching what is drawn.
       if (window.SinWorldStreaming) {
         var refined = window.SinWorldStreaming.refine({
           visible: visibleIds, prepared: preparedIds, meta: meta,
           regions: state.regions, regionGroups: state.regionGroups,
-          links: state.links || [], origin: origin,
+          links: openLinks, origin: origin,
           camera: state.ctx.camera, hero: state.ctx.hero,
-          renderer: state.ctx.renderer, root: state.root,
+          renderer: state.ctx.renderer, root: state.root, frameMs: latestFrameMs,
           now: performance.now()
         });
         if (refined) preparedIds = refined;
       }
+      const budget = Math.max(750000, reserve);
+      if (renderBudget && typeof renderBudget.choose === 'function') {
+        const optional = Array.from(preparedIds).filter(rid => !mandatory.has(rid)).map(rid => {
+          const g = state.regionGroups.get(rid), m = meta.get(rid) || {};
+          return { id: rid, current: false, priority: 2, distance: m.distance || 0, triangles: g ? cachedTriangles(rid, g, false) : 0 };
+        });
+        const chosen = renderBudget.choose(optional, Math.max(0, budget - reserve));
+        const keep = new Set(chosen.ids);
+        preparedIds.forEach(rid => { if (!mandatory.has(rid) && !keep.has(rid)) preparedIds.delete(rid); });
+      }
+      const plan = { ids: Array.from(mandatory), triangles: reserve, budget };
       // Start preparing rooms in the camera prefetch wedge, not only after the
       // hero enters them. The room is assembled off-screen and then appears as
       // one complete set when the camera reaches it.
@@ -2421,13 +2453,21 @@
     if (visibleIds) {
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
-        g.visible = visibleIds.has(rr.id);
-        if (preparedIds.has(rr.id) && !warmed.has(g) && warmQueue.indexOf(g) < 0) warmQueue.push(g);
+        const isCurrent = rr.id === id || rr.id === origin || (isArch && rr.id === id);
+        // Never reveal an unprepared neighbour. Preserve current/player and portal
+        // path groups; those remain the safe visible fallback while warm-up retries.
+        g.visible = visibleIds.has(rr.id) && (isCurrent || isWarmed(g));
       });
       if (smartMemory) {
-        smartMemory.sample(state.ctx.renderer);
+        smartMemory.sample(state.ctx.renderer, latestFrameMs, latestStepMs);
         preparedIds = smartMemory.selectPrepared(visibleIds, preparedIds, meta, id);
       }
+      Array.from(preparedIds).map(rid => ({
+        group: state.regionGroups.get(rid),
+        distance: meta && meta.get(rid) ? meta.get(rid).distance : 0
+      })).filter(item => item.group && !isWarmed(item.group) && warmQueue.indexOf(item.group) < 0)
+        .sort((a, b) => a.distance - b.distance)
+        .forEach(item => warmQueue.push(item.group));
       const key = Array.from(preparedIds).sort().join(',');
       if (gpuResidency && (force || key !== state._preparedKey)) {
         state._preparedKey = key;
@@ -2442,8 +2482,11 @@
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
   }
-  function tick(dt) {
+  function tick(dt, ctx) {
     if (!state.built) return;
+    const frameMs = ctx && Number(ctx.frameMs);
+    latestFrameMs = Number.isFinite(frameMs) && frameMs > 0 ? Math.min(frameMs, 1000) : (Number.isFinite(dt) && dt > 0 ? Math.min(dt * 1000, 1000) : null);
+    latestStepMs = Number.isFinite(dt) && dt > 0 ? Math.min(dt * 1000, 250) : 16.7;
     updateRoomDoors(Math.max(.001, Math.min(.05, Number(dt) || .016)));
     updateCulling(false);
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }

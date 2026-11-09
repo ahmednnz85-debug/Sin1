@@ -70,17 +70,23 @@ test('hidden room GPU resources are disposed, shared resources are retained, and
   assert.equal(sharedTexture.disposed, 0);
 });
 
-test('wing culling calls GPU residency synchronization and is camera-driven, draws everything in sight, and keeps prepared rooms resident', () => {
+test('wing culling respects open portals, warms prepared regions before reveal, and syncs GPU residency', () => {
   const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
   const cullingAt = wings.indexOf('function updateCulling(force)');
-  const tickAt = wings.indexOf('function tick(dt)', cullingAt);
+  const tickAt = wings.indexOf('function tick(dt, ctx)', cullingAt);
   assert.ok(cullingAt >= 0 && tickAt > cullingAt);
   const culling = wings.slice(cullingAt, tickAt);
-  assert.match(culling, /visibilityPlanner\.plan\(state\.regions, state\.links, origin, view/);
+  assert.match(culling, /visibilityPlanner\.plan\(state\.regions, openLinks, origin, view/);
+  assert.match(culling, /SinWingVisibility\.openLinks\(state\.links \|\| \[\], state\.doors \|\| \[\]\)/);
   assert.doesNotMatch(culling, /distM < 18/);
-  assert.doesNotMatch(culling, /renderBudget\.choose\(/);
+  assert.match(culling, /renderBudget\.choose\(/);
   assert.match(culling, /state\.palaceNear = id === 'Palace' \|\| isArch/);
   assert.match(culling, /preparedIds\.forEach\(dressRoomIfNeeded\)/);
+  assert.match(culling, /g\.visible = visibleIds\.has\(rr\.id\) && \(isCurrent \|\| isWarmed\(g\)\)/);
+  assert.match(culling, /warmQueue\.indexOf\(item\.group\) < 0/);
+  assert.match(wings, /function isWarmed\(group\)/);
+  assert.match(wings, /warmed\.set\(g, warmShape\(g\)\)/);
+  assert.match(culling, /frameMs: latestFrameMs/);
   assert.match(culling, /if \(preparedIds && preparedIds\.has\('K4'\)\) loadK4Assets\(\)/);
   assert.match(culling, /gpuResidency\.sync\(state\.ctx\.scene, state\.root, state\.regionGroups, preparedIds\)/);
   assert.match(wings, /visibleRegionTriangles/);

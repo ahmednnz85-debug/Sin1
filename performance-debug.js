@@ -8,7 +8,6 @@
     fireOff: false,
     lightsOff: false,
     gradeFogOff: false,
-    skipLightWork: false,
     pixelScale: 1
   };
   var samples = [];
@@ -103,7 +102,6 @@
     '<label style="display:block"><input type="checkbox" data-flag="fireOff"> إخفاء نيران المشاعل/المباخر</label>' +
     '<label style="display:block"><input type="checkbox" data-flag="lightsOff"> شدة الأضواء = 0</label>' +
     '<label style="display:block"><input type="checkbox" data-flag="gradeFogOff"> إيقاف #grade والضباب (دون تبديل الشيدر)</label>' +
-    '<label style="display:block"><input type="checkbox" data-flag="skipLightWork"> إيقاف updatePalaceLights وcullOutsideLights</label>' +
     '<label>النقطة: <select id="perf-point"><option>ساحة الطريق — courtyard</option><option>قاعة العرش</option><option>أول ممر الأجنحة</option></select></label>' +
     '<button id="perf-record">تسجيل 10 ثوانٍ</button> <button id="perf-clear">مسح القياسات</button> <button id="perf-csv">تصدير CSV</button>' +
     '<label>antialias: <select id="perf-aa"><option value="1">ON</option><option value="0">OFF</option></select></label> ' +
@@ -142,7 +140,6 @@
   panel.querySelectorAll('[data-flag]').forEach(function (input) {
     input.addEventListener('change', function () {
       flags[input.dataset.flag] = input.checked;
-      if (input.dataset.flag === 'skipLightWork') window.__perfLab.flags.skipLightWork = input.checked;
     });
   });
   window.__perfLab = { flags: flags, samples: samples, records: records, summary: percentileSummary };

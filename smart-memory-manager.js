@@ -20,12 +20,13 @@
     function ratio(value, budget) {
       return Math.max(0, Number(value) || 0) / Math.max(1, budget);
     }
-    function sample(renderer, frameMs) {
+    function sample(renderer, frameMs, dtMs) {
       const memory = renderer && renderer.info && renderer.info.memory || {};
       const geometryRatio = ratio(memory.geometries, o.geometryBudget);
       const textureRatio = ratio(memory.textures, o.textureBudget);
-      const ms = Number.isFinite(frameMs) && frameMs > 0 ? frameMs : frameEma;
+      const ms = Number.isFinite(frameMs) && frameMs > 0 ? Math.min(frameMs, 1000) : frameEma;
       frameEma = frameEma * 0.88 + ms * 0.12;
+      const stepMs = Number.isFinite(dtMs) && dtMs > 0 ? Math.min(dtMs, 250) : Math.min(ms, 250);
       const pressure = Math.max(geometryRatio, textureRatio);
       const critical = pressure >= o.criticalRatio || frameEma >= o.frameCriticalMs;
       const watch = pressure >= o.watchRatio || frameEma >= o.frameWatchMs;
@@ -36,10 +37,10 @@
         level = 'watch';
         stableMs = 0;
       } else if (level !== 'normal') {
-        stableMs += Math.max(0, ms);
+        stableMs = Math.min(o.recoveryMs, stableMs + stepMs);
         if (stableMs >= o.recoveryMs) level = 'normal';
       } else {
-        stableMs = Math.min(o.recoveryMs, stableMs + Math.max(0, ms));
+        stableMs = Math.min(o.recoveryMs, stableMs + stepMs);
       }
       last = { level, geometryRatio, textureRatio, frameMs: frameEma };
       return last;

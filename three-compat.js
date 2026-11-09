@@ -31,23 +31,63 @@ if (!Object.getOwnPropertyDescriptor(ThreeModule.WebGLRenderer.prototype, 'outpu
 
 // r147 applied an artist-friendly PI intensity scale to lights. Reapply that
 // scale only while rendering so animation and scene code continue to read and
-// write their original intensity values. Point/spot attenuation itself changed
-// in modern Three.js and cannot be restored by intensity scaling alone.
+// write their original intensity values. Cache scene lights: walking the full
+// world and allocating an array on every frame caused severe CPU/GC pressure.
+const lightCacheByScene = new WeakMap();
+function attachedScene(object) {
+  for (let node = object; node; node = node.parent) {
+    if (node.isScene) return node;
+  }
+  return null;
+}
+function invalidateScene(scene) {
+  const entry = scene && lightCacheByScene.get(scene);
+  if (entry) entry.dirty = true;
+}
+const originalAdd = ThreeModule.Object3D.prototype.add;
+const originalRemove = ThreeModule.Object3D.prototype.remove;
+ThreeModule.Object3D.prototype.add = function (...objects) {
+  const result = originalAdd.apply(this, objects);
+  invalidateScene(attachedScene(this));
+  return result;
+};
+ThreeModule.Object3D.prototype.remove = function (...objects) {
+  const scene = attachedScene(this);
+  const result = originalRemove.apply(this, objects);
+  invalidateScene(scene);
+  return result;
+};
+function lightsFor(scene) {
+  let entry = lightCacheByScene.get(scene);
+  if (!entry || entry.dirty) {
+    const lights = [];
+    if (scene && scene.traverse) {
+      scene.traverse(object => {
+        if (object.isLight && Number.isFinite(object.intensity)) lights.push(object);
+      });
+    }
+    entry = { dirty: false, lights, intensities: new Array(lights.length) };
+    lightCacheByScene.set(scene, entry);
+  }
+  return entry;
+}
+// Point/spot attenuation itself changed in modern Three.js and cannot be
+// restored by intensity scaling alone.
 const renderWithModernLights = ThreeModule.WebGLRenderer.prototype.render;
 ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
-  const originalIntensities = [];
-  if (scene && scene.traverse) {
-    scene.traverse(object => {
-      if (object.isLight && object.intensity !== 0 && Number.isFinite(object.intensity)) {
-        originalIntensities.push([object, object.intensity]);
-        object.intensity *= Math.PI;
-      }
-    });
+  const entry = scene && typeof scene === 'object' ? lightsFor(scene) : null;
+  if (entry) for (let i = 0; i < entry.lights.length; i++) {
+    const light = entry.lights[i];
+    const intensity = light.intensity;
+    entry.intensities[i] = intensity;
+    if (intensity !== 0 && Number.isFinite(intensity)) light.intensity = intensity * Math.PI;
   }
   try {
     return renderWithModernLights.call(this, scene, camera);
   } finally {
-    for (const [light, intensity] of originalIntensities) light.intensity = intensity;
+    if (entry) for (let i = 0; i < entry.lights.length; i++) {
+      entry.lights[i].intensity = entry.intensities[i];
+    }
   }
 };
 
