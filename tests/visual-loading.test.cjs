@@ -64,3 +64,8 @@ test('palace warm-up skips materials under hidden wing-room groups', () => {
   assert.match(warmup, /if \(visibleOnly\)[\s\S]*if \(!parent\.visible\) return/);
   assert.match(warmup, /consider\(wingRuntime\.root, true\)/);
 });
+
+test('open palace doorway preview is placed behind the aperture, not occluded on the far wall', () => {
+  assert.match(index, /const imageZ\s*=\s*Math\.min\(wallZ\s*-\s*0\.06,\s*frontZ\s*\+\s*0\.62\)/);
+  assert.match(index, /plane\.position\.set\(doorX,\s*doorY,\s*imageZ\)/);
+});

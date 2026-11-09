@@ -1529,13 +1529,18 @@ function buildDoorGlimpse(frontZ){
     if(nearest<1e8) wallZ=nearest-0.06;
   }
   const camZ=frontZ-6.8, doorZ=frontZ+0.25;
-  const scale=Math.max(1,(wallZ-camZ)/Math.max(0.8,doorZ-camZ));
+  // Keep the temporary palace view immediately behind the doorway aperture.
+  // Placing it on the far interior wall lets intervening palace meshes occlude
+  // the image after the door-hole shader cuts the exterior facade, producing a
+  // black void until the full interior finishes loading.
+  const imageZ=Math.min(wallZ-0.06,frontZ+0.62);
+  const scale=Math.max(1,(imageZ-camZ)/Math.max(0.8,doorZ-camZ));
   const pw=doorW*scale, ph=doorH*scale;
   const imgA=1280/721, planeA=pw/ph;
   if(imgA>planeA){const r=planeA/imgA; map.repeat.set(r,1); map.offset.set((1-r)*0.5,0);}
   else{const r=imgA/planeA; map.repeat.set(1,r); map.offset.set(0,(1-r)*0.5);}
   const plane=new THREE.Mesh(new THREE.PlaneGeometry(pw,ph), new THREE.MeshBasicMaterial({map:map,side:THREE.DoubleSide}));
-  plane.position.set(doorX, doorY, wallZ);
+  plane.position.set(doorX, doorY, imageZ);
   plane.rotation.y=Math.PI;
   plane.frustumCulled=false;
   plane.renderOrder=4;
