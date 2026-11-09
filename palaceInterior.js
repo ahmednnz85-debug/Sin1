@@ -131,7 +131,7 @@
   let warmFrame = false;
   let loadStartedAt = 0;
   let loadStage = 0;
-  const LOAD_STAGES = ['جاري تحميل القصر الرئيسي', 'جاري تحميل جناح الملوك', 'جاري تحميل المكتبة الكبرى', 'جاري تحميل المعبد الملكي للقمر', 'جاري تجهيز الإضاءة والخامات والمؤثرات', 'جاري تجهيز الكاميرا والموارد المشتركة', 'اكتمل تحميل القصر'];
+  const LOAD_STAGES = ['جاري إعداد موارد القصر', 'جاري تحميل القاعة وجميع أجنحة القصر', 'جاري تحليل موارد القصر', 'جاري تحليل موارد الأجنحة', 'جاري تجهيز الإضاءة والخامات والمؤثرات', 'جاري تجهيز الكاميرا والموارد المشتركة', 'اكتمل تحميل القصر'];
   let contextWatch = false;
   let lastDoor = false;
   let heroSnap = '—';
@@ -249,7 +249,7 @@
       const pair = FILES[key];
       const name = CONFIG.useOptimizedAssets ? pair[0] : pair[1];
       if (!name) return;
-      list.push({ id: 'glb:' + key, key: key, name: name, kind: 'glb', url: fileURL(pair), optional: /Lod$/.test(key) || key === 'stairs' || key === 'door' });
+      list.push({ id: 'glb:' + key, key: key, name: name, kind: 'glb', url: fileURL(pair), optional: /Lod$/.test(key) });
     });
     list.forEach(function (s) {
       s.status = 'pending'; s.loaded = 0; s.total = 0; s.error = ''; s.attempt = 0; s.buf = null; s.result = null;
@@ -649,9 +649,9 @@
     });
   }
 
-  // Wing (K1, K2, corridors) files join the palace loading screen so the wings
-  // are dressed on the first frame when available. They remain optional so a
-  // single slow/broken wing asset cannot block entry to the palace.
+  // Every K1-K4 room, corridor and door asset joins the palace loading screen.
+  // A missing asset is a load failure rather than a late network request after
+  // entry, so the player never walks into a partially loaded wing.
   function attachWingSpecs() {
     if (wingsProbed || !CONFIG.useWings || !window.PalaceWings || typeof PalaceWings.assetList !== 'function') return;
     wingsProbed = true;
@@ -661,7 +661,7 @@
       specs.push({
         id: 'wing:' + a.url, key: 'wing:' + a.url, name: a.url.split('/').pop(),
         kind: a.kind === 'tex' ? 'wtex' : (/طاولة|اثاث/.test(a.url) ? 'wglb-draco' : 'wglb'),
-        wingPath: a.url, url: url, optional: true,
+        wingPath: a.url, url: url, optional: false,
         status: 'pending', loaded: 0, total: 0, error: '', attempt: 0, buf: null, result: null
       });
     });
@@ -676,7 +676,7 @@
       try {
         PalaceWings.provideAsset(a.url, a.kind === 'tex' ? await textureFromBytes(own.buf, own.name, false) : await parseRawGLB(own.buf));
         own.wingShared = true;
-      } catch (e) { console.warn('تعذّر تجهيز ملف الجناح مسبقاً', a.url, e); }
+      } catch (e) { throw new Error('تعذّر تجهيز ملف الجناح مسبقاً — ' + a.url + ': ' + ((e && e.message) || e)); }
     });
     await Promise.all(jobs);
   }

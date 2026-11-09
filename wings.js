@@ -32,6 +32,8 @@
      "ارضيات وسقوف/optimized/" (same geometry, WebP textures, meshopt where the
      game already decodes it). Only the K1 model is needed for the first palace
      frame; all other rooms use the on-demand loader after the player approaches.
+     The manifest below now primes every asset before entry; attachment and GPU
+     residency remain visibility- and memory-managed after entry.
   --------------------------------------------------------------------------- */
   const OPT_DIR = 'ارضيات وسقوف/optimized/';
   const WING_FILES = {
@@ -51,6 +53,7 @@
     k2Floor: 'assets/ارضية المجلس.PNG',
     // Map-room pictures only. The two Draco models stay off this list so they
     // are not decoded while the city is still in memory (same rule as K2).
+    // Correction: both Draco models below are now in the full palace-entry manifest.
     k3Floor: 'assets/\u0627\u0631\u0636\u064A\u0629 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.JPG',
     k3Wall: 'assets/\u062C\u062F\u0627\u0631 \u0627\u0644\u062E\u0631\u0627\u064A\u0654\u0637.JPG',
     k3WallFar: 'assets/جدار الخرائط 2.JPG',
@@ -74,17 +77,21 @@
   };
   // K4's authored GLBs have large embedded textures. Keep them out of the
   // palace-entry preload so the first WebGL warm-up fits mobile GPU budgets.
+  // This now refers to scene attachment only: all are parsed from cache during
+  // the loading screen, while GPU residency is managed when rooms are prepared.
   const K4_DEFERRED_MODELS = new Set([
     WING_FILES.k4KitA, WING_FILES.k4KitB,
     WING_FILES.k4KitC, WING_FILES.k4FrontWall
   ]);
   const WING_DOOR_FILE = 'assets/باب الاجنحة.glb';
+  WING_FILES.wingDoor = WING_DOOR_FILE;
   let wingDoorLoadStarted = false;
   const K2_LAZY = { reception: WING_FILES.k2Reception, meetings: WING_FILES.k2Meetings };
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
   function assetList() {
     const entryAssets = new Set([WING_FILES.k1]);
+    Object.keys(WING_FILES).forEach(k => entryAssets.add(WING_FILES[k]));
     return Object.keys(WING_FILES).filter(k => entryAssets.has(WING_FILES[k]))
       .map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
       .filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);

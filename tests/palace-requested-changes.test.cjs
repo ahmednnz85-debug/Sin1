@@ -9,6 +9,21 @@ const palace = fs.readFileSync(path.join(root, 'palaceInterior.js'), 'utf8');
 const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const cinematic = fs.readFileSync(path.join(root, 'cinematic.js'), 'utf8');
 
+test('palace loading manifest includes every wing asset and the wing doors before entry', () => {
+  const listStart = wings.indexOf('function assetList()');
+  const listEnd = wings.indexOf('function provideAsset', listStart);
+  const manifest = wings.slice(listStart, listEnd);
+  assert.ok(listStart >= 0 && listEnd > listStart);
+  assert.match(manifest, /Object\.keys\(WING_FILES\)/);
+  assert.match(wings, /WING_FILES\.wingDoor = WING_DOOR_FILE/);
+  assert.match(manifest, /\.filter\(k => entryAssets\.has\(WING_FILES\[k\]\)\)/);
+  assert.match(manifest, /findIndex\(b => b\.url === a\.url\)/);
+  assert.match(palace, /Every K1-K4 room, corridor and door asset joins the palace loading screen/);
+  assert.match(palace, /url: url, optional: false/);
+  assert.match(palace, /optional: \/Lod\$\/\.test\(key\)/);
+  assert.match(palace, /LOAD_STAGES = \[[^\]]*جميع أجنحة القصر/);
+});
+
 test('corridor carpet asset remains centered, clipped and fitted to corridor width', () => {
   assert.ok(fs.existsSync(path.join(root, 'assets', 'سجاد الممرات.JPG')));
   assert.match(wings, /corridorCarpet:\s*'assets\/سجاد الممرات\.JPG'/);
