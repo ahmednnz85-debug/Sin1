@@ -21,7 +21,7 @@
   var texPolicy = Core.createTexturePolicy({ maxAnisotropy: budget.profile.maxTextureAnisotropy });
   var lodPolicy = Core.createLodPolicy();
 
-  var lastFrame = 0, frameNo = 0, texTick = 0;
+  var lastFrame = 0, frameNo = 0, texTick = 0, planAt = 0;
   var texKeys = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'];
   var appliedGroups = new WeakMap(), queuedTextures = new WeakSet();
   var tmpDir = { x: 0, y: 0, z: 0 };
@@ -63,8 +63,14 @@
     /* 2. What the camera sees is sacred: always prepared, always cached. */
     visible.forEach(function (id) { prepared.add(id); cache.touch(id, now); });
 
+    // Cache, prefetch, budget trim, texture and LOD work is *plan* work: it is
+    // identical for several consecutive frames, and running it on every frame
+    // allocated a portal BFS result, several Sets and two reports 60x/s.
+    var replan = (now - planAt) >= 90;
+    if (replan) planAt = now;
+
     /* 3. Persistent cache: recently seen rooms stay resident (no reload). */
-    if (on('cache')) {
+    if (on('cache') && replan) {
       cache.setSlots(budget.cacheSlots());
       cache.resident(now).forEach(function (id) {
         if (!prepared.has(id)) { prepared.add(id); stats.addedByCache++; }
@@ -73,7 +79,7 @@
 
     /* 4. Predictive widening over the REAL portal graph.
        Rooms without a portal path can never be added here. */
-    if (on('predict') && pred.moving && p.regions && window.SinWingVisibility && p.links) {
+    if (on('predict') && replan && pred.moving && p.regions && window.SinWingVisibility && p.links) {
       var Vis = window.SinWingVisibility;
       var reach = Vis.hops(p.links, p.origin, 6);
       var view = viewOf(p.camera, p.root);
@@ -101,13 +107,13 @@
     }
 
     /* 6. Texture priority + LOD on a 2-frame cadence (off the hot path). */
-    if ((on('texture') || on('lod')) && p.regionGroups) {
+    if (replan && (on('texture') || on('lod')) && p.regionGroups) {
       texTick = (texTick + 1) % 2;
       if (texTick === 0) applyTextureLod(p, visible, prepared);
     }
 
     /* 7. Time-sliced async work: never a big burst inside one frame. */
-    if (scheduler.pending() > 0) scheduler.runFrame(now, 4.5);
+    if (replan && scheduler.pending() > 0) scheduler.runFrame(now, 4.5);
 
     stats.scheduler = scheduler.report();
     stats.cache = cache.report();
