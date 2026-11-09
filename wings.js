@@ -2273,21 +2273,7 @@
   }
   function suspendRegionGroup(group) {
     if (!group) return;
-    group.traverse(o => {
-      if (o === group) return;
-      // Keep the pre-suspension state so GLB meshes, doors and dressed
-      // corridor pieces are restored exactly instead of remaining invisible.
-      if (o.userData._memoryVisible == null) o.userData._memoryVisible = o.visible;
-      o.visible = false;
-    });
-  }
-  function restoreRegionGroup(group) {
-    if (!group) return;
-    group.traverse(o => {
-      if (o === group || o.userData._memoryVisible == null) return;
-      o.visible = o.userData._memoryVisible;
-      delete o.userData._memoryVisible;
-    });
+    group.traverse(o => { o.visible = false; });
   }
   function applyResidency(mode) {
     const next = RESIDENCY[mode] || RESIDENCY.PALACE_NEAR;
@@ -2300,8 +2286,7 @@
       if (!g) return;
       const resident = state.residentRegions.has(r.id);
       g.userData.memoryResident = resident;
-      if (resident) restoreRegionGroup(g);
-      else suspendRegionGroup(g);
+      if (!resident) suspendRegionGroup(g);
     });
     if (window.PalaceInterior && typeof window.PalaceInterior.setMemoryProfile === 'function') {
       window.PalaceInterior.setMemoryProfile(mode);

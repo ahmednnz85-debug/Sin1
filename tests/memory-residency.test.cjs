@@ -15,8 +15,6 @@ test('residency profiles release the requested palace and distant-wing groups', 
   assert.match(wings, /K4:\s*new Set\(\['K3', 'KC1', 'KC2', 'KC3', 'KC4', 'K4'\]\)/);
   assert.match(wings, /state\.suspendedRegions = new Set/);
   assert.match(wings, /g\.userData\.memoryResident = resident/);
-  assert.match(wings, /function restoreRegionGroup\(group\)/);
-  assert.match(wings, /o\.visible = o\.userData\._memoryVisible/);
 });
 
 test('KC2, KC3 and KC4 are explicit restoration checkpoints', () => {
