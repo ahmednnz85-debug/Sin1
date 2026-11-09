@@ -67,6 +67,13 @@ test('palace warm-up skips materials under hidden wing-room groups', () => {
   assert.match(warmup, /consider\(wingRuntime\.root, true\)/);
 });
 
+test('legacy bootstrap cache-busts palace scripts before loading them', () => {
+  const bustAt = index.indexOf("s.dataset.src=u+'&cache=6abc54f'");
+  const palaceAt = index.indexOf('data-src="palaceInterior.js?');
+  const wingsAt = index.indexOf('data-src="wings.js?');
+  assert.ok(bustAt >= 0 && palaceAt > bustAt && wingsAt > bustAt);
+});
+
 test('open palace doorway preview is placed behind the aperture, not occluded on the far wall', () => {
   assert.match(index, /const imageZ\s*=\s*Math\.min\(wallZ\s*-\s*0\.06,\s*frontZ\s*\+\s*0\.62\)/);
   assert.match(index, /plane\.position\.set\(doorX,\s*doorY,\s*imageZ\)/);
