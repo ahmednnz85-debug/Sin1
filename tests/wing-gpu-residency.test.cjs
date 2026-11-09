@@ -80,6 +80,8 @@ test('wing culling calls GPU residency synchronization and is camera-driven, dra
   assert.doesNotMatch(culling, /distM < 18/);
   assert.doesNotMatch(culling, /renderBudget\.choose\(/);
   assert.match(culling, /state\.palaceNear = id === 'Palace' \|\| isArch/);
+  assert.match(culling, /preparedIds\.forEach\(dressRoomIfNeeded\)/);
+  assert.match(culling, /if \(preparedIds && preparedIds\.has\('K4'\)\) loadK4Assets\(\)/);
   assert.match(culling, /gpuResidency\.sync\(state\.ctx\.scene, state\.root, state\.regionGroups, preparedIds\)/);
   assert.match(wings, /visibleRegionTriangles/);
   assert.match(wings, /if \(state\.built && !state\.building\) updateCulling\(true\)/);

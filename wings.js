@@ -25,6 +25,7 @@
   };
   const gpuResidency = window.SinWingGpuResidency ? window.SinWingGpuResidency() : null;
   const renderBudget = window.SinWingRenderBudget || null;
+  const smartMemory = window.SinSmartMemory ? window.SinSmartMemory.create() : null;
 
   /* ---------------------------------------------------------------------------
      Wing asset files. Heavy models and pictures use the compressed copies in
@@ -2291,6 +2292,16 @@
     const halfFov = Math.atan(Math.tan(vfov / 2) * aspect);
     return { x: cam.position.x - rootX, z: cam.position.z - rootZ, dirX: dx, dirZ: dz, halfFov };
   }
+  function dressRoomIfNeeded(id) {
+    if (!state.deferredDress.has(id)) return;
+    state.deferredDress.delete(id);
+    // Camera-driven streaming: a room starts decoding as soon as it enters
+    // the camera visibility plan, not when the hero crosses its threshold.
+    if (id === 'K2') dressK2();
+    else if (id === 'K3') dressK3();
+    else if (id === 'K4') dressK4();
+    if (state.root) state.root.updateMatrixWorld(true);
+  }
   function updateCulling(force) {
     if (!state.built || !state.ctx || !state.ctx.hero) return;
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
@@ -2299,15 +2310,6 @@
     if (force) triCache.clear();
     if (regionChanged) {
       state.current = id;
-      if (state.deferredDress.has(id)) {
-        state.deferredDress.delete(id);
-        // Avoid parsing and uploading hidden rooms during palace entry. The
-        // active room is dressed only when the hero actually reaches it.
-        if (id === 'K2') dressK2();
-        else if (id === 'K3') dressK3();
-        else if (id === 'K4') dressK4();
-        if (state.root) state.root.updateMatrixWorld(true);
-      }
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
     const isArch = !!(r && r.kind === 'threshold');
@@ -2332,6 +2334,10 @@
       // drop a region the camera can actually see.
       const plan = { ids: candidates.map(c => c.id), triangles: candidates.reduce((n, c) => n + c.triangles, 0), budget: Infinity };
       visibleIds = new Set(plan.ids); preparedIds = planned.prepared;
+      // Start preparing rooms in the camera prefetch wedge, not only after the
+      // hero enters them. The room is assembled off-screen and then appears as
+      // one complete set when the camera reaches it.
+      preparedIds.forEach(dressRoomIfNeeded);
       state.renderBudget = { triangles: Math.round(plan.triangles), budget: plan.budget, activeRegions: plan.ids.slice() };
       // Seeing into the palace hall from a wing keeps the hall drawn.
       if (!state.palaceNear && meta && state.links.some(l => (l[0] === 'Palace' && visibleIds.has(l[1])) || (l[1] === 'Palace' && visibleIds.has(l[0])))) {
@@ -2342,6 +2348,7 @@
       const dist = distancesFrom(origin);
       visibleIds = new Set(); preparedIds = new Set();
       state.regions.forEach(rr => { const d = dist.has(rr.id) ? dist.get(rr.id) : 99; if (d <= 2) { visibleIds.add(rr.id); preparedIds.add(rr.id); } });
+      preparedIds.forEach(dressRoomIfNeeded);
     }
     if (visibleIds) {
       state.regions.forEach(rr => {
@@ -2349,6 +2356,10 @@
         g.visible = visibleIds.has(rr.id);
         if (preparedIds.has(rr.id) && !warmed.has(g) && warmQueue.indexOf(g) < 0) warmQueue.push(g);
       });
+      if (smartMemory) {
+        smartMemory.sample(state.ctx.renderer);
+        preparedIds = smartMemory.selectPrepared(visibleIds, preparedIds, meta, id);
+      }
       const key = Array.from(preparedIds).sort().join(',');
       if (gpuResidency && (force || key !== state._preparedKey)) {
         state._preparedKey = key;
@@ -2356,10 +2367,10 @@
         // Anything the residency manager released must be re-warmed next time.
         state.regions.forEach(rr => { const g = state.regionGroups.get(rr.id); if (g && !preparedIds.has(rr.id)) warmed.delete(g); });
       }
-      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: warmQueue.length };
+      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: warmQueue.length, memory: smartMemory ? smartMemory.state() : null };
     }
     warmNext();
-    if (id === 'K4') loadK4Assets();
+    if (preparedIds && preparedIds.has('K4')) loadK4Assets();
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
   }
@@ -3066,8 +3077,9 @@
       fittedHeight: +(sourceSize.y * scale).toFixed(3), resizedTextures: resizedTextures
     };
   }
-  // Each kit file is fetched once (only when K4 becomes active) and every
-  // placement that uses it is cloned from that single decoded copy.
+  // Each kit file is fetched once when K4 enters the camera prefetch wedge.
+  // All kits are decoded first and all props are attached in one commit, so
+  // the player never sees a half-dressed treasury.
   function loadK4Assets() {
     const dress = state.k4Dress;
     if (!dress || dress.loadStarted || !dress.assetSpecs || !dress.assetSpecs.length) return;
@@ -3075,45 +3087,34 @@
     const rootAtRequest = state.root;
     const kits = [];
     dress.assetSpecs.forEach(function (spec) { if (kits.indexOf(spec.url) < 0) kits.push(spec.url); });
-    let nextIndex = 0;
-    function next() {
-      if (state.k4Dress !== dress || nextIndex >= kits.length) return;
-      const url = kits[nextIndex++];
+    const loaded = [];
+    let pending = kits.length;
+    const finish = function () {
+      if (pending || state.k4Dress !== dress || state.root !== rootAtRequest) return;
+      loaded.forEach(function (entry) {
+        entry.gltf.scene.updateMatrixWorld(true);
+        dress.assetSpecs.filter(function (spec) { return spec.url === entry.url; }).forEach(function (spec) {
+          const src = entry.gltf.scene.getObjectByName(spec.item);
+          if (!src) dress.errors.push(spec.name + ': missing node ' + spec.item);
+          else k4PlaceAsset(dress, spec, src, rootAtRequest);
+        });
+      });
+      rebuildSpatial();
+      rootAtRequest.updateMatrixWorld(true);
+    };
+    kits.forEach(function (url) {
       wingGLB(url, function (gltf) {
-        if (gltf && state.root === rootAtRequest && state.k4Dress === dress) {
-          gltf.scene.updateMatrixWorld(true);
-          const specs = dress.assetSpecs.filter(function (spec) { return spec.url === url; });
-          let itemIndex = 0;
-          // A kit may contain many large props. Add one prop per idle slice so
-          // K4 becomes visibly complete over time instead of uploading all
-          // meshes/textures in one frame and evicting the whole WebGL context.
-          const placeNext = function () {
-            if (state.k4Dress !== dress || state.root !== rootAtRequest) return;
-            const spec = specs[itemIndex++];
-            if (spec) {
-              const src = gltf.scene.getObjectByName(spec.item);
-              if (!src) dress.errors.push(spec.name + ': missing node ' + spec.item);
-              else k4PlaceAsset(dress, spec, src, rootAtRequest);
-              rebuildSpatial();
-              requestAnimationFrame(function () { setTimeout(placeNext, 90); });
-            } else {
-              // Give the browser a render opportunity between K4 kits. This is
-              // intentionally longer than a frame to avoid a decode/upload
-              // burst when entering the treasury on mobile GPUs.
-              requestAnimationFrame(function () { setTimeout(next, 260); });
-            }
-          };
-          placeNext();
-          return;
-        }
-        requestAnimationFrame(function () { setTimeout(next, 260); });
+        if (gltf && state.root === rootAtRequest && state.k4Dress === dress) loaded.push({ url: url, gltf: gltf });
+        else if (!gltf) dress.errors.push(url + ': failed to decode');
+        pending -= 1;
+        finish();
       }, function (error) {
         dress.errors.push(url + ': ' + (error && error.message ? error.message : String(error || 'load failed')));
         console.error('K4 treasury asset failed', url, error);
-        requestAnimationFrame(function () { setTimeout(next, 260); });
+        pending -= 1;
+        finish();
       });
-    }
-    next();
+    });
   }
   function dressK4() {
     const r = state.rooms.find(function (room) { return room.id === 'K4'; });

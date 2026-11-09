@@ -116,11 +116,13 @@ test('K4 layout follows the reference picture: mural at the back, altar centre, 
   assert.match(dress, /'k4_lionSphinx', R - /);
 });
 
-test('K4 kits are deferred until entry and each kit is downloaded once', () => {
+test('K4 kits are camera-prefetched and each kit is downloaded once', () => {
   assert.match(wings, /const K4_DEFERRED_MODELS = new Set\([\s\S]{0,180}WING_FILES\.k4FrontWall/);
   const cullStart = wings.indexOf('function updateCulling(force)');
   const cullEnd = wings.indexOf('function tick(dt)', cullStart);
-  assert.match(wings.slice(cullStart, cullEnd), /if \(id === 'K4'\) loadK4Assets\(\)/);
+  assert.match(wings.slice(cullStart, cullEnd), /if \(preparedIds && preparedIds\.has\('K4'\)\) loadK4Assets\(\)/);
   assert.match(wings, /if \(kits\.indexOf\(spec\.url\) < 0\) kits\.push\(spec\.url\)/);
   assert.match(wings, /gltf\.scene\.getObjectByName\(spec\.item\)/);
+  assert.match(wings, /loaded\.forEach\(function \(entry\)/);
+  assert.doesNotMatch(wings, /setTimeout\(placeNext, 90\)/);
 });
