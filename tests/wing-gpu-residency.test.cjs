@@ -70,18 +70,29 @@ test('hidden room GPU resources are disposed, shared resources are retained, and
   assert.equal(sharedTexture.disposed, 0);
 });
 
-test('wing culling calls GPU residency synchronization and keeps only the current/adjacent plus compact hysteresis range', () => {
+test('wing culling calls GPU residency synchronization and is camera-driven, budgeted, and keeps prepared rooms resident', () => {
   const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
   const cullingAt = wings.indexOf('function updateCulling(force)');
   const tickAt = wings.indexOf('function tick(dt)', cullingAt);
   assert.ok(cullingAt >= 0 && tickAt > cullingAt);
   const culling = wings.slice(cullingAt, tickAt);
-  assert.match(culling, /const adjacent = d <= 1/);
-  assert.match(culling, /rr\._visState \? distM < 22 : distM < 18/);
+  assert.match(culling, /visibilityPlanner\.plan\(state\.regions, state\.links, origin, view/);
+  assert.doesNotMatch(culling, /distM < 18/);
   assert.match(culling, /renderBudget\.choose\(candidates, 750000\)/);
-  assert.match(culling, /if \(!candidates\.length && state\.regions\.length\)/);
   assert.match(culling, /state\.palaceNear = id === 'Palace' \|\| isArch/);
-  assert.match(culling, /gpuResidency\.sync\(state\.ctx\.scene, state\.root, state\.regionGroups\)/);
+  assert.match(culling, /gpuResidency\.sync\(state\.ctx\.scene, state\.root, state\.regionGroups, preparedIds\)/);
   assert.match(wings, /visibleRegionTriangles/);
   assert.match(wings, /if \(state\.built && !state\.building\) updateCulling\(true\)/);
+});
+
+test('prepared hidden regions are not disposed', () => {
+  const geo = resource();
+  const room = group([mesh(geo, resource())], false);
+  const wingRoot = group([room]);
+  const scene = group([wingRoot]);
+  const manager = createResidency();
+  manager.sync(scene, wingRoot, new Map([['P', room]]), new Set(['P']));
+  assert.equal(geo.disposed, 0);
+  manager.sync(scene, wingRoot, new Map([['P', room]]), new Set());
+  assert.equal(geo.disposed, 1);
 });
