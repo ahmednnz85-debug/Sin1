@@ -3024,6 +3024,10 @@
         if (!warmMeshes) {
           const seen = new Set();
           warmMeshes = [];
+          ctx.scene.updateMatrixWorld(true);
+          ctx.camera.updateMatrixWorld(true);
+          const warmMatrix = new THREE.Matrix4().multiplyMatrices(ctx.camera.projectionMatrix, ctx.camera.matrixWorldInverse);
+          const warmFrustum = new THREE.Frustum().setFromProjectionMatrix(warmMatrix);
           const consider = function (root, visibleOnly) {
             if (!root) return;
             root.traverse(function (o) {
@@ -3034,6 +3038,7 @@
                   if (parent === root) break;
                   parent = parent.parent;
                 }
+                if (o.frustumCulled !== false && (o.isMesh || o.isSprite || o.isPoints) && !warmFrustum.intersectsObject(o)) return;
               }
               if (!o.isMesh && !o.isSprite && !o.isPoints) return;
               const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
@@ -3045,7 +3050,7 @@
               });
             });
           };
-          consider(group);
+          consider(group, true);
           // Hidden wing rooms can contain dozens of large authored materials.
           // Warming them all at the palace entrance caused long stalls and GPU resets.
           if (wingRuntime && wingRuntime.root) consider(wingRuntime.root, true);
@@ -3079,7 +3084,7 @@
           ctx.scene.add(warmProxyI);
           warmIndex = 0;
           warmSlow = 0;
-          mark('warm materials ' + warmMeshes.length);
+          mark('warm visible materials ' + warmMeshes.length);
         }
         const e = warmMeshes[warmIndex];
         const o = e && e.obj;

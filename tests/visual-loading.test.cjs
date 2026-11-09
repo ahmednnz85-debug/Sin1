@@ -62,6 +62,8 @@ test('palace warm-up skips materials under hidden wing-room groups', () => {
   assert.ok(start >= 0 && end > start);
   const warmup = palace.slice(start, end);
   assert.match(warmup, /if \(visibleOnly\)[\s\S]*if \(!parent\.visible\) return/);
+  assert.match(warmup, /warmFrustum\.intersectsObject\(o\)/);
+  assert.match(warmup, /consider\(group, true\)/);
   assert.match(warmup, /consider\(wingRuntime\.root, true\)/);
 });
 
