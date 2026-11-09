@@ -128,9 +128,6 @@
   let hallW = 0;
   let exteriorHidden = false;
   let hallBuilt = false;
-  // Main-hall residency is controlled by PalaceWings' route memory policy.
-  // It is hidden while K2/K3/K4 are resident and restored at their checkpoints.
-  let memoryProfile = 'PALACE_NEAR';
   let warmFrame = false;
   let loadStartedAt = 0;
   let loadStage = 0;
@@ -2894,12 +2891,6 @@
   }
 
   let lastDt = 0.016;
-  function setMemoryProfile(mode) {
-    memoryProfile = String(mode || 'PALACE_NEAR');
-    const hallResident = !/^(K2|K3|K4)$/.test(memoryProfile);
-    if (group && state === 'DONE') group.visible = hallResident && occupant;
-    mark('palace residency ' + memoryProfile + ' hall=' + (hallResident ? 'resident' : 'suspended'));
-  }
   function tick(dt, ctx) {
     rig.idle++; // frames since the camera rig last ran (a re-entry snaps instead of swinging)
     try { tickInner(dt, ctx); }
@@ -3194,8 +3185,7 @@
       occupant = inHall || inWings;
       // Keep the palace hall drawn from nearby wing rooms so the arch behind the player is not a void.
       const palaceSeen = inWings && (typeof PalaceWings.palaceVisible !== 'function' || PalaceWings.palaceVisible());
-      const hallResident = !/^(K2|K3|K4)$/.test(memoryProfile);
-      if (group) group.visible = hallResident && (wingRuntime ? (inHall || palaceSeen) : occupant);
+      if (group) group.visible = wingRuntime ? (inHall || palaceSeen) : occupant;
       setExteriorVisible(ctx.scene, !occupant);
       if (ctx.renderer && ctx.renderer.info && ctx.renderer.info.render) {
         const inf = ctx.renderer.info.render;
@@ -3419,7 +3409,6 @@
       return CONFIG.PROPS.map(function (s) { return { id: s.id, count: s.positions.length, mode: s.glbPath ? 'pending' : 'placeholder' }; });
     },
     loadPalaceAssets: loadPalaceAssets,
-    setMemoryProfile: setMemoryProfile,
     state: function () { return state; },
     percent: shownPercent,
     debugText: debugText,
