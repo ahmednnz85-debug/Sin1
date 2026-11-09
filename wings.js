@@ -20,6 +20,7 @@
     colliders: [], spatial: new Map(), regionGroups: new Map(), ceilings: [], materials: [],
     k1FloorY: 0, k1ModelMetrics: null, k1ModelColliderCount: 0,
     current: null, cutaway: false, fullbright: false, debug: false, report: null,
+    deferredDress: new Set(),
     ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null, dynamicDoorBoxes: [], activeDoor: null, interactDoor: null
   };
   const gpuResidency = window.SinWingGpuResidency ? window.SinWingGpuResidency() : null;
@@ -28,10 +29,8 @@
   /* ---------------------------------------------------------------------------
      Wing asset files. Heavy models and pictures use the compressed copies in
      "ارضيات وسقوف/optimized/" (same geometry, WebP textures, meshopt where the
-     game already decodes it). PalaceInterior downloads every file in this list
-     behind its loading screen and hands the decoded result back through
-     provideAsset(), so the wings are fully dressed on the first visible frame.
-     When a file was not preloaded the old on-demand network load still runs.
+     game already decodes it). Only the K1 model is needed for the first palace
+     frame; all other rooms use the on-demand loader after the player approaches.
   --------------------------------------------------------------------------- */
   const OPT_DIR = 'ارضيات وسقوف/optimized/';
   const WING_FILES = {
@@ -84,7 +83,8 @@
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
   function assetList() {
-    return Object.keys(WING_FILES).filter(k => !K4_DEFERRED_MODELS.has(WING_FILES[k]))
+    const entryAssets = new Set([WING_FILES.k1]);
+    return Object.keys(WING_FILES).filter(k => entryAssets.has(WING_FILES[k]))
       .map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
       .filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
   }
@@ -866,11 +866,11 @@
     addSpecials();
     dressCorridors();
     wingMark('wings corridors');
-    dressK2();
+    state.deferredDress.add('K2');
     wingMark('wings k2');
-    dressK3();
+    state.deferredDress.add('K3');
     wingMark('wings k3');
-    dressK4();
+    state.deferredDress.add('K4');
     wingMark('wings k4');
     const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
     const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
@@ -2299,6 +2299,15 @@
     if (force) triCache.clear();
     if (regionChanged) {
       state.current = id;
+      if (state.deferredDress.has(id)) {
+        state.deferredDress.delete(id);
+        // Avoid parsing and uploading hidden rooms during palace entry. The
+        // active room is dressed only when the hero actually reaches it.
+        if (id === 'K2') dressK2();
+        else if (id === 'K3') dressK3();
+        else if (id === 'K4') dressK4();
+        if (state.root) state.root.updateMatrixWorld(true);
+      }
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
     const isArch = !!(r && r.kind === 'threshold');
