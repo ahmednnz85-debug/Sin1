@@ -1998,13 +1998,18 @@
   const ROOM_DOOR_ROOMS = new Set(['K1', 'K2', 'K3', 'K4']);
   function isRoomDoor(d) { return d && d.id !== 'KC12-K2' && d.kind !== 'arch' && (ROOM_DOOR_ROOMS.has(d.from) || ROOM_DOOR_ROOMS.has(d.to)); }
   function doorBox(d, out) {
-    const half = d.width * 0.5, span = d.state === 'Open' ? 0 : Math.max(0.42, half * (1 - d.progress) + 0.12);
+    // The leaves swing out of the passage while opening. Keep only a very thin
+    // safety band during the animation; a full-width slab makes the hero appear
+    // to walk in the air. Once open, there is deliberately no door collider.
+    const half = d.width * 0.5;
+    const span = d.state === 'Open' ? 0 : Math.max(0.08, half * (1 - d.progress) * 0.18);
     const b = out || { _door: true, _doorRef: d };
-    b.minx = d.axis === 'x' ? d.x - 0.6 : d.x - span;
-    b.maxx = d.axis === 'x' ? d.x + 0.6 : d.x + span;
+    const thickness = d.state === 'Open' ? 0 : 0.14;
+    b.minx = d.axis === 'x' ? d.x - thickness : d.x - span;
+    b.maxx = d.axis === 'x' ? d.x + thickness : d.x + span;
     b.miny = 0; b.maxy = d.height * .94;
-    b.minz = d.axis === 'x' ? d.z - span : d.z - 0.6;
-    b.maxz = d.axis === 'x' ? d.z + span : d.z + 0.6;
+    b.minz = d.axis === 'x' ? d.z - span : d.z - thickness;
+    b.maxz = d.axis === 'x' ? d.z + span : d.z + thickness;
     return b;
   }
   function rebuildDoorColliders() {
@@ -2115,12 +2120,11 @@
       const c = doorCoordinates(d, hero), near = nearDoor(d, c);
       if (c.distance > 4.0) d.autoRearm = true;
       if (d.state === 'Closed' && near && d.autoRearm && !busyDoor && beginDoorMotion(d, true, c)) busyDoor = d;
-      else if (d.state === 'Closing' && near && c.signed * (d.approachSide || 1) >= -1.0 && beginDoorMotion(d, true, c)) busyDoor = d;
       if (d.state === 'Open') {
-        const passed = d.approachSide && c.signed * d.approachSide < -1.15 && Math.abs(c.lateral) < d.width * 0.5 - 0.3;
-        if (passed) { d.crossed = true; d.autoCloseTimer += dt; }
-        else if (!d.crossed || c.signed * d.approachSide >= -0.75) { d.crossed = false; d.autoCloseTimer = 0; }
-        if (d.crossed && d.autoCloseTimer >= 1.0 && !doorOccupied(d) && (!busyDoor || busyDoor === d) && beginDoorMotion(d, false, c)) busyDoor = d;
+        // Wing doors are persistent state: after the hero opens one, it stays
+        // open when he leaves the room. Do not arm an automatic close timer.
+        d.crossed = true;
+        d.autoCloseTimer = 0;
       }
       if (d.progress === d.target) return;
       const opening = d.target > d.progress;
@@ -2134,7 +2138,11 @@
       a.time = opening ? cclip.duration * d.progress : cclip.duration * (1 - d.progress);
       m.update(0); a.paused = true;
       if (!opening && d.progress <= .001) { d.progress = 0; d.state = 'Closed'; d.crossed = false; d.autoCloseTimer = 0; d.heroPushActive = false; }
-      else if (opening && d.progress >= .999) { d.progress = 1; d.state = 'Open'; if (d.heroPushActive) { const anim = state.ctx && state.ctx.combat; if (anim && anim.releasePush) anim.releasePush(); d.heroPushActive = false; } }
+      else if (opening && d.progress >= .999) {
+        d.progress = 1; d.state = 'Open';
+        if (d.heroPushActive) { const anim = state.ctx && state.ctx.combat; if (anim && anim.releasePush) anim.releasePush(); d.heroPushActive = false; }
+        if (state.activeDoor === d) state.activeDoor = null;
+      }
     });
     rebuildDoorColliders();
   }
@@ -3065,20 +3073,35 @@
       wingGLB(url, function (gltf) {
         if (gltf && state.root === rootAtRequest && state.k4Dress === dress) {
           gltf.scene.updateMatrixWorld(true);
-          dress.assetSpecs.forEach(function (spec) {
-            if (spec.url !== url) return;
-            const src = gltf.scene.getObjectByName(spec.item);
-            if (!src) { dress.errors.push(spec.name + ': missing node ' + spec.item); return; }
-            k4PlaceAsset(dress, spec, src, rootAtRequest);
-          });
-          rebuildSpatial();
+          const specs = dress.assetSpecs.filter(function (spec) { return spec.url === url; });
+          let itemIndex = 0;
+          // A kit may contain many large props. Add one prop per idle slice so
+          // K4 becomes visibly complete over time instead of uploading all
+          // meshes/textures in one frame and evicting the whole WebGL context.
+          const placeNext = function () {
+            if (state.k4Dress !== dress || state.root !== rootAtRequest) return;
+            const spec = specs[itemIndex++];
+            if (spec) {
+              const src = gltf.scene.getObjectByName(spec.item);
+              if (!src) dress.errors.push(spec.name + ': missing node ' + spec.item);
+              else k4PlaceAsset(dress, spec, src, rootAtRequest);
+              rebuildSpatial();
+              requestAnimationFrame(function () { setTimeout(placeNext, 90); });
+            } else {
+              // Give the browser a render opportunity between K4 kits. This is
+              // intentionally longer than a frame to avoid a decode/upload
+              // burst when entering the treasury on mobile GPUs.
+              requestAnimationFrame(function () { setTimeout(next, 260); });
+            }
+          };
+          placeNext();
+          return;
         }
-        // Let the renderer upload this kit before decoding the next one.
-        requestAnimationFrame(function () { setTimeout(next, 120); });
+        requestAnimationFrame(function () { setTimeout(next, 260); });
       }, function (error) {
         dress.errors.push(url + ': ' + (error && error.message ? error.message : String(error || 'load failed')));
         console.error('K4 treasury asset failed', url, error);
-        requestAnimationFrame(function () { setTimeout(next, 120); });
+        requestAnimationFrame(function () { setTimeout(next, 260); });
       });
     }
     next();
