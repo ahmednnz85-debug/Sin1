@@ -2334,6 +2334,19 @@
       // drop a region the camera can actually see.
       const plan = { ids: candidates.map(c => c.id), triangles: candidates.reduce((n, c) => n + c.triangles, 0), budget: Infinity };
       visibleIds = new Set(plan.ids); preparedIds = planned.prepared;
+      // World streaming: refine residency (prediction + persistent cache +
+      // memory budget + texture/LOD priority) without touching what is drawn.
+      if (window.SinWorldStreaming) {
+        var refined = window.SinWorldStreaming.refine({
+          visible: visibleIds, prepared: preparedIds, meta: meta,
+          regions: state.regions, regionGroups: state.regionGroups,
+          links: state.links || [], origin: origin,
+          camera: state.ctx.camera, hero: state.ctx.hero,
+          renderer: state.ctx.renderer, root: state.root,
+          now: performance.now()
+        });
+        if (refined) preparedIds = refined;
+      }
       // Start preparing rooms in the camera prefetch wedge, not only after the
       // hero enters them. The room is assembled off-screen and then appears as
       // one complete set when the camera reaches it.
