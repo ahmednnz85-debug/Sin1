@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+      # Preview room-streaming work on the live Pages URL before merge.
+      - 'cursor/room-streaming-*-a9f2'
   workflow_dispatch:
 
 permissions:
