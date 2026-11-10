@@ -2262,6 +2262,13 @@
       roomGraph = null;
       state.roomGraph = null;
     }
+    if (window.SinRoomLoader && typeof window.SinRoomLoader.createLoader === 'function') {
+      roomLoader = window.SinRoomLoader.createLoader({ sliceMs: 3.5, maxTasksPerFrame: 1, hysteresisHops: 2, hysteresisMs: 10000 });
+      state.roomLoader = roomLoader;
+    } else {
+      roomLoader = null;
+      state.roomLoader = null;
+    }
     prepareArchitecture(layout);
     if (roomGraph && typeof roomGraph.bindGroups === 'function') roomGraph.bindGroups(state.regionGroups);
     wingMark('wings architecture');
@@ -2322,6 +2329,7 @@
   }
   const visibilityPlanner = window.SinWingVisibility ? window.SinWingVisibility.createPlanner() : null;
   let roomGraph = null;
+  let roomLoader = null;
   const triCache = new Map();
   const warmed = new WeakMap();
   const warmQueue = [];
@@ -2402,11 +2410,17 @@
     const halfFov = Math.atan(Math.tan(vfov / 2) * aspect);
     return { x: cam.position.x - rootX, z: cam.position.z - rootZ, dirX: dx, dirZ: dz, halfFov };
   }
+  function shouldStartDress(roomId) {
+    // Phase 2: decode starts when the hero enters the corridor that leads to
+    // the room (graph hop ≤ 1), not when a closed door is merely approached.
+    if (!roomGraph) return true;
+    const hops = roomGraph.hopsFrom(state.current || 'Palace', 2);
+    return hops.has(roomId) && hops.get(roomId) <= 1;
+  }
   function dressRoomIfNeeded(id) {
     if (!state.deferredDress.has(id)) return;
+    if (!shouldStartDress(id)) return;
     state.deferredDress.delete(id);
-    // Camera-driven streaming: a room starts decoding as soon as it enters
-    // the camera visibility plan, not when the hero crosses its threshold.
     if (id === 'K2') dressK2();
     else if (id === 'K3') dressK3();
     else if (id === 'K4') dressK4();
@@ -2524,18 +2538,25 @@
       })).filter(item => item.group && !isWarmed(item.group) && warmQueue.indexOf(item.group) < 0)
         .sort((a, b) => a.distance - b.distance)
         .forEach(item => warmQueue.push(item.group));
-      // A region that just left the prepared set is usually still on the
-      // camera's way back. Releasing it at once disposed textures the next plan
-      // had to upload again; that churn is what pushed iOS past its memory
-      // limit at 99% and reloaded the game. Hold them for a short grace window.
-      const GRACE_MS = 1500, nowMs = performance.now();
-      if (!state._residentUntil) state._residentUntil = new Map();
-      preparedIds.forEach(rid => state._residentUntil.set(rid, nowMs + GRACE_MS));
-      const residentIds = new Set();
-      state._residentUntil.forEach((until, rid) => {
-        if (until > nowMs || preparedIds.has(rid)) residentIds.add(rid);
-        else state._residentUntil.delete(rid);
-      });
+      // Phase 2 hysteresis: unload only after the hero is ≥2 hops away for 10s,
+      // so turning back through a corridor never reloads the same room.
+      const nowMs = performance.now();
+      let residentIds = new Set(preparedIds);
+      if (roomLoader && roomGraph) {
+        const hopMap = roomGraph.hopsFrom(origin, 12);
+        preparedIds.forEach(rid => hopMap.set(rid, hopMap.has(rid) ? hopMap.get(rid) : 0));
+        state.regions.forEach(rr => { if (!hopMap.has(rr.id)) hopMap.set(rr.id, 99); });
+        residentIds = roomLoader.applyHysteresis(preparedIds, hopMap, nowMs);
+      } else {
+        const GRACE_MS = 1500;
+        if (!state._residentUntil) state._residentUntil = new Map();
+        preparedIds.forEach(rid => state._residentUntil.set(rid, nowMs + GRACE_MS));
+        residentIds = new Set();
+        state._residentUntil.forEach((until, rid) => {
+          if (until > nowMs || preparedIds.has(rid)) residentIds.add(rid);
+          else state._residentUntil.delete(rid);
+        });
+      }
       const key = Array.from(residentIds).sort().join(',');
       if (gpuResidency && (force || key !== state._preparedKey)) {
         state._preparedKey = key;
@@ -2543,10 +2564,15 @@
         // Anything the residency manager released must be re-warmed next time.
         state.regions.forEach(rr => { const g = state.regionGroups.get(rr.id); if (g && !residentIds.has(rr.id)) warmed.delete(g); });
       }
-      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: warmQueue.length, memory: smartMemory ? smartMemory.state() : null };
+      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: warmQueue.length, memory: smartMemory ? smartMemory.state() : null, loader: roomLoader ? roomLoader.report() : null };
     }
     warmNext();
     if (preparedIds && preparedIds.has('K4')) loadK4Assets();
+    if (roomLoader && view) {
+      roomLoader.noteCamera(view.dirX, view.dirZ, latestStepMs / 1000);
+      const doorBusy = (state.doors || []).some(d => d && (d.state === 'Opening' || d.state === 'Closing'));
+      roomLoader.runFrame(performance.now(), { doorBusy: doorBusy });
+    }
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
   }
@@ -3260,9 +3286,9 @@
       fittedHeight: +(sourceSize.y * scale).toFixed(3), resizedTextures: resizedTextures
     };
   }
-  // Each kit file is fetched once when K4 enters the camera prefetch wedge.
-  // All kits are decoded first and all props are attached in one commit, so
-  // the player never sees a half-dressed treasury.
+  // Phase 2: K4 kits/props enter through the single room loader queue
+  // (one file, then one prop placement at a time). The room shell stays
+  // visible immediately; props fill in without resetting gameplay.
   function loadK4Assets() {
     const dress = state.k4Dress;
     if (!dress || dress.loadStarted || !dress.assetSpecs || !dress.assetSpecs.length) return;
@@ -3270,33 +3296,43 @@
     const rootAtRequest = state.root;
     const kits = [];
     dress.assetSpecs.forEach(function (spec) { if (kits.indexOf(spec.url) < 0) kits.push(spec.url); });
-    const loaded = [];
-    let pending = kits.length;
-    const finish = function () {
-      if (pending || state.k4Dress !== dress || state.root !== rootAtRequest) return;
-      loaded.forEach(function (entry) {
-        entry.gltf.scene.updateMatrixWorld(true);
-        dress.assetSpecs.filter(function (spec) { return spec.url === entry.url; }).forEach(function (spec) {
-          const src = entry.gltf.scene.getObjectByName(spec.item);
-          if (!src) dress.errors.push(spec.name + ': missing node ' + spec.item);
-          else k4PlaceAsset(dress, spec, src, rootAtRequest);
-        });
-      });
+    const kitScenes = new Map();
+    function placeSpec(spec) {
+      if (state.k4Dress !== dress || state.root !== rootAtRequest) return;
+      if (dress.loaded && dress.loaded[spec.name]) return;
+      const gltf = kitScenes.get(spec.url);
+      if (!gltf) return;
+      gltf.scene.updateMatrixWorld(true);
+      const src = gltf.scene.getObjectByName(spec.item);
+      if (!src) dress.errors.push(spec.name + ': missing node ' + spec.item);
+      else k4PlaceAsset(dress, spec, src, rootAtRequest);
       rebuildSpatial();
       rootAtRequest.updateMatrixWorld(true);
-    };
-    kits.forEach(function (url) {
-      wingGLB(url, function (gltf) {
-        if (gltf && state.root === rootAtRequest && state.k4Dress === dress) loaded.push({ url: url, gltf: gltf });
-        else if (!gltf) dress.errors.push(url + ': failed to decode');
-        pending -= 1;
-        finish();
-      }, function (error) {
-        dress.errors.push(url + ': ' + (error && error.message ? error.message : String(error || 'load failed')));
-        console.error('K4 treasury asset failed', url, error);
-        pending -= 1;
-        finish();
+    }
+    function queuePlacesFor(url) {
+      dress.assetSpecs.filter(function (spec) { return spec.url === url; }).forEach(function (spec) {
+        if (roomLoader) roomLoader.push({ id: 'k4-place:' + spec.name, run: function () { placeSpec(spec); } }, 1);
+        else placeSpec(spec);
       });
+    }
+    kits.forEach(function (url) {
+      const runKit = function () {
+        return new Promise(function (resolve) {
+          wingGLB(url, function (gltf) {
+            if (gltf && state.root === rootAtRequest && state.k4Dress === dress) {
+              kitScenes.set(url, gltf);
+              queuePlacesFor(url);
+            } else if (!gltf) dress.errors.push(url + ': failed to decode');
+            resolve();
+          }, function (error) {
+            dress.errors.push(url + ': ' + (error && error.message ? error.message : String(error || 'load failed')));
+            console.error('K4 treasury asset failed', url, error);
+            resolve();
+          });
+        });
+      };
+      if (roomLoader) roomLoader.push({ id: 'k4-kit:' + url, run: runKit }, 0);
+      else runKit();
     });
   }
   function dressK4() {
