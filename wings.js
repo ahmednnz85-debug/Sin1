@@ -2237,6 +2237,10 @@
   }
   function buildNow(ctx, hall) {
     state.ctx = ctx; state.hall = hall; state.debug = /(?:[?&#])debug=1(?:&|#|$)/.test(location.href);
+    if (window.SinRoomMetrics) {
+      if (typeof window.SinRoomMetrics.attachRenderer === 'function') window.SinRoomMetrics.attachRenderer(ctx && ctx.renderer);
+      if (typeof window.SinRoomMetrics.noteRoom === 'function') window.SinRoomMetrics.noteRoom('Palace', ctx && ctx.renderer);
+    }
     state.root = new THREE.Group(); state.root.name = 'PalaceWings';
     state.root.position.set(ctx.portal.x, hall.floorY || 0, ctx.portal.frontZ); ctx.scene.add(state.root);
     // One fixed ambient source serves every wing and corridor, so brightness
@@ -2405,6 +2409,10 @@
     if (regionChanged) {
       state.current = id;
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
+      // Phase 0: room enter/exit metrics (FPS + renderer.info memory/render).
+      if (window.SinRoomMetrics && typeof window.SinRoomMetrics.noteRoom === 'function') {
+        window.SinRoomMetrics.noteRoom(id, state.ctx && state.ctx.renderer);
+      }
     }
     const isArch = !!(r && r.kind === 'threshold');
     state.palaceNear = id === 'Palace' || isArch;
