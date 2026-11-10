@@ -288,9 +288,12 @@
     hq() { return base !== 'low'; },
     settings() { return E; },
     pixelRatio() {
-      // Phase 4: cap at 2×; the adaptive governor still multiplies by E.scale.
+      // Cap at 2× on desktop. On iPhone/iPad, 2× framebuffers during the palace
+      // 99% warm-up are enough for Safari to kill the tab and reload the opening
+      // screen, so mobile stays at 1× and the governor may still scale lower.
       const dpr = Number(window.devicePixelRatio) || 1;
-      return Math.min(2, Math.max(1, dpr)) * E.scale;
+      const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '') || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent || ''));
+      return Math.min(mobile ? 1 : 2, Math.max(1, dpr)) * E.scale;
     },
     mode() { return mode; },
     tier() { return base; },

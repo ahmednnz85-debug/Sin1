@@ -2948,7 +2948,10 @@
     fireMats.forEach(function (m) {
       if (m.uniforms && m.uniforms.uTime) m.uniforms.uTime.value = clock;
     });
-    if (group && hallBuilt && (state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'DONE')) animateHall(dt, ctx);
+    // REVEAL warms one material per frame. Running PalaceWings.tick there used to
+    // start room streaming + GPU residency churn in the same frames, which is
+    // exactly when Safari kills the tab and reloads the opening screen at 99%.
+    if (group && hallBuilt && (state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'DONE')) animateHall(dt, ctx);
     if (ctx.hero) heroSnap = ctx.hero.position.x.toFixed(2) + ', ' + ctx.hero.position.y.toFixed(2) + ', ' + ctx.hero.position.z.toFixed(2);
     lastDoor = !!ctx.doorOpen;
     if (ctx.renderer) {
@@ -3194,10 +3197,12 @@
         entryCut = true;
         note('done (entrance cinematic skipped)');
         renderDebug();
-        if (window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.restore === 'function') {
+        // Defer checkpoint restore until after the first playable frames so a
+        // saved wing position cannot decode K3/K4 during the 99→100 handoff.
+        if (window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.noteContext === 'function') {
           window.SinRoomCheckpoint.noteContext(ctx);
-          window.SinRoomCheckpoint.restore(ctx);
         }
+        holdT = 0;
       }
       return;
     }
@@ -3221,14 +3226,21 @@
       aimCamera(ctx, false);
       if (fadeT >= 0.9) {
         state = 'DONE'; note('done'); renderDebug();
-        if (window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.restore === 'function') {
+        if (window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.noteContext === 'function') {
           window.SinRoomCheckpoint.noteContext(ctx);
-          window.SinRoomCheckpoint.restore(ctx);
         }
+        holdT = 0;
       }
       return;
     }
     if (state === 'DONE') {
+      if (holdT < 1.25) {
+        holdT += dt;
+        if (holdT >= 1.25 && window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.restore === 'function') {
+          window.SinRoomCheckpoint.noteContext(ctx);
+          window.SinRoomCheckpoint.restore(ctx);
+        }
+      }
       const lx = ctx.hero.position.x - portalX;
       const lz = ctx.hero.position.z - portalFront;
       const inHall = lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;

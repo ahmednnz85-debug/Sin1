@@ -2432,6 +2432,12 @@
   }
   function updateCulling(force) {
     if (!state.built || !state.ctx || !state.ctx.hero) return;
+    // Never stream/dress/unload while the palace loading warm-up is compiling
+    // materials (REVEAL). That overlap reloaded Safari at 99%.
+    try {
+      const ps = window.PalaceInterior && typeof window.PalaceInterior.state === 'function' ? window.PalaceInterior.state() : (window.PalaceInterior && window.PalaceInterior.state);
+      if (ps === 'SETUP' || ps === 'REVEAL' || ps === 'LOADING' || ps === 'FADING_OUT') return;
+    } catch (_) { /* state probe is best-effort */ }
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
     const r = regionAt(x, z), id = r ? r.id : 'Palace';
     const regionChanged = !!force || state.current !== id;
