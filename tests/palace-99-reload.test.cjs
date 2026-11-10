@@ -18,8 +18,20 @@ test('palace warm-up does not tick wing streaming during REVEAL', () => {
 test('entrance warm hides wing regions and does not warm wing-root materials', () => {
   assert.match(palace, /g\.userData\._entryWarmVis = g\.visible !== false/);
   assert.match(palace, /regionGroups\.forEach\(function \(g\)/);
-  assert.match(palace, /Do not warm wing-room materials at entrance/);
+  assert.match(palace, /Do not warm wing-room materials at entrance|Wings are deferred past/);
   assert.equal(/consider\(wingRuntime\.root,\s*true\)/.test(palace), false);
+});
+
+test('wing GPU build is deferred until after hall warm-up / DONE', () => {
+  assert.match(palace, /wingsPending/);
+  assert.match(palace, /phase wings deferred until after hall warm-up/);
+  assert.match(palace, /function ensureWingsBuilt/);
+  assert.match(palace, /wingsPending && holdT >= 0\.55/);
+  assert.match(palace, /_wingSeal/);
+  assert.match(palace, /warm capped/);
+  assert.match(palace, /warm budget stop|warmBudget >= 1600/);
+  assert.match(palace, /Strip maps for the warm draw/);
+  assert.match(palace, /entryPixelHold/);
 });
 
 test('wing culling refuses to stream while palace is warming', () => {
@@ -33,7 +45,7 @@ test('mobile pixel ratio stays at 1× to avoid Safari OOM at palace entry', () =
 });
 
 test('checkpoint restore is deferred after DONE instead of mid fade', () => {
-  assert.match(palace, /holdT < 1\.25/);
+  assert.match(palace, /holdT >= 1\.25 && holdT - dt < 1\.25/);
   assert.match(palace, /SinRoomCheckpoint\.restore/);
   const fadeDone = palace.indexOf("note('done (entrance cinematic skipped)')");
   const immediateRestoreInFade = palace.slice(fadeDone, fadeDone + 350);

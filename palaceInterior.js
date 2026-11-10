@@ -144,6 +144,11 @@
   let lodPacks = [];
   let fireList = [];
   let wingRuntime = null;
+  // Safari 99% kill: building every wing room during SETUP/REVEAL uploads too much
+  // GPU state with the hall warm-up. Build the hall first; attach wings after DONE.
+  let wingsPending = null;
+  let wingsAttachAt = 0;
+  let entryPixelHold = false;
   let lightAssignAt = 0;
   let overlapNotes = [];
   let propsProbed = false;
@@ -151,6 +156,7 @@
   let warmMeshes = null;
   let warmIndex = 0;
   let warmSlow = 0;
+  let warmBudget = 0;
   let warmProxy = null;
   let warmProxyI = null;
   const aniso = { v: 4 };
@@ -404,6 +410,8 @@
     hallBuilt = false;
     warmFrame = false;
     warmMeshes = null;
+    wingsPending = null;
+    entryPixelHold = false;
     loadOk = null;
     loadError = null;
     palaceLoadStarted = false;
@@ -1095,8 +1103,43 @@
     });
   }
 
+  function ensureWingsBuilt(ctx) {
+    if (wingRuntime || !wingsPending || !CONFIG.useWings || !window.PalaceWings || !group) return false;
+    const opts = wingsPending;
+    wingsPending = null;
+    const tWings = performance.now();
+    mark('phase wings attach after hall entry');
+    try {
+      wingRuntime = PalaceWings.build(ctx, opts);
+    } catch (err) {
+      wingsPending = opts;
+      runtimeErrors.push('WINGS: ' + (err && (err.stack || err.message) || err));
+      note('wings attach failed ' + (err && err.message));
+      return false;
+    }
+    note('wings ' + Math.round(performance.now() - tWings) + 'ms');
+    wingRuntime.fires.forEach(function (f) { f._wing = true; fireList.push(f); });
+    ['fire', 'fire-glow', 'embers'].forEach(function (name) {
+      const obj = group.children.find(function (ch) { return ch.name === name; });
+      if (obj) { group.remove(obj); wingRuntime.root.add(obj); }
+    });
+    // Open the sealed arch plugs now that wing colliders exist.
+    colliders = colliders.filter(function (c) { return !c._wingSeal; });
+    const ox = portalX, oz = portalFront, gy = floorY;
+    wingRuntime.colliders.forEach(function (b) {
+      colliders.push({
+        minx: ox + b.minx, maxx: ox + b.maxx, miny: gy + b.miny, maxy: gy + b.maxy,
+        minz: oz + b.minz, maxz: oz + b.maxz, _wing: true
+      });
+    });
+    wingsAttachAt = performance.now();
+    mark('wings attached; arch seals cleared');
+    return true;
+  }
+
   function removeGroup(scene) {
     if (wingRuntime && window.PalaceWings) { PalaceWings.dispose(); wingRuntime = null; }
+    wingsPending = null;
     if (!group) return;
     scene.remove(group);
     disposeObject(group);
@@ -2672,22 +2715,19 @@
     });
 
     if (CONFIG.useWings && window.PalaceWings) {
-      const tWings = performance.now();
-      mark('phase wings start');
-      wingRuntime = PalaceWings.build(ctx, {
+      // Defer wing mesh/GPU construction past the 99% warm handoff. Assets stay
+      // in CPU caches; only the throne hall is uploaded during REVEAL.
+      wingsPending = {
         width: W, length: L, wallThickness: wallThick, alcoveDepth: 1.15 * H,
         floorY: gy, passages: CONFIG.PASSAGES
-      });
-      note('wings ' + Math.round(performance.now() - tWings) + 'ms');
-      wingRuntime.fires.forEach(function (f) { f._wing = true; fireList.push(f); });
+      };
+      wingsAttachAt = 0;
+      mark('phase wings deferred until after hall warm-up');
+      note('wings deferred');
+    } else {
+      wingsPending = null;
     }
     buildFires();
-    if (wingRuntime) {
-      ['fire', 'fire-glow', 'embers'].forEach(function (name) {
-        const obj = group.children.find(function (ch) { return ch.name === name; });
-        if (obj) { group.remove(obj); wingRuntime.root.add(obj); }
-      });
-    }
     const dustN = 48;
     const pos = new Float32Array(dustN * 3);
     for (let i = 0; i < dustN; i++) {
@@ -2725,6 +2765,22 @@
         cursor = cut.z1;
       });
       if (cursor < L) worldBox(new THREE.Vector3(side * (W / 2) - 0.45, 0, cursor), new THREE.Vector3(side * (W / 2) + 0.45, CH, L));
+      // While wings are deferred, plug each open arch so the player cannot walk
+      // into an empty void during the 99→100 handoff.
+      if (!wingRuntime && wingsPending) {
+        cuts.forEach(function (cut) {
+          const seal = {
+            minx: ox + side * (W / 2) - 0.55,
+            maxx: ox + side * (W / 2) + 0.55,
+            miny: gy,
+            maxy: gy + archH,
+            minz: oz + cut.z0,
+            maxz: oz + cut.z1,
+            _wingSeal: true
+          };
+          colliders.push(seal);
+        });
+      }
     });
     worldBox(new THREE.Vector3(-W / 2, 0, L - 0.45), new THREE.Vector3(W / 2, CH, L + 0.45));
     worldBox(new THREE.Vector3(-W / 2 - 0.3, 0, -0.4), new THREE.Vector3(W / 2 + 0.3, CH, 0.85));
@@ -3041,6 +3097,8 @@
         // Hide every wing region before REVEAL warm-up. Skipping PalaceWings.tick
         // during REVEAL (to avoid streaming churn) left all region groups visible,
         // so warm uploaded wing materials too and Safari reloaded at 99%.
+        // Wings are normally deferred past REVEAL now; keep this guard for any
+        // fallback path that still builds them early.
         if (wingRuntime && window.PalaceWings && PalaceWings.state && PalaceWings.state.regionGroups) {
           PalaceWings.state.regionGroups.forEach(function (g) {
             if (!g) return;
@@ -3048,6 +3106,7 @@
             g.visible = false;
           });
         }
+        entryPixelHold = true;
         note('built ' + Math.round(performance.now() - tBuild) + 'ms');
         renderUI();
         state = 'REVEAL';
@@ -3100,9 +3159,16 @@
             });
           };
           consider(group, true);
-          // Do not warm wing-room materials at entrance. Wing groups are hidden
-          // above; streaming reveals and warms them after the player can move.
+          // Do not warm wing-room materials at entrance. Wings are deferred past
+          // REVEAL; hall materials alone must fit the Safari GPU budget at 99%.
           if (ctx.hero) consider(ctx.hero);
+          // Cap warm slices: compiling every hall material still OOMs some
+          // iPhones. Keep the nearest / first unique materials; the rest compile
+          // lazily across early gameplay frames.
+          if (warmMeshes.length > 48) {
+            mark('warm capped ' + warmMeshes.length + '→48');
+            warmMeshes = warmMeshes.slice(0, 48);
+          }
           warmMeshes.forEach(function (e) {
             if (e.obj.userData._warmVis == null) e.obj.userData._warmVis = e.obj.visible;
             e.obj.visible = false;
@@ -3132,14 +3198,27 @@
           ctx.scene.add(warmProxyI);
           warmIndex = 0;
           warmSlow = 0;
+          warmBudget = 0;
           mark('warm visible materials ' + warmMeshes.length);
         }
         const e = warmMeshes[warmIndex];
         const o = e && e.obj;
         const heavy = o && (o.isSprite || o.isPoints || o.isSkinnedMesh);
         const proxy = !o ? null : heavy ? o : (o.isInstancedMesh ? warmProxyI : warmProxy);
+        // Strip maps for the warm draw. Compiling MeshStandard with full hall
+        // textures synchronously is what Safari treats as a dead tab at 99%.
+        // Programs without maps still prime the lighting pipeline; textured
+        // variants finish across the first playable frames.
+        const warmMat = e && e.mat;
+        const stripped = [];
+        if (warmMat) {
+          ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'envMap', 'lightMap', 'bumpMap', 'displacementMap', 'alphaMap'].forEach(function (k) {
+            if (warmMat[k]) { stripped.push([k, warmMat[k]]); warmMat[k] = null; }
+          });
+          if (stripped.length) warmMat.needsUpdate = true;
+        }
         if (proxy && proxy !== o) {
-          proxy.material = e.mat;
+          proxy.material = warmMat;
           const dir = new THREE.Vector3();
           ctx.camera.getWorldDirection(dir);
           proxy.position.copy(ctx.camera.position).addScaledVector(dir, 0.45);
@@ -3147,20 +3226,29 @@
           proxy.visible = true;
         } else if (o) {
           o.visible = o.userData._warmVis !== false;
-          if (e.mat) o.material = o.material;
+          if (warmMat) o.material = o.material;
         }
         const tWarm = performance.now();
         try { ctx.renderer.render(ctx.scene, ctx.camera); }
         catch (renderErr) { mark('render ' + (renderErr && renderErr.message)); }
+        if (warmMat && stripped.length) {
+          stripped.forEach(function (pair) { warmMat[pair[0]] = pair[1]; });
+          warmMat.needsUpdate = true;
+        }
         const took = performance.now() - tWarm;
+        warmBudget += took;
         if (took > warmSlow) warmSlow = took;
-        if (took > 120) mark('warm ' + Math.round(took) + 'ms ' + ((e && e.mat && (e.mat.name || e.mat.type)) || (o && (o.name || o.type)) || '?'));
+        if (took > 120) mark('warm ' + Math.round(took) + 'ms ' + ((warmMat && (warmMat.name || warmMat.type)) || (o && (o.name || o.type)) || '?'));
         if (proxy && proxy !== o) proxy.visible = false;
         else if (o) o.visible = false;
         warmIndex += 1;
         if (statusEl) statusEl.textContent = 'جارٍ تجهيز القاعة';
         renderUI();
-        if (warmIndex >= warmMeshes.length) {
+        // Hard wall-clock budget for the 99% bar. A single pathological compile
+        // must not keep Safari on a dead tab; remaining materials compile in play.
+        const warmDone = warmIndex >= warmMeshes.length || warmBudget >= 1600 || (warmIndex >= 12 && took > 250);
+        if (warmDone) {
+          if (warmIndex < warmMeshes.length) mark('warm budget stop at ' + warmIndex + '/' + warmMeshes.length + ' spent=' + Math.round(warmBudget) + 'ms');
           const restored = new Set();
           warmMeshes.forEach(function (e2) {
             if (restored.has(e2.obj)) return;
@@ -3178,7 +3266,7 @@
           // will draw it after the fade transition; rendering it synchronously at
           // 99% can spike GPU memory and reset the mobile tab.
           warmFrame = true;
-          mark('warm slices max=' + Math.round(warmSlow) + 'ms deferred-full n=' + warmMeshes.length);
+          mark('warm slices max=' + Math.round(warmSlow) + 'ms deferred-full n=' + warmIndex + ' spent=' + Math.round(warmBudget) + 'ms');
           warmMeshes = null;
           // Wing visibility returns under PalaceWings.tick after FADING_IN/DONE.
           renderUI();
@@ -3212,10 +3300,8 @@
         entranceLeft = 0;
         entryCut = true;
         note('done (entrance cinematic skipped)');
-        if (ctx.renderer && typeof ctx.renderer.setPixelRatio === 'function' && window.SinGfx && typeof window.SinGfx.pixelRatio === 'function') {
-          ctx.renderer.setPixelRatio(window.SinGfx.pixelRatio());
-          delete ctx.renderer.__entryPixelRatio;
-        }
+        // Keep 1× buffers through the first playable frames + wing attach. Restoring
+        // retina DPR at the same moment as DONE still kills Safari after 99%.
         renderDebug();
         // Defer checkpoint restore until after the first playable frames so a
         // saved wing position cannot decode K3/K4 during the 99→100 handoff.
@@ -3254,12 +3340,24 @@
       return;
     }
     if (state === 'DONE') {
-      if (holdT < 1.25) {
-        holdT += dt;
-        if (holdT >= 1.25 && window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.restore === 'function') {
-          window.SinRoomCheckpoint.noteContext(ctx);
-          window.SinRoomCheckpoint.restore(ctx);
+      holdT += dt;
+      // Attach wings after the hall is playable and the 99% warm is finished.
+      if (wingsPending && holdT >= 0.55) {
+        ensureWingsBuilt(ctx);
+      }
+      if (entryPixelHold && holdT >= 2.1 && ctx.renderer && typeof ctx.renderer.setPixelRatio === 'function') {
+        if (window.SinGfx && typeof window.SinGfx.pixelRatio === 'function') {
+          ctx.renderer.setPixelRatio(window.SinGfx.pixelRatio());
+        } else if (ctx.renderer.__entryPixelRatio != null) {
+          ctx.renderer.setPixelRatio(ctx.renderer.__entryPixelRatio);
         }
+        delete ctx.renderer.__entryPixelRatio;
+        entryPixelHold = false;
+        mark('entry pixel ratio restored');
+      }
+      if (holdT >= 1.25 && holdT - dt < 1.25 && window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.restore === 'function') {
+        window.SinRoomCheckpoint.noteContext(ctx);
+        window.SinRoomCheckpoint.restore(ctx);
       }
       const lx = ctx.hero.position.x - portalX;
       const lz = ctx.hero.position.z - portalFront;
