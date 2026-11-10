@@ -64,7 +64,8 @@ test('palace warm-up skips materials under hidden wing-room groups', () => {
   assert.match(warmup, /if \(visibleOnly\)[\s\S]*if \(!parent\.visible\) return/);
   assert.match(warmup, /warmFrustum\.intersectsObject\(o\)/);
   assert.match(warmup, /consider\(group, true\)/);
-  assert.match(warmup, /consider\(wingRuntime\.root, true\)/);
+  assert.equal(/consider\(wingRuntime\.root,\s*true\)/.test(warmup), false);
+  assert.match(palace, /_entryWarmVis/);
 });
 
 test('legacy bootstrap cache-busts palace scripts before loading them', () => {

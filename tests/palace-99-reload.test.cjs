@@ -15,6 +15,13 @@ test('palace warm-up does not tick wing streaming during REVEAL', () => {
   assert.match(palace, /Safari kills the tab and reloads the opening screen at 99%/);
 });
 
+test('entrance warm hides wing regions and does not warm wing-root materials', () => {
+  assert.match(palace, /g\.userData\._entryWarmVis = g\.visible !== false/);
+  assert.match(palace, /regionGroups\.forEach\(function \(g\)/);
+  assert.match(palace, /Do not warm wing-room materials at entrance/);
+  assert.equal(/consider\(wingRuntime\.root,\s*true\)/.test(palace), false);
+});
+
 test('wing culling refuses to stream while palace is warming', () => {
   assert.match(wings, /ps === 'SETUP' \|\| ps === 'REVEAL' \|\| ps === 'LOADING'/);
   assert.match(wings, /Never stream\/dress\/unload while the palace loading warm-up/);

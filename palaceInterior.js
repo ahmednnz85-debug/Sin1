@@ -3024,6 +3024,12 @@
       try {
         if (statusEl) statusEl.textContent = 'جارٍ بناء القاعة';
         renderUI();
+        // Force 1× buffers for the warm handoff; retina ×2/×3 framebuffers are a
+        // common Safari tab-kill during the 99% material compile.
+        if (ctx.renderer && typeof ctx.renderer.setPixelRatio === 'function') {
+          ctx.renderer.__entryPixelRatio = ctx.renderer.getPixelRatio ? ctx.renderer.getPixelRatio() : 1;
+          ctx.renderer.setPixelRatio(1);
+        }
         const tBuild = performance.now();
         build(ctx);
         hallBuilt = true;
@@ -3032,6 +3038,16 @@
         // together with the new hall uploads enough geometry to kill the tab,
         // which reloads the game back to the opening loading screen at 99%.
         holdCull(ctx.scene, ctx.hero);
+        // Hide every wing region before REVEAL warm-up. Skipping PalaceWings.tick
+        // during REVEAL (to avoid streaming churn) left all region groups visible,
+        // so warm uploaded wing materials too and Safari reloaded at 99%.
+        if (wingRuntime && window.PalaceWings && PalaceWings.state && PalaceWings.state.regionGroups) {
+          PalaceWings.state.regionGroups.forEach(function (g) {
+            if (!g) return;
+            g.userData._entryWarmVis = g.visible !== false;
+            g.visible = false;
+          });
+        }
         note('built ' + Math.round(performance.now() - tBuild) + 'ms');
         renderUI();
         state = 'REVEAL';
@@ -3084,9 +3100,8 @@
             });
           };
           consider(group, true);
-          // Hidden wing rooms can contain dozens of large authored materials.
-          // Warming them all at the palace entrance caused long stalls and GPU resets.
-          if (wingRuntime && wingRuntime.root) consider(wingRuntime.root, true);
+          // Do not warm wing-room materials at entrance. Wing groups are hidden
+          // above; streaming reveals and warms them after the player can move.
           if (ctx.hero) consider(ctx.hero);
           warmMeshes.forEach(function (e) {
             if (e.obj.userData._warmVis == null) e.obj.userData._warmVis = e.obj.visible;
@@ -3165,6 +3180,7 @@
           warmFrame = true;
           mark('warm slices max=' + Math.round(warmSlow) + 'ms deferred-full n=' + warmMeshes.length);
           warmMeshes = null;
+          // Wing visibility returns under PalaceWings.tick after FADING_IN/DONE.
           renderUI();
         }
         return;
@@ -3196,6 +3212,10 @@
         entranceLeft = 0;
         entryCut = true;
         note('done (entrance cinematic skipped)');
+        if (ctx.renderer && typeof ctx.renderer.setPixelRatio === 'function' && window.SinGfx && typeof window.SinGfx.pixelRatio === 'function') {
+          ctx.renderer.setPixelRatio(window.SinGfx.pixelRatio());
+          delete ctx.renderer.__entryPixelRatio;
+        }
         renderDebug();
         // Defer checkpoint restore until after the first playable frames so a
         // saved wing position cannot decode K3/K4 during the 99→100 handoff.
