@@ -3,7 +3,7 @@
    Build hall12 — asset URLs carry ?v=hall12 so Safari cannot reuse a stale copy.
    Final hall: wall modules, columns, marble, carpet, lions, braziers, procedural fire. */
 (function () {
-  const BUILD = 'hall18';
+  const BUILD = 'hall19';
   const CONFIG = {
     useOptimizedAssets: true,
     useWings: true,
@@ -129,6 +129,7 @@
   let hallW = 0;
   let exteriorHidden = false;
   let hallBuilt = false;
+  let gpuFlushed = false;
   let warmFrame = false;
   let loadStartedAt = 0;
   let loadStage = 0;
@@ -403,6 +404,7 @@
     if (!filesReady()) assets = null;
     hallBuilt = false;
     warmFrame = false;
+    gpuFlushed = false;
     warmMeshes = null;
     loadOk = null;
     loadError = null;
@@ -986,6 +988,20 @@
     note('city released ' + drop.length + ' roots, ' + geometries.size + ' geometries, ' + materials.size + ' materials, ' + textures.size + ' textures');
   }
 
+  // dispose() only returns the buffers to the driver. One frame of the emptied
+  // scene must render before the hall is uploaded, or the city and the palace
+  // sit in GPU memory together and the tab is killed at 99%.
+  function flushReleasedGPU(ctx) {
+    if (!ctx || !ctx.renderer || !ctx.scene || !ctx.camera) return;
+    try {
+      ctx.renderer.shadowMap.enabled = false;
+      ctx.renderer.render(ctx.scene, ctx.camera);
+      if (ctx.renderer.renderLists && ctx.renderer.renderLists.dispose) ctx.renderer.renderLists.dispose();
+      const gl = ctx.renderer.getContext && ctx.renderer.getContext();
+      if (gl && gl.flush) gl.flush();
+    } catch (e) { note('flush ' + (e && e.message || e)); }
+  }
+
   function startPalaceLoad(ctx) {
     if (palaceLoadStarted) return;
     palaceLoadStarted = true;
@@ -1324,8 +1340,8 @@
         .replace('#include <common>', '#include <common>\nvarying vec3 vPalaceWorld;\nuniform float slabSize;')
         .replace('#include <map_fragment>', [
           '#ifdef USE_MAP',
-          'vec4 sampledDiffuseColor = texture2D(map, vUv);',
-          'vec4 sampledHalf = texture2D(map, vUv + vec2(0.5, 0.5));',
+          'vec4 sampledDiffuseColor = texture2D(map, vMapUv);',
+          'vec4 sampledHalf = texture2D(map, vMapUv + vec2(0.5, 0.5));',
           'sampledDiffuseColor = mix(sampledDiffuseColor, sampledHalf, 0.16);',
           'diffuseColor *= sampledDiffuseColor;',
           '#endif',
@@ -1344,7 +1360,7 @@
         ].join('\n'))
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor * (0.82 + 0.36 * fract(sin(dot(floor(vPalaceWorld.xz / max(0.001, slabSize)), vec2(12.9, 78.2))) * 437.1)), 0.14, 0.55);');
     };
-    material.customProgramCacheKey = function () { return 'palaceMarble6'; };
+    material.customProgramCacheKey = function () { return 'palaceMarble7'; };
   }
 
   function updateLODs(cam) {
@@ -2970,6 +2986,7 @@
         loadError = null;
         hallBuilt = false;
         warmFrame = false;
+        gpuFlushed = false;
     warmMeshes = null;
         occupant = true;
         palaceLoadStarted = false;
@@ -2996,7 +3013,15 @@
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
       renderUI();
-      if (loadOk === true && holdT >= CONFIG.minBlackHoldSeconds) state = 'SETUP';
+      if (loadOk === true && holdT >= CONFIG.minBlackHoldSeconds) {
+        if (!gpuFlushed) {
+          gpuFlushed = true;
+          flushReleasedGPU(ctx);
+          note('gpu flush');
+          return;
+        }
+        state = 'SETUP';
+      }
       if (loadOk === false && holdT >= CONFIG.minBlackHoldSeconds) { state = 'FAILED'; showFail(loadError); }
       return;
     }
@@ -3073,6 +3098,17 @@
           // Warming them all at the palace entrance caused long stalls and GPU resets.
           if (wingRuntime && wingRuntime.root) consider(wingRuntime.root, true);
           if (ctx.hero) consider(ctx.hero);
+          // The first warm frame used to leave every mesh that shares a material
+          // visible, so it drew the whole hall while compiling and the browser
+          // reloaded the game back to the opening screen before 100%.
+          if (group) {
+            group.userData._warmRootVis = group.visible;
+            group.visible = false;
+          }
+          if (wingRuntime && wingRuntime.root) {
+            wingRuntime.root.userData._warmRootVis = wingRuntime.root.visible;
+            wingRuntime.root.visible = false;
+          }
           warmMeshes.forEach(function (e) {
             if (e.obj.userData._warmVis == null) e.obj.userData._warmVis = e.obj.visible;
             e.obj.visible = false;
@@ -3141,6 +3177,14 @@
           if (ctx.hero && ctx.hero.userData._warmHero != null) {
             ctx.hero.visible = ctx.hero.userData._warmHero !== false;
             delete ctx.hero.userData._warmHero;
+          }
+          if (group && group.userData._warmRootVis != null) {
+            group.visible = group.userData._warmRootVis !== false;
+            delete group.userData._warmRootVis;
+          }
+          if (wingRuntime && wingRuntime.root && wingRuntime.root.userData._warmRootVis != null) {
+            wingRuntime.root.visible = wingRuntime.root.userData._warmRootVis !== false;
+            delete wingRuntime.root.userData._warmRootVis;
           }
           if (warmProxy) { ctx.scene.remove(warmProxy); warmProxy.geometry.dispose(); warmProxy = null; }
           if (warmProxyI) { ctx.scene.remove(warmProxyI); warmProxyI.geometry.dispose(); warmProxyI = null; }
