@@ -27,9 +27,9 @@
     // Start near native resolution; the previous 0.88/0.92 scales made the
     // whole game visibly soft. The governor still lowers scale only after a
     // sustained FPS drop, avoiding a permanent blurry image.
-    low:    { scale: 0.94, shadow: true,  res: 1024, extent: 88, soft: false, veg: 0.70, pots: 58,  potShadow: 18, dust: 220 },
-    medium: { scale: 0.98, shadow: true,  res: 1024, extent: 88, soft: false, veg: 0.78, pots: 70,  potShadow: 22, dust: 320 },
-    high:   { scale: 1.00, shadow: true,  res: 2048, extent: 88, soft: true,  veg: 1.00, pots: 110, potShadow: 46, dust: 500 }
+    low:    { scale: 0.90, shadow: true,  res: 1024, extent: 36, soft: false, veg: 0.55, pots: 48,  potShadow: 0, dust: 140 },
+    medium: { scale: 0.96, shadow: true,  res: 1024, extent: 44, soft: false, veg: 0.70, pots: 64,  potShadow: 0, dust: 220 },
+    high:   { scale: 1.00, shadow: true,  res: 1024, extent: 52, soft: false, veg: 0.85, pots: 80, potShadow: 0, dust: 280 }
   };
   const ORDER = ['low', 'medium', 'high'];
   function detectTier() {
@@ -291,7 +291,9 @@
       // keep the game buffer at CSS resolution and let the governor scale lower.
       const dpr = Number(window.devicePixelRatio) || 1;
       const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '') || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent || ''));
-      return Math.min(mobile ? 1 : 1.25, Math.max(1, dpr)) * E.scale;
+      // r187 pixel cost dominated after the engine upgrade. Cap every device
+      // at CSS resolution; the governor still scales this down when frames slip.
+      return (mobile ? 1 : Math.min(1, dpr)) * E.scale;
     },
     mode() { return mode; },
     tier() { return base; },

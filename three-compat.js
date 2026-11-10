@@ -63,7 +63,7 @@ function lightsFor(scene) {
   // player moves, so the cache went dirty on most frames and the render loop
   // paid a full traverse plus a new array each time. A light added a couple of
   // frames later still ends at the same intensity, so rate-limit the rebuild.
-  if (entry && entry.dirty && performance.now() - entry.builtAt < 200) return entry;
+  if (entry && entry.dirty && performance.now() - entry.builtAt < 1000) return entry;
   if (!entry || entry.dirty) {
     const lights = [];
     if (scene && scene.traverse) {

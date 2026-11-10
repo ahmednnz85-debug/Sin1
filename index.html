@@ -186,15 +186,15 @@ if(!window.THREE||!THREE.GLTFLoader){$('st').textContent='تعذّر تحميل 
 const SUN=new THREE.Vector3(-0.45,0.30,-0.84).normalize();
 const GATE_H=16, GATE_S=GATE_H/0.502, GATE_HD=0.197*GATE_S, GATE_HW=0.5*GATE_S, PASS=1.35;
 const canvas=$('c');
-const gfxParams=new URLSearchParams(location.search);const renderer=new THREE.WebGLRenderer({canvas,antialias:gfxParams.get('aa')!=='0',powerPreference:'high-performance'});if(gfxParams.get('p3')==='1'){try{const gl=renderer.getContext();if('drawingBufferColorSpace' in gl)gl.drawingBufferColorSpace='display-p3';}catch(e){console.warn('P3 غير مدعوم',e);}}
+const gfxParams=new URLSearchParams(location.search);const renderer=new THREE.WebGLRenderer({canvas,antialias:gfxParams.get('aa')==='1',powerPreference:'high-performance'});if(gfxParams.get('p3')==='1'){try{const gl=renderer.getContext();if('drawingBufferColorSpace' in gl)gl.drawingBufferColorSpace='display-p3';}catch(e){console.warn('P3 غير مدعوم',e);}}
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.02;
- renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-const scene=new THREE.Scene();
+ renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFShadowMap;
+const scene=new THREE.Scene();window.__sinScene=scene;
 scene.fog=new THREE.FogExp2(0xc6a77b,0.0038);
 const CAM_VFOV=42,CAM_LOOK=1.18,CAM_DIST=3.45,CAM_PITCH=0.22;
-const camera=new THREE.PerspectiveCamera(CAM_VFOV,1,0.25,1200);
+const camera=new THREE.PerspectiveCamera(CAM_VFOV,1,0.28,460);
 window.__qaFast = new URLSearchParams(location.search).has('qa');
 let hq=readPreference('quality')!=='low';
 renderer.shadowMap.enabled=hq;
@@ -292,10 +292,10 @@ try{buildSkyline();}catch(e){showErr(e);}
 
 // ---------- lights ----------
 const hemi=new THREE.HemisphereLight(0x86a8dc,0x8a6a45,0.55);hemi.userData.keepDuringPalace=true;scene.add(hemi);
-const sun=new THREE.DirectionalLight(0xffc48a,3.1); sun.userData.keepDuringPalace=true; sun.castShadow=true;
+const sun=new THREE.DirectionalLight(0xffc48a,3.1); sun.userData.keepDuringPalace=true; sun.castShadow=true;window.__sinSun=sun;
 sun.shadow.camera.left=-32;sun.shadow.camera.right=32;sun.shadow.camera.top=32;sun.shadow.camera.bottom=-32;sun.shadow.camera.near=1;sun.shadow.camera.far=170;
 sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.06; sun.shadow.camera.layers.enable(1); scene.add(sun); scene.add(sun.target);
-function setShadowRes(){if(window.SinGfx)return;const r=hq?2048:1024; if(sun.shadow.mapSize.x!==r){sun.shadow.mapSize.set(r,r); if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}}}
+function setShadowRes(){if(window.SinGfx)return;const r=1024; if(sun.shadow.mapSize.x!==r){sun.shadow.mapSize.set(r,r); if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}}}
 
 // ===================== EXTRAS: cinematic golden-hour lighting matched to the sky =====================
 renderer.toneMappingExposure=1.02;
@@ -405,11 +405,36 @@ const loader=new THREE.GLTFLoader();
 const b2b=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer;};
 const loadGLB=k=>new Promise((res,rej)=>{const buf=b2b(B64[k]);B64[k]=null;loader.parse(buf,'',res,rej);});
 const bar=$('bar').firstElementChild;
-function prep(root,{cast=false,recv=true}={}){root.traverse(o=>{if(o.isMesh){o.castShadow=cast;o.receiveShadow=recv;if(o.isSkinnedMesh)o.frustumCulled=false;const m=o.material;if(m){{const ro=m.roughness==null?1:m.roughness,me=m.metalness==null?0:m.metalness;m.envMapIntensity=.45+.35*(1-ro)+.4*me;}['map','normalMap','metalnessMap','roughnessMap'].forEach(n=>{if(m[n])m[n].anisotropy=8;});}}});}
+function prep(root,{cast=false,recv=true}={}){root.traverse(o=>{if(o.isMesh){o.castShadow=cast;o.receiveShadow=recv;if(o.isSkinnedMesh)o.frustumCulled=false;const m=o.material;if(m){{const ro=m.roughness==null?1:m.roughness,me=m.metalness==null?0:m.metalness;m.envMapIntensity=.45+.35*(1-ro)+.4*me;}['map','normalMap','metalnessMap','roughnessMap'].forEach(n=>{if(m[n])m[n].anisotropy=2;});}}});}
 function place(src,{h,minY,x,z,ry=0,s=1,cast=false}){ // static model: base on the ground
   const o=src.clone(true);prep(o,{cast});const sc=h*s;const g=new THREE.Group();o.scale.setScalar(sc);o.position.y=-minY*sc;g.add(o);g.position.set(x,0,z);g.rotation.y=ry;scene.add(g);return g;}
 
 const colliders=[]; const mixers=[];const marketOpenings=[];
+const COL_CELL=8;let colStamp=-1,colBuckets=null;
+function colIndex(){
+  if(colStamp===colliders.length&&colBuckets)return colBuckets;
+  const buckets=new Map();
+  for(let i=0;i<colliders.length;i++){
+    const c=colliders[i],r=c[2];
+    const x0=Math.floor((c[0]-r)/COL_CELL),x1=Math.floor((c[0]+r)/COL_CELL);
+    const z0=Math.floor((c[1]-r)/COL_CELL),z1=Math.floor((c[1]+r)/COL_CELL);
+    for(let x=x0;x<=x1;x++)for(let z=z0;z<=z1;z++){
+      const k=x+','+z;let a=buckets.get(k);if(!a){a=[];buckets.set(k,a);}a.push(c);
+    }
+  }
+  colBuckets=buckets;colStamp=colliders.length;return buckets;
+}
+function forNearColliders(x,z,pad,fn){
+  const buckets=colIndex();
+  const x0=Math.floor((x-pad)/COL_CELL),x1=Math.floor((x+pad)/COL_CELL);
+  const z0=Math.floor((z-pad)/COL_CELL),z1=Math.floor((z+pad)/COL_CELL);
+  for(let gx=x0;gx<=x1;gx++)for(let gz=z0;gz<=z1;gz++){
+    const a=buckets.get(gx+','+gz);if(!a)continue;
+    for(let i=0;i<a.length;i++)if(fn(a[i])===true)return true;
+  }
+  return false;
+}
+
 // ===================== EXTRAS: water canals beside the road (water is a barrier) =====================
 let waterT=null;
 try{
@@ -484,8 +509,8 @@ async function buildExtras(trees){
   const pickStall=()=>{ if(R()<0.09)return{part:K,sc:5.4*(0.95+R()*.13)}; let i;do{i=Math.floor(R()*S.length);}while(i===lastS);lastS=i;return{part:S[i],sc:13*(0.92+R()*.2)}; };
   const pickHouse=k=>()=>{let i;do{i=Math.floor(R()*H.length);}while(i===lastH);lastH=i;return{part:H[i],sc:k*(0.9+R()*.3)};};
   for(const side of [-1,1]){
-    row(side,{front:8.4, jit:0.3,gap:[0.5,1.6],pick:pickStall,cast:true,col:true,market:true});     // market stalls beside the road
-    row(side,{front:14.4,jit:0.5,gap:[0.3,1.2],pick:pickHouse(36),cast:true,col:true});              // houses behind the stalls
+    row(side,{front:8.4, jit:0.3,gap:[0.5,1.6],pick:pickStall,cast:false,col:true,market:true});     // market stalls beside the road
+    row(side,{front:14.4,jit:0.5,gap:[0.3,1.2],pick:pickHouse(36),cast:false,col:true});              // houses behind the stalls
     row(side,{front:22.5,jit:1.5,gap:[0.4,1.6],pick:pickHouse(40),cast:false,col:false,optional:true}); // second row of houses
   }
 }
@@ -506,126 +531,126 @@ async function buildRoadsideArchitecture(){
   const wallProxyGeo=new THREE.BoxGeometry(wb.max.x-wb.min.x,wb.max.y-wb.min.y,Math.max(wb.max.z-wb.min.z,0.02));
   wallProxyGeo.translate((wb.min.x+wb.max.x)/2,(wb.min.y+wb.max.y)/2,(wb.min.z+wb.max.z)/2);
   const wallProxyMat=new THREE.MeshBasicMaterial({color:0x000000});
+  wall.updateMatrixWorld(true);
+  const wallParts=[];
+  wall.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=true;wallParts.push(o);}});
+  const sections=[];
   for(const side of[-1,1]){
     for(let i=0;i<sectionCount;i++){
       const segmentStart=start+i*baseSpacing,segmentLength=Math.min(baseSpacing,end-segmentStart);
-      const z=segmentStart+segmentLength/2,g=new THREE.Group(),part=wall.clone(true);
-      prep(part,{cast:false});part.scale.set(wallScale*segmentLength/baseSpacing,wallScale,wallScale);part.position.y=-wb.min.y*wallScale;
-      const proxy=new THREE.Mesh(wallProxyGeo,wallProxyMat);
-      proxy.castShadow=true;proxy.receiveShadow=false;proxy.layers.set(1);proxy.frustumCulled=false;
-      part.add(proxy);
-      g.add(part);g.rotation.y=Math.PI/2;g.position.set(side*WALL_X,0,z);scene.add(g);
-      extras.push({g,x:g.position.x,z,r:segmentLength*.7+1,optional:false,y:wallHeight*wallScale*0.5});
+      const z=segmentStart+segmentLength/2;
+      sections.push({side,z,segmentLength,sx:wallScale*segmentLength/baseSpacing,sy:wallScale,sz:wallScale});
     }
-    for(let z=start;z<end;z+=1.05)colliders.push([side*WALL_X,z,1.05]);
-    colliders.push([side*WALL_X,end,1.05]);
+    for(let z=start;z<end;z+=2.1)colliders.push([side*WALL_X,z,1.35]);
+    colliders.push([side*WALL_X,end,1.35]);
   }
-  // Pot clusters close the two side passages at the wall ends without narrowing the central route.
+  const gM=new THREE.Object3D(),pM=new THREE.Object3D(),tmpM=new THREE.Matrix4();
+  const sectionMatrix=(sec,extra)=>{
+    gM.position.set(sec.side*WALL_X,0,sec.z);gM.rotation.set(0,Math.PI/2,0);gM.scale.set(1,1,1);gM.updateMatrix();
+    pM.position.set(0,-wb.min.y*wallScale,0);pM.rotation.set(0,0,0);pM.scale.set(sec.sx,sec.sy,sec.sz);pM.updateMatrix();
+    tmpM.multiplyMatrices(gM.matrix,pM.matrix);
+    if(extra)tmpM.multiply(extra);
+    return tmpM.clone();
+  };
+  const wallBuckets=new Map();
+  sections.forEach(sec=>{
+    const k=sec.side+':'+Math.floor(sec.z/56);
+    let bucket=wallBuckets.get(k);if(!bucket){bucket={side:sec.side,zs:[],secs:[]};wallBuckets.set(k,bucket);}
+    bucket.secs.push(sec);bucket.zs.push(sec.z);
+  });
+  for(const bucket of wallBuckets.values()){
+    const root=new THREE.Group();root.name='babylon-wall-chunk';
+    wallParts.forEach(src=>{
+      const mesh=new THREE.InstancedMesh(src.geometry,src.material,bucket.secs.length);
+      mesh.castShadow=false;mesh.receiveShadow=true;
+      mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+      bucket.secs.forEach((sec,i)=>mesh.setMatrixAt(i,sectionMatrix(sec,src.matrixWorld)));
+      mesh.instanceMatrix.needsUpdate=true;
+      root.add(mesh);
+    });
+    const proxy=new THREE.InstancedMesh(wallProxyGeo,wallProxyMat,bucket.secs.length);
+    proxy.castShadow=true;proxy.receiveShadow=false;proxy.layers.set(1);
+    proxy.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    bucket.secs.forEach((sec,i)=>proxy.setMatrixAt(i,sectionMatrix(sec,null)));
+    proxy.instanceMatrix.needsUpdate=true;root.add(proxy);
+    scene.add(root);
+    const z=bucket.zs.reduce((s,v)=>s+v,0)/bucket.zs.length;
+    const span=Math.max.apply(null,bucket.zs)-Math.min.apply(null,bucket.zs);
+    extras.push({g:root,x:bucket.side*WALL_X,z,r:span*0.5+10,optional:false,y:wallHeight*wallScale*0.5});
+  }
+  // Jars only at real openings. A full carpet of jars was one of the
+  // heaviest draws after the r187 upgrade (thousands of triangles each,
+  // and the shadow flag flipped while walking). Invisible colliders close
+  // the same gaps so the hero cannot leave the walkway.
   const clusterBox=new THREE.Box3().setFromObject(potCluster),clusterSize=clusterBox.getSize(new THREE.Vector3());
-  const clusterHeight=clusterSize.y,clusterScale=1.1/clusterHeight;
-  const clusterHit=Math.hypot(clusterSize.x,clusterSize.z)*clusterScale*.5+.1;
+  const clusterHeight=clusterSize.y;
   function addPotCluster(x,z,h){
     h=h||1.1;
-    const g=place(potCluster,{h:h,minY:clusterBox.min.y,x,z,ry:Math.PI/2,cast:true});
-    g.traverse(o=>{if(o.isMesh){o.userData.gateShadow=1;o.castShadow=false;}});
+    const g=place(potCluster,{h:h,minY:clusterBox.min.y,x,z,ry:Math.PI/2,cast:false});
+    g.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=true;}});
     const sc=h/clusterHeight,hit=Math.hypot(clusterSize.x,clusterSize.z)*sc*0.55+0.2;
-    extras.push({g,x,z,r:3,optional:false,shadow:1});
+    extras.push({g,x,z,r:3,optional:false,shadow:0});
     colliders.push([x,z,hit]);
   }
   const gateZ=start+.25;
   for(const side of[-1,1]){
-    addPotCluster(side*7.25,gateZ);
-    addPotCluster(side*9.3,gateZ);
-    [0.2,1.7,3.2].forEach(function(dx){
-      [end-1.1,end+.35,end+1.8].forEach(function(z){
-        addPotCluster(side*(WALL_X+dx),z,1.6);
-      });
+    addPotCluster(side*8.3,gateZ,1.25);
+    addPotCluster(side*(WALL_X+1.15),end+0.15,1.5);
+    [[7.25,gateZ,1.2],[9.35,gateZ,1.2]].forEach(function(pt){colliders.push([side*pt[0],pt[1],pt[2]]);});
+    [0.15,1.55,2.95].forEach(function(dx){
+      [end-1.15,end+0.35,end+1.75].forEach(function(z){colliders.push([side*(WALL_X+dx),z,1.15]);});
     });
   }
-  // A varied row of individual pots fills each actual gap between adjacent market stalls.
-  prep(pot,{cast:true});pot.updateMatrixWorld(true);
+  prep(pot,{cast:false});pot.updateMatrixWorld(true);
   const potBox=new THREE.Box3().setFromObject(pot),potHeight=potBox.max.y-potBox.min.y;
   const potMesh=pot.getObjectByProperty('isMesh',true);
   if(!(potHeight>0&&potMesh))throw new Error('أصل القارورة المفردة غير صالح');
   const potBaseMatrix=potMesh.matrixWorld.clone(),potBatches=new Map();
-  const potHeights=[1.62,1.86,1.52,1.78,1.55,1.82];
+  const potHeights=[1.55,1.72,1.48,1.66];
+  let gapPotCount=0;
   marketOpenings.forEach((gap,gapIndex)=>{
-    const centerZ=(gap.z0+gap.z1)/2,depth=Math.abs(gap.farX-gap.nearX);
-    const count=Math.max(4,Math.ceil(depth/.68));
-    const gapWidth=gap.z1-gap.z0,laneOffsets=gapWidth>.75?[-gapWidth*.24,gapWidth*.24]:[0];
-    laneOffsets.forEach((offset,laneIndex)=>{
-      const z=centerZ+offset;
-      for(let i=0;i<count;i++){
-        const x=gap.nearX+(gap.farX-gap.nearX)*(i+.5)/count;
-        const h=potHeights[(gapIndex+i+laneIndex)%potHeights.length],scale=h/potHeight;
-        const root=new THREE.Object3D();
-        root.position.set(x,-potBox.min.y*scale,z);
-        root.rotation.y=((gapIndex+i+laneIndex)%2)*Math.PI/2;
-        root.scale.setScalar(scale);root.updateMatrix();
-        const matrix=root.matrix.clone().multiply(potBaseMatrix);
-        const chunk=Math.floor((z+78)/22),key=gap.side+':'+chunk;
-        if(!potBatches.has(key))potBatches.set(key,{side:gap.side,chunk,zs:[],matrices:[]});
-        const batch=potBatches.get(key);batch.zs.push(z);batch.matrices.push(matrix);
-        colliders.push([x,z,.68]);
-      }
-    });
+    const span=Math.max(0.45,gap.z1-gap.z0);
+    const count=Math.max(1,Math.min(3,Math.ceil(span/1.05)));
+    const x=gap.nearX+(gap.farX-gap.nearX)*0.18;
+    for(let i=0;i<count;i++){
+      const z=gap.z0+(i+0.5)*(span/count);
+      const h=potHeights[(gapIndex+i)%potHeights.length],scale=h/potHeight;
+      const root=new THREE.Object3D();
+      root.position.set(x,-potBox.min.y*scale,z);
+      root.rotation.y=((gapIndex+i)%2)*Math.PI/2;
+      root.scale.setScalar(scale);root.updateMatrix();
+      const matrix=root.matrix.clone().multiply(potBaseMatrix);
+      const chunk=Math.floor((z+78)/22),key=gap.side+':'+chunk;
+      if(!potBatches.has(key))potBatches.set(key,{side:gap.side,zs:[],xs:[],matrices:[]});
+      const batch=potBatches.get(key);batch.zs.push(z);batch.xs.push(x);batch.matrices.push(matrix);
+      colliders.push([x,z,0.62]);
+      gapPotCount++;
+    }
   });
   for(const batch of potBatches.values()){
     const mesh=new THREE.InstancedMesh(potMesh.geometry,potMesh.material,batch.matrices.length);
-    mesh.name='market-pot-barriers';mesh.castShadow=false;mesh.receiveShadow=true;mesh.userData.gateShadow=1;
+    mesh.name='market-pot-barriers';mesh.castShadow=false;mesh.receiveShadow=true;
     mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     batch.matrices.forEach((m,i)=>mesh.setMatrixAt(i,m));
-    mesh.instanceMatrix.needsUpdate=true;
-    mesh.frustumCulled=false;scene.add(mesh);
-    const z=batch.zs.reduce((a,b)=>a+b,0)/batch.zs.length;
-    extras.push({g:mesh,x:batch.side*10.5,z,r:18,optional:false,shadow:1});
+    mesh.instanceMatrix.needsUpdate=true;mesh.frustumCulled=true;
+    scene.add(mesh);
+    const z=batch.zs.reduce((s,v)=>s+v,0)/batch.zs.length;
+    const x=batch.xs.reduce((s,v)=>s+v,0)/batch.xs.length;
+    extras.push({g:mesh,x,z,r:14,optional:false,shadow:0});
   }
-  // Bottles seal every walk-off into the grass: path start, market shoulders, canal mouths, and both ends of the walls.
-  const seal=[];
-  function pushPot(x,z){
-    const h=1.72,scale=h/potHeight,root=new THREE.Object3D();
-    root.position.set(x,-potBox.min.y*scale,z);
-    root.rotation.y=(Math.abs((Math.round(x+z)*3)%4))*Math.PI/2;
-    root.scale.setScalar(scale);root.updateMatrix();
-    seal.push(root.matrix.clone().multiply(potBaseMatrix));
-    colliders.push([x,z,.74]);
-  }
-  function potLine(x0,z0,x1,z1,step){
+  function rail(x0,z0,x1,z1,step,rad){
     const len=Math.hypot(x1-x0,z1-z0),n=Math.max(1,Math.round(len/step));
-    for(let i=0;i<=n;i++){const t=i/n;pushPot(x0+(x1-x0)*t,z0+(z1-z0)*t);}
+    for(let i=0;i<=n;i++){const t=n?i/n:0;colliders.push([x0+(x1-x0)*t,z0+(z1-z0)*t,rad]);}
   }
-  potLine(-20,-80.6,20,-80.6,1.15);
+  rail(-18,-80.6,18,-80.6,2.6,1.5);
   for(const s of [-1,1]){
-    potLine(s*5.6,-80.6,s*5.6,-75.2,1.15);
-    potLine(s*5.8,-76.5,s*20,-76.5,1.15);
-    potLine(s*20,-80.6,s*20,-74.2,1.15);
-    potLine(s*8.2,-78.4,s*16.5,-78.4,1.15);
-    potLine(s*9.3,-9.2,s*18,-9.2,1.15);
-    potLine(s*9.3,9.2,s*18,9.2,1.15);
-    potLine(s*8.6,76.2,s*14,76.2,1.15);
+    rail(s*5.6,-80.6,s*5.6,-74.5,2.4,1.35);
+    rail(s*6.2,-76.8,s*20,-76.8,2.6,1.35);
+    rail(s*9.2,-9.4,s*18,-9.4,2.4,1.2);
+    rail(s*9.2,9.4,s*18,9.4,2.4,1.2);
+    rail(s*8.6,75.6,s*14.5,75.6,2.4,1.25);
   }
-  marketOpenings.forEach(function(gap){
-    const z=(gap.z0+gap.z1)/2,out=gap.side>0?1:-1;
-    pushPot(gap.farX+out*0.75,z);
-    pushPot(gap.farX+out*0.75,(gap.z0+z)*0.5);
-  });
-  if(seal.length){
-    const groups=new Map();
-    seal.forEach(m=>{
-      const x=m.elements[12],z=m.elements[14],key=Math.floor(z/24);
-      let g=groups.get(key); if(!g){g={m:[],x:0,z:0};groups.set(key,g);}
-      g.m.push(m);g.x+=x;g.z+=z;
-    });
-    for(const g of groups.values()){
-      const mesh=new THREE.InstancedMesh(potMesh.geometry,potMesh.material,g.m.length);
-      mesh.name='gap-seal-pots';mesh.castShadow=false;mesh.receiveShadow=true;mesh.userData.gateShadow=1;
-      mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-      g.m.forEach((m,i)=>mesh.setMatrixAt(i,m));
-      mesh.instanceMatrix.needsUpdate=true;mesh.frustumCulled=false;scene.add(mesh);
-      const n=g.m.length;
-      extras.push({g:mesh,x:g.x/n,z:g.z/n,r:18,optional:false,shadow:1});
-    }
-  }
+  window.__sinBudget=Object.assign(window.__sinBudget||{},{gapPots:gapPotCount,grassTufts:0});
   // Small palms: one evenly spaced, mirrored row on each side, INSIDE the wall (between the procession road and the wall), all the way to the wall end.
   // Fixed spacing, identical height and rotation -> orderly rhythm. The row is phased so the winged statues (z=121) sit exactly between two palms.
   const PALM_X=7.9,PALM_STEP=8,PALM_H=9.4,STATUE_Z=121;
@@ -642,7 +667,8 @@ async function buildRoadsideArchitecture(){
   try{oldGrove=buildBabylonForest(palm,pb,palmHeight,start,end);}catch(e){console.warn('babylon grove skipped',e);}
   try{$('st').textContent='جارٍ تحميل: الأشجار والأعشاب الجديدة';await new Promise(r=>setTimeout(r,30));}catch(e){}
   try{await buildNewTrees(oldGrove?[...oldGrove.left,...oldGrove.right]:[],palm,pb,palmHeight);}catch(e){console.warn('new palms skipped',e);}
-  try{await buildNewGrass();}catch(e){console.warn('new grass skipped',e);}
+  // Grass tufts removed: LOD0 is 10268 triangles and the field planted thousands of them.
+  window.__sinBudget=Object.assign(window.__sinBudget||{},{grassTufts:0});
 }
 // ===================== EXTRAS: Babylonian grove (NEW palms only) =====================
 // Adds extra copies of the palm asset that is ALREADY in the game (assets/palm.glb, reused from buildRoadsideArchitecture: no new file, no new texture upload).
@@ -705,9 +731,9 @@ function buildBabylonForest(palm,pb,palmHeight,wallStart,wallEnd){
   const baseM=pm.matrixWorld.clone(),cxp=(pb.min.x+pb.max.x)*.5,czp=(pb.min.z+pb.max.z)*.5;
   const ZF=Math.max(38,wallStart-40);
   const L=babylonForestLayout({mulberry,edge:34,zFrom:ZF,zTo:272,palaceBox:PAL_BOX,colliders:colliders.slice(),seed:20261027,layers:[
-    {x0:34,x1:62,n:110,w:[0.30,0.32,0.38],bias:1.1,optional:false},     // near belt: understory + mid + tall palms (hides the horizon line)
-    {x0:62,x1:95,n:50,w:[0.04,0.20,0.76],bias:1.0,optional:true},       // middle belt: mostly tall palms (hides the far skyline)
-    {x0:95,x1:140,n:18,w:[0,0.1,0.9],bias:1.0,optional:true}]});        // outer belt: a few very tall palms in the haze
+    {x0:34,x1:62,n:42,w:[0.30,0.32,0.38],bias:1.1,optional:false},     // near belt: understory + mid + tall palms (hides the horizon line)
+    {x0:62,x1:95,n:16,w:[0.04,0.20,0.76],bias:1.0,optional:true},       // middle belt: mostly tall palms (hides the far skyline)
+    {x0:95,x1:140,n:8,w:[0,0.1,0.9],bias:1.0,optional:true}]});        // outer belt: a few very tall palms in the haze
   const mat=pm.material.clone();                                         // same palm look + same texture, own program (instance colours)
   const CH=40,groups=new Map();
   for(const side of[-1,1])for(const t of(side<0?L.left:L.right)){const k=side+':'+t.layer+':'+Math.floor((t.z-ZF)/CH);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(t);}
@@ -832,8 +858,8 @@ async function buildNewTrees(old, oldPalm, oldBox, oldHeight){
   [trunk,...leaf2,...leaf0].forEach(m=>{const mt=m.material;mt.envMapIntensity=.7;['map'].forEach(n=>{if(mt[n])mt[n].anisotropy=4;});});
   const ZF=-70;
   const L=babylonNewTreeLayout({mulberry,edge:38,zFrom:ZF,zTo:275,palaceBox:PAL_BOX,colliders:colliders.slice(),old:old,seed:20261028,layers:[
-    {x0:38,x1:74,n:44,hMin:7.5,hMax:12.5,bias:1.1,optional:false},      // near belt: modest palms right outside the wall/market land
-    {x0:74,x1:120,n:30,hMin:10,hMax:15,bias:1.0,optional:false},        // middle belt: taller palms that screen the far skyline and the horizon line
+    {x0:38,x1:74,n:22,hMin:7.5,hMax:12.5,bias:1.1,optional:false},      // near belt: modest palms right outside the wall/market land
+    {x0:74,x1:120,n:14,hMin:10,hMax:15,bias:1.0,optional:false},        // middle belt: taller palms that screen the far skyline and the horizon line
     {x0:120,x1:178,n:16,hMin:12,hMax:17,bias:1.0,optional:true}]});     // outer belt: a few tall palms in the haze (high quality only)
   const CH=36,groups=new Map();
   for(const side of[-1,1])for(const t of(side<0?L.left:L.right)){const k=side+':'+t.layer+':'+Math.floor((t.z-ZF)/CH);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(t);}
@@ -890,7 +916,7 @@ async function buildNewTrees(old, oldPalm, oldBox, oldHeight){
     if(newSpots.length){
       const mats=newSpots.map(t=>{const s=t.h/H;E.set(0,t.yaw,0,'YXZ');Q.setFromEuler(E);P.set(t.x,0,t.z);S.set(s,s,s);
         const m=new THREE.Matrix4().compose(P,Q,S);Nm.makeTranslation(-cxp,-tb.min.y,-czp);return m.multiply(Nm).multiply(baseM);});
-      [trunk,leaf2[0],leaf0[0]].forEach(src=>{
+      [trunk,leaf2[leaf2.length-1],leaf0[leaf0.length-1]].forEach(src=>{
         const mesh=new THREE.InstancedMesh(src.geometry,src.material,newSpots.length);
         mesh.castShadow=false;mesh.receiveShadow=false;mesh.frustumCulled=false;
         mats.forEach((m,i)=>mesh.setMatrixAt(i,m));
@@ -939,7 +965,8 @@ function updateVeg(){
   for(let i=0;i<vegChunks.length;i++){
     const c=vegChunks[i],dx=c.x-cx,dz=c.z-cz,dn=Math.max(0,Math.sqrt(dx*dx+dz*dz)-c.r);
     let lod=-1;
-    if(dn<sightRange()){
+    const cap=(c.maxHQ? (hq?c.maxHQ:c.maxLQ) : sightRange())*(0.75+0.25*vk);
+    if(dn<Math.min(sightRange(),cap)){
       lod=dn<c.lodD[0]*vk?0:dn<c.lodD[1]*vk?1:2;if(!hq&&lod<c.minLodLQ)lod=c.minLodLQ;
       _vs.center.set(c.x,c.y,c.z);_vs.radius=c.r;if(!_vf.intersectsSphere(_vs))lod=-1;}
     for(let k=0;k<3;k++){const g=c.lods[k];if(g)g.visible=(k===lod);}
@@ -966,6 +993,8 @@ function updateExtras(){
   const prep=new Set();
   for(let i=0;i<extras.length;i++){
     const e=extras[i],dx=e.x-cx,dz=e.z-cz,d2=dx*dx+dz*dz;
+    const far=e.optional?120:175;
+    if(d2>far*far){e.g.visible=false;continue;}
     _vs.center.set(e.x,e.y==null?4:e.y,e.z);_vs.radius=Math.max(e.r*1.2,8);
     const lim=range+e.r,limP=lim+PREFETCH_EXTRA_M;
     const vis=d2<lim*lim&&_vf.intersectsSphere(_vs);
@@ -975,25 +1004,17 @@ function updateExtras(){
     if(pre){prep.add(i);if(!vis&&!_cityPrepared.has(i))warmTextures(e.g);}
   }
   _cityPrepared.clear();prep.forEach(i=>_cityPrepared.add(i));
-  if(cityResidency){const now=performance.now();const key=Array.from(prep).join(',');
-    if(key!==_cityKey&&now-_citySyncAt>400){_cityKey=key;_citySyncAt=now;try{window.__cityResidency=cityResidency.sync(scene,null,_cityGroups,prep);}catch(err){console.warn('city residency',err);}}}
+  // Outdoor GPU eviction is off. Disposing city geometries that left the
+  // prefetch cone forced r187 to re-upload them on the next turn.
   updateShadowCasters();
   updateVeg();
 }
 let _shx=1e9,_shz=1e9;
 function updateShadowCasters(){
-  if(!heroRoot)return;
-  const hx=heroRoot.position.x,hz=heroRoot.position.z,dx=hx-_shx,dz=hz-_shz;
-  if(dx*dx+dz*dz<9)return;
-  _shx=hx;_shz=hz;
-  const R2s=window.SinGfx?SinGfx.potShadowRange():46,R2=R2s*R2s;
-  for(let i=0;i<extras.length;i++){
-    const e=extras[i]; if(!e.shadow)continue;
-    const on=(e.x-hx)*(e.x-hx)+(e.z-hz)*(e.z-hz)<R2;
-    if(e._sh===on)continue;
-    e._sh=on;
-    e.g.traverse(o=>{if(o.isMesh&&o.userData.gateShadow)o.castShadow=on;});
-  }
+  // r187 recompiles a material whenever castShadow changes. The previous
+  // walker flipped that flag on jars and palms as the hero moved, which
+  // stalled frames so badly the character could barely walk. Shadows stay
+  // on the prebuilt wall proxies only.
 }
 
 
@@ -1157,9 +1178,9 @@ async function buildPalace(lamScene){
     for(const e of[-1,1]){const r=new THREE.Mesh(new THREE.BoxGeometry(6.2,.45,.6),rm);r.position.set(0,.22,e*((PL_POOL1-PL_POOL0)/2+.3));r.castShadow=r.receiveShadow=true;g.add(r);}
   }
   // 5) التماثيل المجنحة على جانبي الممر
-  for(const z of[121])for(const sx of[-1,1]){place(lamScene,{h:5.1,minY:-0.487,x:sx*7.6,z,ry:Math.PI,cast:true});colliders.push([sx*7.6,z-1.6,1.1],[sx*7.6,z+1.6,1.1]);}
+  for(const z of[121])for(const sx of[-1,1]){place(lamScene,{h:5.1,minY:-0.487,x:sx*7.6,z,ry:Math.PI,cast:false});colliders.push([sx*7.6,z-1.6,1.1],[sx*7.6,z+1.6,1.1]);}
   // 6) القصر نفسه
-  const g=await loadX('palace'),m=g.scene;prep(m,{cast:true});m.scale.setScalar(PAL.s);
+  const g=await loadX('palace'),m=g.scene;prep(m,{cast:false});m.scale.setScalar(PAL.s);
   const bb=new THREE.Box3().setFromObject(m);m.position.set(-(bb.min.x+bb.max.x)/2,-bb.min.y,-(bb.min.z+bb.max.z)/2);
   const grp=new THREE.Group();grp.name='PalaceExterior';grp.add(m);grp.rotation.y=PAL.ry;grp.position.set(PAL.x,0,PAL.z);scene.add(grp);grp.updateMatrixWorld(true);
   grp.traverse(o=>{if(o.isMesh)palMeshes.push(o);});
@@ -1227,7 +1248,7 @@ async function init(){
   const names=[['hero','البطل'],['gate','بوابة عشتار'],['lam','التمثال المجنح']];const M={};
   for(let i=0;i<names.length;i++){$('st').textContent='جارٍ تحميل: '+names[i][1];await new Promise(r=>setTimeout(r,30));M[names[i][0]]=await (names[i][0]==='hero'?loadX(HERO_FILE):loadGLB(names[i][0]));}
   // gate (passage runs along Z, centred on x=0)
-  const gate=M.gate.scene;prep(gate,{cast:true});gate.scale.setScalar(GATE_S);gate.rotation.y=-Math.PI/2;gate.position.set(-0.0025*GATE_S,0.2512*GATE_S,0);scene.add(gate);
+  const gate=M.gate.scene;prep(gate,{cast:false});gate.scale.setScalar(GATE_S);gate.rotation.y=-Math.PI/2;gate.position.set(-0.0025*GATE_S,0.2512*GATE_S,0);scene.add(gate);
   gate.updateMatrixWorld(true);
   gate.traverse(function(o){
     if(!o.isMesh||!o.geometry||!o.geometry.index)return;
@@ -1247,7 +1268,7 @@ async function init(){
     g.setIndex(keep);g.computeBoundingBox();g.computeBoundingSphere();
   });
   // winged guardians flanking the approach, facing the arriving hero
-  [-1,1].forEach(sx=>{const L=place(M.lam.scene,{h:5.1,minY:-0.487,x:sx*5.4,z:-17,ry:Math.PI,cast:true});colliders.push([sx*5.4,-17-1.6,1.1],[sx*5.4,-17+1.6,1.1]);});
+  [-1,1].forEach(sx=>{const L=place(M.lam.scene,{h:5.1,minY:-0.487,x:sx*5.4,z:-17,ry:Math.PI,cast:false});colliders.push([sx*5.4,-17-1.6,1.1],[sx*5.4,-17+1.6,1.1]);});
   // trees, varied sizes
   const t4=[],t5=[];
   t4.forEach(([x,z,s])=>{place(M.t4.scene,{h:11,minY:-0.501,x,z,ry:rnd()*6.28,s});colliders.push([x,z,1.3*s]);});
@@ -1542,7 +1563,7 @@ const combat=(function(){
 function buildDoorGlimpse(frontZ){
   const g=new THREE.Group();g.name='DoorGlimpse';g.visible=false;scene.add(g);
   const map=new THREE.TextureLoader().load('assets/palace-glimpse.webp?v=4');
-  map.encoding=THREE.sRGBEncoding;map.anisotropy=8;
+  map.encoding=THREE.sRGBEncoding;map.anisotropy=2;
   map.wrapS=map.wrapT=THREE.ClampToEdgeWrapping;
   const doorX=1, doorW=4.42, doorH=8.18, doorY=3.86+doorH*0.5;
   let wallZ=frontZ+5.2;
@@ -1577,7 +1598,7 @@ function buildDoorGlimpse(frontZ){
   g.add(plane);
   // Marble sits on the palace-mesh floor seen through the door. The glimpse image is not modified.
   const marbleMap=new THREE.TextureLoader().load('assets/marble.webp?v=1');
-  marbleMap.encoding=THREE.sRGBEncoding;marbleMap.anisotropy=8;marbleMap.wrapS=marbleMap.wrapT=THREE.RepeatWrapping;
+  marbleMap.encoding=THREE.sRGBEncoding;marbleMap.anisotropy=2;marbleMap.wrapS=marbleMap.wrapT=THREE.RepeatWrapping;
   let floorY=3.86;
   if(ext){
     const down=new THREE.Raycaster(),dir=new THREE.Vector3(0,-1,0);
@@ -1867,19 +1888,19 @@ async function buildRoyalDoor(gltf,heroModel){
   };
   return{update,postAnimation,updateCamera,blocks,skip,active:()=>phase!=='idle'&&phase!=='done',open:()=>phase==='done',passing:()=>phase==='enter'||phase==='done',wantsWalk:()=>phase==='approach'||phase==='enter',probe,portal:()=>({x:ARCH.x,frontZ,width:ARCH.width,yaw:0})};
 }
-const blocked=(x,z)=>{if(window.PalaceInterior&&PalaceInterior.ownsGround())return PalaceInterior.blocks(x,z);if(royalDoor.blocks(x,z))return true;if(palaceBlocked(x,z))return true;if(Math.abs(z)<GATE_HD+.4&&Math.abs(x)>PASS&&Math.abs(x)<GATE_HW+.3)return true;for(const c of colliders){const dx=x-c[0],dz=z-c[1];if(dx*dx+dz*dz<c[2]*c[2])return true;}return false;};
+const blocked=(x,z)=>{if(window.PalaceInterior&&PalaceInterior.ownsGround())return PalaceInterior.blocks(x,z);if(royalDoor.blocks(x,z))return true;if(palaceBlocked(x,z))return true;if(Math.abs(z)<GATE_HD+.4&&Math.abs(x)>PASS&&Math.abs(x)<GATE_HW+.3)return true;return forNearColliders(x,z,0.01,c=>{const dx=x-c[0],dz=z-c[1];return dx*dx+dz*dz<c[2]*c[2];});};
 function clipFollowCamera(want,hx,hy,hz){
   const dx=want.x-hx,dy=want.y-hy,dz=want.z-hz,A=dx*dx+dz*dz;
   if(A<0.08)return 1;
   let best=1;
-  for(let i=0;i<colliders.length;i++){
-    const c=colliders[i],rr=c[2]+0.65,vx=hx-c[0],vz=hz-c[1];
-    if(vx*vx+vz*vz>A+9)continue;
+  forNearColliders(hx,hz,Math.sqrt(A)+3.2,c=>{
+    const rr=c[2]+0.65,vx=hx-c[0],vz=hz-c[1];
+    if(vx*vx+vz*vz>A+9)return;
     const B=2*(dx*vx+dz*vz),C=vx*vx+vz*vz-rr*rr,disc=B*B-4*A*C;
-    if(disc<0)continue;
+    if(disc<0)return;
     const t=(-B-Math.sqrt(disc))/(2*A);
     if(t>0.015&&t<best)best=t;
-  }
+  });
   if(best<0.97)return Math.max(0.16,best*0.82);
   return 1;
 }
@@ -1963,7 +1984,7 @@ function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=wi
   // the hero here moved the whole shadow frustum and made nearby shadows swim.
   sun.target.position.set(0,0,93);sun.position.set(0,0,93).addScaledVector(SUN,80);sun.target.updateMatrixWorld();
   if(window.SinGfx)SinGfx.update(dt,{babylon:skyTransition.started,courtyard:hp.z>PL_Z0+4&&!isInteriorNow(),running:!!run&&moving});
-  updateDust(tAcc);updateWater(tAcc);if(!(window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround()))updateExtras();}if(window.PalaceInterior&&PalaceInterior.holdCull)PalaceInterior.holdCull(scene,heroRoot);const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';if(palaceState!=='FADING_OUT'&&palaceState!=='LOADING'&&palaceState!=='SETUP'&&palaceState!=='FAILED'&&palaceState!=='REVEAL')renderer.render(scene,camera);}catch(e){console.error('loop',e);}}
+  updateDust(tAcc);updateWater(tAcc);if(!(window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround()))updateExtras();}if(window.PalaceInterior&&PalaceInterior.holdCull)PalaceInterior.holdCull(scene,heroRoot);const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';if(palaceState!=='FADING_OUT'&&palaceState!=='LOADING'&&palaceState!=='SETUP'&&palaceState!=='FAILED'&&palaceState!=='REVEAL')renderer.render(scene,camera);const __ri=renderer.info.render;window.__sinFrame={tris:__ri.triangles,calls:__ri.calls,geoms:renderer.info.memory.geometries,tex:renderer.info.memory.textures};}catch(e){console.error('loop',e);}}
 init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);});
 window.__releaseExteriorStage=function(){
   _cityGroups.clear();_cityPrepared.clear();if(cityResidency&&cityResidency.reset)cityResidency.reset();
