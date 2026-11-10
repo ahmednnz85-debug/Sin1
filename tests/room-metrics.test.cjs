@@ -26,6 +26,12 @@ function load(search) {
     requestAnimationFrame(fn) { raf.push(fn); return raf.length; },
     console: { info() { calls.push(Array.from(arguments)); } }
   };
+  windowObj.THREE = {
+    WebGLRenderer: function () {},
+  };
+  windowObj.THREE.WebGLRenderer.prototype = {
+    render() { return null; }
+  };
   const context = {
     window: windowObj,
     document: doc,
@@ -35,6 +41,7 @@ function load(search) {
     Date,
     console: windowObj.console,
     requestAnimationFrame: windowObj.requestAnimationFrame,
+    THREE: windowObj.THREE,
     Math, Number, String, Array, Object
   };
   windowObj.document = doc;

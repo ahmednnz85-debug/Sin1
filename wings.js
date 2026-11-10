@@ -2252,7 +2252,18 @@
     wingMark('wings layout');
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
     state.regions = state.rooms.concat(state.connectors); state.links = layout.links; state.sealed = layout.sealed; state.back = layout.back;
+    if (window.SinRoomGraph && typeof window.SinRoomGraph.createGraph === 'function') {
+      roomGraph = window.SinRoomGraph.createGraph({
+        links: state.links,
+        regionIds: state.regions.map(r => r.id)
+      });
+      state.roomGraph = roomGraph;
+    } else {
+      roomGraph = null;
+      state.roomGraph = null;
+    }
     prepareArchitecture(layout);
+    if (roomGraph && typeof roomGraph.bindGroups === 'function') roomGraph.bindGroups(state.regionGroups);
     wingMark('wings architecture');
     // Remove procedural walls inside K1 so the GLB model is the only interior
     const k1 = state.rooms.find(r => r.id === 'K1');
@@ -2310,6 +2321,7 @@
     return triangles;
   }
   const visibilityPlanner = window.SinWingVisibility ? window.SinWingVisibility.createPlanner() : null;
+  let roomGraph = null;
   const triCache = new Map();
   const warmed = new WeakMap();
   const warmQueue = [];
@@ -2464,6 +2476,20 @@
         preparedIds.forEach(rid => { if (!mandatory.has(rid) && !keep.has(rid)) preparedIds.delete(rid); });
       }
       const plan = { ids: Array.from(mandatory), triangles: reserve, budget };
+      // Phase 1 room graph: permanent + active + warm neighbors stay resident.
+      // Cold rooms leave the prepared set so GPU residency can release them.
+      // Camera-visible rooms through an open door are promoted to warm.
+      if (roomGraph) {
+        const snap = roomGraph.classify(id, { origin: origin, visible: visibleIds, warmHops: 1 });
+        const graphResident = roomGraph.residentIds(snap);
+        // Never drop a camera-visible room; graph residency is the residency ceiling.
+        preparedIds.forEach(rid => { if (!graphResident.has(rid) && !visibleIds.has(rid)) preparedIds.delete(rid); });
+        graphResident.forEach(rid => preparedIds.add(rid));
+        state.roomStates = snap;
+        if (window.SinRoomMetrics && typeof window.SinRoomMetrics.noteGraph === 'function') {
+          window.SinRoomMetrics.noteGraph(snap);
+        }
+      }
       // Start preparing rooms in the camera prefetch wedge, not only after the
       // hero enters them. The room is assembled off-screen and then appears as
       // one complete set when the camera reaches it.

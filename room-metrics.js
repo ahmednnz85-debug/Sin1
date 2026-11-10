@@ -19,7 +19,8 @@
   var lastPaint = 0;
   var lastFps = 0;
   var lastSample = null;
-  var currentRoom = '—';
+  var currentRoom = 'City';
+  var graphInfo = { warm: 0, cold: 0, active: '—' };
   var log = [];
   var MAX_LOG = 80;
   var rendererRef = null;
@@ -65,6 +66,9 @@
     var s = {
       t: Date.now(),
       room: roomId != null ? roomId : currentRoom,
+      active: graphInfo.active,
+      warm: graphInfo.warm,
+      cold: graphInfo.cold,
       fps: Number.isFinite(fps) ? fps : lastFps,
       geometries: info.geometries,
       textures: info.textures,
@@ -75,13 +79,23 @@
     return s;
   }
 
+  function noteGraph(snap) {
+    if (!snap) return;
+    graphInfo = {
+      active: snap.active || '—',
+      warm: (snap.warm && snap.warm.length) || 0,
+      cold: (snap.cold && snap.cold.length) || 0
+    };
+  }
+
   function format(s) {
     if (!s) return 'Room metrics…';
     return [
-      'Room  ' + s.room,
+      'Room  ' + s.room + (s.active && s.active !== s.room ? ' → ' + s.active : ''),
       'FPS   ' + (s.fps ? s.fps.toFixed(0) : '—'),
       'Geo   ' + s.geometries + '   Tex ' + s.textures,
-      'Draw  ' + s.calls + '   Tri ' + Math.round(s.triangles / 1000) + 'k'
+      'Draw  ' + s.calls + '   Tri ' + Math.round(s.triangles / 1000) + 'k',
+      'Warm  ' + (s.warm != null ? s.warm : graphInfo.warm) + '   Cold ' + (s.cold != null ? s.cold : graphInfo.cold)
     ].join('\n');
   }
 
@@ -97,10 +111,24 @@
     if (el) el.textContent = format(s);
   }
 
+  function hookRenderer() {
+    if (!window.THREE || !THREE.WebGLRenderer || THREE.WebGLRenderer.prototype.__sinRoomMetricsHook) return;
+    var proto = THREE.WebGLRenderer.prototype;
+    var original = proto.render;
+    proto.render = function (scene, camera) {
+      rendererRef = this;
+      var out = original.apply(this, arguments);
+      return out;
+    };
+    proto.__sinRoomMetricsHook = true;
+  }
+
   function bindRaf() {
     if (rafBound) return;
     rafBound = true;
+    hookRenderer();
     var tick = function (ts) {
+      if (!rendererRef) hookRenderer();
       paint(ts);
       requestAnimationFrame(tick);
     };
@@ -167,6 +195,7 @@
 
   window.SinRoomMetrics = {
     noteRoom: noteRoom,
+    noteGraph: noteGraph,
     attachRenderer: attachRenderer,
     sample: function () { return sample(rendererRef, currentRoom, lastFps); },
     log: function () { return log.slice(); },
