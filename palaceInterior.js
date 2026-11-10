@@ -3,7 +3,7 @@
    Build hall12 — asset URLs carry ?v=hall12 so Safari cannot reuse a stale copy.
    Final hall: wall modules, columns, marble, carpet, lions, braziers, procedural fire. */
 (function () {
-  const BUILD = 'hall18';
+  const BUILD = 'hall19';
   const CONFIG = {
     useOptimizedAssets: true,
     useWings: true,

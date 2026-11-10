@@ -75,7 +75,7 @@ test('palace warm-up skips materials under hidden wing-room groups', () => {
 });
 
 test('legacy bootstrap cache-busts palace scripts before loading them', () => {
-  const bustAt = index.indexOf("s.dataset.src=u+'&cache=r187floor'");
+  const bustAt = index.indexOf("s.dataset.src=u+'&cache=hall19'");
   const palaceAt = index.indexOf('data-src="palaceInterior.js?');
   const wingsAt = index.indexOf('data-src="wings.js?');
   assert.ok(bustAt >= 0 && palaceAt > bustAt && wingsAt > bustAt);
