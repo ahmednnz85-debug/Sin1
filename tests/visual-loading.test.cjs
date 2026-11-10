@@ -25,7 +25,7 @@ test('resolution governor recovers severe mobile frame stalls and remains bounde
   assert.match(resolution, /var min = Number\.isFinite\(options\.min\) \? options\.min : 0\.58/);
   assert.match(cinematic, /dt > 2000 \|\| busy \|\| document\.hidden/);
   assert.doesNotMatch(cinematic, /dt > 250 \|\| busy/);
-  assert.match(cinematic, /Math\.min\(mobile \? 1 : 1\.25, Math\.max\(1, dpr\)\) \* E\.scale/);
+  assert.match(cinematic, /return \(mobile \? 1 : Math\.min\(1, dpr\)\) \* E\.scale/);
 });
 
 test('cinematic grade/fog are restrained and exposure is consistent', () => {
@@ -33,6 +33,13 @@ test('cinematic grade/fog are restrained and exposure is consistent', () => {
   assert.match(index, /new THREE\.FogExp2\(0xc6a77b,0\.0038\)/);
   assert.equal((index.match(/renderer\.toneMappingExposure=1\.02;/g) || []).length, 2);
   assert.doesNotMatch(index, /renderer\.toneMappingExposure=1\.10/);
+});
+
+test('palace floor shader uses the r187 map UV, not the removed vUv varying', () => {
+  assert.match(palace, /texture2D\(map, vMapUv\)/);
+  assert.doesNotMatch(palace, /texture2D\(map, vUv\)/);
+  assert.match(palace, /function flushReleasedGPU/);
+  assert.match(palace, /group\.visible = false/);
 });
 
 test('palace loading starts only after the fade, exterior disposal and reference cleanup', () => {
@@ -68,7 +75,7 @@ test('palace warm-up skips materials under hidden wing-room groups', () => {
 });
 
 test('legacy bootstrap cache-busts palace scripts before loading them', () => {
-  const bustAt = index.indexOf("s.dataset.src=u+'&cache=6abc54f'");
+  const bustAt = index.indexOf("s.dataset.src=u+'&cache=r187floor'");
   const palaceAt = index.indexOf('data-src="palaceInterior.js?');
   const wingsAt = index.indexOf('data-src="wings.js?');
   assert.ok(bustAt >= 0 && palaceAt > bustAt && wingsAt > bustAt);

@@ -76,8 +76,18 @@ function lightsFor(scene) {
   }
   return entry;
 }
-// Point/spot attenuation itself changed in modern Three.js and cannot be
-// restored by intensity scaling alone.
+// r147 point/spot lights (physicallyCorrectLights off) faded with a windowed
+// power, not inverse-square. r187 only has the physical formula, so palace
+// braziers went black or blew out. Restore the r147 function. Directional and
+// hemisphere lights still get the r155 intensity * PI scale below; point and
+// spot lights do not, because the legacy formula has no PI factor.
+const lightsChunk = ThreeModule.ShaderChunk && ThreeModule.ShaderChunk.lights_pars_begin;
+if (lightsChunk && lightsChunk.indexOf('getDistanceAttenuation') >= 0) {
+  ThreeModule.ShaderChunk.lights_pars_begin = lightsChunk.replace(
+    'float distanceFalloff = 1.0 / max( pow( lightDistance, decayExponent ), 0.01 );\n\tif ( cutoffDistance > 0.0 ) {\n\t\tdistanceFalloff *= pow2( saturate( 1.0 - pow4( lightDistance / cutoffDistance ) ) );\n\t}\n\treturn distanceFalloff;',
+    'if ( cutoffDistance > 0.0 && decayExponent > 0.0 ) {\n\t\treturn pow( saturate( - lightDistance / cutoffDistance + 1.0 ), decayExponent );\n\t}\n\treturn 1.0;'
+  );
+}
 const renderWithModernLights = ThreeModule.WebGLRenderer.prototype.render;
 ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
   const entry = scene && typeof scene === 'object' ? lightsFor(scene) : null;
@@ -85,7 +95,8 @@ ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
     const light = entry.lights[i];
     const intensity = light.intensity;
     entry.intensities[i] = intensity;
-    if (intensity !== 0 && Number.isFinite(intensity)) light.intensity = intensity * Math.PI;
+    const legacyFalloff = light.isPointLight || light.isSpotLight;
+    if (!legacyFalloff && intensity !== 0 && Number.isFinite(intensity)) light.intensity = intensity * Math.PI;
   }
   try {
     return renderWithModernLights.call(this, scene, camera);
