@@ -2425,6 +2425,10 @@
     else if (id === 'K3') dressK3();
     else if (id === 'K4') dressK4();
     if (state.root) state.root.updateMatrixWorld(true);
+    if (window.SinTextureBudget && typeof window.SinTextureBudget.capObject === 'function') {
+      const g = state.regionGroups.get(id);
+      if (g) window.SinTextureBudget.capObject(g, id);
+    }
   }
   function updateCulling(force) {
     if (!state.built || !state.ctx || !state.ctx.hero) return;
@@ -2438,6 +2442,11 @@
       // Phase 0: room enter/exit metrics (FPS + renderer.info memory/render).
       if (window.SinRoomMetrics && typeof window.SinRoomMetrics.noteRoom === 'function') {
         window.SinRoomMetrics.noteRoom(id, state.ctx && state.ctx.renderer);
+      }
+      // Phase 5: checkpoint after every room enter (Safari tab kill recovery).
+      if (window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.save === 'function') {
+        window.SinRoomCheckpoint.noteContext(state.ctx);
+        window.SinRoomCheckpoint.save(state.ctx);
       }
     }
     const isArch = !!(r && r.kind === 'threshold');

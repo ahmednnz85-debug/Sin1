@@ -27,9 +27,10 @@
     // Start near native resolution; the previous 0.88/0.92 scales made the
     // whole game visibly soft. The governor still lowers scale only after a
     // sustained FPS drop, avoiding a permanent blurry image.
+    // Phase 4: one dynamic shadow at 1024 keeps Safari GPU memory stable.
     low:    { scale: 0.94, shadow: true,  res: 1024, extent: 88, soft: false, veg: 0.70, pots: 58,  potShadow: 18, dust: 220 },
     medium: { scale: 0.98, shadow: true,  res: 1024, extent: 88, soft: false, veg: 0.78, pots: 70,  potShadow: 22, dust: 320 },
-    high:   { scale: 1.00, shadow: true,  res: 2048, extent: 88, soft: true,  veg: 1.00, pots: 110, potShadow: 46, dust: 500 }
+    high:   { scale: 1.00, shadow: true,  res: 1024, extent: 88, soft: true,  veg: 1.00, pots: 110, potShadow: 46, dust: 500 }
   };
   const ORDER = ['low', 'medium', 'high'];
   function detectTier() {
@@ -287,11 +288,9 @@
     hq() { return base !== 'low'; },
     settings() { return E; },
     pixelRatio() {
-      // Mobile retina DPR multiplies pixel work without improving the UI, so
-      // keep the game buffer at CSS resolution and let the governor scale lower.
+      // Phase 4: cap at 2×; the adaptive governor still multiplies by E.scale.
       const dpr = Number(window.devicePixelRatio) || 1;
-      const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '') || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent || ''));
-      return Math.min(mobile ? 1 : 1.25, Math.max(1, dpr)) * E.scale;
+      return Math.min(2, Math.max(1, dpr)) * E.scale;
     },
     mode() { return mode; },
     tier() { return base; },

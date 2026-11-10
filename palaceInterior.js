@@ -2887,10 +2887,22 @@
     gl.canvas.addEventListener('webglcontextlost', function (e) {
       if (e && e.preventDefault) e.preventDefault();
       runtimeErrors.push('webglcontextlost');
+      if (window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.save === 'function' && lastContext) {
+        window.SinRoomCheckpoint.save(lastContext);
+      }
       loadError = new Error('فُقد سياق الرسم WebGL — ذاكرة الجهاز لا تكفي لعرض القاعة');
       if (state !== 'DONE' && state !== 'IDLE') {
         state = 'FAILED';
         showFail(loadError);
+      }
+      renderDebug();
+    }, false);
+    gl.canvas.addEventListener('webglcontextrestored', function () {
+      runtimeErrors.push('webglcontextrestored');
+      // Phase 5: only the player's current room is re-streamed after restore.
+      if (window.PalaceWings && window.PalaceWings.state) window.PalaceWings.state._preparedKey = '';
+      if (window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.restore === 'function' && lastContext) {
+        window.SinRoomCheckpoint.restore(lastContext);
       }
       renderDebug();
     }, false);
@@ -3182,6 +3194,10 @@
         entryCut = true;
         note('done (entrance cinematic skipped)');
         renderDebug();
+        if (window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.restore === 'function') {
+          window.SinRoomCheckpoint.noteContext(ctx);
+          window.SinRoomCheckpoint.restore(ctx);
+        }
       }
       return;
     }
@@ -3203,7 +3219,13 @@
       ctx.hero.position.y = floorAt(ctx.hero.position.x, ctx.hero.position.z);
       ctx.setFacing(0);
       aimCamera(ctx, false);
-      if (fadeT >= 0.9) { state = 'DONE'; note('done'); renderDebug(); }
+      if (fadeT >= 0.9) {
+        state = 'DONE'; note('done'); renderDebug();
+        if (window.SinRoomCheckpoint && typeof window.SinRoomCheckpoint.restore === 'function') {
+          window.SinRoomCheckpoint.noteContext(ctx);
+          window.SinRoomCheckpoint.restore(ctx);
+        }
+      }
       return;
     }
     if (state === 'DONE') {
