@@ -179,7 +179,21 @@
   }
 
   function attachRenderer(renderer) {
-    if (renderer) rendererRef = renderer;
+    if (!renderer) {
+      if (enabled) { ensurePanel(); bindRaf(); }
+      return;
+    }
+    rendererRef = renderer;
+    // cinematic.js replaces the instance render(); wrap that concrete function
+    // so memory/draw counters update every frame outdoors and indoors.
+    if (!renderer.__sinRoomMetricsWrapped && typeof renderer.render === 'function') {
+      var original = renderer.render.bind(renderer);
+      renderer.render = function (scene, camera) {
+        rendererRef = renderer;
+        return original(scene, camera);
+      };
+      renderer.__sinRoomMetricsWrapped = true;
+    }
     if (enabled) { ensurePanel(); bindRaf(); }
   }
 

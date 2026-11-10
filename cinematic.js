@@ -315,7 +315,12 @@
     potShadowRange() { return E.potShadow; },
     dustCount() { return E.dust; },
     // called once per rAF, before simulation
-    frame(ts, busy) { govern(ts, busy); hud(ts); },
+    frame(ts, busy) {
+      if (R && window.SinRoomMetrics && typeof window.SinRoomMetrics.attachRenderer === 'function') {
+        window.SinRoomMetrics.attachRenderer(R);
+      }
+      govern(ts, busy); hud(ts);
+    },
     // called once per simulation step, after the camera has been placed
     update(dt, info) { updateAtmo(dt, info); cameraFrame(dt, ctx.interior(), info && info.running); },
     status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, shadowPolicy: !!E.shadow, shadowMapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg }; }
