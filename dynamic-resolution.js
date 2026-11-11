@@ -13,7 +13,7 @@
     var value = Math.max(min, Math.min(max, Number.isFinite(options.initial) ? options.initial : max));
     var recoveryMs = 0;
 
-    function sample(fps, elapsedMs, busy) {
+    function sample(fps, elapsedMs, busy, hint) {
       var before = value;
       if (busy || !Number.isFinite(fps) || !Number.isFinite(elapsedMs) || elapsedMs <= 0) {
         recoveryMs = 0;
@@ -31,6 +31,12 @@
         }
       } else {
         recoveryMs = 0;
+      }
+      // When the drawn triangle budget is modest, keep resolution readable on
+      // phones (palace hall / single room) instead of lingering near min 0.58.
+      var tris = hint && Number(hint.triangles);
+      if (Number.isFinite(tris) && tris > 0 && tris < 600000) {
+        value = Math.max(value, 0.85);
       }
       value = Math.round(value * 1000) / 1000;
       return { value: value, changed: value !== before };

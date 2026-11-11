@@ -59,11 +59,10 @@ ThreeModule.Object3D.prototype.remove = function (...objects) {
 };
 function lightsFor(scene) {
   let entry = lightCacheByScene.get(scene);
-  // Rebuilding walks the whole scene. Streamed regions are added while the
-  // player moves, so the cache went dirty on most frames and the render loop
-  // paid a full traverse plus a new array each time. A light added a couple of
-  // frames later still ends at the same intensity, so rate-limit the rebuild.
-  if (entry && entry.dirty && performance.now() - entry.builtAt < 1000) return entry;
+  // Rebuild promptly when dirty so newly added palace hemi/ambient lights get
+  // the r147 ×π scale on the next frame. Cap rebuild cost with a short
+  // coalesce window only (was 1000ms and left interiors dark after entry).
+  if (entry && entry.dirty && performance.now() - entry.builtAt < 32) return entry;
   if (!entry || entry.dirty) {
     const lights = [];
     if (scene && scene.traverse) {

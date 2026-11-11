@@ -675,6 +675,17 @@
     });
   }
 
+  // Stone/wood GLBs ship metallicFactor=1 + mrMap. Leaving that intact makes
+  // doors/columns pure black under weak IBL. Soften regardless of metalnessMap.
+  function softenPalaceMetal(m) {
+    if (!m || !m.isMeshStandardMaterial) return m;
+    if (m.metalness == null || m.metalness >= 0.85) {
+      m.metalness = 0.22;
+      if (m.roughness == null || m.roughness < 0.35) m.roughness = 0.55;
+    }
+    return m;
+  }
+
   function tuneGLTF(gltf) {
     gltf.scene.traverse(function (o) {
       if (!o.isMesh || !o.material) return;
@@ -687,10 +698,7 @@
           else { m[k].anisotropy = aniso.v; m[k].needsUpdate = true; }
         });
         m.userData.palaceShared = true;
-        if ((m.metalness == null || m.metalness >= 0.99) && !m.metalnessMap) {
-          m.metalness = 0.3;
-          m.roughness = 0.5;
-        }
+        softenPalaceMetal(m);
       });
     });
     return gltf;
@@ -804,8 +812,11 @@
 
   async function settle(spec) {
     if (spec.status === 'loaded' && spec.result) return spec.result;
+    const t0 = performance.now();
+    let tAfterDl = t0, tAfterParse = t0;
     try {
       if (!spec.buf) spec.buf = await fetchWithRetry(spec);
+      tAfterDl = performance.now();
       const byteLen = spec.buf ? spec.buf.byteLength : 0;
       if (spec.kind === 'js') spec.result = await installDecoder(spec.buf);
       else if (spec.kind === 'tex') spec.result = await textureFromBytes(spec.buf, spec.name, spec.linear);
@@ -816,11 +827,25 @@
         await waitDecoder();
         spec.result = await parseGLB(spec.buf);
       }
+      tAfterParse = performance.now();
       // Free the ArrayBuffer immediately after parse/upload — do not keep it
       // until the whole batch finishes (that was a peak-RAM spike on iPhone).
       spec.buf = null;
       const renderer = lastContext && lastContext.renderer;
       if (spec.kind !== 'js') releaseCpuFromResult(spec.result, renderer);
+      const tAfterUpload = performance.now();
+      spec.timing = {
+        downloadMs: Math.round(tAfterDl - t0),
+        parseMs: Math.round(tAfterParse - tAfterDl),
+        uploadMs: Math.round(tAfterUpload - tAfterParse),
+        bytes: byteLen
+      };
+      try {
+        console.info('[palace load]', spec.name, spec.timing);
+        const prev = JSON.parse(sessionStorage.getItem('sinLoadTiming') || '[]');
+        prev.push(Object.assign({ name: spec.name, kind: spec.kind }, spec.timing));
+        sessionStorage.setItem('sinLoadTiming', JSON.stringify(prev.slice(-40)));
+      } catch (_) {}
       if (spec.wingPath && window.PalaceWings) PalaceWings.provideAsset(spec.wingPath, spec.result);
       spec.status = 'loaded';
       spec.error = '';
@@ -1525,14 +1550,11 @@
     const base = Array.isArray(src) ? src[0] : src;
     const m = base.clone();
     m.userData = Object.assign({}, m.userData, { palaceShared: false });
-    if ((m.metalness == null || m.metalness >= 0.99) && !m.metalnessMap) {
-      m.metalness = 0.3;
-      m.roughness = 0.5;
-    }
+    softenPalaceMetal(m);
     m.side = THREE.DoubleSide;
     if (palaceEnv) {
       m.envMap = palaceEnv;
-      m.envMapIntensity = 0.6;
+      m.envMapIntensity = Math.max(0.85, m.envMapIntensity || 0);
     }
     return m;
   }
@@ -1558,21 +1580,22 @@
 
   function makePalaceEnv(renderer) {
     const c = document.createElement('canvas');
-    c.width = 128;
-    c.height = 64;
+    c.width = 256;
+    c.height = 128;
     const g = c.getContext('2d');
-    const grd = g.createLinearGradient(0, 0, 0, 64);
-    grd.addColorStop(0, '#100e0c');
-    grd.addColorStop(0.4, '#3a2618');
-    grd.addColorStop(0.52, '#e39a45');
-    grd.addColorStop(0.64, '#5c381f');
-    grd.addColorStop(1, '#0c0a09');
+    const grd = g.createLinearGradient(0, 0, 0, 128);
+    // Brighter warm probe so MeshStandard metals/stone read after outdoor IBL is gone.
+    grd.addColorStop(0, '#2a2218');
+    grd.addColorStop(0.35, '#6a4a2c');
+    grd.addColorStop(0.5, '#f0b56a');
+    grd.addColorStop(0.62, '#8a5a30');
+    grd.addColorStop(1, '#1a1410');
     g.fillStyle = grd;
-    g.fillRect(0, 0, 128, 64);
-    g.fillStyle = 'rgba(255,214,150,0.95)';
-    [[18, 34], [46, 36], [74, 33], [104, 35]].forEach(function (p) {
+    g.fillRect(0, 0, 256, 128);
+    g.fillStyle = 'rgba(255,230,180,0.98)';
+    [[36, 68], [92, 72], [148, 66], [208, 70], [64, 58], [180, 60]].forEach(function (p) {
       g.beginPath();
-      g.arc(p[0], p[1], 3.2, 0, 6.283);
+      g.arc(p[0], p[1], 5.5, 0, 6.283);
       g.fill();
     });
     const tex = new THREE.CanvasTexture(c);
@@ -1584,6 +1607,40 @@
     pmrem.dispose();
     tex.dispose();
     return env;
+  }
+
+  function reportMeshMaterials(root, tag) {
+    const rows = [];
+    if (!root || !root.traverse) return rows;
+    root.traverse(function (o) {
+      if (!o.isMesh || !o.material) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      mats.forEach(function (m, mi) {
+        if (!m) return;
+        rows.push({
+          mesh: o.name || '(unnamed)',
+          mat: mi,
+          type: m.type,
+          metalness: m.metalness,
+          roughness: m.roughness,
+          map: !!m.map,
+          normalMap: !!m.normalMap,
+          emissive: m.emissive ? '#' + m.emissive.getHexString() : null,
+          emissiveIntensity: m.emissiveIntensity,
+          colorSpace: m.map && m.map.colorSpace,
+          side: m.side,
+          vertexColors: !!m.vertexColors,
+          envMap: !!m.envMap,
+          envMapIntensity: m.envMapIntensity
+        });
+      });
+    });
+    try {
+      console.table(rows.slice(0, 40));
+      console.info('[palace materials]', tag, 'n=' + rows.length);
+      sessionStorage.setItem('sinPalaceMats', JSON.stringify({ tag: tag, at: Date.now(), rows: rows.slice(0, 60) }));
+    } catch (_) {}
+    return rows;
   }
 
   function attachFloorShader(material) {
@@ -1673,10 +1730,25 @@
 
   function updatePalaceLights(dt, hero) {
     if (window.__perfLab && window.__perfLab.flags.skipLightWork) return;
-    // Lights are assigned once to fixed braziers during build(). Re-ranking them
-    // by hero distance every 0.8 s caused visible light pools to travel across walls.
-    // Keep their baked positions and intensities unchanged while the hero moves.
-    void dt; void hero;
+    void dt;
+    // Keep at most 4 real PointLights near the hero; the rest stay at intensity 0.
+    // Glow sprites cover distant braziers so the look does not go flat.
+    if (!lights.length || !lightTargets.length || !hero || !group) return;
+    const hx = hero.position.x - group.position.x;
+    const hz = hero.position.z - group.position.z;
+    const ranked = lightTargets.map(function (t, i) {
+      return { i: i, d2: (t.x - hx) * (t.x - hx) + (t.z - hz) * (t.z - hz), t: t };
+    }).sort(function (a, b) { return a.d2 - b.d2; });
+    const ACTIVE = 4;
+    const on = {};
+    for (let k = 0; k < ranked.length && k < ACTIVE; k++) on[ranked[k].i] = true;
+    for (let i = 0; i < lights.length; i++) {
+      const t = lightTargets[i];
+      if (!t) continue;
+      lights[i].position.set(t.x, t.y, t.z);
+      lights[i].intensity = on[i] ? t.baseIntensity : 0;
+      lights[i].distance = 11 * H;
+    }
   }
 
 
@@ -1717,7 +1789,11 @@
     if (!assets.props) console.warn('مجموعة الأغراض غير محمّلة — القاعة بلا أثاث مفصول.');
     try {
       palaceEnv = ctx.renderer ? makePalaceEnv(ctx.renderer) : null;
-      if (palaceEnv) palaceEnv.userData.palaceShared = true;
+      if (palaceEnv) {
+        palaceEnv.userData.palaceShared = true;
+        // Scene-level IBL so wing/streamed meshes without per-material env still lit.
+        if (ctx.scene) ctx.scene.environment = palaceEnv;
+      }
     } catch (envErr) {
       palaceEnv = null;
       console.warn('تعذّر إنشاء انعكاس القاعة', envErr && envErr.message);
@@ -1894,11 +1970,14 @@
     });
     if (palaceEnv) { floorMat.envMap = palaceEnv; floorMat.envMapIntensity = 0.6; }
     attachFloorShader(floorMat);
+    floorMat.side = THREE.DoubleSide;
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(0, -0.015, L / 2);
     floor.name = 'floor';
     floor.receiveShadow = true;
+    floor.frustumCulled = false;
+    if (floor.geometry && floor.geometry.computeBoundingSphere) floor.geometry.computeBoundingSphere();
     group.add(floor);
 
     const borderMap = tex.floorBorder.clone();
@@ -2115,10 +2194,10 @@
         if (!o.isMesh) return;
         o.castShadow = false;
         o.receiveShadow = true;
-        o.frustumCulled = true;
+        o.frustumCulled = false;
         if (o.material) {
-          o.material = o.material.clone();
-          o.material.side = THREE.DoubleSide;
+          const src = Array.isArray(o.material) ? o.material[0] : o.material;
+          o.material = palaceMat(src);
         }
       });
       const holder = new THREE.Group();
@@ -2161,10 +2240,17 @@
     ceiling.position.y = CH - 0.22;
     ceiling.name = 'ceiling';
     ceiling.material.color = new THREE.Color(0xffffff);
-    ceiling.material.roughness = 0.62;
-    ceiling.material.metalness = 0.16;
-    ceiling.material.emissive = new THREE.Color(0x3a2a16);
-    ceiling.material.emissiveIntensity = 0.08;
+    ceiling.material.roughness = 0.72;
+    ceiling.material.metalness = 0.04;
+    ceiling.material.emissive = new THREE.Color(0x4a3418);
+    ceiling.material.emissiveIntensity = 0.14;
+    ceiling.material.side = THREE.DoubleSide;
+    if (palaceEnv) {
+      ceiling.material.envMap = palaceEnv;
+      ceiling.material.envMapIntensity = 0.55;
+    }
+    ceiling.frustumCulled = false;
+    if (ceiling.geometry && ceiling.geometry.computeBoundingSphere) ceiling.geometry.computeBoundingSphere();
     group.add(ceiling);
     const corniceMat = new THREE.MeshStandardMaterial({ color: 0x8d6840, roughness: 0.62, metalness: 0.28 });
     if (palaceEnv) { corniceMat.envMap = palaceEnv; corniceMat.envMapIntensity = 0.3; }
@@ -2542,15 +2628,20 @@
     })();
     if (!propParts.length) slotModes.push({ id: 'propsSheet', count: 0, mode: 'missing' });
 
-    const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.18);
+    // Intensities tuned for r187 + three-compat (point lights keep author units;
+    // hemi/ambient receive ×π only while rendering). Outdoor sun/hemi are zeroed.
+    const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.58);
+    hemi.name = 'PalaceHallHemi';
     group.add(hemi);
-    const fill = new THREE.AmbientLight(0xffd0a4, 0.035);
+    const fill = new THREE.AmbientLight(0xffd0a4, 0.12);
+    fill.name = 'PalaceHallAmbient';
     group.add(fill);
     lights = [];
     for (let i = 0; i < CONFIG.lightCount; i++) {
-      const pl = new THREE.PointLight(0xffb15a, 0, 9 * H, 2);
+      const pl = new THREE.PointLight(0xffb15a, 0, 11 * H, 2);
       pl.castShadow = false;
       pl.position.set(0, 2.2 * H, L * 0.45);
+      pl.name = 'PalaceHallPoint' + i;
       group.add(pl);
       lights.push(pl);
     }
@@ -2634,10 +2725,43 @@
       for (let i = 0; i < lights.length; i++) {
         const f = sorted[Math.min(sorted.length - 1, Math.round(i * (sorted.length - 1) / Math.max(1, lights.length - 1)))];
         lights[i].position.set(f.x, ly, f.z);
-        const baseIntensity = 0.82 * Math.max(0.6, Math.min(1.7, Number(f.intensity) || 1));
+        const baseIntensity = 1.45 * Math.max(0.6, Math.min(1.7, Number(f.intensity) || 1));
         lights[i].intensity = baseIntensity;
-        lights[i].distance = 9 * H;
+        lights[i].distance = 11 * H;
         lightTargets[i] = { x: f.x, y: ly, z: f.z, baseIntensity: baseIntensity, seed: Number(f.seed) || i };
+      }
+      // Soft glow sprites at every brazier so distant torches still read when
+      // only the 3–4 nearest PointLights are active near the hero.
+      try {
+        const gc = document.createElement('canvas');
+        gc.width = gc.height = 64;
+        const gg = gc.getContext('2d');
+        const rad = gg.createRadialGradient(32, 32, 2, 32, 32, 30);
+        rad.addColorStop(0, 'rgba(255,210,120,0.95)');
+        rad.addColorStop(0.35, 'rgba(255,140,40,0.45)');
+        rad.addColorStop(1, 'rgba(0,0,0,0)');
+        gg.fillStyle = rad;
+        gg.fillRect(0, 0, 64, 64);
+        const glowTex = new THREE.CanvasTexture(gc);
+        glowTex.encoding = THREE.sRGBEncoding;
+        const glowMat = new THREE.SpriteMaterial({
+          map: glowTex, color: 0xffc878, transparent: true, depthWrite: false,
+          blending: THREE.AdditiveBlending, opacity: 0.72
+        });
+        fireList.forEach(function (f, fi) {
+          const spr = new THREE.Sprite(glowMat);
+          spr.position.set(f.x, f.y + 0.15 * H, f.z);
+          const s = 0.55 * H * Math.max(0.7, Math.min(1.4, Number(f.intensity) || 1));
+          spr.scale.set(s, s, 1);
+          spr.name = 'torch-glow';
+          spr.frustumCulled = false;
+          spr.renderOrder = 4;
+          spr.userData.torchGlow = true;
+          spr.userData.fireIndex = fi;
+          group.add(spr);
+        });
+      } catch (glowErr) {
+        console.warn('torch glow sprites', glowErr && glowErr.message);
       }
     }
 
@@ -3124,12 +3248,14 @@
         if (!o.material) return;
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         mats.forEach(function (m) {
-          if (!m.isMeshStandardMaterial || m.envMap) return;
-          m.envMap = palaceEnv;
-          if (!m.envMapIntensity) m.envMapIntensity = 0.45;
+          if (!m.isMeshStandardMaterial) return;
+          softenPalaceMetal(m);
+          if (!m.envMap) m.envMap = palaceEnv;
+          if (!m.envMapIntensity || m.envMapIntensity < 0.7) m.envMapIntensity = 0.85;
         });
       });
     }
+    try { reportMeshMaterials(group, 'post-palace-build'); } catch (_) {}
     function geomLoad() {
       let draws = 0, tris = 0;
       group.traverse(function (o) {

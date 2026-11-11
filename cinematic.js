@@ -139,7 +139,9 @@
   const ZONES = {
     approach:  { exp: 1.00, fog: 1.00, fogTint: [1, 1, 1],          hemi: 1.00, sun: 1.00 },
     babylon:   { exp: 0.97, fog: 1.10, fogTint: [1.04, 0.86, 0.78], hemi: 0.94, sun: 1.00 },
-    courtyard: { exp: 0.96, fog: 0.78, fogTint: [1.02, 0.90, 0.82], hemi: 0.96, sun: 1.00 }
+    courtyard: { exp: 0.96, fog: 0.78, fogTint: [1.02, 0.90, 0.82], hemi: 0.96, sun: 1.00 },
+    // Interior: cut outdoor fog so ceilings/far walls are not crushed; hall lights own fill.
+    palace:    { exp: 1.06, fog: 0.18, fogTint: [1.05, 0.92, 0.78], hemi: 0.00, sun: 0.00 }
   };
   let zoneName = 'approach';
   function captureBase() {
@@ -151,8 +153,20 @@
     Object.assign(cur, ZONES.approach); cur.fogTint = ZONES.approach.fogTint.slice();
   }
   function updateAtmo(dt, info) {
-    if (ctx.interior()) return;                       // the palace hall owns its own lighting
     if (!baseAtmo) captureBase();
+    if (ctx.interior()) {
+      // Keep the HUD zone truthful and dial fog/exposure for the palace.
+      zoneName = 'palace';
+      const z = ZONES.palace, k = 1 - Math.exp(-dt / 0.9);
+      cur.exp += (z.exp - cur.exp) * k; cur.fog += (z.fog - cur.fog) * k;
+      for (let i = 0; i < 3; i++) cur.fogTint[i] += (z.fogTint[i] - cur.fogTint[i]) * k;
+      R.toneMappingExposure = baseAtmo.exp * cur.exp;
+      if (scene.fog) {
+        scene.fog.density = baseAtmo.fogD * cur.fog;
+        scene.fog.color.setRGB(baseAtmo.fogC.r * cur.fogTint[0], baseAtmo.fogC.g * cur.fogTint[1], baseAtmo.fogC.b * cur.fogTint[2]);
+      }
+      return;
+    }
     zoneName = info && info.courtyard ? 'courtyard' : info && info.babylon ? 'babylon' : 'approach';
     const z = ZONES[zoneName], k = 1 - Math.exp(-dt / 1.6);   // ~1.6 s time constant: no exposure jumps
     cur.exp += (z.exp - cur.exp) * k; cur.fog += (z.fog - cur.fog) * k;
@@ -202,7 +216,7 @@
     const avg = acc / n, sampleMs = winT; acc = n = winT = 0;
     perf.avg = avg;
     if (dynamicResolution) {
-      const change = dynamicResolution.sample(1000 / avg, sampleMs, false);
+      const change = dynamicResolution.sample(1000 / avg, sampleMs, false, { triangles: perf.tris || 0 });
       if (change.changed) { E = eff(); if (ctx.resize) ctx.resize(); }
     }
     // Keep shadow policy, material layout, LOD distances and grade fixed during

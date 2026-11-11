@@ -1725,6 +1725,7 @@
           return { geometry: geo, material: material, size: geo.boundingBox.getSize(new THREE.Vector3()) };
         })();
         if (!extracted) return;
+        softenWingMetal(extracted.material);
         const k = targetH / Math.max(1e-4, extracted.size.y);
         const im = new THREE.InstancedMesh(extracted.geometry, extracted.material, pairs.length);
         im.name = 'K2-majlis-columns'; im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false;
@@ -1737,6 +1738,7 @@
           im.setMatrixAt(i, dummy.matrix);
         });
         im.instanceMatrix.needsUpdate = true;
+        hideUntilReady(im);
         g.add(im);
         state.k2Dress.columns = pairs.length;
         state.k2Dress.columnH = targetH;
@@ -1782,7 +1784,13 @@
       holder.position.set(b.cx, 0, b.cz);
       holder.rotation.y = rot;
       holder.add(model);
-      model.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.frustumCulled = false; } });
+      model.traverse(o => {
+        if (!o.isMesh) return;
+        o.castShadow = false; o.receiveShadow = true; o.frustumCulled = false;
+        const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        mats.forEach(softenWingMetal);
+      });
+      hideUntilReady(holder);
       g.add(holder);
       state.k2Dress.table = true;
       state.k2Dress.tableH = (box.max.y - box.min.y) * s;
@@ -1912,7 +1920,11 @@
               m.compose(p, q, scl); im.setMatrixAt(i++, m);
             }
             im.instanceMatrix.needsUpdate = true;
-            im.userData.ceiling = true; im.visible = !state.cutaway;
+            im.userData.ceiling = true;
+            const mats = im.material ? (Array.isArray(im.material) ? im.material : [im.material]) : [];
+            mats.forEach(softenWingMetal);
+            hideUntilReady(im);
+            if (!state.cutaway) { /* revealed in markDressReady */ }
             g.add(im); ceilingMeshes.push(im);
             (state.corridorCeilings || (state.corridorCeilings = [])).push(im);
           });
@@ -1943,7 +1955,13 @@
         model.position.set(-c.x * k, -box.min.y * k, -c.z * k);
         const holder = new THREE.Group(); holder.name = 'K2-winged-lion-' + (i + 1);
         holder.position.set(s.x, 0, s.z); holder.rotation.y = s.rot; holder.add(model);
-        model.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
+        model.traverse(o => {
+          if (!o.isMesh) return;
+          o.castShadow = false; o.receiveShadow = true;
+          const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+          mats.forEach(softenWingMetal);
+        });
+        hideUntilReady(holder);
         g.add(holder);
       });
       state.k2Dress.lions = lionSlots.length;
@@ -1976,7 +1994,9 @@
           rel.copy(dummy.matrix).multiply(centre).multiply(part.matrixWorld);
           im.setMatrixAt(i, rel);
         });
-        im.instanceMatrix.needsUpdate = true; g.add(im);
+        im.instanceMatrix.needsUpdate = true;
+        hideUntilReady(im);
+        g.add(im);
       });
       state.k2Dress.plants = plantSlots.length;
       state.root.updateMatrixWorld(true);
@@ -2021,6 +2041,7 @@
         // Keep the asset's authored materials and appearance; only set render flags.
         o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false;
       });
+      hideUntilReady(model);
       g.add(model);
       const cups = K2_DRESS.cups.map((cup, i) => ({
         x: b.cx + (cup.x - c.x) * k,
@@ -2037,6 +2058,7 @@
       state.k2Dress.chandelierH = chH;
       state.k2Dress.fireY = fireY;
       state.root.updateMatrixWorld(true);
+      // Table may still be loading; watchDressReady reveals when columns+table+chandelier are set.
     });
   }
   function rebuildSpatial() {
@@ -2235,9 +2257,12 @@
     state.root.position.set(ctx.portal.x, hall.floorY || 0, ctx.portal.frontZ); ctx.scene.add(state.root);
     // One fixed ambient source serves every wing and corridor, so brightness
     // does not jump when regional geometry is culled or the hero changes rooms.
-    state.unifiedAmbient = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.78);
+    state.unifiedAmbient = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.95);
     state.unifiedAmbient.name = 'PalaceWingsUnifiedAmbient';
     state.root.add(state.unifiedAmbient);
+    state.unifiedFill = new THREE.AmbientLight(0xffd0a4, 0.10);
+    state.unifiedFill.name = 'PalaceWingsFill';
+    state.root.add(state.unifiedFill);
     const layout = solveLayout(hall);
     wingMark('wings layout');
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
@@ -2314,26 +2339,81 @@
     }
     return triCache.get(id);
   }
+  // Spread texture uploads across frames; compileAsync when available.
+  const uploadQueue = [];
+  let warmBusy = false;
+  function softenWingMetal(m) {
+    if (!m || !m.isMeshStandardMaterial) return;
+    if (m.metalness == null || m.metalness >= 0.85) {
+      m.metalness = 0.2;
+      if (m.roughness == null || m.roughness < 0.35) m.roughness = 0.55;
+    }
+    const env = state.ctx && state.ctx.scene && state.ctx.scene.environment;
+    if (env && !m.envMap) {
+      m.envMap = env;
+      m.envMapIntensity = Math.max(0.75, m.envMapIntensity || 0);
+    }
+  }
+  function queueRoomUploads(g) {
+    if (!g) return;
+    g.traverse(o => {
+      if (!o.isMesh) return;
+      const list = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      list.forEach(m => {
+        softenWingMetal(m);
+        if (m && m.side !== THREE.DoubleSide && /ceil|floor|سقف|أرض/i.test(String(o.name || ''))) {
+          m.side = THREE.DoubleSide;
+        }
+        ['map', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'metalnessMap'].forEach(k => {
+          if (m && m[k] && m[k].isTexture) uploadQueue.push(m[k]);
+        });
+      });
+      if (o.geometry && (!o.geometry.boundingSphere || o.frustumCulled !== false) && /ceil|floor/i.test(String(o.name || ''))) {
+        o.frustumCulled = false;
+        try { o.geometry.computeBoundingSphere(); } catch (_) {}
+      }
+    });
+  }
+  function pumpUploads(renderer, budget) {
+    if (!renderer || typeof renderer.initTexture !== 'function') { uploadQueue.length = 0; return; }
+    let n = 0;
+    while (uploadQueue.length && n < (budget || 3)) {
+      const t = uploadQueue.shift();
+      try { if (t && t.image) renderer.initTexture(t); } catch (_) {}
+      n++;
+    }
+  }
   // Preparation step: compile shaders and upload textures for a prepared room
   // before it is drawn, at most one room per frame so there is no hitch.
   function warmNext() {
     const ctx = state.ctx;
+    if (warmBusy) return;
+    pumpUploads(ctx && ctx.renderer, 4);
     if (!warmQueue.length || !ctx || !ctx.renderer || !ctx.camera) return;
     const g = warmQueue.shift();
     if (!g || warmed.has(g)) return;
     warmed.add(g);
     const was = g.visible;
+    warmBusy = true;
     try {
       g.visible = true;
-      if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(g, ctx.camera);
-      if (typeof ctx.renderer.initTexture === 'function') {
-        g.traverse(o => {
-          const list = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-          list.forEach(m => { ['map', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'metalnessMap'].forEach(k => { if (m && m[k] && m[k].isTexture && m[k].image) ctx.renderer.initTexture(m[k]); }); });
-        });
+      queueRoomUploads(g);
+      const finish = function () {
+        pumpUploads(ctx.renderer, 4);
+        g.visible = was;
+        if (g.userData) g.userData.warmReady = true;
+        warmBusy = false;
+      };
+      if (typeof ctx.renderer.compileAsync === 'function') {
+        Promise.resolve(ctx.renderer.compileAsync(g, ctx.camera)).then(finish).catch(finish);
+      } else {
+        if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(g, ctx.camera);
+        finish();
       }
-    } catch (e) { /* warming is best-effort */ }
-    g.visible = was;
+    } catch (e) {
+      g.visible = was;
+      warmBusy = false;
+    }
   }
   function cameraView(rootX, rootZ) {
     const cam = state.ctx && state.ctx.camera;
@@ -2351,9 +2431,53 @@
   // built at palace entry stay. Re-entry re-queues dressRoomIfNeeded.
   const STREAM_DRESS_ROOMS = new Set(['K2', 'K3', 'K4']);
   const dressedRooms = new Set();
+  const dressPending = new Set();
   const dressFailures = [];
+  function markDressReady(id) {
+    if (!dressPending.has(id) && dressedRooms.has(id)) return;
+    dressPending.delete(id);
+    dressedRooms.add(id);
+    const g = state.regionGroups.get(id);
+    if (g) {
+      // Soften metals + queue GPU work, then show streamed meshes as one set.
+      g.traverse(function (o) {
+        if (!o.isMesh) return;
+        const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        mats.forEach(softenWingMetal);
+        if (o.userData && o.userData.hideUntilDressReady) {
+          o.visible = true;
+          delete o.userData.hideUntilDressReady;
+        }
+      });
+      queueRoomUploads(g);
+      if (g.userData) g.userData.dressReady = true;
+      if (warmQueue.indexOf(g) < 0 && !warmed.has(g)) warmQueue.push(g);
+    }
+    try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('load', id + ' dress ready'); } catch (e) {}
+  }
+  function watchDressReady(id) {
+    const started = performance.now();
+    function tick() {
+      if (!dressPending.has(id)) return;
+      let ok = false;
+      if (id === 'K2') ok = !!(state.k2Dress && state.k2Dress.chandelier && state.k2Dress.columns && state.k2Dress.table);
+      else if (id === 'K3') ok = !!(state.k3Dress && state.k3Dress.furniture);
+      else if (id === 'K4') ok = !!(state.k4Dress && state.k4Dress.loadStarted && state.k4Dress._assetsCommitted);
+      if (ok || performance.now() - started > 14000) markDressReady(id);
+      else setTimeout(tick, 180);
+    }
+    setTimeout(tick, 180);
+  }
+  function hideUntilReady(obj) {
+    if (!obj) return;
+    obj.traverse(function (o) {
+      if (!o.isMesh && !o.isInstancedMesh && !o.isPoints && !o.isSprite) return;
+      o.visible = false;
+      o.userData.hideUntilDressReady = true;
+    });
+  }
   function unloadStreamedDress(id) {
-    if (!STREAM_DRESS_ROOMS.has(id) || !dressedRooms.has(id)) return false;
+    if (!STREAM_DRESS_ROOMS.has(id) || (!dressedRooms.has(id) && !dressPending.has(id))) return false;
     const g = state.regionGroups.get(id);
     if (!g) return false;
     const doomed = [];
@@ -2375,25 +2499,27 @@
     if (id === 'K2') {
       state.colliders = state.colliders.filter(function (c) { return !c._k2Prop; });
       state.k2Lights = null; state.k2LightBase = null; state.k2Dress = null;
-      if (g.userData) g.userData.k2Dressed = false;
+      if (g.userData) { g.userData.k2Dressed = false; g.userData.dressReady = false; }
     }
-    if (id === 'K3') { state.k3Lights = null; state.k3LightBase = null; if (g.userData) g.userData.k3Dressed = false; }
-    if (id === 'K4') { state.k4Dress = null; if (g.userData) g.userData.k4Dressed = false; }
+    if (id === 'K3') { state.k3Lights = null; state.k3LightBase = null; if (g.userData) { g.userData.k3Dressed = false; g.userData.dressReady = false; } }
+    if (id === 'K4') { state.k4Dress = null; if (g.userData) { g.userData.k4Dressed = false; g.userData.dressReady = false; } }
     dressedRooms.delete(id);
+    dressPending.delete(id);
     state.deferredDress.add(id);
     try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('unload', id + ' dress released n=' + doomed.length); } catch (e) {}
     return doomed.length > 0;
   }
   function dressRoomIfNeeded(id) {
     if (!state.deferredDress.has(id)) return;
-    if (dressedRooms.has(id)) { state.deferredDress.delete(id); return; }
+    if (dressedRooms.has(id) || dressPending.has(id)) { state.deferredDress.delete(id); return; }
     state.deferredDress.delete(id);
-    // Camera-driven streaming: a room starts decoding as soon as it enters
-    // the camera visibility plan, not when the hero crosses its threshold.
+    dressPending.add(id);
+    // Preload as soon as the room is prepared (before the hero reaches the door).
+    // Streamed meshes stay hidden until watchDressReady → markDressReady.
     if (id === 'K2') dressK2();
     else if (id === 'K3') dressK3();
     else if (id === 'K4') dressK4();
-    if (STREAM_DRESS_ROOMS.has(id)) dressedRooms.add(id);
+    watchDressReady(id);
     if (state.root) state.root.updateMatrixWorld(true);
     try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('load', id + ' dress start'); } catch (e) {}
   }
@@ -3233,6 +3359,9 @@
       });
       rebuildSpatial();
       rootAtRequest.updateMatrixWorld(true);
+      dress._assetsCommitted = true;
+      if (dress.host && dress.host.userData) dress.host.userData.k4Dressed = true;
+      markDressReady('K4');
     };
     kits.forEach(function (url) {
       wingGLB(url, function (gltf) {
@@ -3584,7 +3713,13 @@
         holder.position.set(b.cx, 0, b.cz);
         holder.rotation.y = -Math.PI / 2;
         holder.add(model);
-        model.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
+        model.traverse(o => {
+          if (!o.isMesh) return;
+          o.castShadow = false; o.receiveShadow = true;
+          const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+          mats.forEach(softenWingMetal);
+        });
+        hideUntilReady(holder);
         g.add(holder);
         const hx = size.z * s * 0.5, hz = size.x * s * 0.5;
         state.colliders.push({
@@ -3610,6 +3745,8 @@
           dress2.pieceReport = pieces.map(p => ({ kind: k3Kind(p), size: [p.size.x, p.size.y, p.size.z].map(n => +n.toFixed(3)) }));
         }
         k3PlaceFurniture();
+        if (g.userData) g.userData.k3Dressed = true;
+        markDressReady('K3');
       });
     });
   }
