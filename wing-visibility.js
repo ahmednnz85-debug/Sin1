@@ -19,8 +19,8 @@
   const DEFAULTS = {
     viewDistance: 400,     // the camera's full sight line (everything it can see is drawn)
     frustumMargin: 0.22,   // tight camera gate: do not treat side rooms as visible through walls
-    prefetchMargin: 0.05,  // almost no look-ahead beyond adjacency (memory-bounded)
-    prefetchDistance: 2,   // only a couple of metres past the door — not whole wings
+    prefetchMargin: 0.18,  // prepare the next doorway slightly before the hero arrives
+    prefetchDistance: 6,   // start dress a few metres before the door (still hop-capped)
     nearPad: 1.25,         // only the immediate camera volume bypasses the wedge
     // Memory hard rule: keep the current room + directly connected rooms only.
     maxHops: 1,

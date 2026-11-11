@@ -42,3 +42,11 @@ test('severe 3 FPS frames drive the default render scale to its safe floor withi
   assert.equal(g.value(), 0.58);
   assert.equal(g.sample(59, 3000, false).value, 0.59);
 });
+
+test('triangle budgets under 600k raise the dynamic resolution floor to at least 0.85', () => {
+  const g = create();
+  for (let i = 0; i < 6; i++) g.sample(3, 1500, false);
+  assert.equal(g.value(), 0.58);
+  assert.equal(g.sample(55, 1500, false, { triangles: 450000 }).value, 0.85);
+  assert.ok(g.sample(55, 1500, false, { triangles: 900000 }).value <= 0.85);
+});
