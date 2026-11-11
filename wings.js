@@ -118,9 +118,34 @@
       else if (++tries > 300) { clearInterval(t); go(null); }
     }, 100);
   }
+  // Strict one-at-a-time wing GLB fetch/parse. Parallel parses were a peak-RAM
+  // spike on iPhone when K2/K3 dressed several models together.
+  let wingLoadChain = Promise.resolve();
+  function enqueueWingLoad(task) {
+    const run = wingLoadChain.then(task, task);
+    wingLoadChain = run.catch(function () {});
+    return run;
+  }
+  function releaseGltfCpu(gltf) {
+    if (!gltf || !gltf.scene) return;
+    gltf.scene.traverse(function (o) {
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      mats.forEach(function (m) {
+        if (!m) return;
+        ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'].forEach(function (k) {
+          const t = m[k];
+          if (!t || !t.isTexture) return;
+          try {
+            if (t.image && typeof t.image.close === 'function') t.image.close();
+            if (!t.isCompressedTexture) t.image = null;
+          } catch (_) {}
+        });
+      });
+    });
+  }
   // Every wing model goes through here: a preloaded model is handed out as a
   // fresh clone (geometry, materials and textures shared, nothing downloaded);
-  // otherwise it is fetched exactly as before.
+  // otherwise it is fetched exactly as before — but never in parallel.
   function wingGLB(url, onLoad, onError) {
     const fail = onError || (e => console.warn('Wing model failed', url, e));
     if (!THREE.GLTFLoader) { fail(new Error('GLTFLoader not available')); return; }
@@ -134,10 +159,28 @@
       if (state.building) deferredLoads.push(run); else run();
       return;
     }
-    withMeshopt(dec => {
-      const loader = new THREE.GLTFLoader();
-      if (dec) loader.setMeshoptDecoder(dec);
-      loader.load(encodeURI(url), deliver, undefined, fail);
+    enqueueWingLoad(function () {
+      return new Promise(function (resolve) {
+        withMeshopt(function (dec) {
+          fetch(encodeURI(url)).then(function (res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url);
+            return res.arrayBuffer();
+          }).then(function (buf) {
+            return new Promise(function (resOk, resFail) {
+              const loader = new THREE.GLTFLoader();
+              if (dec) loader.setMeshoptDecoder(dec);
+              loader.parse(buf, '', function (gltf) {
+                try { releaseGltfCpu(gltf); } catch (_) {}
+                // buf dropped when this closure ends — no long-lived ArrayBuffer.
+                deliver(gltf);
+                resOk();
+              }, resFail);
+            });
+          }).catch(function (e) {
+            fail(e);
+          }).then(resolve, resolve);
+        });
+      });
     });
   }
 
@@ -2955,13 +2998,31 @@
       onLoad({ scene: cached.scene.clone(true), animations: cached.animations || [] });
       return;
     }
-    k3EnsureDraco(draco => {
-      if (!draco || !THREE.GLTFLoader) { fail(new Error('DRACOLoader unavailable')); return; }
-      withMeshopt(dec => {
-        const loader = new THREE.GLTFLoader();
-        loader.setDRACOLoader(draco);
-        if (dec) loader.setMeshoptDecoder(dec);
-        loader.load(encodeURI(url), gltf => { if (state.root === root) onLoad(gltf); else onLoad(null); }, undefined, fail);
+    // Queue behind other wing GLBs; never parse طاولة الخرائط alongside اثاث.
+    enqueueWingLoad(function () {
+      return new Promise(function (resolve) {
+        k3EnsureDraco(function (draco) {
+          if (!draco || !THREE.GLTFLoader) { fail(new Error('DRACOLoader unavailable')); resolve(); return; }
+          withMeshopt(function (dec) {
+            fetch(encodeURI(url)).then(function (res) {
+              if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url);
+              return res.arrayBuffer();
+            }).then(function (buf) {
+              return new Promise(function (resOk, resFail) {
+                const loader = new THREE.GLTFLoader();
+                loader.setDRACOLoader(draco);
+                if (dec) loader.setMeshoptDecoder(dec);
+                loader.parse(buf, '', function (gltf) {
+                  try { releaseGltfCpu(gltf); } catch (_) {}
+                  if (state.root === root) onLoad(gltf); else onLoad(null);
+                  resOk();
+                }, resFail);
+              });
+            }).catch(function (e) {
+              fail(e);
+            }).then(resolve, resolve);
+          });
+        });
       });
     });
   }
@@ -3504,48 +3565,52 @@
     state.k3Lights = [];
     state.k3LightBase = [];
 
+    // Sequential: table first, then furniture. طاولة الخرائط is never fetched
+    // unless K3 is in the hop≤1 prepared set (dressK3 only runs then).
     k3LoadGLB(K3_LAZY.table, gltf => {
       const dress = state.k3Dress;
       if (!dress || dress.host !== g) return;
-      if (!gltf) { dress.tableHalf = { x: 2.16, z: 2.20 }; k3PlaceFurniture(); return; }
-      const model = gltf.scene;
-      model.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(model);
-      const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
-      const s = 1.12 / Math.max(1e-4, size.y);
-      model.scale.setScalar(s);
-      model.position.set(-c.x * s, -box.min.y * s, -c.z * s);
-      const holder = new THREE.Group();
-      holder.name = 'K3-map-table';
-      holder.position.set(b.cx, 0, b.cz);
-      holder.rotation.y = -Math.PI / 2;
-      holder.add(model);
-      model.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
-      g.add(holder);
-      const hx = size.z * s * 0.5, hz = size.x * s * 0.5;
-      state.colliders.push({
-        minx: b.cx - hx, maxx: b.cx + hx, miny: 0, maxy: size.y * s,
-        minz: b.cz - hz, maxz: b.cz + hz, _wing: true, _k3Prop: true
+      if (!gltf) { dress.tableHalf = { x: 2.16, z: 2.20 }; }
+      else {
+        const model = gltf.scene;
+        model.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+        const s = 1.12 / Math.max(1e-4, size.y);
+        model.scale.setScalar(s);
+        model.position.set(-c.x * s, -box.min.y * s, -c.z * s);
+        const holder = new THREE.Group();
+        holder.name = 'K3-map-table';
+        holder.position.set(b.cx, 0, b.cz);
+        holder.rotation.y = -Math.PI / 2;
+        holder.add(model);
+        model.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
+        g.add(holder);
+        const hx = size.z * s * 0.5, hz = size.x * s * 0.5;
+        state.colliders.push({
+          minx: b.cx - hx, maxx: b.cx + hx, miny: 0, maxy: size.y * s,
+          minz: b.cz - hz, maxz: b.cz + hz, _wing: true, _k3Prop: true
+        });
+        dress.table = true;
+        dress.tableHalf = { x: hx, z: hz };
+        dress.tableSize = size.toArray();
+        rebuildSpatial();
+      }
+      k3LoadGLB(K3_LAZY.furn, gltf2 => {
+        const dress2 = state.k3Dress;
+        if (!dress2 || dress2.host !== g) return;
+        if (gltf2) {
+          const pieces = k3SplitFurniture(gltf2.scene);
+          const by = {};
+          pieces.forEach(p => {
+            const k = k3Kind(p);
+            if (!by[k] || p.tris > by[k].tris) by[k] = p;
+          });
+          dress2.by = by;
+          dress2.pieceReport = pieces.map(p => ({ kind: k3Kind(p), size: [p.size.x, p.size.y, p.size.z].map(n => +n.toFixed(3)) }));
+        }
+        k3PlaceFurniture();
       });
-      dress.table = true;
-      dress.tableHalf = { x: hx, z: hz };
-      dress.tableSize = size.toArray();
-      rebuildSpatial();
-      k3PlaceFurniture();
-    });
-    k3LoadGLB(K3_LAZY.furn, gltf => {
-      const dress = state.k3Dress;
-      if (!dress || dress.host !== g) return;
-      if (!gltf) return;
-      const pieces = k3SplitFurniture(gltf.scene);
-      const by = {};
-      pieces.forEach(p => {
-        const k = k3Kind(p);
-        if (!by[k] || p.tris > by[k].tris) by[k] = p;
-      });
-      dress.by = by;
-      dress.pieceReport = pieces.map(p => ({ kind: k3Kind(p), size: [p.size.x, p.size.y, p.size.z].map(n => +n.toFixed(3)) }));
-      k3PlaceFurniture();
     });
   }
 
