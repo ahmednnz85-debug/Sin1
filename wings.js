@@ -2380,6 +2380,7 @@
       }
     });
   }
+  let camDir = null;
   function cameraView(rootX, rootZ) {
     const cam = state.ctx && state.ctx.camera;
     if (!cam || !cam.getWorldDirection) return null;
