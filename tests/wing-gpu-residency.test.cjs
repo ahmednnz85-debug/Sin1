@@ -82,7 +82,8 @@ test('wing culling calls GPU residency synchronization and is camera-driven, dra
   assert.match(culling, /state\.palaceNear = id === 'Palace' \|\| isArch/);
   // Prepared/visible rooms are streamed through the zone streamer.
   assert.match(culling, /streamZones\(origin, visibleIds, preparedIds\)/);
-  assert.match(culling, /gpuResidency\.sync\(state\.ctx\.scene, state\.root, state\.regionGroups, preparedIds\)/);
+  // Palace GPU residency is owned by the zone streamer; this module remains for the outdoor city only.
+  assert.doesNotMatch(culling, /gpuResidency\.sync\(/);
   assert.match(wings, /visibleRegionTriangles/);
   assert.match(wings, /if \(state\.built && !state\.building\) updateCulling\(true\)/);
 });

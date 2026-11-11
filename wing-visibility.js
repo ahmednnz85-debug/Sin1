@@ -106,10 +106,13 @@
         if (seen) lastSeen.set(r.id, t);
         const lingering = lastSeen.has(r.id) && t - lastSeen.get(r.id) <= opt.linger && h <= opt.maxHops;
         if (seen || lingering) { visible.add(r.id); touch(r.id); }
-        // Prepared = GPU-resident: every region within prepareHops of the
-        // hero's region, plus everything visible.
+        // Prepared (GPU-resident + prefetch) is based on the PLAYER'S region,
+        // with a hop radius. Camera direction must not start loads or evicts
+        // (a 360° spin must not churn zones). Visible rooms are still drawn,
+        // and the streamer protects anything currently in the frustum from
+        // eviction, but membership of `prepared` itself does not follow the camera.
         const prepHops = Number.isFinite(opt.prepareHops) ? opt.prepareHops : opt.maxHops;
-        if (h <= prepHops || visible.has(r.id)) prepared.add(r.id);
+        if (h <= prepHops) prepared.add(r.id);
         meta.set(r.id, { hops: h, distance: near, inView: seen });
       });
       if (opt.memory > 0) recent.forEach(id => prepared.add(id));

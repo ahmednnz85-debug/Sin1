@@ -1,28 +1,29 @@
+'use strict';
+// smart-memory-manager.js was folded into zone-streamer.js (sample / memoryLevel).
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { create } = require('../smart-memory-manager.js');
+const fs = require('node:fs');
+const path = require('node:path');
+const Z = require('../zone-streamer.js');
 
-test('normal pressure keeps the planned resident rooms', () => {
-  const m = create({ geometryBudget: 100, textureBudget: 100 });
-  const result = m.selectPrepared(new Set(['current']), new Set(['current', 'near', 'far']), new Map(), 'current');
-  assert.deepEqual([...result], ['current', 'near', 'far']);
-  assert.equal(m.state().level, 'normal');
+test('the standalone smart-memory-manager module is gone; streamer owns pressure', () => {
+  assert.equal(fs.existsSync(path.join(__dirname, '..', 'smart-memory-manager.js')), false);
+  const s = Z.create();
+  assert.equal(typeof s.sample, 'function');
+  const st = s.sample({ info: { memory: { geometries: 10, textures: 10 } } }, 16);
+  assert.equal(st.level, 'normal');
 });
 
-test('watch pressure keeps visible rooms and only the closest hidden prefetch', () => {
-  const m = create({ geometryBudget: 10, textureBudget: 10 });
-  m.sample({ info: { memory: { geometries: 9, textures: 1 } } }, 16);
-  const result = m.selectPrepared(new Set(['current']), new Set(['current', 'near', 'far']), new Map([
-    ['near', { distance: 4 }], ['far', { distance: 20 }]
-  ]), 'current');
-  assert.deepEqual([...result], ['current', 'near']);
-  assert.equal(m.state().level, 'watch');
+test('watch pressure is reported so LRU cache shrinks (does not drop visible/adjacent)', () => {
+  const s = Z.create();
+  let last;
+  for (let i = 0; i < 8; i++) last = s.sample({ info: { memory: { geometries: 400, textures: 10 } } }, 16);
+  assert.equal(last.level, 'watch');
 });
 
-test('critical pressure releases hidden GPU residency without reducing resolution', () => {
-  const m = create({ geometryBudget: 10, textureBudget: 10 });
-  m.sample({ info: { memory: { geometries: 10, textures: 10 } } }, 50);
-  const result = m.selectPrepared(new Set(['visible']), new Set(['visible', 'hidden']), new Map(), 'current');
-  assert.deepEqual([...result].sort(), ['current', 'visible']);
-  assert.equal(m.state().level, 'critical');
+test('critical pressure is reported from frame-time spikes, without touching resolution', () => {
+  const s = Z.create();
+  let last;
+  for (let i = 0; i < 20; i++) last = s.sample({ info: { memory: { geometries: 10, textures: 10 } } }, 50);
+  assert.equal(last.level, 'critical');
 });

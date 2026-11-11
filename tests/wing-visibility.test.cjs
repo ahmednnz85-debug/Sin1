@@ -89,3 +89,29 @@ test('a room seen earlier is released from memory after leaving adjacency', () =
   assert.ok(later.prepared.has('C'));
   assert.ok(later.prepared.has('R'));
 });
+
+test('prepared set is independent of camera direction (spin does not churn residency)', () => {
+  const p = createPlanner();
+  const dirs = [
+    { x: 0, z: -1, dirX: 0, dirZ: 1, halfFov: 0.6 },
+    { x: 0, z: -1, dirX: 1, dirZ: 0, halfFov: 0.6 },
+    { x: 0, z: -1, dirX: 0, dirZ: -1, halfFov: 0.6 },
+    { x: 0, z: -1, dirX: -1, dirZ: 0, halfFov: 0.6 },
+    { x: 0, z: -1, dirX: 0.7, dirZ: 0.7, halfFov: 0.6 }
+  ];
+  const sets = dirs.map((cam, i) => {
+    const out = p.plan(regions, links, 'A', cam, i * 0.05);
+    return Array.from(out.prepared).sort().join(',');
+  });
+  assert.ok(sets.every(s => s === sets[0]), 'prepared changed with camera yaw: ' + sets.join(' | '));
+  // A visible-through-doorways 2-hop room stays prepared because of hops, not the camera.
+  assert.ok(sets[0].split(',').includes('R'));
+});
+
+test('a room only brought into the frustum (beyond prepareHops) is drawn but not added to prepared', () => {
+  const p = createPlanner({ prepareHops: 1 });
+  const out = p.plan(regions, links, 'A', lookNorth, 0);
+  // R is 2 hops from A: visible down the corridor, but residency does not follow the camera.
+  assert.ok(out.visible.has('R'));
+  assert.equal(out.prepared.has('R'), false);
+});

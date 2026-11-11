@@ -23,9 +23,9 @@
     deferredDress: new Set(),
     ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null, dynamicDoorBoxes: [], activeDoor: null, interactDoor: null
   };
-  const gpuResidency = window.SinWingGpuResidency ? window.SinWingGpuResidency() : null;
-  const renderBudget = window.SinWingRenderBudget || null;
-  const smartMemory = window.SinSmartMemory ? window.SinSmartMemory.create() : null;
+  // Palace streaming / residency / shader warm / memory pressure are all owned
+  // by zone-streamer.js (single source of truth). wing-gpu-residency.js is
+  // still used by the outdoor city in index.html, not by the palace wings.
   // Data-driven zone streaming (prefetch -> budgeted upload -> shader
   // precompile -> atomic reveal -> LRU eviction). See zone-streamer.js and
   // ADDING_CONTENT.md. Streamed rooms are registered in WING_ZONES below.
@@ -944,11 +944,8 @@
     addSpecials();
     dressCorridors();
     wingMark('wings corridors');
-    state.deferredDress.add('K2');
     wingMark('wings k2');
-    state.deferredDress.add('K3');
     wingMark('wings k3');
-    state.deferredDress.add('K4');
     wingMark('wings k4');
     const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
     const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
@@ -2282,13 +2279,12 @@
     });
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
-    if (gpuResidency) gpuResidency.reset();
     wingDoorLoadStarted = false;
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0; state.gpuResidency = null; state.renderBudget = null;
-    dressedRooms.clear(); zoneDone.clear(); dressFailures.length = 0; state.deferredDress.clear(); state._preparedKey = ''; state._streamSets = null; zoneDistKey = ''; zoneDist = null;
+    dressedRooms.clear(); zoneDone.clear(); dressFailures.length = 0; state.deferredDress.clear(); state._streamSets = null; zoneDistKey = ''; zoneDist = null;
     if (zoneStreamer) zoneStreamer.reset();
   }
   function wingMark(msg) {
@@ -2372,28 +2368,6 @@
   }
   const visibilityPlanner = window.SinWingVisibility ? window.SinWingVisibility.createPlanner() : null;
   const triCache = new Map();
-  const warmed = new WeakSet();
-  const warmQueue = [];
-  let camDir = null;
-  function cachedTriangles(id, g, force) {
-    if (force || !triCache.has(id)) {
-      // Count all meshes regardless of current visibility so the budget does
-      // not change just because a room was hidden last frame.
-      const was = g.visible; g.visible = true;
-      triCache.set(id, groupTriangleCount(g));
-      g.visible = was;
-    }
-    return triCache.get(id);
-  }
-  // Spread texture uploads across frames; compileAsync when available.
-  const uploadQueue = [];
-  let warmBusy = false;
-  // Visual-regression fix: wing GLB materials are used as authored again
-  // (pre-upgrade behaviour). Forcing metalness 0.2 / envMapIntensity >= 0.75
-  // on every streamed material was a compensation for textures that were
-  // never uploaded; it changed every stone, wood and metal surface.
-  // scene.environment still supplies IBL to materials without an envMap.
-  function softenWingMetal(m) { void m; }
   function prepareRoomMaterials(g) {
     if (!g) return;
     g.traverse(o => {
@@ -2405,77 +2379,6 @@
         try { o.geometry.computeBoundingSphere(); } catch (_) {}
       }
     });
-  }
-  function queueRoomUploads(g) {
-    if (!g) return;
-    g.traverse(o => {
-      if (!o.isMesh) return;
-      const list = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-      list.forEach(m => {
-        softenWingMetal(m);
-        if (m && m.side !== THREE.DoubleSide && /ceil|floor|سقف|أرض/i.test(String(o.name || ''))) {
-          m.side = THREE.DoubleSide;
-        }
-        ['map', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'metalnessMap'].forEach(k => {
-          if (m && m[k] && m[k].isTexture) uploadQueue.push(m[k]);
-        });
-      });
-      if (o.geometry && (!o.geometry.boundingSphere || o.frustumCulled !== false) && /ceil|floor/i.test(String(o.name || ''))) {
-        o.frustumCulled = false;
-        try { o.geometry.computeBoundingSphere(); } catch (_) {}
-      }
-    });
-  }
-  function pumpUploads(renderer, budget) {
-    if (!renderer || typeof renderer.initTexture !== 'function') { uploadQueue.length = 0; return; }
-    let n = 0;
-    while (uploadQueue.length && n < (budget || 3)) {
-      const t = uploadQueue.shift();
-      try { if (t && t.image) renderer.initTexture(t); } catch (_) {}
-      n++;
-    }
-  }
-  // Preparation step: compile shaders and upload textures for a prepared room
-  // before it is drawn, at most one room per frame so there is no hitch.
-  function warmNext() {
-    const ctx = state.ctx;
-    if (warmBusy) return;
-    pumpUploads(ctx && ctx.renderer, 2);
-    if (!warmQueue.length || !ctx || !ctx.renderer || !ctx.camera) return;
-    const g = warmQueue.shift();
-    if (!g || warmed.has(g)) return;
-    warmed.add(g);
-    const was = g.visible;
-    warmBusy = true;
-    try {
-      // renderer.compile/compileAsync only need the group visible during
-      // their SYNCHRONOUS traversal. The previous version left the hidden
-      // room visible until the async promise resolved (several frames), so
-      // rooms behind walls were drawn, then hidden again by finish() — which
-      // could also hide a room the culling pass had just made visible.
-      queueRoomUploads(g);
-      let pending = null;
-      g.visible = true;
-      try {
-        // r158+: compile(object, camera, targetScene). Without targetScene the
-        // programs were built for a scene with no lights/fog/environment, so
-        // they never matched and every room compiled again on first draw.
-        if (typeof ctx.renderer.compileAsync === 'function') pending = ctx.renderer.compileAsync(g, ctx.camera, ctx.scene);
-        else if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(g, ctx.camera, ctx.scene);
-      } finally {
-        g.visible = was;
-      }
-      const finish = function () {
-        pumpUploads(ctx.renderer, 4);
-        if (g.userData) g.userData.warmReady = true;
-        warmBusy = false;
-      };
-      if (pending && typeof pending.then === 'function') Promise.resolve(pending).then(finish, finish);
-      else finish();
-    } catch (e) {
-      g.visible = was;
-      warmBusy = false;
-    }
   }
   function cameraView(rootX, rootZ) {
     const cam = state.ctx && state.ctx.camera;
@@ -2533,7 +2436,7 @@
       prepare: function (api) { zonePrepare(api); if (userPrepare) userPrepare(api); },
       onReady: function (api) {
         dressedRooms.add(spec.id);
-        if (api.group && warmQueue.indexOf(api.group) < 0 && !warmed.has(api.group)) warmQueue.push(api.group);
+        if (api.group && zoneStreamer) zoneStreamer.enqueueWarm(api.group);
         if (userReady) userReady(api);
       },
       unload: function (api) {
@@ -2554,9 +2457,8 @@
     const g = state.regionGroups.get(id);
     if (g) {
       zoneStreamer ? zoneStreamer.reveal(g) : g.traverse(function (o) { if (o.userData && o.userData.hideUntilDressReady) { o.visible = true; delete o.userData.hideUntilDressReady; } });
-      queueRoomUploads(g);
       g.userData.dressReady = true;
-      if (warmQueue.indexOf(g) < 0 && !warmed.has(g)) warmQueue.push(g);
+      if (zoneStreamer) zoneStreamer.enqueueWarm(g);
     }
   }
   function hideUntilReady(obj) {
@@ -2587,8 +2489,11 @@
     if (zoneDistKey !== origin || !zoneDist) { zoneDistKey = origin; zoneDist = distancesFrom(origin); }
     const ctx = state.ctx;
     zoneStreamer.attach({ renderer: ctx.renderer, scene: ctx.scene, camera: ctx.camera, groupOf: function (id) { return state.regionGroups.get(id) || null; } });
-    const level = smartMemory && smartMemory.state ? smartMemory.state().level : 'normal';
-    return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds, memoryLevel: level });
+    const level = (zoneStreamer.sample(ctx.renderer) || {}).level || 'normal';
+    const warmGroups = [];
+    (preparedIds || new Set()).forEach(function (id) { const g = state.regionGroups.get(id); if (g) warmGroups.push(g); });
+    (visibleIds || new Set()).forEach(function (id) { const g = state.regionGroups.get(id); if (g && warmGroups.indexOf(g) < 0) warmGroups.push(g); });
+    return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds, memoryLevel: level, warmGroups: warmGroups });
   }
   function updateCulling(force) {
     if (!state.built || !state.ctx || !state.ctx.hero) return;
@@ -2639,29 +2544,18 @@
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
         g.visible = visibleIds.has(rr.id);
-        if (preparedIds.has(rr.id) && !warmed.has(g) && warmQueue.indexOf(g) < 0) warmQueue.push(g);
       });
-      if (smartMemory) {
-        smartMemory.sample(state.ctx.renderer);
-        preparedIds = smartMemory.selectPrepared(visibleIds, preparedIds, meta, id);
-      }
-      const key = Array.from(preparedIds).sort().join(',');
-      // Zone streaming: prefetch, budgeted uploads, compile, atomic reveal and
-      // LRU eviction (never visible / adjacent zones).
+      // Zone streaming is the single source of truth: prefetch, budgeted
+      // uploads, shader compile (shells + dress), atomic reveal, LRU eviction
+      // (never visible / adjacent / in-frustum zones). Memory pressure is
+      // sampled inside the streamer.
       state._streamSets = { origin, visible: visibleIds, prepared: preparedIds };
-      const dressUnloaded = streamZones(origin, visibleIds, preparedIds) > 0;
-      if (gpuResidency && (force || dressUnloaded || key !== state._preparedKey)) {
-        state._preparedKey = key;
-        state.gpuResidency = gpuResidency.sync(state.ctx.scene, state.root, state.regionGroups, preparedIds);
-        // Anything the residency manager released must be re-warmed next time.
-        state.regions.forEach(rr => { const g = state.regionGroups.get(rr.id); if (g && !preparedIds.has(rr.id)) warmed.delete(g); });
-      }
-      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: warmQueue.length, memory: smartMemory ? smartMemory.state() : null, dressFailures: dressFailures.slice(-8), zones: zoneStreamer ? zoneStreamer.report() : null };
+      streamZones(origin, visibleIds, preparedIds);
+      const zr = zoneStreamer ? zoneStreamer.report() : null;
+      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: zr ? zr.warmPending : 0, memory: zr ? zr.memory : null, dressFailures: dressFailures.slice(-8), zones: zr };
     } else if (state._streamSets) {
-      // Frames without a new plan still advance uploads / compiles / reveals.
       streamZones(state._streamSets.origin, state._streamSets.visible, state._streamSets.prepared);
     }
-    warmNext();
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
   }
@@ -3129,7 +3023,7 @@
       current: state.current || null,
       meshes, triangles, visibleMeshes, visibleTriangles, visibleRegionTriangles,
       topVisibleMeshes: topVisibleMeshes.slice(0, 12),
-      gpuResidency: state.gpuResidency || null,
+      gpuResidency: null,
       visibility: state.visibility || null,
       renderBudget: state.renderBudget || null,
       dressed: Array.from(dressedRooms),

@@ -282,18 +282,77 @@
       return doomed.length;
     }
 
-    // view = { current, distances: Map(id->hops), visible:Set, prepared:Set, memoryLevel }
+    // ---- memory pressure (migrated from smart-memory-manager.js) -----------
+    // Never changes render resolution. Only informs LRU cache size.
+    let memLevel = 'normal', memStableMs = 0, memFrameEma = 16.7, memLast = { level: 'normal', geometryRatio: 0, textureRatio: 0, frameMs: 16.7 };
+    const memOpt = { geometryBudget: 420, textureBudget: 180, watchRatio: 0.82, criticalRatio: 0.96, frameWatchMs: 24, frameCriticalMs: 40, recoveryMs: 2500 };
+    function sample(renderer, frameMs) {
+      const memory = renderer && renderer.info && renderer.info.memory || {};
+      const gr = Math.max(0, Number(memory.geometries) || 0) / memOpt.geometryBudget;
+      const tr = Math.max(0, Number(memory.textures) || 0) / memOpt.textureBudget;
+      const ms = Number.isFinite(frameMs) && frameMs > 0 ? frameMs : memFrameEma;
+      memFrameEma = memFrameEma * 0.88 + ms * 0.12;
+      const pressure = Math.max(gr, tr);
+      const critical = pressure >= memOpt.criticalRatio || memFrameEma >= memOpt.frameCriticalMs;
+      const watch = pressure >= memOpt.watchRatio || memFrameEma >= memOpt.frameWatchMs;
+      if (critical) { memLevel = 'critical'; memStableMs = 0; }
+      else if (watch) { memLevel = 'watch'; memStableMs = 0; }
+      else if (memLevel !== 'normal') { memStableMs += Math.max(0, ms); if (memStableMs >= memOpt.recoveryMs) memLevel = 'normal'; }
+      else memStableMs = Math.min(memOpt.recoveryMs, memStableMs + Math.max(0, ms));
+      memLast = { level: memLevel, geometryRatio: gr, textureRatio: tr, frameMs: memFrameEma };
+      return memLast;
+    }
+    function memoryState() { return Object.assign({}, memLast); }
+
+    // ---- shell warm (shader compile + budgeted upload of already-built
+    // architecture). Replaces wings.js warmNext / uploadQueue. One group per
+    // turn; the group is only made visible during the SYNCHRONOUS compile
+    // traversal so a hidden room is never drawn for a frame.
+    const warmed = typeof WeakSet === 'function' ? new WeakSet() : { has() { return false; }, add() {}, delete() {} };
+    const warmQ = [];
+    let warmBusy = false;
+    function enqueueWarm(g) {
+      if (!g || (warmed.has && warmed.has(g)) || warmQ.indexOf(g) >= 0) return;
+      warmQ.push(g);
+    }
+    function forgetWarm(g) { if (g && warmed.delete) warmed.delete(g); }
+    function pumpWarm() {
+      if (warmBusy || !ctx || !ctx.renderer || !ctx.camera) return;
+      if (!warmQ.length) return;
+      const g = warmQ.shift();
+      if (!g || (warmed.has && warmed.has(g))) return;
+      if (warmed.add) warmed.add(g);
+      const was = g.visible, r = ctx.renderer;
+      warmBusy = true;
+      let pending = null;
+      try {
+        g.visible = true;
+        try {
+          if (typeof r.compileAsync === 'function') pending = r.compileAsync(g, ctx.camera, ctx.scene || null);
+          else if (typeof r.compile === 'function') r.compile(g, ctx.camera, ctx.scene || null);
+          stats.compiles++;
+        } finally { g.visible = was; }
+      } catch (_) { g.visible = was; warmBusy = false; return; }
+      const fin = function () { warmBusy = false; pumpUploads(); };
+      if (pending && typeof pending.then === 'function') pending.then(fin, fin); else fin();
+    }
+
+    // view = { current, distances: Map(id->hops), visible:Set, prepared:Set, memoryLevel, warmGroups }
     function update(view) {
       const t = now();
       const distances = view.distances || new Map();
       const visible = view.visible || new Set(), prepared = view.prepared || new Set();
-      const level = view.memoryLevel || 'normal';
+      const level = view.memoryLevel || memLevel || 'normal';
       const wanted = [];
       order.forEach(function (id) {
         const rec = zones.get(id);
         const hops = distances.has(id) ? distances.get(id) : Infinity;
-        const want = visible.has(id) || prepared.has(id) || hops <= rec.spec.prefetchHops;
-        const protect = want || hops <= 1 || id === view.current;
+        // Load/prefetch follows the player's region (prepared + prefetch hops),
+        // never the camera direction alone: spinning in place must not start
+        // or cancel a load. Anything the camera can currently see is still
+        // protected from eviction (no disappearing props mid-spin).
+        const want = prepared.has(id) || hops <= rec.spec.prefetchHops;
+        const protect = want || visible.has(id) || hops <= 1 || id === view.current;
         rec.hops = hops; rec.protected = protect;
         if (want) { rec.lastWanted = t; rec.leftAt = 0; wanted.push(rec); }
         else if (rec.state !== 'cold' && !rec.leftAt) rec.leftAt = t;
@@ -322,6 +381,9 @@
       });
       pumpUploads();
       sweepReleasable();
+      // Compile shells of prepared / visible groups (off-screen, one at a time).
+      (view.warmGroups || []).forEach(enqueueWarm);
+      pumpWarm();
       return evicted;
     }
 
@@ -336,14 +398,14 @@
     function forceEvict(id) { const r = zones.get(id); return r && r.state !== 'cold' ? evict(r, 'forced') : 0; }
     function reset() {
       zones.forEach(r => { r.state = 'cold'; r.pending.clear(); r.leftAt = 0; r.lastWanted = 0; r.done = false; r.waiters.length = 0; });
-      uploadQueue = []; releasable.clear();
+      uploadQueue = []; releasable.clear(); warmQ.length = 0; warmBusy = false; memLevel = 'normal';
     }
     function report() {
-      const out = { zones: {}, uploadQueue: uploadQueue.length, releasable: releasable.size, stats: Object.assign({}, stats) };
+      const out = { zones: {}, uploadQueue: uploadQueue.length, releasable: releasable.size, warmPending: warmQ.length, memory: memoryState(), stats: Object.assign({}, stats) };
       zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected }; });
       return out;
     }
-    return { register, unregister, attach, update, status, isReady, whenReady, markReleasable, queueTextures: (obj) => queueTextures(null, obj, 50), pumpUploads, forceEvict, reset, report, hide: hideObject, reveal: revealObject, zones: () => Array.from(order) };
+    return { register, unregister, attach, update, status, isReady, whenReady, markReleasable, queueTextures: (obj) => queueTextures(null, obj, 50), pumpUploads, pumpWarm, enqueueWarm, forgetWarm, sample, memoryState, forceEvict, reset, report, hide: hideObject, reveal: revealObject, zones: () => Array.from(order) };
   }
   return { create, HIDE_FLAG };
 });

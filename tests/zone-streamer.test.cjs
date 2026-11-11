@@ -108,6 +108,39 @@ test('wings registers K2-K4 through the data manifest and exposes registerZone',
   ['K2', 'K3', 'K4'].forEach(id => assert.match(wings, new RegExp("\\{ id: '" + id + "'")));
   assert.match(wings, /WING_ZONES\.forEach\(registerZone\)/);
   assert.match(wings, /registerZone: registerZone/);
-  assert.match(wings, /compileAsync\(g, ctx\.camera, ctx\.scene\)/);
+  const streamer = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
+  assert.match(streamer, /compileAsync\(g, ctx\.camera, ctx\.scene/);
   assert.ok(index.indexOf('zone-streamer.js') > 0 && index.indexOf('zone-streamer.js') < index.indexOf('wings.js?'));
+});
+
+test('camera pointing at a far zone does not start a load; player hops do', async () => {
+  const scene = obj('scene'); const g = obj('FAR'); scene.add(g);
+  const R = renderer();
+  const s = Z.create({ graceMs: 0, maxConcurrentLoads: 1 });
+  let loaded = 0;
+  s.register({ id: 'FAR', prefetchHops: 2, load(api) { loaded++; api.add(mesh('FAR-m', tex())); api.done(); } });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: () => g });
+  // Camera can see FAR, but the player is 5 hops away: must not start.
+  s.update({ current: 'HERE', distances: new Map([['FAR', 5]]), visible: new Set(['FAR']), prepared: new Set() });
+  assert.strictEqual(s.status('FAR'), 'cold');
+  assert.strictEqual(loaded, 0);
+  // Player walks to 2 hops: prefetch starts.
+  s.update({ current: 'NEAR', distances: new Map([['FAR', 2]]), visible: new Set(), prepared: new Set() });
+  assert.notStrictEqual(s.status('FAR'), 'cold');
+  assert.strictEqual(loaded, 1);
+});
+
+test('a zone the camera can see is never evicted even if hops are large', async () => {
+  const scene = obj('scene'); const g = obj('Z'); scene.add(g);
+  const R = renderer();
+  const s = Z.create({ graceMs: 0, cacheZones: { normal: 0, watch: 0, critical: 0 }, maxConcurrentLoads: 1 });
+  let unloaded = 0;
+  s.register({ id: 'Z', prefetchHops: 1, load(api) { api.add(mesh('Z-m', tex())); api.done(); }, unload() { unloaded++; } });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: () => g });
+  for (let i = 0; i < 8; i++) { s.update({ current: 'A', distances: new Map([['Z', 1]]), prepared: new Set(['Z']) }); await tick(); }
+  assert.strictEqual(s.status('Z'), 'ready');
+  // Player moves far, but the camera still sees Z through a doorway.
+  s.update({ current: 'FAR', distances: new Map([['Z', 6]]), visible: new Set(['Z']), prepared: new Set(), memoryLevel: 'critical' });
+  assert.strictEqual(s.status('Z'), 'ready');
+  assert.strictEqual(unloaded, 0);
 });

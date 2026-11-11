@@ -46,10 +46,12 @@ test('fight button hides indoors so run is not duplicated', () => {
 test('wing dress reveals when ready and spreads GPU uploads', () => {
   assert.match(wings, /function markDressReady/);
   assert.match(wings, /function hideUntilReady/);
-  assert.match(wings, /compileAsync/);
-  assert.match(wings, /pumpUploads/);
+  // compile + budgeted upload live in the zone streamer (single source of truth).
+  const streamer = fs.readFileSync(require('path').join(__dirname, '..', 'zone-streamer.js'), 'utf8');
+  assert.match(streamer, /compileAsync/);
+  assert.match(streamer, /pumpUploads/);
   // the room must not stay visible while the async compile is pending
-  assert.match(wings, /\} finally \{\s*g\.visible = was;\s*\}/);
+  assert.match(streamer, /\} finally \{\s*g\.visible = was;\s*\}/);
 });
 
 test('per-asset load timing is recorded', () => {

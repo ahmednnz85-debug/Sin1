@@ -162,13 +162,16 @@
   const LOOK = {
     enabled: true,
     interior: {
-      exposure: 1.15,
-      envIntensity: 0.9,              // scene.environmentIntensity (r163+)
-      fogColor: [0.115, 0.070, 0.042], fogDensity: 0.0090,
-      hemiSky: [0.42, 0.50, 0.66], hemiGround: [0.40, 0.25, 0.14], hemiGain: 0.8,   // cool fill / warm bounce
-      ambientGain: 1.0,
-      fireColor: [1.0, 0.60, 0.30], fireGain: 1.6,  // braziers / torches
-      wingAmbientGain: 0.6
+      // Tuned so midtones stay near the pre-upgrade luminance (K3 ~57)
+      // and materials (blue tiles, books, painted maps) stay clearly readable.
+      // Warm practicals vs a cooler, brighter fill — not a dark orange wash.
+      exposure: 1.16,
+      envIntensity: 0.70,             // scene.environmentIntensity (r163+); keep IBL from washing albedo
+      fogColor: [0.12, 0.10, 0.09], fogDensity: 0.0040,  // subtle depth haze, almost-neutral
+      hemiSky: [0.52, 0.60, 0.76], hemiGround: [0.42, 0.32, 0.22], hemiGain: 1.05,  // cooler, lifted fill
+      ambientGain: 1.15,
+      fireColor: [1.0, 0.64, 0.36], fireGain: 1.28,  // warm key, not overpowering
+      wingAmbientGain: 1.05             // K3/wings are lit mainly by this hemi; 0.6 crushed them
     },
     tier: { low: { envIntensity: 0.9 }, medium: {}, high: {} }
   };
@@ -186,10 +189,10 @@
       const up = Math.max(0, 0.5 - v) * 2, down = Math.max(0, v - 0.5) * 2;
       for (let x = 0; x < W; x++) {
         const u = x / W, i = (y * W + x) * 4;
-        let rr = 0.030 + 0.020 * up, gg = 0.032 + 0.028 * up, bb = 0.040 + 0.050 * up;   // cool ceiling
-        rr += 0.075 * down; gg += 0.046 * down; bb += 0.026 * down;                          // warm floor bounce
+        let rr = 0.045 + 0.045 * up, gg = 0.050 + 0.060 * up, bb = 0.065 + 0.090 * up;   // cooler, brighter ceiling
+        rr += 0.055 * down; gg += 0.042 * down; bb += 0.032 * down;                          // mild warm floor bounce
         const band = Math.exp(-Math.pow((v - 0.47) / 0.07, 2));                               // warm wall band
-        rr += 0.075 * band; gg += 0.042 * band; bb += 0.018 * band;
+        rr += 0.045 * band; gg += 0.032 * band; bb += 0.018 * band;
         for (let k = 0; k < 6; k++) {                                                        // fire hot-spots
           const du = Math.min(Math.abs(u - (k + 0.5) / 6), 1 - Math.abs(u - (k + 0.5) / 6));
           const d2 = (du * 6.5) * (du * 6.5) + Math.pow((v - 0.44) / 0.05, 2);

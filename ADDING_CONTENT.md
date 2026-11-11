@@ -16,8 +16,8 @@ cold → loading → uploading → compiling → ready (revealed) → … → ev
 | Door gate | A wing door into a zone that is still preparing stays closed for up to 2.5 s | `zoneGateOpen()` in wings.js |
 | CPU release | Pixels of parsed GLB textures are dropped only after every texture that shares the image is on the GPU | `markReleasable()` |
 | LRU eviction | Zones you have left linger for `graceMs` (20 s). `cacheZones` (2 / 1 / 0 for normal / watch / critical memory) idle zones stay cached. Never evicted, at any memory level: the current zone, every directly connected zone, everything the camera can see (including through doorways), and every zone still within `prefetchHops` | `update()` / `evict()` |
-| Shell residency | Architecture of every region within 2 hops, plus everything visible, stays GPU-resident (`prepareHops: 2` in `wing-visibility.js`). `smart-memory-manager.js` can trim further regions under pressure, but never visible or 1-hop regions | `updateCulling()` |
-| Memory pressure | `smart-memory-manager.js` sets the level (normal / watch / critical). Under critical pressure every idle zone is evicted at once | `streamZones()` in wings.js |
+| Shell residency | Architecture of every region within 2 hops, plus everything visible, stays GPU-resident (`prepareHops: 2` in `wing-visibility.js`). The streamer's `sample()` can shrink the idle LRU cache under pressure, but never evicts visible or 1-hop regions. Architecture shells stay; only streamed dress is evicted. `wing-gpu-residency.js` is no longer used by the palace (it remains for the outdoor city). | `zone-streamer.js` |
+| Memory pressure | `zone-streamer.js` `sample()` sets the level (normal / watch / critical) from GPU memory and frame time. Under critical pressure every idle (unprotected) zone is evicted at once. Visible, adjacent, and in-frustum zones are never evicted. This replaced `smart-memory-manager.js`. | `update()` / `sample()` |
 
 ## 1. Add a new room to the palace wings
 
