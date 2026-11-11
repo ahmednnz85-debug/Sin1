@@ -23,9 +23,20 @@
     deferredDress: new Set(),
     ui: null, label: null, minimap: null, minimapAt: 0, fires: [], seals: [], ambient: null, dynamicDoorBoxes: [], activeDoor: null, interactDoor: null
   };
-  const gpuResidency = window.SinWingGpuResidency ? window.SinWingGpuResidency() : null;
-  const renderBudget = window.SinWingRenderBudget || null;
-  const smartMemory = window.SinSmartMemory ? window.SinSmartMemory.create() : null;
+  // Palace streaming / residency / shader warm / memory pressure are all owned
+  // by zone-streamer.js (single source of truth). wing-gpu-residency.js is
+  // still used by the outdoor city in index.html, not by the palace wings.
+  // Data-driven zone streaming (prefetch -> budgeted upload -> shader
+  // precompile -> atomic reveal -> LRU eviction). See zone-streamer.js and
+  // ADDING_CONTENT.md. Streamed rooms are registered in WING_ZONES below.
+  const zoneStreamer = window.SinZoneStreamer ? window.SinZoneStreamer.create({
+    // Three streamed dress rooms (K2/K3/K4) must stay resident at normal
+    // memory so a sprint-and-return finds them already settled. They fit
+    // comfortably in the 420/180 geometry/texture budget (measured peak
+    // 251 geo / 131 tex with all three ready).
+    cacheZones: { normal: 3, watch: 2, critical: 0 },
+    log: function (kind, msg) { try { if (window.SinMemoryOverlay) SinMemoryOverlay.note(kind, msg); } catch (_) {} }
+  }) : null;
 
   /* ---------------------------------------------------------------------------
      Wing asset files. Heavy models and pictures use the compressed copies in
@@ -126,21 +137,48 @@
     wingLoadChain = run.catch(function () {});
     return run;
   }
+  // Visual-regression fix: this used to null every texture.image right after
+  // parse, BEFORE the texture had ever been uploaded. Every streamed wing
+  // model (room doors, K2-K4 dress) then sampled the empty 1x1 texture
+  // (black albedo, zero roughness/metalness, broken normals) and only the
+  // gold environment reflection remained. Upload first, then drop CPU pixels
+  // only for image sources whose textures all have a live GPU copy.
   function releaseGltfCpu(gltf) {
-    if (!gltf || !gltf.scene) return;
+    // Phase 2: no synchronous upload of a whole GLB on the parse frame (that
+    // was a frame-time spike). The streamer uploads the textures under its
+    // per-frame budget and drops CPU pixels once every texture sharing an
+    // image source has a GPU copy.
+    if (zoneStreamer && gltf && gltf.scene) { zoneStreamer.markReleasable(gltf.scene); return; }
+    const renderer = state.ctx && state.ctx.renderer;
+    if (!gltf || !gltf.scene || !renderer || typeof renderer.initTexture !== 'function') return;
+    const bySource = new Map();
     gltf.scene.traverse(function (o) {
       const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
       mats.forEach(function (m) {
         if (!m) return;
         ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'].forEach(function (k) {
           const t = m[k];
-          if (!t || !t.isTexture) return;
-          try {
-            if (t.image && typeof t.image.close === 'function') t.image.close();
-            if (!t.isCompressedTexture) t.image = null;
-          } catch (_) {}
+          if (!t || !t.isTexture || t.isCompressedTexture || !t.source) return;
+          const list = bySource.get(t.source) || [];
+          if (list.indexOf(t) < 0) list.push(t);
+          bySource.set(t.source, list);
         });
       });
+    });
+    bySource.forEach(function (list) {
+      list.forEach(function (t) { try { if (t.image) renderer.initTexture(t); } catch (_) {} });
+    });
+    bySource.forEach(function (list, source) {
+      if (!source.data) return;
+      const resident = list.every(function (t) {
+        try { const p = renderer.properties.get(t); return !!(p && p.__webglTexture && p.__version === t.version); } catch (_) { return false; }
+      });
+      if (!resident) return;
+      try {
+        const img = source.data;
+        source.data = null;
+        if (img && typeof img.close === 'function') img.close();
+      } catch (_) {}
     });
   }
   // Every wing model goes through here: a preloaded model is handed out as a
@@ -911,11 +949,8 @@
     addSpecials();
     dressCorridors();
     wingMark('wings corridors');
-    state.deferredDress.add('K2');
     wingMark('wings k2');
-    state.deferredDress.add('K3');
     wingMark('wings k3');
-    state.deferredDress.add('K4');
     wingMark('wings k4');
     const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
     const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
@@ -2058,7 +2093,7 @@
       state.k2Dress.chandelierH = chH;
       state.k2Dress.fireY = fireY;
       state.root.updateMatrixWorld(true);
-      // Table may still be loading; watchDressReady reveals when columns+table+chandelier are set.
+      // Table may still be loading; the zone streamer reveals once columns+table+chandelier are set.
     });
   }
   function rebuildSpatial() {
@@ -2187,6 +2222,21 @@
   }
   // Kept as no-op compatibility methods: wing doors are intentionally not manually interactable.
   function interact() { return false; }
+  // Readiness gate: a door into a streamed zone that is still preparing waits
+  // (closed, at most ZONE_DOOR_WAIT_MS) so the player never walks into a
+  // half-built room. With hop prefetch the zone is normally ready long before.
+  const ZONE_DOOR_WAIT_MS = 2500;
+  function zoneGateOpen(d) {
+    if (!zoneStreamer) return true;
+    const cur = state.current;
+    const target = d.to === cur ? d.from : d.to;
+    const st = zoneStreamer.status(target);
+    if (st === 'unregistered' || st === 'ready') { d._gateSince = 0; return true; }
+    const t = performance.now();
+    if (!d._gateSince) d._gateSince = t;
+    if (t - d._gateSince >= ZONE_DOOR_WAIT_MS) { d._gateSince = 0; return true; }
+    return false;
+  }
   function updateRoomDoors(dt) {
     if (!state.built || !state.ctx || !state.ctx.hero || !state.root) return;
     const hero = state.ctx.hero.position;
@@ -2194,8 +2244,8 @@
     state.doors.forEach(d => {
       if (!d._roomDoor || !d.model) return;
       const c = doorCoordinates(d, hero), near = nearDoor(d, c);
-      if (c.distance > 4.0) d.autoRearm = true;
-      if (d.state === 'Closed' && near && d.autoRearm && !busyDoor && beginDoorMotion(d, true, c)) busyDoor = d;
+      if (c.distance > 4.0) { d.autoRearm = true; d._gateSince = 0; }
+      if (d.state === 'Closed' && near && d.autoRearm && !busyDoor && zoneGateOpen(d) && beginDoorMotion(d, true, c)) busyDoor = d;
       if (d.state === 'Open') {
         // Wing doors are persistent state: after the hero opens one, it stays
         // open when he leaves the room. Do not arm an automatic close timer.
@@ -2234,13 +2284,13 @@
     });
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
-    if (gpuResidency) gpuResidency.reset();
     wingDoorLoadStarted = false;
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0; state.gpuResidency = null; state.renderBudget = null;
-    dressedRooms.clear(); dressFailures.length = 0; state.deferredDress.clear(); state._preparedKey = '';
+    dressedRooms.clear(); zoneDone.clear(); dressFailures.length = 0; state.deferredDress.clear(); state._streamSets = null; zoneDistKey = ''; zoneDist = null;
+    if (zoneStreamer) zoneStreamer.reset();
   }
   function wingMark(msg) {
     try { if (window.PalaceInterior && PalaceInterior.mark) PalaceInterior.mark(msg); } catch (e) { /* marks are diagnostic only */ }
@@ -2257,12 +2307,9 @@
     state.root.position.set(ctx.portal.x, hall.floorY || 0, ctx.portal.frontZ); ctx.scene.add(state.root);
     // One fixed ambient source serves every wing and corridor, so brightness
     // does not jump when regional geometry is culled or the hero changes rooms.
-    state.unifiedAmbient = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.95);
+    state.unifiedAmbient = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.78);
     state.unifiedAmbient.name = 'PalaceWingsUnifiedAmbient';
     state.root.add(state.unifiedAmbient);
-    state.unifiedFill = new THREE.AmbientLight(0xffd0a4, 0.10);
-    state.unifiedFill.name = 'PalaceWingsFill';
-    state.root.add(state.unifiedFill);
     const layout = solveLayout(hall);
     wingMark('wings layout');
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
@@ -2326,95 +2373,34 @@
   }
   const visibilityPlanner = window.SinWingVisibility ? window.SinWingVisibility.createPlanner() : null;
   const triCache = new Map();
-  const warmed = new WeakSet();
-  const warmQueue = [];
-  let camDir = null;
   function cachedTriangles(id, g, force) {
     if (force || !triCache.has(id)) {
-      // Count all meshes regardless of current visibility so the budget does
-      // not change just because a room was hidden last frame.
+      // Count all meshes regardless of current visibility so a diagnostics
+      // total does not change just because a room was hidden last frame.
       const was = g.visible; g.visible = true;
       triCache.set(id, groupTriangleCount(g));
       g.visible = was;
     }
     return triCache.get(id);
   }
-  // Spread texture uploads across frames; compileAsync when available.
-  const uploadQueue = [];
-  let warmBusy = false;
-  function softenWingMetal(m) {
-    if (!m || !m.isMeshStandardMaterial) return;
-    if (m.metalness == null || m.metalness >= 0.85) {
-      m.metalness = 0.2;
-      if (m.roughness == null || m.roughness < 0.35) m.roughness = 0.55;
-    }
-    const env = state.ctx && state.ctx.scene && state.ctx.scene.environment;
-    if (env && !m.envMap) {
-      m.envMap = env;
-      m.envMapIntensity = Math.max(0.75, m.envMapIntensity || 0);
-    }
-  }
-  function queueRoomUploads(g) {
+  // Visual-regression fix: wing GLB materials are used as authored again.
+  // Forcing metalness / envMapIntensity on streamed materials was a
+  // compensation for textures that were never uploaded. No-op retained
+  // because dress / door / prop paths still call it.
+  function softenWingMetal(m) { void m; }
+  function prepareRoomMaterials(g) {
     if (!g) return;
     g.traverse(o => {
       if (!o.isMesh) return;
       const list = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-      list.forEach(m => {
-        softenWingMetal(m);
-        if (m && m.side !== THREE.DoubleSide && /ceil|floor|سقف|أرض/i.test(String(o.name || ''))) {
-          m.side = THREE.DoubleSide;
-        }
-        ['map', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'metalnessMap'].forEach(k => {
-          if (m && m[k] && m[k].isTexture) uploadQueue.push(m[k]);
-        });
-      });
-      if (o.geometry && (!o.geometry.boundingSphere || o.frustumCulled !== false) && /ceil|floor/i.test(String(o.name || ''))) {
+      list.forEach(m => { if (m && m.side !== THREE.DoubleSide && /ceil|floor|سقف|أرض/i.test(String(o.name || ''))) m.side = THREE.DoubleSide; });
+      if (o.geometry && o.frustumCulled !== false && /ceil|floor/i.test(String(o.name || ''))) {
         o.frustumCulled = false;
         try { o.geometry.computeBoundingSphere(); } catch (_) {}
       }
     });
   }
-  function pumpUploads(renderer, budget) {
-    if (!renderer || typeof renderer.initTexture !== 'function') { uploadQueue.length = 0; return; }
-    let n = 0;
-    while (uploadQueue.length && n < (budget || 3)) {
-      const t = uploadQueue.shift();
-      try { if (t && t.image) renderer.initTexture(t); } catch (_) {}
-      n++;
-    }
-  }
-  // Preparation step: compile shaders and upload textures for a prepared room
-  // before it is drawn, at most one room per frame so there is no hitch.
-  function warmNext() {
-    const ctx = state.ctx;
-    if (warmBusy) return;
-    pumpUploads(ctx && ctx.renderer, 4);
-    if (!warmQueue.length || !ctx || !ctx.renderer || !ctx.camera) return;
-    const g = warmQueue.shift();
-    if (!g || warmed.has(g)) return;
-    warmed.add(g);
-    const was = g.visible;
-    warmBusy = true;
-    try {
-      g.visible = true;
-      queueRoomUploads(g);
-      const finish = function () {
-        pumpUploads(ctx.renderer, 4);
-        g.visible = was;
-        if (g.userData) g.userData.warmReady = true;
-        warmBusy = false;
-      };
-      if (typeof ctx.renderer.compileAsync === 'function') {
-        Promise.resolve(ctx.renderer.compileAsync(g, ctx.camera)).then(finish).catch(finish);
-      } else {
-        if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(g, ctx.camera);
-        finish();
-      }
-    } catch (e) {
-      g.visible = was;
-      warmBusy = false;
-    }
-  }
+  let camDir = null;
   function cameraView(rootX, rootZ) {
     const cam = state.ctx && state.ctx.camera;
     if (!cam || !cam.getWorldDirection) return null;
@@ -2426,47 +2412,75 @@
     const halfFov = Math.atan(Math.tan(vfov / 2) * aspect);
     return { x: cam.position.x - rootX, z: cam.position.z - rootZ, dirX: dx, dirZ: dz, halfFov };
   }
-  // Streamed dress content (K2–K4 props) can be torn down when the room leaves
-  // the hop≤1 residency set so GPU/CPU memory stays flat. Architecture shells
-  // built at palace entry stay. Re-entry re-queues dressRoomIfNeeded.
-  const STREAM_DRESS_ROOMS = new Set(['K2', 'K3', 'K4']);
+  // Streamed dress content (K2–K4 props) is owned by the zone streamer:
+  // prepared before the player arrives, revealed atomically, evicted LRU with
+  // a grace period. Architecture shells built at palace entry stay.
   const dressedRooms = new Set();
-  const dressPending = new Set();
   const dressFailures = [];
+  // ---------------------------------------------------------------------------
+  // Streamed zones. Each entry is pure data + hooks; the streamer owns the
+  // lifecycle (prefetch, budgeted upload, compile against the real scene,
+  // atomic reveal, LRU eviction). To add a room: add one entry (see
+  // ADDING_CONTENT.md) or call PalaceWings.registerZone(spec) at runtime.
+  const zoneDone = new Set();
+  function streamedName(id) { const re = new RegExp('^' + id + '-'); return function (ch) { return !!(ch.userData && ch.userData.streamDress) || !!(ch.name && re.test(ch.name)); }; }
+  const WING_ZONES = [
+    { id: 'K2', prefetchHops: 8, priority: 0,
+      load: function () { dressK2(); },
+      isComplete: function () { return zoneDone.has('K2') || !!(state.k2Dress && state.k2Dress.chandelier && state.k2Dress.columns && state.k2Dress.table); },
+      unload: function (api) {
+        state.colliders = state.colliders.filter(function (c) { return !c._k2Prop; });
+        state.k2Lights = null; state.k2LightBase = null; state.k2Dress = null;
+        if (api.group) api.group.userData.k2Dressed = false;
+      },
+      ownsObject: streamedName('K2') },
+    { id: 'K3', prefetchHops: 8, priority: 1,
+      load: function () { dressK3(); },
+      isComplete: function () { return zoneDone.has('K3') || !!(state.k3Dress && state.k3Dress.furniture); },
+      unload: function (api) { state.k3Lights = null; state.k3LightBase = null; if (api.group) api.group.userData.k3Dressed = false; },
+      ownsObject: streamedName('K3') },
+    { id: 'K4', prefetchHops: 8, priority: 2,
+      load: function () { dressK4(); loadK4Assets(); },
+      isComplete: function () { return zoneDone.has('K4') || !!(state.k4Dress && state.k4Dress.loadStarted && state.k4Dress._assetsCommitted); },
+      unload: function (api) { state.k4Dress = null; if (api.group) api.group.userData.k4Dressed = false; },
+      ownsObject: streamedName('K4') }
+  ];
+  function zonePrepare(api) {
+    // Material fixes that change the shader program must happen BEFORE the
+    // zone is compiled, otherwise the reveal frame compiles again.
+    if (api.group) prepareRoomMaterials(api.group);
+  }
+  function registerZone(spec) {
+    if (!zoneStreamer) return null;
+    const userReady = spec.onReady, userPrepare = spec.prepare;
+    return zoneStreamer.register(Object.assign({}, spec, {
+      prepare: function (api) { zonePrepare(api); if (userPrepare) userPrepare(api); },
+      onReady: function (api) {
+        dressedRooms.add(spec.id);
+        if (api.group && zoneStreamer) zoneStreamer.enqueueWarm(api.group);
+        if (userReady) userReady(api);
+      },
+      unload: function (api) {
+        if (spec.unload) spec.unload(api);
+        dressedRooms.delete(spec.id); zoneDone.delete(spec.id);
+        if (api.group) api.group.userData.dressReady = false;
+        if (state.root) rebuildSpatial();
+      }
+    }));
+  }
+  WING_ZONES.forEach(registerZone);
+  // Legacy entry point used by the dress builders: "everything I requested
+  // has arrived". With the streamer this only marks the zone complete; the
+  // reveal happens after upload + compile.
   function markDressReady(id) {
-    if (!dressPending.has(id) && dressedRooms.has(id)) return;
-    dressPending.delete(id);
+    if (zoneStreamer && zoneStreamer.status(id) !== 'unregistered') { zoneDone.add(id); return; }
     dressedRooms.add(id);
     const g = state.regionGroups.get(id);
     if (g) {
-      // Soften metals + queue GPU work, then show streamed meshes as one set.
-      g.traverse(function (o) {
-        if (!o.isMesh) return;
-        const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-        mats.forEach(softenWingMetal);
-        if (o.userData && o.userData.hideUntilDressReady) {
-          o.visible = true;
-          delete o.userData.hideUntilDressReady;
-        }
-      });
-      queueRoomUploads(g);
-      if (g.userData) g.userData.dressReady = true;
-      if (warmQueue.indexOf(g) < 0 && !warmed.has(g)) warmQueue.push(g);
+      zoneStreamer ? zoneStreamer.reveal(g) : g.traverse(function (o) { if (o.userData && o.userData.hideUntilDressReady) { o.visible = true; delete o.userData.hideUntilDressReady; } });
+      g.userData.dressReady = true;
+      if (zoneStreamer) zoneStreamer.enqueueWarm(g);
     }
-    try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('load', id + ' dress ready'); } catch (e) {}
-  }
-  function watchDressReady(id) {
-    const started = performance.now();
-    function tick() {
-      if (!dressPending.has(id)) return;
-      let ok = false;
-      if (id === 'K2') ok = !!(state.k2Dress && state.k2Dress.chandelier && state.k2Dress.columns && state.k2Dress.table);
-      else if (id === 'K3') ok = !!(state.k3Dress && state.k3Dress.furniture);
-      else if (id === 'K4') ok = !!(state.k4Dress && state.k4Dress.loadStarted && state.k4Dress._assetsCommitted);
-      if (ok || performance.now() - started > 14000) markDressReady(id);
-      else setTimeout(tick, 180);
-    }
-    setTimeout(tick, 180);
   }
   function hideUntilReady(obj) {
     if (!obj) return;
@@ -2474,54 +2488,33 @@
       if (!o.isMesh && !o.isInstancedMesh && !o.isPoints && !o.isSprite) return;
       o.visible = false;
       o.userData.hideUntilDressReady = true;
+      o.userData.streamDress = true;
     });
-  }
-  function unloadStreamedDress(id) {
-    if (!STREAM_DRESS_ROOMS.has(id) || (!dressedRooms.has(id) && !dressPending.has(id))) return false;
-    const g = state.regionGroups.get(id);
-    if (!g) return false;
-    const doomed = [];
-    g.children.forEach(function (ch) {
-      if (ch.userData && (ch.userData.streamDress || (ch.name && /^K[234]-/.test(ch.name)))) doomed.push(ch);
-    });
-    doomed.forEach(function (ch) {
-      g.remove(ch);
-      ch.traverse(function (o) {
-        if (o.geometry && o.geometry.dispose) o.geometry.dispose();
-        const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-        mats.forEach(function (m) {
-          if (!m || (m.userData && m.userData.palaceShared)) return;
-          // Keep shared texture images in `preloaded`; only drop GPU handle.
-          if (typeof m.dispose === 'function') m.dispose();
-        });
+    obj.userData.streamDress = true;
+    // Callers add the object to its room group right after this call. If that
+    // room was already revealed (e.g. a slow model arriving after the
+    // timeout), upload its textures and show it instead of hiding it forever.
+    Promise.resolve().then(function () {
+      let ready = false;
+      for (let n = obj.parent; n; n = n.parent) { if (n.userData && n.userData.dressReady) { ready = true; break; } }
+      if (!ready) return;
+      if (zoneStreamer) zoneStreamer.queueTextures(obj);
+      obj.traverse(function (o) {
+        if (o.userData && o.userData.hideUntilDressReady) { o.visible = true; delete o.userData.hideUntilDressReady; }
       });
     });
-    if (id === 'K2') {
-      state.colliders = state.colliders.filter(function (c) { return !c._k2Prop; });
-      state.k2Lights = null; state.k2LightBase = null; state.k2Dress = null;
-      if (g.userData) { g.userData.k2Dressed = false; g.userData.dressReady = false; }
-    }
-    if (id === 'K3') { state.k3Lights = null; state.k3LightBase = null; if (g.userData) { g.userData.k3Dressed = false; g.userData.dressReady = false; } }
-    if (id === 'K4') { state.k4Dress = null; if (g.userData) { g.userData.k4Dressed = false; g.userData.dressReady = false; } }
-    dressedRooms.delete(id);
-    dressPending.delete(id);
-    state.deferredDress.add(id);
-    try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('unload', id + ' dress released n=' + doomed.length); } catch (e) {}
-    return doomed.length > 0;
   }
-  function dressRoomIfNeeded(id) {
-    if (!state.deferredDress.has(id)) return;
-    if (dressedRooms.has(id) || dressPending.has(id)) { state.deferredDress.delete(id); return; }
-    state.deferredDress.delete(id);
-    dressPending.add(id);
-    // Preload as soon as the room is prepared (before the hero reaches the door).
-    // Streamed meshes stay hidden until watchDressReady → markDressReady.
-    if (id === 'K2') dressK2();
-    else if (id === 'K3') dressK3();
-    else if (id === 'K4') dressK4();
-    watchDressReady(id);
-    if (state.root) state.root.updateMatrixWorld(true);
-    try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('load', id + ' dress start'); } catch (e) {}
+  let zoneDistKey = '', zoneDist = null;
+  function streamZones(origin, visibleIds, preparedIds) {
+    if (!zoneStreamer) return 0;
+    if (zoneDistKey !== origin || !zoneDist) { zoneDistKey = origin; zoneDist = distancesFrom(origin); }
+    const ctx = state.ctx;
+    zoneStreamer.attach({ renderer: ctx.renderer, scene: ctx.scene, camera: ctx.camera, groupOf: function (id) { return state.regionGroups.get(id) || null; } });
+    const level = (zoneStreamer.sample(ctx.renderer) || {}).level || 'normal';
+    const warmGroups = [];
+    (preparedIds || new Set()).forEach(function (id) { const g = state.regionGroups.get(id); if (g) warmGroups.push(g); });
+    (visibleIds || new Set()).forEach(function (id) { const g = state.regionGroups.get(id); if (g && warmGroups.indexOf(g) < 0) warmGroups.push(g); });
+    return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds, memoryLevel: level, warmGroups: warmGroups });
   }
   function updateCulling(force) {
     if (!state.built || !state.ctx || !state.ctx.hero) return;
@@ -2555,10 +2548,8 @@
       // drop a region the camera can actually see.
       const plan = { ids: candidates.map(c => c.id), triangles: candidates.reduce((n, c) => n + c.triangles, 0), budget: Infinity };
       visibleIds = new Set(plan.ids); preparedIds = planned.prepared;
-      // Start preparing rooms in the camera prefetch wedge, not only after the
-      // hero enters them. The room is assembled off-screen and then appears as
-      // one complete set when the camera reaches it.
-      preparedIds.forEach(dressRoomIfNeeded);
+      // Rooms in the camera prefetch wedge / within prefetch hops are streamed
+      // by streamZones() below: assembled off-screen, revealed as one set.
       state.renderBudget = { triangles: Math.round(plan.triangles), budget: plan.budget, activeRegions: plan.ids.slice() };
       // Seeing into the palace hall from a wing keeps the hall drawn.
       if (!state.palaceNear && meta && state.links.some(l => (l[0] === 'Palace' && visibleIds.has(l[1])) || (l[1] === 'Palace' && visibleIds.has(l[0])))) {
@@ -2569,34 +2560,23 @@
       const dist = distancesFrom(origin);
       visibleIds = new Set(); preparedIds = new Set();
       state.regions.forEach(rr => { const d = dist.has(rr.id) ? dist.get(rr.id) : 99; if (d <= 2) { visibleIds.add(rr.id); preparedIds.add(rr.id); } });
-      preparedIds.forEach(dressRoomIfNeeded);
     }
     if (visibleIds) {
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
         g.visible = visibleIds.has(rr.id);
-        if (preparedIds.has(rr.id) && !warmed.has(g) && warmQueue.indexOf(g) < 0) warmQueue.push(g);
       });
-      if (smartMemory) {
-        smartMemory.sample(state.ctx.renderer);
-        preparedIds = smartMemory.selectPrepared(visibleIds, preparedIds, meta, id);
-      }
-      const key = Array.from(preparedIds).sort().join(',');
-      if (gpuResidency && (force || key !== state._preparedKey)) {
-        // Fully unload streamed dress for rooms that left the hop≤1 set BEFORE
-        // GPU sync, so materials/textures are not held by detached meshes.
-        state.regions.forEach(rr => {
-          if (!preparedIds.has(rr.id)) unloadStreamedDress(rr.id);
-        });
-        state._preparedKey = key;
-        state.gpuResidency = gpuResidency.sync(state.ctx.scene, state.root, state.regionGroups, preparedIds);
-        // Anything the residency manager released must be re-warmed next time.
-        state.regions.forEach(rr => { const g = state.regionGroups.get(rr.id); if (g && !preparedIds.has(rr.id)) warmed.delete(g); });
-      }
-      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: warmQueue.length, memory: smartMemory ? smartMemory.state() : null, dressFailures: dressFailures.slice(-8) };
+      // Zone streaming is the single source of truth: prefetch, budgeted
+      // uploads, shader compile (shells + dress), atomic reveal, LRU eviction
+      // (never visible / adjacent / in-frustum zones). Memory pressure is
+      // sampled inside the streamer.
+      state._streamSets = { origin, visible: visibleIds, prepared: preparedIds };
+      streamZones(origin, visibleIds, preparedIds);
+      const zr = zoneStreamer ? zoneStreamer.report() : null;
+      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: zr ? zr.warmPending : 0, memory: zr ? zr.memory : null, dressFailures: dressFailures.slice(-8), zones: zr };
+    } else if (state._streamSets) {
+      streamZones(state._streamSets.origin, state._streamSets.visible, state._streamSets.prepared);
     }
-    warmNext();
-    if (preparedIds && preparedIds.has('K4')) loadK4Assets();
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
   }
@@ -3064,10 +3044,11 @@
       current: state.current || null,
       meshes, triangles, visibleMeshes, visibleTriangles, visibleRegionTriangles,
       topVisibleMeshes: topVisibleMeshes.slice(0, 12),
-      gpuResidency: state.gpuResidency || null,
+      gpuResidency: null,
       visibility: state.visibility || null,
       renderBudget: state.renderBudget || null,
       dressed: Array.from(dressedRooms),
+      zones: zoneStreamer ? zoneStreamer.report() : null,
       dressFailures: dressFailures.slice(-8),
       colliders: state.colliders.length,
       k1ModelColliders: state.k1ModelColliderCount,
@@ -3752,6 +3733,11 @@
   }
 
   window.PalaceWings = {
+    // Data-driven streaming: register a new streamed zone (see ADDING_CONTENT.md).
+    registerZone: registerZone,
+    zones: function () { return zoneStreamer ? zoneStreamer.report() : null; },
+    // Test/diagnostic hook: evict a zone now (ignores protection).
+    forceEvictZone: function (id) { return zoneStreamer ? zoneStreamer.forceEvict(id) : 0; },
     palaceVisible: function () { return state.palaceNear !== false; },
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
     teleport, overview, runTests, formatReport, cameraTour, metrics, corridorReport: () => state.corridorReport,

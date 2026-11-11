@@ -22,10 +22,13 @@
     prefetchMargin: 0.18,  // prepare the next doorway slightly before the hero arrives
     prefetchDistance: 6,   // start dress a few metres before the door (still hop-capped)
     nearPad: 1.25,         // only the immediate camera volume bypasses the wedge
-    // Memory hard rule: keep the current room + directly connected rooms only.
-    maxHops: 1,
-    linger: 0.35,          // short hysteresis prevents flicker at doorways
-    memory: 0              // no LRU of distant rooms — hop≤1 is the residency budget
+    // Visibility reach (portal hops the camera can see through). Restored to
+    // the pre-upgrade value: with 1 hop, a room seen through two doorways or
+    // down a corridor was simply not drawn and popped in as the player walked.
+    maxHops: 6,
+    prepareHops: 2,      // visible + current + everything within 2 hops stays resident: resident a full room BEFORE it can be seen or reached
+    linger: 0.45,          // pre-upgrade hysteresis; prevents flicker at doorways
+    memory: 0              // no LRU in the planner — zone-streamer.js owns LRU eviction
   };
 
   function hops(links, startId, limit) {
@@ -103,9 +106,13 @@
         if (seen) lastSeen.set(r.id, t);
         const lingering = lastSeen.has(r.id) && t - lastSeen.get(r.id) <= opt.linger && h <= opt.maxHops;
         if (seen || lingering) { visible.add(r.id); touch(r.id); }
-        // Prepared = GPU-resident. Strict hop≤1 from the hero's room — no
-        // distant prefetch. Visible rooms are always prepared too.
-        if (h <= opt.maxHops || visible.has(r.id)) prepared.add(r.id);
+        // Prepared (GPU-resident + prefetch) is based on the PLAYER'S region,
+        // with a hop radius. Camera direction must not start loads or evicts
+        // (a 360° spin must not churn zones). Visible rooms are still drawn,
+        // and the streamer protects anything currently in the frustum from
+        // eviction, but membership of `prepared` itself does not follow the camera.
+        const prepHops = Number.isFinite(opt.prepareHops) ? opt.prepareHops : opt.maxHops;
+        if (h <= prepHops) prepared.add(r.id);
         meta.set(r.id, { hops: h, distance: near, inView: seen });
       });
       if (opt.memory > 0) recent.forEach(id => prepared.add(id));

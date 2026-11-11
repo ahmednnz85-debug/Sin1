@@ -65,7 +65,8 @@ test('palace loading starts only after the fade, exterior disposal and reference
 
 test('all palace wings share one stable ambient source and synchronized subtle flicker', () => {
   assert.match(wings, /PalaceWingsUnifiedAmbient/);
-  assert.match(wings, /new THREE\.HemisphereLight\(0xffe2b8, 0x5c3a28, 0\.95\)/);
+  assert.match(wings, /new THREE\.HemisphereLight\(0xffe2b8, 0x5c3a28, 0\.78\)/);
+  assert.doesNotMatch(wings, /PalaceWingsFill/);
   assert.match(wings, /const sharedFlicker = 0\.98 \+ 0\.02 \* Math\.sin/);
   assert.match(wings, /\[state\.k2Lights, state\.k3Lights\]/);
 });
