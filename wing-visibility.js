@@ -19,12 +19,13 @@
   const DEFAULTS = {
     viewDistance: 400,     // the camera's full sight line (everything it can see is drawn)
     frustumMargin: 0.22,   // tight camera gate: do not treat side rooms as visible through walls
-    prefetchMargin: 0.55,  // wider hidden look-ahead; it never makes a room visible
-    prefetchDistance: 25,  // extra metres beyond the sight line that are uploaded ahead
+    prefetchMargin: 0.05,  // almost no look-ahead beyond adjacency (memory-bounded)
+    prefetchDistance: 2,   // only a couple of metres past the door — not whole wings
     nearPad: 1.25,         // only the immediate camera volume bypasses the wedge
-    maxHops: 6,            // portal hops from the camera's region that can be seen
-    linger: 0.45,          // short hysteresis prevents stale rooms after a turn
-    memory: 0              // regions outside the prefetch wedge are released from GPU memory
+    // Memory hard rule: keep the current room + directly connected rooms only.
+    maxHops: 1,
+    linger: 0.35,          // short hysteresis prevents flicker at doorways
+    memory: 0              // no LRU of distant rooms — hop≤1 is the residency budget
   };
 
   function hops(links, startId, limit) {
@@ -102,13 +103,14 @@
         if (seen) lastSeen.set(r.id, t);
         const lingering = lastSeen.has(r.id) && t - lastSeen.get(r.id) <= opt.linger && h <= opt.maxHops;
         if (seen || lingering) { visible.add(r.id); touch(r.id); }
-        // Prepared = GPU-resident. Only what is drawn or about to enter the view
-        // (wider prefetch wedge, slightly past the sight line) stays in memory;
-        // everything else is released until it approaches the view again.
-        if (visible.has(r.id) || (h <= opt.maxHops && inWedge(r.bbox, cam, half + opt.prefetchMargin, opt.viewDistance + opt.prefetchDistance))) prepared.add(r.id);
+        // Prepared = GPU-resident. Strict hop≤1 from the hero's room — no
+        // distant prefetch. Visible rooms are always prepared too.
+        if (h <= opt.maxHops || visible.has(r.id)) prepared.add(r.id);
         meta.set(r.id, { hops: h, distance: near, inView: seen });
       });
       if (opt.memory > 0) recent.forEach(id => prepared.add(id));
+      // Always keep the current room prepared even if hops map missed it.
+      if (currentId) prepared.add(currentId);
       return { visible, prepared, meta };
     }
     function reset() { lastSeen.clear(); recent.length = 0; }

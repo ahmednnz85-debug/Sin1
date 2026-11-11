@@ -16,10 +16,20 @@ const links = [['A', 'C'], ['C', 'R'], ['A', 'B']];
 const lookNorth = { x: 0, z: -1, dirX: 0, dirZ: 1, halfFov: 0.6 };
 const lookSouth = { x: 0, z: -1, dirX: 0, dirZ: -1, halfFov: 0.6 };
 
-test('room 42m away at the end of a corridor is drawn when the camera looks down it', () => {
+test('adjacent corridor is drawn; room two hops away waits until hero advances', () => {
   const p = createPlanner();
   const out = p.plan(regions, links, 'A', lookNorth, 0);
   assert.ok(out.visible.has('C'));
+  // Memory policy is hop≤1: R is two portals away from A.
+  assert.equal(out.visible.has('R'), false);
+  assert.equal(out.prepared.has('R'), false);
+  assert.ok(out.prepared.has('C'));
+});
+
+test('from the corridor, the far room becomes prepared and drawable', () => {
+  const p = createPlanner();
+  const out = p.plan(regions, links, 'C', lookNorth, 0);
+  assert.ok(out.prepared.has('R'));
   assert.ok(out.visible.has('R'));
 });
 
@@ -27,39 +37,39 @@ test('room behind a wall with no doorway is never drawn even if in front of the 
   const p = createPlanner();
   const out = p.plan(regions, links, 'A', lookNorth, 0);
   assert.equal(out.visible.has('S'), false);
+  assert.equal(out.prepared.has('S'), false);
 });
 
-test('a nearby side room is not visible just because the hero is standing near it', () => {
+test('a nearby side room stays prepared (hop≤1) but is not drawn when off-camera', () => {
   const p = createPlanner();
   const side = { id: 'D', bbox: box(3, -5, 8, -1) };
   const out = p.plan(regions.concat(side), links.concat([['A', 'D']]), 'A', lookNorth, 0);
   assert.equal(out.visible.has('D'), false);
-  assert.equal(out.prepared.has('D'), false);
+  assert.ok(out.prepared.has('D'));
 });
 
-test('room behind the camera is neither drawn nor kept in memory, and is drawn on turning around', () => {
+test('adjacent room behind the camera is kept in memory but not drawn until turning', () => {
   const p = createPlanner();
   const ahead = p.plan(regions, links, 'A', lookNorth, 0);
   assert.equal(ahead.visible.has('B'), false);
-  assert.equal(ahead.prepared.has('B'), false);
+  assert.ok(ahead.prepared.has('B')); // hop≤1 neighbour
   const back = p.plan(regions, links, 'A', lookSouth, 0.1);
   assert.ok(back.visible.has('B'));
 });
 
-test('a room just outside the drawn view is prepared before it enters the view', () => {
+test('current room is always prepared', () => {
   const p = createPlanner();
-  // Looking east: room R (north-east, ~45 deg off axis at 40m) is outside the
-  // drawn wedge but inside the wider prefetch wedge.
-  const cam = { x: 0, z: 0, dirX: Math.cos(0.15), dirZ: Math.sin(0.15) * -1, halfFov: 0.1 };
-  const out = p.plan([{ id: 'A', bbox: box(-3, -6, 3, 0) }, { id: 'Q', bbox: box(20, 18, 24, 22) }], [['A', 'Q']], 'A', cam, 0);
-  assert.equal(out.visible.has('Q'), false);
-  assert.ok(out.prepared.has('Q'));
+  const out = p.plan(regions, links, 'A', lookNorth, 0);
+  assert.ok(out.prepared.has('A'));
 });
 
-test('a room seen earlier is released from memory after the camera turns away', () => {
+test('a room seen earlier is released from memory after leaving adjacency', () => {
   const p = createPlanner();
   p.plan(regions, links, 'A', lookNorth, 0);
-  const later = p.plan(regions, links, 'A', lookSouth, 10);
-  assert.equal(later.visible.has('R'), false);
-  assert.equal(later.prepared.has('R'), false);
+  // Camera must sit inside R — otherwise nearPad would still mark A as visible.
+  const camInR = { x: 0, z: 45, dirX: 0, dirZ: -1, halfFov: 0.6 };
+  const later = p.plan(regions, links, 'R', camInR, 10);
+  assert.equal(later.prepared.has('A'), false);
+  assert.ok(later.prepared.has('C'));
+  assert.ok(later.prepared.has('R'));
 });

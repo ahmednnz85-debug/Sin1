@@ -370,6 +370,15 @@
     debugEl.textContent = text;
   }
 
+  function formatError(err) {
+    if (!err) return 'تعذّر بناء القاعة';
+    if (typeof err === 'string') return err;
+    const name = err.name || 'Error';
+    const message = err.message || String(err);
+    const stack = err.stack ? String(err.stack).split('\n').slice(0, 6).join('\n') : '';
+    return name + ': ' + message + (stack ? '\n' + stack : '');
+  }
+
   function showFail(err) {
     ensureLoadScreen();
     const failed = (specs || []).filter(function (s) { return s.status !== 'loaded'; });
@@ -378,8 +387,18 @@
       if (s.status === 'pending' && !s.error) return;
       lines.push('الملف: ' + s.name + '\n' + (s.error || 'فشل غير معروف'));
     });
-    if (!lines.length && err) lines.push(String((err && (err.stack || err.message)) || err));
+    if (err) lines.push(formatError(err));
     if (!lines.length) lines.push('تعذّر بناء القاعة');
+    try {
+      const snap = window.SinMemoryOverlay && SinMemoryOverlay.sample
+        ? SinMemoryOverlay.sample({ renderer: lastContext && lastContext.renderer, scene: lastContext && lastContext.scene })
+        : null;
+      if (snap) {
+        lines.push('mem geo=' + snap.geometries + ' tex=' + snap.textures +
+          ' tris=' + Math.round((snap.triangles || 0) / 1000) + 'k' +
+          ' cityReleased=' + snap.cityReleased);
+      }
+    } catch (_) {}
     errEl.style.display = 'block';
     errEl.textContent = lines.join('\n\n');
     retryBtn.style.display = 'inline-block';
@@ -387,6 +406,7 @@
     loadEl.style.pointerEvents = 'auto';
     renderUI();
     note('FAIL ' + lines[0]);
+    try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('error', lines[0]); } catch (_) {}
   }
 
   function onRetry() {
@@ -936,7 +956,7 @@
       root.traverse(function (o) { keptNodes.add(o); });
     }
     function retainResource(value) { if (value && typeof value === 'object') retainedResources.add(value); }
-    function collectResources(root, target) {
+    function collectResources(root) {
       root.traverse(function (o) {
         retainResource(o.geometry);
         const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
@@ -948,21 +968,20 @@
         });
       });
     }
+    // Outside is a one-way phase: after palace entry the player never returns.
+    // Keep ONLY the hero and the palace group. Outdoor lights, sky, trees,
+    // gate and courtyard are fully torn down so they cannot share GPU memory
+    // with the hall (that overlap is what iOS kills at ~99%).
     hold(hero); hold(group);
-    // Preserve only explicitly tagged renderer lights. Do not retain every Points,
-    // camera, sky or city light node: those belong to the exterior scene being freed.
-    scene.traverse(function (o) {
-      if (!o.userData || !o.userData.keepDuringPalace) return;
-      let root = o;
-      while (root.parent && root.parent !== scene) root = root.parent;
-      if (root.parent === scene) hold(root);
-    });
-    scene.children.forEach(function (ch) { if (keptNodes.has(ch) || ch === hero || ch === group) collectResources(ch, retainedResources); });
-    retainResource(scene.environment); retainResource(scene.background);
+    scene.children.forEach(function (ch) { if (keptNodes.has(ch) || ch === hero || ch === group) collectResources(ch); });
+    // Do not retain outdoor environment/background — palace installs its own.
     const drop = scene.children.filter(function (ch) { return !keptNodes.has(ch) && ch !== hero && ch !== group; });
     const geometries = new Set(), materials = new Set(), textures = new Set();
     drop.forEach(function (root) {
       root.traverse(function (o) {
+        if (o.isLight && o.shadow && o.shadow.map && o.shadow.map.dispose) {
+          try { o.shadow.map.dispose(); o.shadow.map = null; } catch (_) {}
+        }
         if (o.geometry) geometries.add(o.geometry);
         const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
         mats.forEach(function (m) {
@@ -972,13 +991,21 @@
         });
       });
     });
+    // Drop outdoor env/background textures if present and not shared.
+    const outdoorEnv = scene.environment;
+    const outdoorBg = scene.background && scene.background.isTexture ? scene.background : null;
+    scene.environment = null;
+    if (outdoorBg) scene.background = new THREE.Color(0x000000);
     drop.forEach(function (root) { scene.remove(root); });
-    geometries.forEach(function (g) { if (!retainedResources.has(g) && !g.userData.palaceShared && g.dispose) g.dispose(); });
-    materials.forEach(function (m) { if (!retainedResources.has(m) && !m.userData.palaceShared && m.dispose) m.dispose(); });
-    textures.forEach(function (t) { if (!retainedResources.has(t) && !t.userData.palaceShared && t.dispose) t.dispose(); });
+    geometries.forEach(function (g) { if (!retainedResources.has(g) && !(g.userData && g.userData.palaceShared) && g.dispose) g.dispose(); });
+    materials.forEach(function (m) { if (!retainedResources.has(m) && !(m.userData && m.userData.palaceShared) && m.dispose) m.dispose(); });
+    textures.forEach(function (t) { if (!retainedResources.has(t) && !(t.userData && t.userData.palaceShared) && t.dispose) t.dispose(); });
+    if (outdoorEnv && outdoorEnv.dispose && !retainedResources.has(outdoorEnv)) try { outdoorEnv.dispose(); } catch (_) {}
+    if (outdoorBg && outdoorBg.dispose && !retainedResources.has(outdoorBg)) try { outdoorBg.dispose(); } catch (_) {}
     scene.userData.cityReleased = true;
     try { if (window.__releaseExteriorStage) window.__releaseExteriorStage(); } catch (e) { note('exterior refs ' + (e && e.message || e)); }
     note('city released ' + drop.length + ' roots, ' + geometries.size + ' geometries, ' + materials.size + ' materials, ' + textures.size + ' textures');
+    try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('teardown', 'city released g' + geometries.size + ' t' + textures.size); } catch (_) {}
   }
 
   // dispose() only returns the buffers to the driver. One frame of the emptied
@@ -988,10 +1015,21 @@
     if (!ctx || !ctx.renderer || !ctx.scene || !ctx.camera) return;
     try {
       ctx.renderer.shadowMap.enabled = false;
+      // Drop any leftover shadow render-target still held by disposed lights.
+      ctx.scene.traverse(function (o) {
+        if (o.isLight && o.shadow && o.shadow.map && o.shadow.map.dispose) {
+          try { o.shadow.map.dispose(); o.shadow.map = null; } catch (_) {}
+        }
+      });
       ctx.renderer.render(ctx.scene, ctx.camera);
       if (ctx.renderer.renderLists && ctx.renderer.renderLists.dispose) ctx.renderer.renderLists.dispose();
       const gl = ctx.renderer.getContext && ctx.renderer.getContext();
       if (gl && gl.flush) gl.flush();
+      const mem = ctx.renderer.info && ctx.renderer.info.memory;
+      if (mem) {
+        note('gpu flush info geo=' + mem.geometries + ' tex=' + mem.textures + ' prog=' + (mem.programs || '?'));
+        try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('flush', 'geo=' + mem.geometries + ' tex=' + mem.textures); } catch (_) {}
+      }
     } catch (e) { note('flush ' + (e && e.message || e)); }
   }
 
@@ -1051,6 +1089,8 @@
 
   function holdCull(scene, hero) {
     if (!scene || !group) return;
+    // After the exterior teardown there is nothing left to hide outdoors.
+    if (scene.userData && scene.userData.cityReleased) return;
     const on = state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED' || (state === 'DONE' && occupant);
     scene.children.forEach(function (ch) {
       if (ch === group || ch === hero || ch.isLight || ch.name === 'SkyPhoto' || ch.name === 'PalaceInterior' || ch.name === 'PalaceWings') return;
@@ -2880,12 +2920,30 @@
     gl.canvas.addEventListener('webglcontextlost', function (e) {
       if (e && e.preventDefault) e.preventDefault();
       runtimeErrors.push('webglcontextlost');
-      loadError = new Error('فُقد سياق الرسم WebGL — ذاكرة الجهاز لا تكفي لعرض القاعة');
+      try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('error', 'webglcontextlost'); } catch (_) {}
+      const detail = new Error('فُقد سياق الرسم WebGL — ذاكرة الجهاز لا تكفي لعرض القاعة');
+      detail.name = 'WebGLContextLost';
+      loadError = detail;
       if (state !== 'DONE' && state !== 'IDLE') {
+        state = 'FAILED';
+        showFail(loadError);
+      } else {
+        // During gameplay: show the load screen instead of a blank crash.
+        ensureLoadScreen();
+        loadEl.style.opacity = '1';
+        loadEl.style.pointerEvents = 'auto';
+        if (statusEl) statusEl.textContent = 'فُقد سياق الرسم — أعد المحاولة';
         state = 'FAILED';
         showFail(loadError);
       }
       renderDebug();
+    }, false);
+    gl.canvas.addEventListener('webglcontextrestored', function () {
+      runtimeErrors.push('webglcontextrestored');
+      try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('info', 'webglcontextrestored'); } catch (_) {}
+      note('webglcontextrestored');
+      // Full retry path rebuilds palace state safely after a kill.
+      if (state === 'FAILED' && lastContext) onRetry();
     }, false);
   }
 
@@ -3454,6 +3512,17 @@
     },
     loadPalaceAssets: loadPalaceAssets,
     state: function () { return state; },
+    status: function () {
+      return {
+        phase: state,
+        room: (wingRuntime && wingRuntime.current) || (window.PalaceWings && PalaceWings.metrics && PalaceWings.metrics().current) || 'Palace',
+        cityReleased: !!(lastContext && lastContext.scene && lastContext.scene.userData && lastContext.scene.userData.cityReleased),
+        hallBuilt: !!hallBuilt,
+        warmFrame: !!warmFrame,
+        occupant: !!occupant,
+        percent: shownPercent()
+      };
+    },
     percent: shownPercent,
     debugText: debugText,
     mark: mark,

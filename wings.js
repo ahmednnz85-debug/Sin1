@@ -453,6 +453,7 @@
   }
   function mesh(geometry, material, name, parent) {
     const m = new THREE.Mesh(geometry, material); m.name = name; m.castShadow = false; m.receiveShadow = true;
+    if (name && /^K[234]-/.test(name)) m.userData.streamDress = true;
     (parent || state.root).add(m); return m;
   }
   function makeColliders(solids, caps) {
@@ -1460,7 +1461,13 @@
   function k2LoadGLB(url, needsMeshopt, onLoad) {
     const root = state.root;
     wingGLB(url, gltf => { if (state.root === root) onLoad(gltf); },
-      e => { console.warn('K2 council hall model failed', url, e); if (state.root === root) onLoad(null); });
+      e => {
+        const msg = (e && (e.message || e)) + '';
+        console.warn('K2 council hall model failed', url, e);
+        dressFailures.push({ room: 'K2', url: url, error: msg, at: performance.now() });
+        try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('error', 'K2 fail ' + url); } catch (_) {}
+        if (state.root === root) onLoad(null);
+      });
   }
   // Wall faces with world-anchored UVs: U runs to the viewer's right and is
   // fitted so every wall holds whole mural panels from corner to corner.
@@ -1795,6 +1802,9 @@
   function dressK2() {
     const r = state.rooms.find(q => q.id === 'K2'), g = state.regionGroups.get('K2');
     if (!r || !g) return;
+    // Idempotent after unload/re-dress: never stack a second set of K2 props.
+    if (g.userData.k2Dressed && g.children.some(function (c) { return c.name && c.name.indexOf('K2-') === 0; })) return;
+    g.userData.k2Dressed = true;
     const b = r.bbox, W = b.x1 - b.x0, D = b.z1 - b.z0, h = r.height;
     state.k2Dress = { walls: false, ceiling: 0, chandelier: false, lions: 0, plants: 0, columns: 0, fires: 0, table: false, tableH: K2_DRESS.tableSpan * K2_DRESS.tableHeightRatio };
 
@@ -2165,6 +2175,7 @@
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0; state.gpuResidency = null; state.renderBudget = null;
+    dressedRooms.clear(); dressFailures.length = 0; state.deferredDress.clear(); state._preparedKey = '';
   }
   function wingMark(msg) {
     try { if (window.PalaceInterior && PalaceInterior.mark) PalaceInterior.mark(msg); } catch (e) { /* marks are diagnostic only */ }
@@ -2292,15 +2303,56 @@
     const halfFov = Math.atan(Math.tan(vfov / 2) * aspect);
     return { x: cam.position.x - rootX, z: cam.position.z - rootZ, dirX: dx, dirZ: dz, halfFov };
   }
+  // Streamed dress content (K2–K4 props) can be torn down when the room leaves
+  // the hop≤1 residency set so GPU/CPU memory stays flat. Architecture shells
+  // built at palace entry stay. Re-entry re-queues dressRoomIfNeeded.
+  const STREAM_DRESS_ROOMS = new Set(['K2', 'K3', 'K4']);
+  const dressedRooms = new Set();
+  const dressFailures = [];
+  function unloadStreamedDress(id) {
+    if (!STREAM_DRESS_ROOMS.has(id) || !dressedRooms.has(id)) return false;
+    const g = state.regionGroups.get(id);
+    if (!g) return false;
+    const doomed = [];
+    g.children.forEach(function (ch) {
+      if (ch.userData && (ch.userData.streamDress || (ch.name && /^K[234]-/.test(ch.name)))) doomed.push(ch);
+    });
+    doomed.forEach(function (ch) {
+      g.remove(ch);
+      ch.traverse(function (o) {
+        if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+        const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        mats.forEach(function (m) {
+          if (!m || (m.userData && m.userData.palaceShared)) return;
+          // Keep shared texture images in `preloaded`; only drop GPU handle.
+          if (typeof m.dispose === 'function') m.dispose();
+        });
+      });
+    });
+    if (id === 'K2') {
+      state.colliders = state.colliders.filter(function (c) { return !c._k2Prop; });
+      state.k2Lights = null; state.k2LightBase = null; state.k2Dress = null;
+      if (g.userData) g.userData.k2Dressed = false;
+    }
+    if (id === 'K3') { state.k3Lights = null; state.k3LightBase = null; if (g.userData) g.userData.k3Dressed = false; }
+    if (id === 'K4') { state.k4Dress = null; if (g.userData) g.userData.k4Dressed = false; }
+    dressedRooms.delete(id);
+    state.deferredDress.add(id);
+    try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('unload', id + ' dress released n=' + doomed.length); } catch (e) {}
+    return doomed.length > 0;
+  }
   function dressRoomIfNeeded(id) {
     if (!state.deferredDress.has(id)) return;
+    if (dressedRooms.has(id)) { state.deferredDress.delete(id); return; }
     state.deferredDress.delete(id);
     // Camera-driven streaming: a room starts decoding as soon as it enters
     // the camera visibility plan, not when the hero crosses its threshold.
     if (id === 'K2') dressK2();
     else if (id === 'K3') dressK3();
     else if (id === 'K4') dressK4();
+    if (STREAM_DRESS_ROOMS.has(id)) dressedRooms.add(id);
     if (state.root) state.root.updateMatrixWorld(true);
+    try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('load', id + ' dress start'); } catch (e) {}
   }
   function updateCulling(force) {
     if (!state.built || !state.ctx || !state.ctx.hero) return;
@@ -2362,12 +2414,17 @@
       }
       const key = Array.from(preparedIds).sort().join(',');
       if (gpuResidency && (force || key !== state._preparedKey)) {
+        // Fully unload streamed dress for rooms that left the hop≤1 set BEFORE
+        // GPU sync, so materials/textures are not held by detached meshes.
+        state.regions.forEach(rr => {
+          if (!preparedIds.has(rr.id)) unloadStreamedDress(rr.id);
+        });
         state._preparedKey = key;
         state.gpuResidency = gpuResidency.sync(state.ctx.scene, state.root, state.regionGroups, preparedIds);
         // Anything the residency manager released must be re-warmed next time.
         state.regions.forEach(rr => { const g = state.regionGroups.get(rr.id); if (g && !preparedIds.has(rr.id)) warmed.delete(g); });
       }
-      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: warmQueue.length, memory: smartMemory ? smartMemory.state() : null };
+      state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: warmQueue.length, memory: smartMemory ? smartMemory.state() : null, dressFailures: dressFailures.slice(-8) };
     }
     warmNext();
     if (preparedIds && preparedIds.has('K4')) loadK4Assets();
@@ -2834,7 +2891,22 @@
       });
       visibleRegionTriangles[id] = Math.round(n);
     });
-    return { meshes, triangles, visibleMeshes, visibleTriangles, visibleRegionTriangles, topVisibleMeshes: topVisibleMeshes.slice(0, 12), gpuResidency: state.gpuResidency || null, visibility: state.visibility || null, renderBudget: state.renderBudget || null, colliders: state.colliders.length, k1ModelColliders: state.k1ModelColliderCount, k1FloorY: state.k1FloorY, k1Model: state.k1ModelMetrics, rooms: state.rooms.length, regions: state.regions.length };
+    return {
+      current: state.current || null,
+      meshes, triangles, visibleMeshes, visibleTriangles, visibleRegionTriangles,
+      topVisibleMeshes: topVisibleMeshes.slice(0, 12),
+      gpuResidency: state.gpuResidency || null,
+      visibility: state.visibility || null,
+      renderBudget: state.renderBudget || null,
+      dressed: Array.from(dressedRooms),
+      dressFailures: dressFailures.slice(-8),
+      colliders: state.colliders.length,
+      k1ModelColliders: state.k1ModelColliderCount,
+      k1FloorY: state.k1FloorY,
+      k1Model: state.k1ModelMetrics,
+      rooms: state.rooms.length,
+      regions: state.regions.length
+    };
   }
 
   /* ---------------------------------------------------------------------------
