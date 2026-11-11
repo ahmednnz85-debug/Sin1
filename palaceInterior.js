@@ -40,7 +40,10 @@
     maxPalaceBytes: 25 * 1024 * 1024,
     archWidthRatio: 0.30,
     archHeightRatio: 0.64,
-    lodDistanceH: 14
+    lodDistanceH: 10,
+    // Beyond this distance (× H) instanced hall props are not drawn at all.
+    // Still covers a full hall length so the look stays the same from play cameras.
+    cullDistanceH: 22
   };
 
   const PLAN = (function () {
@@ -147,6 +150,7 @@
   let palaceEnv = null;
   let fireMats = [];
   let lodPacks = [];
+  let propCullList = [];
   let fireList = [];
   let wingRuntime = null;
   let lightAssignAt = 0;
@@ -511,7 +515,8 @@
     });
   }
 
-  const MAX_INFLIGHT = 4;
+  // Strict one-at-a-time GLB/texture fetch+parse to keep peak RAM flat on iOS.
+  const MAX_INFLIGHT = 1;
   let inflight = 0;
   const slotQueue = [];
   function acquireSlot() {
@@ -522,6 +527,83 @@
     const next = slotQueue.shift();
     if (next) next();
     else inflight = Math.max(0, inflight - 1);
+  }
+
+  // After the GPU has a copy, drop CPU-side ImageBitmap / HTMLImage pixels.
+  function armTextureCpuRelease(tex) {
+    if (!tex || !tex.isTexture || tex.userData._cpuReleaseArmed) return;
+    tex.userData._cpuReleaseArmed = true;
+    const prev = tex.onUpdate;
+    tex.onUpdate = function () {
+      try { if (typeof prev === 'function') prev.call(this); } catch (_) {}
+      try {
+        const img = this.image;
+        if (img && typeof img.close === 'function') img.close();
+        if (!this.isCompressedTexture) this.image = null;
+      } catch (_) {}
+      this.onUpdate = null;
+    };
+  }
+
+  function releaseCpuFromObject(root, renderer) {
+    if (!root || !root.traverse) return;
+    root.traverse(function (o) {
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      mats.forEach(function (m) {
+        if (!m) return;
+        ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'bumpMap', 'displacementMap', 'envMap', 'lightMap'].forEach(function (k) {
+          const t = m[k];
+          if (!t || !t.isTexture) return;
+          armTextureCpuRelease(t);
+          try {
+            if (renderer && renderer.initTexture) renderer.initTexture(t);
+            const img = t.image;
+            if (img && typeof img.close === 'function') img.close();
+            if (!t.isCompressedTexture) t.image = null;
+          } catch (_) {}
+        });
+      });
+    });
+  }
+
+  function releaseCpuFromResult(result, renderer) {
+    if (!result) return;
+    if (result.isTexture) {
+      armTextureCpuRelease(result);
+      try {
+        if (renderer && renderer.initTexture) renderer.initTexture(result);
+        if (result.image && typeof result.image.close === 'function') result.image.close();
+        if (!result.isCompressedTexture) result.image = null;
+      } catch (_) {}
+      return;
+    }
+    if (result.scene) releaseCpuFromObject(result.scene, renderer);
+  }
+
+  function snapshotMeshBudget(tag, ctx) {
+    const info = snapshotRendererInfo(ctx || lastContext || {});
+    const sample = window.SinMemoryOverlay && SinMemoryOverlay.sample
+      ? SinMemoryOverlay.sample({ renderer: (ctx || lastContext || {}).renderer, scene: (ctx || lastContext || {}).scene })
+      : null;
+    const row = {
+      tag: tag,
+      at: Date.now(),
+      geometries: info.geometries,
+      textures: info.textures,
+      programs: info.programs,
+      calls: info.calls,
+      triangles: info.triangles,
+      texMB: sample && sample.texMB,
+      fps: sample && sample.fps,
+      cityReleased: info.cityReleased,
+      teardownPhase: teardownPhase
+    };
+    try {
+      window.__sinMeshBudget = window.__sinMeshBudget || {};
+      window.__sinMeshBudget[tag] = row;
+      if (window.SinMemoryOverlay) SinMemoryOverlay.note('budget', tag + ' draw=' + row.calls + ' tris=' + Math.round((row.triangles || 0) / 1000) + 'k tex=' + row.textures);
+    } catch (_) {}
+    return row;
   }
 
   function fetchWithRetry(spec) {
@@ -582,6 +664,7 @@
           tex.magFilter = THREE.LinearFilter;
           tex.needsUpdate = true;
         } else srgb(tex);
+        armTextureCpuRelease(tex);
         resolve(tex);
       };
       img.onerror = function () {
@@ -700,22 +783,30 @@
 
   async function shareWingAssets() {
     if (!wingsProbed || !window.PalaceWings) return;
-    const jobs = PalaceWings.assetList().map(async function (a) {
+    const list = PalaceWings.assetList();
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
       const url = bust(encodeURI(a.url));
       const own = specs.find(function (s) { return s.url === url && !s.wingPath; });
-      if (!own || !own.buf || own.wingShared) return;
+      if (!own || own.wingShared) continue;
       try {
-        PalaceWings.provideAsset(a.url, a.kind === 'tex' ? await textureFromBytes(own.buf, own.name, false) : await parseRawGLB(own.buf));
-        own.wingShared = true;
+        if (own.result) {
+          PalaceWings.provideAsset(a.url, own.result);
+          own.wingShared = true;
+        } else if (own.buf) {
+          PalaceWings.provideAsset(a.url, a.kind === 'tex' ? await textureFromBytes(own.buf, own.name, false) : await parseRawGLB(own.buf));
+          own.wingShared = true;
+          own.buf = null;
+        }
       } catch (e) { console.warn('تعذّر تجهيز ملف الجناح مسبقاً', a.url, e); }
-    });
-    await Promise.all(jobs);
+    }
   }
 
   async function settle(spec) {
     if (spec.status === 'loaded' && spec.result) return spec.result;
     try {
       if (!spec.buf) spec.buf = await fetchWithRetry(spec);
+      const byteLen = spec.buf ? spec.buf.byteLength : 0;
       if (spec.kind === 'js') spec.result = await installDecoder(spec.buf);
       else if (spec.kind === 'tex') spec.result = await textureFromBytes(spec.buf, spec.name, spec.linear);
       else if (spec.kind === 'wtex') spec.result = await textureFromBytes(spec.buf, spec.name, false);
@@ -725,11 +816,16 @@
         await waitDecoder();
         spec.result = await parseGLB(spec.buf);
       }
+      // Free the ArrayBuffer immediately after parse/upload — do not keep it
+      // until the whole batch finishes (that was a peak-RAM spike on iPhone).
+      spec.buf = null;
+      const renderer = lastContext && lastContext.renderer;
+      if (spec.kind !== 'js') releaseCpuFromResult(spec.result, renderer);
       if (spec.wingPath && window.PalaceWings) PalaceWings.provideAsset(spec.wingPath, spec.result);
       spec.status = 'loaded';
       spec.error = '';
-      spec.loaded = spec.buf.byteLength;
-      spec.total = spec.buf.byteLength;
+      spec.loaded = byteLen;
+      spec.total = byteLen;
       if (spec.optional && spec.kind === 'glb' && spec.result && spec.result.scene) {
         let tris = 0;
         spec.result.scene.traverse(function (o) {
@@ -742,6 +838,7 @@
       paint();
       return spec.result;
     } catch (err) {
+      spec.buf = null;
       spec.status = 'failed';
       spec.error = (err && err.message) || String(err);
       paint();
@@ -755,6 +852,7 @@
     let payload = 0;
     specs.forEach(function (s) {
       if (s.buf) payload += s.buf.byteLength;
+      else if (s.total > 0) payload += s.total;
       if (s.kind === 'tex') tex[s.key] = s.result;
       if (s.optional && s.kind === 'glb' && s.result) props[s.name] = s.result;
     });
@@ -843,17 +941,22 @@
       await attachExistingPropSpecs();
       attachWingSpecs();
       loadStage = 1; paint();
-      const jobs = specs.map(function (s) {
-        return settle(s).catch(function (err) {
+      // One GLB/texture at a time — never parse the next until the previous
+      // ArrayBuffer has been freed.
+      for (let i = 0; i < specs.length; i++) {
+        const s = specs[i];
+        try {
+          await settle(s);
+        } catch (err) {
           if (s.optional) {
             s.status = 'skipped';
             console.warn('فشل تحميل الدعامة، يُبقى الشكل المؤقت', s.name, s.error || (err && err.message) || err);
-            return null;
+          } else {
+            // Keep going so we can report every failure; throw below.
           }
-          return null;
-        });
-      });
-      await Promise.all(jobs);
+        }
+        s.buf = null;
+      }
       loadStage = 4; paint();
       await shareWingAssets();
       loadStage = 5; paint();
@@ -866,6 +969,7 @@
       }
       const result = assembleFromSpecs();
       loadStage = 6; paint();
+      try { snapshotMeshBudget('palace-assets-ready', lastContext); } catch (_) {}
       return result;
     })().catch(function (err) { loadPromise = null; throw err; });
     return loadPromise;
@@ -1113,6 +1217,7 @@
       preTeardownInfo = snapshotRendererInfo(ctx);
       note('teardown pause geo=' + preTeardownInfo.geometries + ' tex=' + preTeardownInfo.textures + ' tris=' + preTeardownInfo.triangles);
       try {
+        snapshotMeshBudget('pre-teardown', ctx);
         if (window.SinMemoryOverlay) {
           SinMemoryOverlay.note('teardown', 'pause geo=' + preTeardownInfo.geometries + ' tex=' + preTeardownInfo.textures);
           SinMemoryOverlay.reportHeaviest(ctx.scene, 'pre-teardown');
@@ -1144,6 +1249,7 @@
       note('teardown verify released=' + released + ' Δgeo=' + geoDrop + ' Δtex=' + texDrop +
         ' now geo=' + post.geometries + ' tex=' + post.textures);
       try {
+        snapshotMeshBudget('post-teardown', ctx);
         if (window.SinMemoryOverlay) {
           SinMemoryOverlay.note('teardown', 'verify Δg=' + geoDrop + ' Δt=' + texDrop + ' released=' + released);
           SinMemoryOverlay.reportHeaviest(ctx.scene, 'post-teardown');
@@ -1520,12 +1626,17 @@
     for (let p = 0; p < lodPacks.length; p++) {
       const pack = lodPacks[p];
       const lim = (pack.limitH || CONFIG.lodDistanceH) * H;
+      const cull = (pack.cullH != null ? pack.cullH : CONFIG.cullDistanceH) * H;
       let ni = 0;
       let fi = 0;
       for (let i = 0; i < pack.local.length; i++) {
         wp.copy(pack.local[i]);
         group.localToWorld(wp);
         const dist = cam.position.distanceTo(wp);
+        if (dist > cull) {
+          if (pack.nearState) pack.nearState[i] = false;
+          continue; // distance cull: draw neither near nor far LOD
+        }
         if (!pack.nearState) pack.nearState = new Array(pack.local.length).fill(false);
         const wasNear = pack.nearState[i];
         const isNear = wasNear ? dist < lim * 1.12 : dist < lim;
@@ -1539,6 +1650,16 @@
       pack.far.visible = fi > 0;
       if (ni) pack.near.instanceMatrix.needsUpdate = true;
       if (fi) pack.far.instanceMatrix.needsUpdate = true;
+    }
+    // Distance-cull non-instanced prop roots (look unchanged at play distances).
+    if (propCullList && propCullList.length) {
+      const cullProp = CONFIG.cullDistanceH * H;
+      for (let i = 0; i < propCullList.length; i++) {
+        const entry = propCullList[i];
+        if (!entry || !entry.root) continue;
+        const d = cam.position.distanceTo(entry.world);
+        entry.root.visible = d <= cullProp * 1.05;
+      }
     }
   }
 
@@ -1584,6 +1705,7 @@
     overlapNotes = [];
     ramp = null;
     lodPacks = [];
+    propCullList = [];
     fireList = [];
     fireMats = [];
     lightAssignAt = 0;
@@ -2816,14 +2938,54 @@
           group.remove(m);
           if (m.geometry && m.geometry.dispose) m.geometry.dispose();
         });
-        slot.positions.forEach(function (p, i) {
-          const obj = wrapFitted(gltf.scene.clone(true), slot.targetHeightH * H);
-          obj.name = 'prop:' + slot.id;
-          obj.position.set(p[0] * H, p[1] * H, p[2] * H);
-          obj.rotation.y = slotRot(slot, i);
-          group.add(obj);
+        // Prefer InstancedMesh for repeated props (same look, fewer draws).
+        const fitted = wrapFitted(gltf.scene.clone(true), slot.targetHeightH * H);
+        fitted.position.set(0, 0, 0);
+        fitted.rotation.set(0, 0, 0);
+        fitted.scale.set(1, 1, 1);
+        fitted.updateMatrixWorld(true);
+        const parts = [];
+        fitted.traverse(function (o) {
+          if (o.isMesh && o.geometry) parts.push(o);
         });
-        slotModes.push({ id: slot.id, count: slot.positions.length, mode: 'real' });
+        let instanced = false;
+        if (parts.length && slot.positions.length > 1) {
+          instanced = true;
+          const tmp = new THREE.Matrix4();
+          parts.forEach(function (part, pi) {
+            const mat = palaceMat(part.material);
+            const im = new THREE.InstancedMesh(part.geometry, mat, slot.positions.length);
+            im.name = 'prop:' + slot.id + (pi ? (':' + pi) : '');
+            im.frustumCulled = true;
+            im.castShadow = false;
+            im.receiveShadow = true;
+            const local = part.matrixWorld.clone();
+            slot.positions.forEach(function (p, i) {
+              dummy.position.set(p[0] * H, p[1] * H, p[2] * H);
+              dummy.rotation.set(0, slotRot(slot, i), 0);
+              dummy.scale.set(1, 1, 1);
+              dummy.updateMatrix();
+              tmp.copy(dummy.matrix).multiply(local);
+              im.setMatrixAt(i, tmp);
+            });
+            im.instanceMatrix.needsUpdate = true;
+            group.add(im);
+            (slotMeshes[slot.id] || (slotMeshes[slot.id] = [])).push(im);
+          });
+        } else {
+          slot.positions.forEach(function (p, i) {
+            const obj = i === 0 ? fitted : wrapFitted(gltf.scene.clone(true), slot.targetHeightH * H);
+            obj.name = 'prop:' + slot.id;
+            obj.position.set(p[0] * H, p[1] * H, p[2] * H);
+            obj.rotation.y = slotRot(slot, i);
+            group.add(obj);
+            propCullList.push({
+              root: obj,
+              world: new THREE.Vector3(portalX + p[0] * H, floorY + p[1] * H, portalFront + p[2] * H)
+            });
+          });
+        }
+        slotModes.push({ id: slot.id, count: slot.positions.length, mode: instanced ? 'instanced' : 'real' });
       } else {
         if (slot.glbPath) console.warn('الدعامة غير جاهزة، يُبقى الشكل المؤقت', slot.id, slot.glbPath);
         slotModes.push({ id: slot.id, count: slot.positions.length, mode: 'placeholder' });
@@ -3235,6 +3397,7 @@
         holdCull(ctx.scene, ctx.hero);
         note('built ' + Math.round(performance.now() - tBuild) + 'ms');
         try {
+          snapshotMeshBudget('post-palace-build', ctx);
           if (window.SinMemoryOverlay) SinMemoryOverlay.reportHeaviest(ctx.scene, 'post-palace-build');
         } catch (_) {}
         window.__sinEntryBlackout = false;
