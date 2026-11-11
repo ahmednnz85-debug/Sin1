@@ -25,7 +25,8 @@ test('resolution governor recovers severe mobile frame stalls and remains bounde
   assert.match(resolution, /var min = Number\.isFinite\(options\.min\) \? options\.min : 0\.58/);
   assert.match(cinematic, /dt > 2000 \|\| busy \|\| document\.hidden/);
   assert.doesNotMatch(cinematic, /dt > 250 \|\| busy/);
-  assert.match(cinematic, /Math\.min\(mobile \? 1 : 1\.25, Math\.max\(1, dpr\)\) \* E\.scale/);
+  // Retina cap 1.25× on all devices; dynamic-resolution governor still scales under load.
+  assert.match(cinematic, /Math\.min\(1\.25, Math\.max\(1, dpr\)\) \* E\.scale/);
 });
 
 test('cinematic grade/fog are restrained and exposure is consistent', () => {

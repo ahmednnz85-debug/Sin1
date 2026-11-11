@@ -154,9 +154,9 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 
 
 <script type="text/plain" data-legacy-script data-src="dynamic-resolution.js?v=20261109a"></script>
-<script type="text/plain" data-legacy-script data-src="cinematic.js?v=20261109a"></script>
+<script type="text/plain" data-legacy-script data-src="cinematic.js?v=20261109a&r187=pcf"></script>
 <script type="text/plain" data-legacy-script data-src="vendor/clipper.js"></script>
-<script type="text/plain" data-legacy-script data-src="palaceInterior.js?v=hall26&cam=20261108c&preload=20261108c&loadingfix=20261109"></script>
+<script type="text/plain" data-legacy-script data-src="palaceInterior.js?v=hall26&cam=20261108c&preload=20261108c&loadingFix=20261109&r187=floor"></script>
 <script type="text/plain" data-legacy-script data-src="wing-gpu-residency.js?v=20261109k4"></script>
 <script type="text/plain" data-legacy-script data-src="wing-render-budget.js?v=20261109b"></script>
 <script type="text/plain" data-legacy-script data-src="wing-visibility.js?v=20261109k4"></script>
@@ -187,7 +187,7 @@ const gfxParams=new URLSearchParams(location.search);const renderer=new THREE.We
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.02;
- renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+ renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFShadowMap;
 const scene=new THREE.Scene();
 scene.fog=new THREE.FogExp2(0xc6a77b,0.0038);
 const CAM_VFOV=42,CAM_LOOK=1.18,CAM_DIST=3.45,CAM_PITCH=0.22;
@@ -1970,6 +1970,6 @@ window.__releaseExteriorStage=function(){
 };
 })();
 </script>
-<script type="module" src="three-compat.js"></script>
+<script type="module" src="three-compat.js?v=r187engine"></script>
 </body>
 </html>
