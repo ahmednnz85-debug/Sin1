@@ -37,13 +37,22 @@ test('cinematic grade/fog are restrained and exposure is consistent', () => {
 });
 
 test('palace loading starts only after the fade, exterior disposal and reference cleanup', () => {
-  const loadStart = palace.indexOf('function startPalaceLoad(ctx)');
-  const loadCall = palace.indexOf('loadPalaceAssets()', loadStart);
-  const release = palace.indexOf('releaseCity(ctx && ctx.scene, ctx && ctx.hero)', loadStart);
-  assert.ok(loadStart >= 0 && release > loadStart && loadCall > release);
-  assert.match(palace, /if \(state === 'LOADING'\)[\s\S]{0,160}startPalaceLoad\(ctx\)/);
+  // Gated order: black → pause → releaseCity → flush → verify → only then loadPalaceAssets.
+  assert.match(palace, /function advanceTeardownGate\(ctx\)/);
+  assert.match(palace, /function beginPalaceAssetLoad\(ctx\)/);
+  const gate = palace.indexOf('function advanceTeardownGate(ctx)');
+  const begin = palace.indexOf('function beginPalaceAssetLoad(ctx)');
+  const release = palace.indexOf('releaseCity(ctx && ctx.scene, ctx && ctx.hero)', gate);
+  const loadCall = palace.indexOf('loadPalaceAssets()', begin);
+  assert.ok(gate >= 0 && begin >= 0 && release > gate && loadCall > begin);
+  assert.match(palace, /if \(teardownPhase < 5\)[\s\S]{0,120}advanceTeardownGate\(ctx\)/);
+  assert.match(palace, /teardownPhase < 4/);
+  assert.match(palace, /palace load blocked until outdoor teardown/);
+  assert.match(palace, /__sinEntryBlackout/);
   const threshold = palace.slice(palace.indexOf("if (state === 'IDLE')"), palace.indexOf("if (state === 'FADING_OUT')"));
   assert.doesNotMatch(threshold, /loadPalaceAssets\(\)/);
+  const fading = palace.slice(palace.indexOf("if (state === 'FADING_OUT')"), palace.indexOf("if (state === 'LOADING')"));
+  assert.doesNotMatch(fading, /loadPalaceAssets\(\)/);
   // Outside is a one-way phase: releaseCity keeps only hero + palace group.
   assert.match(palace, /Outside is a one-way phase/);
   assert.match(palace, /retainedResources\.has\(g\)/);
@@ -51,6 +60,7 @@ test('palace loading starts only after the fade, exterior disposal and reference
   assert.match(palace, /flushReleasedGPU/);
   assert.match(index, /extras\.length=0;colliders\.length=0;marketOpenings\.length=0;vegChunks\.length=0;palMeshes\.length=0;palBVH=null/);
   assert.match(index, /__sinCityReleased/);
+  assert.match(index, /__sinEntryBlackout/);
 });
 
 test('all palace wings share one stable ambient source and synchronized subtle flicker', () => {

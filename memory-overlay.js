@@ -1,12 +1,22 @@
 /* Toggleable memory / residency diagnostic overlay (?mem=1 or Settings).
-   Screenshot-friendly: phase, room, renderer.info, estimated GPU costs, event log. */
+   Persistent black box: writes phase/room/renderer.info/texMB/FPS/last events
+   to sessionStorage every 500 ms so a crash/reload can show the prior session. */
 (function (root) {
   'use strict';
   const MAX_LOG = 40;
+  const MAX_EVENTS_STORE = 30;
+  const STORE_KEY = 'sinBlackBox';
+  const PREV_KEY = 'sinBlackBoxPrev';
+  const TICK_MS = 500;
   const log = [];
   let el = null;
   let on = /(?:[?&](?:mem|perf)\b)/.test(location.search) || false;
   let lastSample = null;
+  let lastWriteAt = 0;
+  let fpsEma = 0;
+  let lastFrameTs = 0;
+  let heaviestByPhase = {};
+  let crashBannerShown = false;
 
   function push(kind, msg) {
     const line = {
@@ -20,15 +30,111 @@
   }
 
   function estimateTextureBytes(renderer) {
-    // Rough: count textures × assume 1024² RGBA mipmapped ≈ 5.3 MB if unknown.
     const n = renderer && renderer.info && renderer.info.memory ? renderer.info.memory.textures : 0;
-    return n * 2.5; // MB estimate (conservative average for game textures)
+    return n * 2.5;
   }
 
   function estimateGeometryBytes(renderer) {
     const n = renderer && renderer.info && renderer.info.memory ? renderer.info.memory.geometries : 0;
-    return n * 0.15; // MB estimate
+    return n * 0.15;
   }
+
+  function texDecodedMB(tex) {
+    if (!tex) return 0;
+    const img = tex.image || tex.source && tex.source.data;
+    let w = 0, h = 0;
+    if (img) {
+      w = img.width || img.videoWidth || (img.image && img.image.width) || 0;
+      h = img.height || img.videoHeight || (img.image && img.image.height) || 0;
+      if ((!w || !h) && img.data && img.data.width) { w = img.data.width; h = img.data.height; }
+    }
+    if (!w || !h) {
+      if (tex.isCompressedTexture && tex.mipmaps && tex.mipmaps[0]) {
+        w = tex.mipmaps[0].width || 0;
+        h = tex.mipmaps[0].height || 0;
+      }
+    }
+    if (!w || !h) return 0;
+    // RGBA8 + mipmaps (~33% overhead)
+    return (w * h * 4 * 1.333) / 1048576;
+  }
+
+  function meshTris(obj) {
+    const g = obj.geometry;
+    if (!g) return 0;
+    const idx = g.index;
+    if (idx) return Math.floor(idx.count / 3);
+    const pos = g.attributes && g.attributes.position;
+    return pos ? Math.floor(pos.count / 3) : 0;
+  }
+
+  function reportHeaviest(scene, phase) {
+    phase = phase || 'unknown';
+    const texMap = new Map();
+    const meshes = [];
+    if (!scene || !scene.traverse) {
+      return { phase: phase, textures: [], meshes: [] };
+    }
+    scene.traverse(function (o) {
+      if (o.isMesh || o.isSkinnedMesh || o.isInstancedMesh) {
+        const tris = meshTris(o);
+        if (tris > 0) {
+          const count = o.isInstancedMesh ? (o.count || 1) : 1;
+          meshes.push({
+            name: o.name || o.type || 'mesh',
+            tris: tris * count,
+            inst: count,
+            res: (o.geometry && (o.geometry.uuid || '').slice(0, 8)) || ''
+          });
+        }
+      }
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      mats.forEach(function (m) {
+        if (!m) return;
+        ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'envMap', 'lightMap', 'alphaMap', 'bumpMap', 'displacementMap'].forEach(function (k) {
+          const t = m[k];
+          if (!t || !t.isTexture) return;
+          const mb = texDecodedMB(t);
+          const img = t.image || t.source && t.source.data;
+          const w = img && (img.width || img.videoWidth) || 0;
+          const h = img && (img.height || img.videoHeight) || 0;
+          const key = t.uuid || (k + ':' + w + 'x' + h);
+          const prev = texMap.get(key);
+          if (!prev || mb > prev.mb) {
+            texMap.set(key, {
+              name: (t.name || m.name || o.name || k),
+              slot: k,
+              mb: +mb.toFixed(2),
+              w: w,
+              h: h
+            });
+          }
+        });
+      });
+    });
+    const textures = Array.from(texMap.values()).sort(function (a, b) { return b.mb - a.mb; }).slice(0, 10);
+    const heavyMeshes = meshes.sort(function (a, b) { return b.tris - a.tris; }).slice(0, 10);
+    const report = { phase: phase, at: Date.now(), textures: textures, meshes: heavyMeshes };
+    heaviestByPhase[phase] = report;
+    try {
+      console.groupCollapsed('[mem] heaviest @ ' + phase);
+      console.table(textures.map(function (t) {
+        return { name: t.name, slot: t.slot, MB: t.mb, res: t.w + 'x' + hStr(t) };
+      }));
+      console.table(heavyMeshes.map(function (m) {
+        return { name: m.name, tris: m.tris, inst: m.inst };
+      }));
+      console.groupEnd();
+    } catch (_) {}
+    push('heaviest', phase + ' tex0=' + (textures[0] ? textures[0].name + ' ' + textures[0].mb + 'MB' : '—') +
+      ' mesh0=' + (heavyMeshes[0] ? heavyMeshes[0].name + ' ' + heavyMeshes[0].tris : '—'));
+    try {
+      sessionStorage.setItem('sinHeaviest', JSON.stringify(heaviestByPhase));
+    } catch (_) {}
+    return report;
+  }
+
+  function hStr(t) { return (t.w || '?') + 'x' + (t.h || '?'); }
 
   function ensure() {
     if (el || !on) return;
@@ -51,26 +157,63 @@
     const wings = window.PalaceWings && PalaceWings.metrics ? PalaceWings.metrics() : null;
     const palace = window.PalaceInterior && PalaceInterior.status ? PalaceInterior.status() : null;
     const gfx = window.SinGfx && SinGfx.status ? SinGfx.status() : null;
+    const now = performance.now();
+    if (lastFrameTs) {
+      const instFps = 1000 / Math.max(1, now - lastFrameTs);
+      fpsEma = fpsEma ? (fpsEma * 0.85 + instFps * 0.15) : instFps;
+    }
+    lastFrameTs = now;
+    const fps = gfx && gfx.avgMs ? +(1000 / Math.max(1, gfx.avgMs)).toFixed(0) : (fpsEma ? +fpsEma.toFixed(0) : null);
     lastSample = {
+      t: Date.now(),
       phase: (palace && palace.phase) || (ctx.phase) || (document.body.dataset.sinPhase) || '—',
       room: (wings && wings.current) || (palace && palace.room) || '—',
-      cityReleased: !!(ctx.scene && ctx.scene.userData && ctx.scene.userData.cityReleased),
+      cityReleased: !!(ctx.scene && ctx.scene.userData && ctx.scene.userData.cityReleased) || !!(palace && palace.cityReleased),
+      teardown: palace && palace.teardownPhase != null ? palace.teardownPhase : null,
       geometries: mem.geometries || 0,
       textures: mem.textures || 0,
-      programs: mem.programs || 0,
+      programs: mem.programs || (Array.isArray(mem.programs) ? mem.programs.length : 0) || 0,
       calls: render.calls || 0,
       triangles: render.triangles || 0,
       texMB: +estimateTextureBytes(renderer).toFixed(1),
       geoMB: +estimateGeometryBytes(renderer).toFixed(1),
       heap,
-      fps: gfx && gfx.avgMs ? +(1000 / Math.max(1, gfx.avgMs)).toFixed(0) : null,
+      fps: fps,
       frameMs: gfx ? gfx.avgMs : null,
       visible: wings && wings.visibility ? wings.visibility.visible : null,
       prepared: wings && wings.visibility ? wings.visibility.prepared : null,
       gpu: wings && wings.gpuResidency ? wings.gpuResidency : null,
-      memoryPolicy: wings && wings.visibility && wings.visibility.memory ? wings.visibility.memory : null
+      memoryPolicy: wings && wings.visibility && wings.visibility.memory ? wings.visibility.memory : null,
+      events: log.slice(0, MAX_EVENTS_STORE).map(function (e) {
+        return { kind: e.kind, msg: e.msg.slice(0, 120), t: Math.round(e.t) };
+      })
     };
+    // programs may be an array in some three builds
+    if (Array.isArray(mem.programs)) lastSample.programs = mem.programs.length;
     return lastSample;
+  }
+
+  function persist(sampleObj) {
+    try {
+      sessionStorage.setItem(STORE_KEY, JSON.stringify(sampleObj));
+    } catch (_) {}
+  }
+
+  function promotePrevOnBoot() {
+    try {
+      const cur = sessionStorage.getItem(STORE_KEY);
+      if (cur) {
+        sessionStorage.setItem(PREV_KEY, cur);
+        // Keep STORE_KEY until a fresh write replaces it; PREV holds the crash snapshot.
+      }
+    } catch (_) {}
+  }
+
+  function readPrev() {
+    try {
+      const raw = sessionStorage.getItem(PREV_KEY) || sessionStorage.getItem(STORE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) { return null; }
   }
 
   function render(ctx) {
@@ -79,10 +222,10 @@
     const s = sample(ctx);
     const lines = [
       'MEM ' + (s.phase || '—') + '  room ' + (s.room || '—'),
-      'cityReleased ' + (s.cityReleased ? 'YES' : 'no'),
+      'cityReleased ' + (s.cityReleased ? 'YES' : 'no') + (s.teardown != null ? '  tear ' + s.teardown : ''),
       'geo ' + s.geometries + '  tex ' + s.textures + '  prog ' + s.programs,
       'draw ' + s.calls + '  tris ' + (s.triangles / 1000).toFixed(0) + 'k',
-      '~tex ' + s.texMB + 'MB  ~geo ' + s.geoMB + 'MB',
+      '~tex ' + s.texMB + 'MB  ~geo ' + s.geoMB + 'MB  fps ' + (s.fps != null ? s.fps : '—'),
       heapLine(s.heap),
       'vis ' + fmtList(s.visible),
       'prep ' + fmtList(s.prepared),
@@ -92,6 +235,17 @@
       return e.kind[0].toUpperCase() + ' ' + e.msg.slice(0, 72);
     }));
     el.textContent = lines.filter(Boolean).join('\n');
+  }
+
+  function tick(ctx) {
+    const s = sample(ctx || {});
+    const now = performance.now();
+    if (now - lastWriteAt >= TICK_MS) {
+      lastWriteAt = now;
+      persist(s);
+    }
+    if (on) render(ctx);
+    return s;
   }
 
   function heapLine(h) {
@@ -107,6 +261,43 @@
     return 'gpu g' + g.resident.geometries + ' t' + g.resident.textures + ' rel+' + (g.releasedThisSync || 0);
   }
 
+  function showCrashReportOnStart() {
+    if (crashBannerShown) return;
+    const prev = readPrev();
+    if (!prev || !prev.phase) return;
+    // Only surface if prior session died mid-palace or with heavy load.
+    const interesting = prev.phase === 'LOADING' || prev.phase === 'FADING_OUT' || prev.phase === 'SETUP' ||
+      prev.phase === 'REVEAL' || prev.phase === 'FAILED' || (prev.triangles && prev.triangles > 500000) ||
+      prev.cityReleased === false && (prev.phase && prev.phase !== 'IDLE' && prev.phase !== '—');
+    // Always show a compact last-record strip when we have a previous snapshot.
+    crashBannerShown = true;
+    const host = document.getElementById('main-menu') || document.getElementById('menu-grid') || document.body;
+    if (!host) return;
+    let box = document.getElementById('sin-blackbox-prev');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'sin-blackbox-prev';
+      box.style.cssText = 'margin-top:14px;padding:10px 12px;font:11px/1.4 ui-monospace,Menlo,monospace;color:#f0e2c8;background:rgba(40,12,10,.72);border:1px solid rgba(220,120,80,.55);white-space:pre-wrap;max-width:min(440px,92vw);text-align:left;direction:ltr';
+      const col = host.querySelector && host.querySelector('.menu-column');
+      (col || host).appendChild(box);
+    }
+    const ev = (prev.events || []).slice(0, 8).map(function (e) {
+      return '  ' + (e.kind || '?') + ': ' + (e.msg || '');
+    }).join('\n');
+    box.textContent = [
+      'LAST SESSION (black box)',
+      'phase ' + prev.phase + '  room ' + (prev.room || '—') + '  cityReleased ' + (prev.cityReleased ? 'YES' : 'no'),
+      'geo ' + prev.geometries + '  tex ' + prev.textures + '  prog ' + prev.programs,
+      'draw ' + prev.calls + '  tris ' + ((prev.triangles || 0) / 1000).toFixed(0) + 'k  ~tex ' + prev.texMB + 'MB',
+      'fps ' + (prev.fps != null ? prev.fps : '—') + (prev.teardown != null ? '  teardownPhase ' + prev.teardown : ''),
+      interesting ? '⚠ prior session looked like a crash mid-entry' : 'prior session snapshot',
+      ev ? ('events:\n' + ev) : ''
+    ].filter(Boolean).join('\n');
+  }
+
+  // On boot: promote last live record to "previous" so a reload shows the crash frame.
+  promotePrevOnBoot();
+
   const api = {
     set(v) { on = !!v; if (!on && el) { el.remove(); el = null; } },
     toggle() { api.set(!on); return on; },
@@ -114,8 +305,23 @@
     note: push,
     sample,
     render,
+    tick,
+    reportHeaviest,
+    heaviest() { return heaviestByPhase; },
+    showCrashReportOnStart,
+    readPrev,
     log() { return log.slice(); },
     last() { return lastSample; }
   };
   root.SinMemoryOverlay = api;
+
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () {
+        setTimeout(function () { try { api.showCrashReportOnStart(); } catch (_) {} }, 50);
+      });
+    } else {
+      setTimeout(function () { try { api.showCrashReportOnStart(); } catch (_) {} }, 50);
+    }
+  }
 })(typeof window !== 'undefined' ? window : globalThis);
