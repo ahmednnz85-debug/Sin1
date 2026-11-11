@@ -1372,10 +1372,14 @@
 
   function holdCull(scene, hero) {
     if (!scene || !group) return;
-    // After the exterior teardown there is nothing left to hide outdoors.
-    if (scene.userData && scene.userData.cityReleased) return;
+    // After the exterior teardown there are no outdoor meshes left to hide,
+    // but the kept outdoor lights (sun / hemi / fill, keepDuringPalace) must
+    // still fade to 0 inside exactly as in the pre-upgrade game. The early
+    // return used to skip the light cull too, so the 2.6 sun + 0.9 hemi lit
+    // the interior (washed-out left wall / floor in the hall).
+    const released = !!(scene.userData && scene.userData.cityReleased);
     const on = state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED' || (state === 'DONE' && occupant);
-    scene.children.forEach(function (ch) {
+    if (!released) scene.children.forEach(function (ch) {
       if (ch === group || ch === hero || ch.isLight || ch.name === 'SkyPhoto' || ch.name === 'PalaceInterior' || ch.name === 'PalaceWings') return;
       if (on) {
         if (ch.userData._palaceWas == null) ch.userData._palaceWas = ch.visible;
@@ -1598,6 +1602,12 @@
   }
 
   function makePalaceEnv(renderer) {
+    // Cinematic look: one shared HDR interior environment (cinematic.js) for
+    // every palace/wing material, so new assets get correct PBR reflections.
+    if (window.SinGfx && SinGfx.interiorEnvironment) { const e = SinGfx.interiorEnvironment(renderer); if (e) return e; }
+    return makeCanvasPalaceEnv(renderer);
+  }
+  function makeCanvasPalaceEnv(renderer) {
     const c = document.createElement('canvas');
     // Original (pre-upgrade) hall probe. The brightened gold probe was a
     // compensation for the PI-dark point lights and is what tinted every

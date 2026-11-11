@@ -26,11 +26,9 @@
     // the pre-upgrade value: with 1 hop, a room seen through two doorways or
     // down a corridor was simply not drawn and popped in as the player walked.
     maxHops: 6,
-    // Memory hard rule (unchanged): besides what the camera can see, only the
-    // current room + directly connected rooms stay prepared/GPU-resident.
-    prepareHops: 1,
+    prepareHops: 2,      // visible + current + everything within 2 hops stays resident: resident a full room BEFORE it can be seen or reached
     linger: 0.45,          // pre-upgrade hysteresis; prevents flicker at doorways
-    memory: 0              // no LRU of distant rooms — hop≤1 is the residency budget
+    memory: 0              // no LRU in the planner — zone-streamer.js owns LRU eviction
   };
 
   function hops(links, startId, limit) {
@@ -108,8 +106,8 @@
         if (seen) lastSeen.set(r.id, t);
         const lingering = lastSeen.has(r.id) && t - lastSeen.get(r.id) <= opt.linger && h <= opt.maxHops;
         if (seen || lingering) { visible.add(r.id); touch(r.id); }
-        // Prepared = GPU-resident. Strict hop≤1 from the hero's room — no
-        // distant prefetch. Visible rooms are always prepared too.
+        // Prepared = GPU-resident: every region within prepareHops of the
+        // hero's region, plus everything visible.
         const prepHops = Number.isFinite(opt.prepareHops) ? opt.prepareHops : opt.maxHops;
         if (h <= prepHops || visible.has(r.id)) prepared.add(r.id);
         meta.set(r.id, { hops: h, distance: near, inView: seen });

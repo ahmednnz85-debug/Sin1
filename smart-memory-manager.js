@@ -50,6 +50,12 @@
       if (level === 'normal') return new Set(prepared);
       const keep = new Set(visible);
       if (currentId) keep.add(currentId);
+      // Hard rule: what the player can reach next (directly connected regions)
+      // is never released, whatever the memory level.
+      prepared.forEach(function (id) {
+        const item = meta && meta.get ? meta.get(id) : null;
+        if (item && item.hops <= 1) keep.add(id);
+      });
       if (level === 'watch') {
         let best = null;
         prepared.forEach(function (id) {

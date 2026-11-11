@@ -27,10 +27,16 @@ test('a room seen down the corridor (two portals away) is drawn immediately', ()
   assert.ok(out.prepared.has('C'));
 });
 
-test('a two-hop room that is NOT in view is not kept in memory (hop<=1 residency)', () => {
+test('a two-hop room that is NOT in view is not drawn but stays resident (hop<=2 residency)', () => {
   const p = createPlanner();
   const out = p.plan(regions, links, 'A', lookSouth, 0);
   assert.equal(out.visible.has('R'), false);
+  assert.equal(out.prepared.has('R'), true);
+});
+
+test('with prepareHops 1 the two-hop room is not kept resident', () => {
+  const p = createPlanner({ prepareHops: 1 });
+  const out = p.plan(regions, links, 'A', lookSouth, 0);
   assert.equal(out.prepared.has('R'), false);
 });
 
@@ -72,10 +78,11 @@ test('current room is always prepared', () => {
 });
 
 test('a room seen earlier is released from memory after leaving adjacency', () => {
-  const p = createPlanner();
+  // Graph here is A-C-R only, so use a 1-hop residency to exercise the release.
+  const p = createPlanner({ prepareHops: 1 });
   p.plan(regions, links, 'A', lookNorth, 0);
   // Camera must sit inside R — otherwise nearPad would still mark A as visible.
-  // Looking away from A: A is out of view and two hops away, so it is released.
+  // Looking away from A: A is out of view and beyond the residency hops, so it is released.
   const camInR = { x: 0, z: 45, dirX: 0, dirZ: 1, halfFov: 0.6 };
   const later = p.plan(regions, links, 'R', camInR, 10);
   assert.equal(later.prepared.has('A'), false);

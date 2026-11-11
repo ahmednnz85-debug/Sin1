@@ -1,8 +1,13 @@
 import * as ThreeModule from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-
-const THREE = { ...ThreeModule, GLTFLoader, DRACOLoader };
+// DRACOLoader is deliberately NOT taken from three@0.187 addons: its worker
+// calls decoder.GetEncodedGeometryType(Int8Array), which the vendored
+// vendor/draco decoder (draco 1.4.x wasm, shipped with the r147 game) does
+// not support -> "THREE.DRACOLoader: Unexpected geometry type" and the K3 map
+// room furniture/table never appeared. Leaving THREE.DRACOLoader undefined
+// makes wings.js / palaceInterior.js load vendor/draco/DRACOLoader.js, the
+// loader that matches the vendored wasm (exact pre-upgrade behaviour).
+const THREE = { ...ThreeModule, GLTFLoader };
 THREE.sRGBEncoding = ThreeModule.SRGBColorSpace;
 THREE.LinearEncoding = ThreeModule.LinearSRGBColorSpace;
 
@@ -97,7 +102,8 @@ ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
     const intensity = light.intensity;
     entry.intensities[i] = intensity;
     // RectAreaLight / LightProbe were never PI-scaled in r147; every other light was.
-    if (!light.isRectAreaLight && !light.isLightProbe && intensity !== 0 && Number.isFinite(intensity)) light.intensity = intensity * Math.PI;
+    const gain = light.userData && light.userData.lookGain != null ? light.userData.lookGain : 1; // cinematic look (cinematic.js)
+        if (!light.isRectAreaLight && !light.isLightProbe && intensity !== 0 && Number.isFinite(intensity)) light.intensity = intensity * Math.PI * gain;
   }
   try {
     return renderWithModernLights.call(this, scene, camera);
@@ -108,6 +114,27 @@ ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
   }
 };
 
+// r151+ Box3.expandByObject() measures a SkinnedMesh in its CURRENT animated
+// pose (and an InstancedMesh as the union of all instances). r147 used the
+// bind-pose geometry box. The palace derives its whole scale from the hero
+// box (H = hero height), so r187 built a ~2% smaller, pose-dependent hall and
+// moved every brazier light. Restore r147 semantics for non-precise boxes.
+{
+  const Box3P = ThreeModule.Box3.prototype;
+  const modernExpand = Box3P.expandByObject;
+  const _b = new ThreeModule.Box3();
+  Box3P.expandByObject = function (object, precise = false) {
+    if (precise || !(object.isSkinnedMesh || object.isInstancedMesh || object.isBatchedMesh) || !object.geometry) return modernExpand.call(this, object, precise);
+    object.updateWorldMatrix(false, false);
+    const g = object.geometry;
+    if (g.boundingBox === null) g.computeBoundingBox();
+    _b.copy(g.boundingBox).applyMatrix4(object.matrixWorld);
+    this.union(_b);
+    const children = object.children;
+    for (let i = 0, l = children.length; i < l; i++) this.expandByObject(children[i], precise);
+    return this;
+  };
+}
 window.THREE = THREE;
 window.__SIN_THREE_VERSION__ = ThreeModule.REVISION;
 

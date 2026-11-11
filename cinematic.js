@@ -152,6 +152,110 @@
     };
     Object.assign(cur, ZONES.approach); cur.fogTint = ZONES.approach.fogTint.slice();
   }
+  // ---------- cinematic interior look (God-of-War style, zero extra passes) ----------
+  // Warm practicals (braziers) against a cool, low ambient; filmic ACES with a
+  // tuned exposure; an HDR environment (warm fire hot-spots over a dark cool
+  // room) for PBR reflections so metals read as metal instead of black; a warm
+  // depth haze in the existing fog chunk. NO new lights, NO post passes, NO
+  // new shadow casters: the look costs nothing per frame. It is applied by
+  // light NAME/TYPE, so new rooms and assets pick it up automatically.
+  const LOOK = {
+    enabled: true,
+    interior: {
+      exposure: 1.15,
+      envIntensity: 0.9,              // scene.environmentIntensity (r163+)
+      fogColor: [0.115, 0.070, 0.042], fogDensity: 0.0090,
+      hemiSky: [0.42, 0.50, 0.66], hemiGround: [0.40, 0.25, 0.14], hemiGain: 0.8,   // cool fill / warm bounce
+      ambientGain: 1.0,
+      fireColor: [1.0, 0.60, 0.30], fireGain: 1.6,  // braziers / torches
+      wingAmbientGain: 0.6
+    },
+    tier: { low: { envIntensity: 0.9 }, medium: {}, high: {} }
+  };
+  let interiorEnv = null, wasInterior = false, lookScanAt = 0;
+  const lookLights = [];
+  function interiorEnvironment(renderer) {
+    if (interiorEnv) return interiorEnv;
+    const r = renderer || R; if (!r || !THREE.PMREMGenerator || !THREE.DataTexture) return null;
+    // 128x64 float equirect: dark cool upper room, warm floor bounce, a ring of
+    // HDR fire hot-spots near the horizon (strong but small -> controlled
+    // highlights on metal/gold, readable stone/wood).
+    const W = 128, Hh = 64, data = new Float32Array(W * Hh * 4);
+    for (let y = 0; y < Hh; y++) {
+      const v = y / (Hh - 1);                  // 0 top .. 1 bottom
+      const up = Math.max(0, 0.5 - v) * 2, down = Math.max(0, v - 0.5) * 2;
+      for (let x = 0; x < W; x++) {
+        const u = x / W, i = (y * W + x) * 4;
+        let rr = 0.030 + 0.020 * up, gg = 0.032 + 0.028 * up, bb = 0.040 + 0.050 * up;   // cool ceiling
+        rr += 0.075 * down; gg += 0.046 * down; bb += 0.026 * down;                          // warm floor bounce
+        const band = Math.exp(-Math.pow((v - 0.47) / 0.07, 2));                               // warm wall band
+        rr += 0.075 * band; gg += 0.042 * band; bb += 0.018 * band;
+        for (let k = 0; k < 6; k++) {                                                        // fire hot-spots
+          const du = Math.min(Math.abs(u - (k + 0.5) / 6), 1 - Math.abs(u - (k + 0.5) / 6));
+          const d2 = (du * 6.5) * (du * 6.5) + Math.pow((v - 0.44) / 0.05, 2);
+          const f = 14.0 * Math.exp(-d2 * 24.0);   // small + hot: crisp highlights, little diffuse
+          rr += f; gg += f * 0.52; bb += f * 0.20;
+        }
+        data[i] = rr; data[i + 1] = gg; data[i + 2] = bb; data[i + 3] = 1;
+      }
+    }
+    const tex = new THREE.DataTexture(data, W, Hh, THREE.RGBAFormat, THREE.FloatType);
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
+    const pm = new THREE.PMREMGenerator(r);
+    interiorEnv = pm.fromEquirectangular(tex).texture;
+    pm.dispose(); tex.dispose();
+    interiorEnv.name = 'SinInteriorHDR';
+    interiorEnv.userData.palaceShared = true;
+    interiorEnv.addEventListener('dispose', function () { interiorEnv = null; });
+    return interiorEnv;
+  }
+  function setRGB(c, a) { if (c && a) c.setRGB(a[0], a[1], a[2]); }
+  function scanLookLights() {
+    lookLights.length = 0;
+    scene.traverse(function (o) {
+      if (!o.isLight) return;
+      let inside = false;
+      for (let p = o.parent; p; p = p.parent) if (p.name === 'PalaceInterior' || p.name === 'PalaceWings') { inside = true; break; }
+      if (inside) lookLights.push(o);
+    });
+  }
+  function applyInteriorLook(t) {
+    const L = Object.assign({}, LOOK.interior, LOOK.tier[base] || {});
+    R.toneMappingExposure = L.exposure;
+    if (scene.fog) { setRGB(scene.fog.color, L.fogColor); if (scene.fog.isFogExp2) scene.fog.density = L.fogDensity; }
+    const env = interiorEnvironment(R);
+    if (env && scene.environment !== env) scene.environment = env;
+    if ('environmentIntensity' in scene) scene.environmentIntensity = L.envIntensity;
+    if (t - lookScanAt > 1000) { lookScanAt = t; scanLookLights(); }
+    for (let i = 0; i < lookLights.length; i++) {
+      const o = lookLights[i], u = o.userData;
+      if (o.isHemisphereLight) {
+        if (o.name === 'PalaceWingsUnifiedAmbient') u.lookGain = L.wingAmbientGain; else u.lookGain = L.hemiGain;
+        setRGB(o.color, L.hemiSky); setRGB(o.groundColor, L.hemiGround);
+      } else if (o.isAmbientLight) { u.lookGain = L.ambientGain; }
+      else if (o.isPointLight || o.isSpotLight) { setRGB(o.color, L.fireColor); u.lookGain = L.fireGain; }
+    }
+    document.documentElement.classList.add('sin-interior');
+  }
+  let outdoorEnv = null;
+  function leaveInteriorLook() {
+    if ('environmentIntensity' in scene) scene.environmentIntensity = 1;
+    if (scene.environment === interiorEnv) scene.environment = outdoorEnv;
+    R.toneMappingExposure = baseAtmo ? baseAtmo.exp * (cur.exp || 1) : R.toneMappingExposure;
+    for (let i = 0; i < lookLights.length; i++) delete lookLights[i].userData.lookGain;
+    document.documentElement.classList.remove('sin-interior');
+  }
+  // Runs every rAF (also while the simulation is held), before rendering.
+  function lookFrame() {
+    if (!R || !scene) return;
+    const inside = !!ctx.interior() && LOOK.enabled !== false;
+    if (inside) {
+      if (!wasInterior) { outdoorEnv = scene.environment !== interiorEnv ? scene.environment : outdoorEnv; lookScanAt = 0; }
+      applyInteriorLook(performance.now()); wasInterior = true;
+    } else if (wasInterior) { leaveInteriorLook(); wasInterior = false; }
+  }
+
   function updateAtmo(dt, info) {
     if (!baseAtmo) captureBase();
     if (ctx.interior()) {
@@ -334,6 +438,7 @@
     // called once per rAF, before simulation
     frame(ts, busy) {
       govern(ts, busy); hud(ts);
+      try { lookFrame(); } catch (_) {}
       try {
         if (window.SinMemoryOverlay) {
           const memCtx = {
@@ -348,6 +453,8 @@
       } catch (_) {}
     },
     // called once per simulation step, after the camera has been placed
+    look: LOOK,
+    interiorEnvironment: interiorEnvironment,
     update(dt, info) { updateAtmo(dt, info); cameraFrame(dt, ctx.interior(), info && info.running); },
     status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, shadowPolicy: !!E.shadow, shadowMapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg }; }
   };
