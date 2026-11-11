@@ -3674,9 +3674,11 @@
     loadPalaceAssets: loadPalaceAssets,
     state: function () { return state; },
     status: function () {
+      const wingRoom = (wingRuntime && wingRuntime.current) || (window.PalaceWings && PalaceWings.metrics && PalaceWings.metrics().current) || null;
+      const room = wingRoom || (hallBuilt || state === 'DONE' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' ? 'Palace' : (state === 'LOADING' || state === 'FADING_OUT' || state === 'FAILED' ? 'entry' : 'outside'));
       return {
         phase: state,
-        room: (wingRuntime && wingRuntime.current) || (window.PalaceWings && PalaceWings.metrics && PalaceWings.metrics().current) || 'Palace',
+        room: room,
         cityReleased: !!(lastContext && lastContext.scene && lastContext.scene.userData && lastContext.scene.userData.cityReleased),
         hallBuilt: !!hallBuilt,
         warmFrame: !!warmFrame,
