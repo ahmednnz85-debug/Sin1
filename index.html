@@ -154,10 +154,10 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 
 
 <script type="text/plain" data-legacy-script data-src="dynamic-resolution.js?v=20261109a"></script>
-<script type="text/plain" data-legacy-script data-src="memory-overlay.js?v=mem1"></script>
-<script type="text/plain" data-legacy-script data-src="cinematic.js?v=20261109a&r187=pcf&mem=1"></script>
+<script type="text/plain" data-legacy-script data-src="memory-overlay.js?v=mem2-blackbox"></script>
+<script type="text/plain" data-legacy-script data-src="cinematic.js?v=20261109a&r187=pcf&mem=2"></script>
 <script type="text/plain" data-legacy-script data-src="vendor/clipper.js"></script>
-<script type="text/plain" data-legacy-script data-src="palaceInterior.js?v=hall26&cam=20261108c&preload=20261108c&loadingFix=20261109&r187=floor&mem=stream"></script>
+<script type="text/plain" data-legacy-script data-src="palaceInterior.js?v=hall27&cam=door2&preload=20261108c&loadingFix=20261109&r187=floor&mem=teardown"></script>
 <script type="text/plain" data-legacy-script data-src="wing-gpu-residency.js?v=20261109k4"></script>
 <script type="text/plain" data-legacy-script data-src="wing-render-budget.js?v=20261109b"></script>
 <script type="text/plain" data-legacy-script data-src="wing-visibility.js?v=20261109k4&mem=hop1"></script>
@@ -1266,7 +1266,7 @@ async function init(){
   royalDoor=await buildRoyalDoor(await loadX('مجسم الباب'),model);
   buildDust();
   await waitForSceneTextures();
-  state='ready';$('st').textContent='جاهز';$('loading-pane').style.display='none';$('main-menu').style.display='block';$('bar').style.display='none';
+  state='ready';$('st').textContent='جاهز';$('loading-pane').style.display='none';$('main-menu').style.display='block';$('bar').style.display='none';try{if(window.SinMemoryOverlay&&SinMemoryOverlay.showCrashReportOnStart)SinMemoryOverlay.showCrashReportOnStart();}catch(_bb){}
   camera.position.copy(cP0);camera.lookAt(cL0);
   requestAnimationFrame(loop);
   if(new URLSearchParams(location.search).has('startInHall'))setTimeout(async()=>{
@@ -1890,7 +1890,7 @@ const cP0=new THREE.Vector3(-4.2,1.7,-71),cP1=new THREE.Vector3(3.6,2.4,-60),cP2
 const smx=(a,b,t)=>ease(Math.max(0,Math.min(1,(t-a)/(b-a))));
 // Precompile shaders to avoid mid-game stutter
 if (renderer && scene && camera) { try { renderer.compile(scene, camera); } catch(e) {} }
-function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';const transitionBusy=['LOADING','SETUP','FADING_OUT','FADING_IN','REVEAL','ENTRANCE','SETTLE'].indexOf(ps_)>=0||royalDoor.active();SinGfx.frame(ts,state==='loading'||transitionBusy);}const portraitBlocked=document.documentElement.classList.contains('portrait-lock');if(portraitBlocked&&window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl())requestLandscape();if(window.__holdSim){renderer.render(scene,camera);return;}const t=ts/1000;const qaFast=window.__qaFast || false;const insideHall=window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround();const interiorBusy=window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl();const frameDt=Math.max(0.001,Math.min(!qaFast?0.05:interiorBusy?0.05:insideHall?0.35:2,(t-last)||0.016));last=t;const steps=(qaFast&&!interiorBusy)?Math.max(1,Math.round(frameDt/0.05)):1;const dtStep=frameDt/steps;for(let __qaStep=0;__qaStep<steps;__qaStep++){const dt=dtStep;tAcc+=dt;const heroZBefore=heroRoot.position.z;
+function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';const transitionBusy=['LOADING','SETUP','FADING_OUT','FADING_IN','REVEAL','ENTRANCE','SETTLE'].indexOf(ps_)>=0||royalDoor.active();SinGfx.frame(ts,state==='loading'||transitionBusy);}const portraitBlocked=document.documentElement.classList.contains('portrait-lock');if(portraitBlocked&&window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl())requestLandscape();if(window.__sinEntryBlackout){try{renderer.setClearColor(0x000000,1);renderer.clear(true,true,true);}catch(_e){}/* tick continues below for teardown gate */}else if(window.__holdSim){renderer.render(scene,camera);return;}const t=ts/1000;const qaFast=window.__qaFast || false;const insideHall=window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround();const interiorBusy=window.PalaceInterior&&PalaceInterior.locksControl&&PalaceInterior.locksControl();const frameDt=Math.max(0.001,Math.min(!qaFast?0.05:interiorBusy?0.05:insideHall?0.35:2,(t-last)||0.016));last=t;const steps=(qaFast&&!interiorBusy)?Math.max(1,Math.round(frameDt/0.05)):1;const dtStep=frameDt/steps;for(let __qaStep=0;__qaStep<steps;__qaStep++){const dt=dtStep;tAcc+=dt;const heroZBefore=heroRoot.position.z;
 
   const intro=introT>=0&&introT<INTRO;if(introT>=0&&introT<INTRO)introT+=dt;
   royalDoor.update(dt,introT>=INTRO);const doorCinematic=royalDoor.active();
@@ -1960,8 +1960,8 @@ function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=wi
   // Keep the outdoor shadow camera anchored to the gate-to-palace route; following
   // the hero here moved the whole shadow frustum and made nearby shadows swim.
   if(!window.__sinCityReleased&&sun&&sun.target){sun.target.position.set(0,0,93);sun.position.set(0,0,93).addScaledVector(SUN,80);sun.target.updateMatrixWorld();}
-  if(window.SinGfx)SinGfx.update(dt,{babylon:skyTransition.started,courtyard:hp.z>PL_Z0+4&&!isInteriorNow(),running:!!run&&moving});
-  updateDust(tAcc);updateWater(tAcc);if(!(window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround()))updateExtras();}if(window.PalaceInterior&&PalaceInterior.holdCull)PalaceInterior.holdCull(scene,heroRoot);const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';if(palaceState!=='FADING_OUT'&&palaceState!=='LOADING'&&palaceState!=='SETUP'&&palaceState!=='FAILED'&&palaceState!=='REVEAL')renderer.render(scene,camera);}catch(e){console.error('loop',e);}}
+  if(window.SinGfx)SinGfx.update(dt,{babylon:skyTransition.started,courtyard:hp.z>PL_Z0+4&&!isInteriorNow()&&!window.__sinEntryBlackout&&!(scene.userData&&scene.userData.cityReleased),running:!!run&&moving&&!window.__sinEntryBlackout});
+  if(!window.__sinEntryBlackout){updateDust(tAcc);updateWater(tAcc);if(!(window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround()))updateExtras();}}if(window.PalaceInterior&&PalaceInterior.holdCull)PalaceInterior.holdCull(scene,heroRoot);const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';if(palaceState!=='FADING_OUT'&&palaceState!=='LOADING'&&palaceState!=='SETUP'&&palaceState!=='FAILED'&&palaceState!=='REVEAL')renderer.render(scene,camera);}catch(e){console.error('loop',e);}}
 init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);});
 window.__releaseExteriorStage=function(){
   _cityGroups.clear();_cityPrepared.clear();if(cityResidency&&cityResidency.reset)cityResidency.reset();

@@ -129,6 +129,11 @@
   let exteriorHidden = false;
   let hallBuilt = false;
   let gpuFlushed = false;
+  // Teardown gate before any palace asset work:
+  // 0 idle → 1 pause/black → 2 city disposed → 3 GPU flushed → 4 counts verified → 5 assets loading
+  let teardownPhase = 0;
+  let preTeardownInfo = null;
+  let postTeardownInfo = null;
   let warmFrame = false;
   let loadStartedAt = 0;
   let loadStage = 0;
@@ -424,11 +429,15 @@
     hallBuilt = false;
     warmFrame = false;
     gpuFlushed = false;
+    teardownPhase = 0;
+    preTeardownInfo = null;
+    postTeardownInfo = null;
     warmMeshes = null;
     loadOk = null;
     loadError = null;
     palaceLoadStarted = false;
     holdT = CONFIG.minBlackHoldSeconds;
+    window.__sinEntryBlackout = true;
     state = 'LOADING';
     renderUI();
     startPalaceLoad(lastContext);
@@ -818,10 +827,18 @@
   }
 
   function loadPalaceAssets() {
+    // Refuse to parse/create palace assets until outdoor teardown verified.
+    if (teardownPhase < 4) {
+      const err = new Error('palace load blocked until outdoor teardown (phase ' + teardownPhase + ')');
+      note(err.message);
+      try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('error', err.message); } catch (_) {}
+      return Promise.reject(err);
+    }
     if (assets && filesReady()) return Promise.resolve(assets);
     if (loadPromise) return loadPromise;
     if (!specs) specs = makeSpecs();
     loadPromise = (async function () {
+      if (teardownPhase < 4) throw new Error('palace load blocked mid-flight tear=' + teardownPhase);
       loadStage = 0; paint();
       await attachExistingPropSpecs();
       attachWingSpecs();
@@ -1008,11 +1025,25 @@
     try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('teardown', 'city released g' + geometries.size + ' t' + textures.size); } catch (_) {}
   }
 
-  // dispose() only returns the buffers to the driver. One frame of the emptied
-  // scene must render before the hall is uploaded, or the city and the palace
-  // sit in GPU memory together and the tab is killed at 99%.
+  function snapshotRendererInfo(ctx) {
+    const mem = ctx && ctx.renderer && ctx.renderer.info && ctx.renderer.info.memory;
+    const render = ctx && ctx.renderer && ctx.renderer.info && ctx.renderer.info.render;
+    const programs = mem && mem.programs;
+    return {
+      geometries: mem && mem.geometries || 0,
+      textures: mem && mem.textures || 0,
+      programs: Array.isArray(programs) ? programs.length : (programs || 0),
+      calls: render && render.calls || 0,
+      triangles: render && render.triangles || 0,
+      cityReleased: !!(ctx && ctx.scene && ctx.scene.userData && ctx.scene.userData.cityReleased)
+    };
+  }
+
+  // dispose() only returns the buffers to the driver. One emptied black frame
+  // must render and flush BEFORE any palace asset is created/parsed, or the
+  // city and the palace sit in GPU memory together and iOS kills the tab.
   function flushReleasedGPU(ctx) {
-    if (!ctx || !ctx.renderer || !ctx.scene || !ctx.camera) return;
+    if (!ctx || !ctx.renderer || !ctx.scene || !ctx.camera) return snapshotRendererInfo(ctx);
     try {
       ctx.renderer.shadowMap.enabled = false;
       // Drop any leftover shadow render-target still held by disposed lights.
@@ -1021,25 +1052,127 @@
           try { o.shadow.map.dispose(); o.shadow.map = null; } catch (_) {}
         }
       });
+      try {
+        if (ctx.renderer.setClearColor) ctx.renderer.setClearColor(0x000000, 1);
+        ctx.renderer.clear(true, true, true);
+      } catch (_) {}
       ctx.renderer.render(ctx.scene, ctx.camera);
       if (ctx.renderer.renderLists && ctx.renderer.renderLists.dispose) ctx.renderer.renderLists.dispose();
       const gl = ctx.renderer.getContext && ctx.renderer.getContext();
       if (gl && gl.flush) gl.flush();
+      if (gl && gl.finish) {
+        try { gl.finish(); } catch (_) {}
+      }
       const mem = ctx.renderer.info && ctx.renderer.info.memory;
       if (mem) {
-        note('gpu flush info geo=' + mem.geometries + ' tex=' + mem.textures + ' prog=' + (mem.programs || '?'));
+        note('gpu flush info geo=' + mem.geometries + ' tex=' + mem.textures + ' prog=' + (Array.isArray(mem.programs) ? mem.programs.length : (mem.programs || '?')));
         try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('flush', 'geo=' + mem.geometries + ' tex=' + mem.textures); } catch (_) {}
       }
     } catch (e) { note('flush ' + (e && e.message || e)); }
+    return snapshotRendererInfo(ctx);
+  }
+
+  function beginPalaceAssetLoad(ctx) {
+    if (palaceLoadStarted) return;
+    // HARD GATE: nothing from the palace may parse/create before teardown verified.
+    if (teardownPhase < 4) {
+      note('blocked palace load teardownPhase=' + teardownPhase);
+      try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('error', 'blocked load tear=' + teardownPhase); } catch (_) {}
+      return;
+    }
+    if (!(ctx && ctx.scene && ctx.scene.userData && ctx.scene.userData.cityReleased)) {
+      note('blocked palace load: city not released');
+      try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('error', 'blocked load cityAlive'); } catch (_) {}
+      return;
+    }
+    palaceLoadStarted = true;
+    loadStartedAt = performance.now();
+    teardownPhase = 5;
+    note('palace assets start (after teardown)');
+    try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('load', 'palace assets start tear=5'); } catch (_) {}
+    loadPalaceAssets().then(function () {
+      loadOk = true;
+      note('assets ready');
+      try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('load', 'palace assets ready'); } catch (_) {}
+    }, function (err) {
+      loadError = err;
+      loadOk = false;
+      note('assets failed ' + (err && err.message));
+      try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('error', 'assets failed ' + (err && err.message)); } catch (_) {}
+    });
+  }
+
+  // Drive black → pause → dispose outside → confirm drop → only then load.
+  // Returns true while the gate is still working (caller should wait).
+  function advanceTeardownGate(ctx) {
+    if (teardownPhase >= 5) return false;
+    if (teardownPhase === 0) {
+      // Pause outdoor work via blackout flag. Do NOT set __holdSim — that
+      // early-returns the main loop before PalaceInterior.tick runs.
+      window.__sinEntryBlackout = true;
+      preTeardownInfo = snapshotRendererInfo(ctx);
+      note('teardown pause geo=' + preTeardownInfo.geometries + ' tex=' + preTeardownInfo.textures + ' tris=' + preTeardownInfo.triangles);
+      try {
+        if (window.SinMemoryOverlay) {
+          SinMemoryOverlay.note('teardown', 'pause geo=' + preTeardownInfo.geometries + ' tex=' + preTeardownInfo.textures);
+          SinMemoryOverlay.reportHeaviest(ctx.scene, 'pre-teardown');
+        }
+      } catch (_) {}
+      teardownPhase = 1;
+      return true;
+    }
+    if (teardownPhase === 1) {
+      try { releaseCity(ctx && ctx.scene, ctx && ctx.hero); }
+      catch (e) { note('city release failed ' + (e && e.message || e)); }
+      teardownPhase = 2;
+      return true;
+    }
+    if (teardownPhase === 2) {
+      flushReleasedGPU(ctx);
+      gpuFlushed = true;
+      teardownPhase = 3;
+      return true;
+    }
+    if (teardownPhase === 3) {
+      // Second emptied frame so renderer.info reflects disposed buffers.
+      postTeardownInfo = flushReleasedGPU(ctx);
+      const pre = preTeardownInfo || { geometries: 0, textures: 0, triangles: 0 };
+      const post = postTeardownInfo || snapshotRendererInfo(ctx);
+      const geoDrop = pre.geometries - post.geometries;
+      const texDrop = pre.textures - post.textures;
+      const released = !!(ctx && ctx.scene && ctx.scene.userData && ctx.scene.userData.cityReleased);
+      note('teardown verify released=' + released + ' Δgeo=' + geoDrop + ' Δtex=' + texDrop +
+        ' now geo=' + post.geometries + ' tex=' + post.textures);
+      try {
+        if (window.SinMemoryOverlay) {
+          SinMemoryOverlay.note('teardown', 'verify Δg=' + geoDrop + ' Δt=' + texDrop + ' released=' + released);
+          SinMemoryOverlay.reportHeaviest(ctx.scene, 'post-teardown');
+        }
+      } catch (_) {}
+      // Require cityReleased. Prefer a drop in geo/tex; if WebGL info lags, still proceed
+      // once the scene graph is empty of outdoor roots (releaseCity sets the flag).
+      if (!released) {
+        note('teardown verify FAILED — city still present');
+        try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('error', 'teardown verify failed'); } catch (_) {}
+        loadError = new Error('تعذّر تفريغ المدينة قبل تحميل القصر');
+        loadOk = false;
+        teardownPhase = 4; // allow FAILED path; beginPalaceAssetLoad still blocked by cityReleased
+        return true;
+      }
+      teardownPhase = 4;
+      return true;
+    }
+    if (teardownPhase === 4) {
+      beginPalaceAssetLoad(ctx);
+      return teardownPhase < 5;
+    }
+    return false;
   }
 
   function startPalaceLoad(ctx) {
-    if (palaceLoadStarted) return;
-    palaceLoadStarted = true;
-    loadStartedAt = performance.now();
-    try { releaseCity(ctx && ctx.scene, ctx && ctx.hero); }
-    catch (e) { note('city release failed ' + (e && e.message || e)); }
-    loadPalaceAssets().then(function () { loadOk = true; note('assets ready'); }, function (err) { loadError = err; loadOk = false; note('assets failed ' + (err && err.message)); });
+    // Legacy entry used by retry: kick the gated LOADING path, never load early.
+    if (teardownPhase === 0) advanceTeardownGate(ctx);
+    else if (teardownPhase >= 4) beginPalaceAssetLoad(ctx);
   }
 
   let lightsCulled = false;
@@ -2891,12 +3024,22 @@
       rig.fresh = true; // already collision-checked: nothing else may move this shot
       return;
     }
+    // Door / fade path: camera must stay BEHIND the hero on -Z and never pass
+    // through his body (outdoor chase often sits in front; lerping would clip).
+    const DOOR_CAM_MIN = 3.2;
     const goal = 6.2;
-    if (snap) camBack = 3.5;
+    if (snap) camBack = Math.max(DOOR_CAM_MIN, 4.2);
     else camBack += (goal - camBack) * (1 - Math.exp(-Math.max(0.001, lastDt) * 0.62));
+    camBack = Math.max(DOOR_CAM_MIN, camBack);
+    const pivot = new THREE.Vector3(hp.x, hp.y + 1.55, hp.z);
     const dest = new THREE.Vector3(hp.x, hp.y + 1.75, hp.z - camBack);
-    if (snap || !ctx.camera.position.distanceTo(dest)) ctx.camera.position.copy(dest);
+    const cur = ctx.camera.position;
+    const aheadOfHero = cur.z > hp.z - 0.6;
+    const tooClose = cur.distanceTo(pivot) < DOOR_CAM_MIN;
+    if (snap || aheadOfHero || tooClose || !cur.distanceTo(dest)) ctx.camera.position.copy(dest);
     else ctx.camera.position.lerp(dest, 1 - Math.exp(-Math.max(0.001, lastDt) * 2.2));
+    // Re-assert minimum distance after lerp so the lens never sits in the torso.
+    if (ctx.camera.position.distanceTo(pivot) < DOOR_CAM_MIN) ctx.camera.position.copy(dest);
     ctx.camera.lookAt(hp.x, hp.y + 1.28, hp.z + 12);
   }
 
@@ -3021,11 +3164,18 @@
         hallBuilt = false;
         warmFrame = false;
         gpuFlushed = false;
-    warmMeshes = null;
+        teardownPhase = 0;
+        preTeardownInfo = null;
+        postTeardownInfo = null;
+        warmMeshes = null;
         occupant = true;
         palaceLoadStarted = false;
         loadStartedAt = 0;
+        // Snap camera behind the hero immediately so the door walk never
+        // starts with the outdoor chase lens inside his body.
+        aimCamera(ctx, true);
         note('threshold x=' + p.x.toFixed(2) + ' z=' + p.z.toFixed(2) + ' door=' + ctx.doorOpen);
+        try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('info', 'threshold door entry'); } catch (_) {}
         renderUI();
       }
       return;
@@ -3038,22 +3188,28 @@
       ctx.hero.position.z += 1.28 * dt;
       ctx.setFacing(0);
       aimCamera(ctx, false);
-      if (u >= 1) { state = 'LOADING'; holdT = 0; note('black'); }
+      // No palace fetch/parse/create while the outside is still alive.
+      if (u >= 1) {
+        state = 'LOADING';
+        holdT = 0;
+        window.__sinEntryBlackout = true;
+        note('black');
+        try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('info', 'black screen — begin teardown gate'); } catch (_) {}
+      }
       return;
     }
     if (state === 'LOADING') {
       holdT += dt;
-      if (!palaceLoadStarted) startPalaceLoad(ctx);
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
       renderUI();
+      // Strict order: pause → dispose outside → confirm drop → only then load.
+      if (teardownPhase < 5) {
+        advanceTeardownGate(ctx);
+        if (loadOk === false) { state = 'FAILED'; showFail(loadError); }
+        return;
+      }
       if (loadOk === true && holdT >= CONFIG.minBlackHoldSeconds) {
-        if (!gpuFlushed) {
-          gpuFlushed = true;
-          flushReleasedGPU(ctx);
-          note('gpu flush');
-          return;
-        }
         state = 'SETUP';
       }
       if (loadOk === false && holdT >= CONFIG.minBlackHoldSeconds) { state = 'FAILED'; showFail(loadError); }
@@ -3062,6 +3218,7 @@
     if (state === 'FAILED') {
       ctx.hero.position.y = floorY;
       loadEl.style.opacity = '1';
+      window.__sinEntryBlackout = false;
       return;
     }
     if (state === 'SETUP') {
@@ -3077,6 +3234,10 @@
         // which reloads the game back to the opening loading screen at 99%.
         holdCull(ctx.scene, ctx.hero);
         note('built ' + Math.round(performance.now() - tBuild) + 'ms');
+        try {
+          if (window.SinMemoryOverlay) SinMemoryOverlay.reportHeaviest(ctx.scene, 'post-palace-build');
+        } catch (_) {}
+        window.__sinEntryBlackout = false;
         renderUI();
         state = 'REVEAL';
         fadeT = 0;
@@ -3513,14 +3674,20 @@
     loadPalaceAssets: loadPalaceAssets,
     state: function () { return state; },
     status: function () {
+      const wingRoom = (wingRuntime && wingRuntime.current) || (window.PalaceWings && PalaceWings.metrics && PalaceWings.metrics().current) || null;
+      const room = wingRoom || (hallBuilt || state === 'DONE' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' ? 'Palace' : (state === 'LOADING' || state === 'FADING_OUT' || state === 'FAILED' ? 'entry' : 'outside'));
       return {
         phase: state,
-        room: (wingRuntime && wingRuntime.current) || (window.PalaceWings && PalaceWings.metrics && PalaceWings.metrics().current) || 'Palace',
+        room: room,
         cityReleased: !!(lastContext && lastContext.scene && lastContext.scene.userData && lastContext.scene.userData.cityReleased),
         hallBuilt: !!hallBuilt,
         warmFrame: !!warmFrame,
         occupant: !!occupant,
-        percent: shownPercent()
+        percent: shownPercent(),
+        teardownPhase: teardownPhase,
+        preTeardown: preTeardownInfo,
+        postTeardown: postTeardownInfo,
+        palaceLoadStarted: !!palaceLoadStarted
       };
     },
     percent: shownPercent,

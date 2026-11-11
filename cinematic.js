@@ -326,12 +326,15 @@
     frame(ts, busy) {
       govern(ts, busy); hud(ts);
       try {
-        if (window.SinMemoryOverlay && SinMemoryOverlay.on()) {
-          SinMemoryOverlay.render({
+        if (window.SinMemoryOverlay) {
+          const memCtx = {
             renderer: R,
             scene: scene,
             phase: window.PalaceInterior && PalaceInterior.status && PalaceInterior.status().phase
-          });
+          };
+          // Black box always ticks (sessionStorage); HUD only when overlay is on.
+          if (SinMemoryOverlay.tick) SinMemoryOverlay.tick(memCtx);
+          else if (SinMemoryOverlay.on()) SinMemoryOverlay.render(memCtx);
         }
       } catch (_) {}
     },
