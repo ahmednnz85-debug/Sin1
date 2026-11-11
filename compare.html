@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sin1 — look compare (main vs fidelity)</title>
+<style>
+  :root{--bg:#0e0c0a;--fg:#f3e6cf;--muted:#a89478;--line:#3a2f22;--accent:#e1b76f}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,sans-serif;padding:16px}
+  h1,h2{color:var(--accent)}
+  .nav a{color:var(--accent);margin-right:12px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:700px){.grid{grid-template-columns:1fr}}
+  figure{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#15110d}
+  figcaption{padding:8px;font-size:12px;color:var(--muted)}
+  img{display:block;width:100%;height:auto;background:#000;min-height:120px}
+  .missing{padding:40px 12px;text-align:center;color:var(--muted)}
+  table{border-collapse:collapse;width:100%;font-size:12px;margin:12px 0}
+  th,td{border:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}
+  th{background:#241c14}
+  code{color:#ffd9a0}
+</style>
+</head>
+<body>
+  <div class="nav">
+    <a href="assets-audit.html">assets-audit</a>
+    <a href="runtime-diff.html">runtime-diff</a>
+    <a href="index.html">game (no overlay)</a>
+    <a href="index.html?mem=1&amp;perf=1">game+overlays</a>
+  </div>
+  <h1>Look compare — same cameras</h1>
+  <p>Primary reference = asset files. Test FPS on the plain <a href="index.html">index.html</a> (no <code>mem=1&amp;perf=1</code>).</p>
+
+  <h2>Sharpness / quality tier</h2>
+  <table>
+    <tr><th>Symptom</th><th>Cause</th><th>Fidelity branch behavior</th></tr>
+    <tr>
+      <td>AUTO:LOW</td>
+      <td><code>cinematic.js detectTier()</code>: mobile + <code>deviceMemory≤3</code> or <code>cores≤4</code> → low</td>
+      <td>Unchanged from main (not invented). Pick MEDIUM/HIGH in Settings to override.</td>
+    </tr>
+    <tr>
+      <td>scale x0.58</td>
+      <td><code>SinDynamicResolution</code> min=0.58 when FPS &lt; 52 for sustained windows</td>
+      <td>Same as main — only drops when FPS truly requires it; recovers slowly.</td>
+    </tr>
+    <tr>
+      <td>x0.85 floor (lighting PR)</td>
+      <td>Recent lighting fix raised floor when tris &lt; 600k</td>
+      <td><strong>Not on this branch</strong> (branched from main; no invented dynres floor).</td>
+    </tr>
+  </table>
+
+  <h2>FPS before / after</h2>
+  <table>
+    <tr><th>Build</th><th>How to measure</th><th>Notes</th></tr>
+    <tr><td>main (memory)</td><td>iPhone Safari <code>index.html</code> without overlays</td><td>Baseline after #37/#38</td></tr>
+    <tr><td>asset-fidelity (this)</td><td>same cameras, no overlays</td><td>Material inventiveness removed; expect similar FPS, possible darker metals until per-material approval</td></tr>
+  </table>
+
+  <h2>Fixed camera slots</h2>
+  <p>Drop matching PNGs into <code>compare-shots/</code> named as below (captured from main vs this branch). Until filled, slots show empty.</p>
+  <div id="slots"></div>
+
+<script>
+const SLOTS = [
+  'start-area','ishtar-gate','courtyard','throne-hall',
+  'door-entry','door-k1','door-k2','door-k3','door-k4',
+  'K1','K2','K3','K4',
+  'close-column','close-door','close-wall','close-floor','close-carpet','close-ceiling','close-hero'
+];
+const root = document.getElementById('slots');
+SLOTS.forEach(id => {
+  const sec = document.createElement('section');
+  sec.innerHTML = `<h2>${id}</h2><div class="grid">
+    <figure><img alt="main ${id}" src="compare-shots/main-${id}.png" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'missing',textContent:'missing main-${id}.png'}))"/><figcaption>main</figcaption></figure>
+    <figure><img alt="fidelity ${id}" src="compare-shots/fidelity-${id}.png" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'missing',textContent:'missing fidelity-${id}.png'}))"/><figcaption>asset-fidelity</figcaption></figure>
+  </div>`;
+  root.appendChild(sec);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,3051 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sin1 — full asset audit</title>
+<style>
+  :root{--bg:#0e0c0a;--fg:#f3e6cf;--muted:#a89478;--line:#3a2f22;--accent:#e1b76f}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,sans-serif;padding:16px}
+  h1{font-size:22px;margin:0 0 8px;color:var(--accent)}
+  h2{font-size:16px;margin:0 0 8px;word-break:break-all}
+  .meta{color:var(--muted);margin-bottom:18px}
+  .toc a{color:var(--accent);display:block;padding:2px 0;text-decoration:none;font-size:12px;word-break:break-all}
+  .card{border:1px solid var(--line);border-radius:10px;padding:12px;margin:14px 0;background:#15110d}
+  .scroll{overflow:auto;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;min-width:1100px;width:100%;font-size:12px}
+  th,td{border:1px solid var(--line);padding:6px 8px;vertical-align:top;text-align:left}
+  th{background:#241c14;position:sticky;top:0}
+  code{font-size:11px;color:#ffd9a0}
+  small{color:var(--muted);font-weight:400}
+  .nav{position:sticky;top:0;z-index:5;background:rgba(14,12,10,.94);padding:8px 0;border-bottom:1px solid var(--line);margin-bottom:12px}
+  .nav a{color:var(--accent);margin-right:12px}
+</style>
+</head>
+<body>
+  <div class="nav">
+    <a href="#glbs">GLBs (60)</a>
+    <a href="#images">Images (57)</a>
+    <a href="compare.html">compare.html</a>
+    <a href="index.html">game</a>
+  </div>
+  <h1>Full asset audit (no sampling)</h1>
+  <p class="meta">Generated 2026-11-11T11:59:22.861Z · 60 GLBs · 57 images · primary reference = file values</p>
+  <p class="meta">Color space rule: baseColor + emissive = <strong>sRGB</strong>; normal + metallicRoughness + occlusion = <strong>linear</strong>.</p>
+  <h2 id="glbs">GLB materials</h2>
+  <div class="toc"><a href="#assets/babylonian_wall.glb">assets/babylonian_wall.glb</a><a href="#assets/grass_tuft_a.glb">assets/grass_tuft_a.glb</a><a href="#assets/grass_tuft_b.glb">assets/grass_tuft_b.glb</a><a href="#assets/houses.glb">assets/houses.glb</a><a href="#assets/K1_RoyalReceptionHall.glb">assets/K1_RoyalReceptionHall.glb</a><a href="#assets/kiosk.glb">assets/kiosk.glb</a><a href="#assets/lion_winged.glb.glb">assets/lion_winged.glb.glb</a><a href="#assets/market_pot.glb">assets/market_pot.glb</a><a href="#assets/market_pots.glb">assets/market_pots.glb</a><a href="#assets/palace.glb">assets/palace.glb</a><a href="#assets/palm_new.glb">assets/palm_new.glb</a><a href="#assets/palm.glb">assets/palm.glb</a><a href="#assets/stalls.glb">assets/stalls.glb</a><a href="#assets/اثاث_الخرائط.glb">assets/اثاث_الخرائط.glb</a><a href="#assets/اجتماعات .glb">assets/اجتماعات .glb</a><a href="#assets/اربع اعمده مختلفة.glb">assets/اربع اعمده مختلفة.glb</a><a href="#assets/اعمدة.glb">assets/اعمدة.glb</a><a href="#assets/الاستقبال.glb">assets/الاستقبال.glb</a><a href="#assets/الجدارية.glb">assets/الجدارية.glb</a><a href="#assets/المباخر.glb">assets/المباخر.glb</a><a href="#assets/باب الاجنحة.glb">assets/باب الاجنحة.glb</a><a href="#assets/ثريا المجلس .glb">assets/ثريا المجلس .glb</a><a href="#assets/جزيئات.glb">assets/جزيئات.glb</a><a href="#assets/درج.glb">assets/درج.glb</a><a href="#assets/سقف المجلس.glb">assets/سقف المجلس.glb</a><a href="#assets/‎⁨سين_وقوف_ساكن_سينمائي⁩.glb">assets/‎⁨سين_وقوف_ساكن_سينمائي⁩.glb</a><a href="#assets/شتله.glb">assets/شتله.glb</a><a href="#assets/طاولة الخرائط.glb">assets/طاولة الخرائط.glb</a><a href="#assets/عرش البطل.glb">assets/عرش البطل.glb</a><a href="#assets/غبار.glb">assets/غبار.glb</a><a href="#assets/قمر دموي.glb">assets/قمر دموي.glb</a><a href="#assets/مجسم الباب.glb">assets/مجسم الباب.glb</a><a href="#assets/مجموعة غراض غير متلاصقة.glb">assets/مجموعة غراض غير متلاصقة.glb</a><a href="#assets/مجموعة غراض.glb">assets/مجموعة غراض.glb</a><a href="#assets/مشعل اسود.glb">assets/مشعل اسود.glb</a><a href="#assets/مشعل خشب.glb">assets/مشعل خشب.glb</a><a href="#ارضيات وسقوف/optimized/K1_RoyalReceptionHall_lod25.glb">ارضيات وسقوف/optimized/K1_RoyalReceptionHall_lod25.glb</a><a href="#ارضيات وسقوف/optimized/K1_RoyalReceptionHall.glb">ارضيات وسقوف/optimized/K1_RoyalReceptionHall.glb</a><a href="#ارضيات وسقوف/optimized/k4/k4_front_mural.glb">ارضيات وسقوف/optimized/k4/k4_front_mural.glb</a><a href="#ارضيات وسقوف/optimized/k4/k4_kit_a.glb">ارضيات وسقوف/optimized/k4/k4_kit_a.glb</a><a href="#ارضيات وسقوف/optimized/k4/k4_kit_b.glb">ارضيات وسقوف/optimized/k4/k4_kit_b.glb</a><a href="#ارضيات وسقوف/optimized/k4/k4_kit_c.glb">ارضيات وسقوف/optimized/k4/k4_kit_c.glb</a><a href="#ارضيات وسقوف/optimized/lion_winged-lod1.glb">ارضيات وسقوف/optimized/lion_winged-lod1.glb</a><a href="#ارضيات وسقوف/optimized/lion_winged.glb">ارضيات وسقوف/optimized/lion_winged.glb</a><a href="#ارضيات وسقوف/optimized/props-set.glb">ارضيات وسقوف/optimized/props-set.glb</a><a href="#ارضيات وسقوف/optimized/اربع اعمده مختلفة.glb">ارضيات وسقوف/optimized/اربع اعمده مختلفة.glb</a><a href="#ارضيات وسقوف/optimized/اعمدة-lod1.glb">ارضيات وسقوف/optimized/اعمدة-lod1.glb</a><a href="#ارضيات وسقوف/optimized/اعمدة.glb">ارضيات وسقوف/optimized/اعمدة.glb</a><a href="#ارضيات وسقوف/optimized/الجدارية.glb">ارضيات وسقوف/optimized/الجدارية.glb</a><a href="#ارضيات وسقوف/optimized/المباخر-lod1.glb">ارضيات وسقوف/optimized/المباخر-lod1.glb</a><a href="#ارضيات وسقوف/optimized/المباخر.glb">ارضيات وسقوف/optimized/المباخر.glb</a><a href="#ارضيات وسقوف/optimized/ثريا-المجلس.glb">ارضيات وسقوف/optimized/ثريا-المجلس.glb</a><a href="#ارضيات وسقوف/optimized/درج.glb">ارضيات وسقوف/optimized/درج.glb</a><a href="#ارضيات وسقوف/optimized/سقف-المجلس.glb">ارضيات وسقوف/optimized/سقف-المجلس.glb</a><a href="#ارضيات وسقوف/optimized/شتله.glb">ارضيات وسقوف/optimized/شتله.glb</a><a href="#ارضيات وسقوف/optimized/عرش البطل.glb">ارضيات وسقوف/optimized/عرش البطل.glb</a><a href="#ارضيات وسقوف/optimized/عمود-المجلس.glb">ارضيات وسقوف/optimized/عمود-المجلس.glb</a><a href="#ارضيات وسقوف/optimized/مجسم الباب.glb">ارضيات وسقوف/optimized/مجسم الباب.glb</a><a href="#ارضيات وسقوف/optimized/مشعل اسود.glb">ارضيات وسقوف/optimized/مشعل اسود.glb</a><a href="#ارضيات وسقوف/optimized/مشعل خشب.glb">ارضيات وسقوف/optimized/مشعل خشب.glb</a></div>
+  <section class="card" id="assets/babylonian_wall.glb">
+        <h2>assets/babylonian_wall.glb <small>7.38 MB · glTF 2</small></h2>
+        <p>generator: https://github.com/mikedh/trimesh · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>bufferView#3 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/grass_tuft_a.glb">
+        <h2>assets/grass_tuft_a.glb <small>1.36 MB · glTF 2</small></h2>
+        <p>generator: palace-game-convert · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: LOD0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>LOD1#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>LOD2#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 3</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>grass_a</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#6 (image/png)</td>
+          <td>0</td>
+          <td>0.9</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/grass_tuft_b.glb">
+        <h2>assets/grass_tuft_b.glb <small>2.57 MB · glTF 2</small></h2>
+        <p>generator: palace-game-convert · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: LOD0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>LOD1#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>LOD2#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 3</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>grass_b</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#7 (image/png)</td>
+          <td>0</td>
+          <td>0.9</td>
+          <td>—</td>
+          <td>bufferView#8 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/houses.glb">
+        <h2>assets/houses.glb <small>2.38 MB · glTF 2</small></h2>
+        <p>generator: babylon-extras · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: part0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part1#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part2#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part3#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part4#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part5#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part6#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part7#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part8#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part9#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 11</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#40 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#42 (image/jpeg)</td>
+          <td>bufferView#41 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/K1_RoyalReceptionHall.glb">
+        <h2>assets/K1_RoyalReceptionHall.glb <small>11.05 MB · glTF 2</small></h2>
+        <p>generator: K1 assembler (Lovable) · extensions: KHR_lights_punctual</p>
+        <p>animations: — · embedded lights: [{&quot;name&quot;:&quot;L_K1_Torch_West_1&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_West_2&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_West_3&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_East_1&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_East_2&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_East_3&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Gate_South&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.7,0.4],&quot;intensity&quot;:90,&quot;range&quot;:18},{&quot;name&quot;:&quot;L_K1_Gate_North&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.7,0.4],&quot;intensity&quot;:90,&quot;range&quot;:18}] · cameras: —</p>
+        <p>primitives: SM_K1_Ceiling#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Floor#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Wall#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Gate#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Column#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_VaseLarge#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Sconce#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_VaseSmall#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_PanelFigure#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_CarpetReception#0: COLOR_0=false UVs=TEXCOORD_0 mat=1</p>
+        <p>nodes with TRS/matrix: 83 / 93</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>M_K1_BabylonKit</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#40 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#42 (image/jpeg)</td>
+          <td>bufferView#41 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>M_K1_CarpetReception</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#43 (image/jpeg)</td>
+          <td>0</td>
+          <td>0.95</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/kiosk.glb">
+        <h2>assets/kiosk.glb <small>4.47 MB · glTF 2</small></h2>
+        <p>generator: babylon-extras · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: part0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#6 (image/jpeg)</td>
+          <td>bufferView#5 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/lion_winged.glb.glb">
+        <h2>assets/lion_winged.glb.glb <small>9.78 MB · glTF 2</small></h2>
+        <p>generator: https://github.com/mikedh/trimesh · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>bufferView#3 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/market_pot.glb">
+        <h2>assets/market_pot.glb <small>3.29 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-12.68.0 · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: defaultMaterial#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 3 / 4</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>DefaultMaterial</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#5 (image/png)</td>
+          <td>bufferView#6 (image/png) ×1</td>
+          <td>bufferView#5 (image/png) s=1</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/market_pots.glb">
+        <h2>assets/market_pots.glb <small>3.38 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-12.68.0 · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: Object_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Object_1#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Object_2#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Object_3#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Object_4#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Object_5#0: COLOR_0=false UVs=TEXCOORD_0 mat=1</p>
+        <p>nodes with TRS/matrix: 8 / 15</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Material.001</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#3 (image/png)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Material.002</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/png)</td>
+          <td>0</td>
+          <td>0.5</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/palace.glb">
+        <h2>assets/palace.glb <small>6.11 MB · glTF 2</small></h2>
+        <p>generator: https://github.com/mikedh/trimesh · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>bufferView#3 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/palm_new.glb">
+        <h2>assets/palm_new.glb <small>3.13 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-16.52.0 · extensions: KHR_materials_specular</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: _1_HP_Palm3_Trunk_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>_1_HP_Palm3_Leaf_2_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>_1_HP_Palm3_Leaf_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>LOD1_Leaf2#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>LOD2_Leaf2#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>LOD1_Leaf0#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>LOD2_Leaf0#0: COLOR_0=false UVs=TEXCOORD_0 mat=2</p>
+        <p>nodes with TRS/matrix: 2 / 11</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>HP_Palm3_Trunk</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#3 (image/jpeg)</td>
+          <td>0</td>
+          <td>0.6</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>KHR_materials_specular</code></td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>HP_Palm3_Leaf_2</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/png)</td>
+          <td>0</td>
+          <td>0.6</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>KHR_materials_specular</code></td>
+          <td>MASK@0.323</td>
+          <td>true</td>
+        </tr><tr>
+          <td>HP_Palm3_Leaf</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#5 (image/png)</td>
+          <td>0</td>
+          <td>0.6</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>KHR_materials_specular</code></td>
+          <td>MASK@0.32</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/palm.glb">
+        <h2>assets/palm.glb <small>1.01 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-16.95.0 · extensions: KHR_materials_specular</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: palm.001_Palm Hamza_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 3 / 5</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Palm_Hamza</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#3 (image/png)</td>
+          <td>0</td>
+          <td>0</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>KHR_materials_specular</code></td>
+          <td>MASK@0.8091453231095561</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/stalls.glb">
+        <h2>assets/stalls.glb <small>3.39 MB · glTF 2</small></h2>
+        <p>generator: babylon-extras · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: part0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part1#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part2#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part3#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part4#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>part5#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 7</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#24 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#26 (image/jpeg)</td>
+          <td>bufferView#25 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/اثاث_الخرائط.glb">
+        <h2>assets/اثاث_الخرائط.glb <small>4.02 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: KHR_draco_mesh_compression</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#0 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>bufferView#1 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/اجتماعات .glb">
+        <h2>assets/اجتماعات .glb <small>7.06 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#0 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>bufferView#1 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/اربع اعمده مختلفة.glb">
+        <h2>assets/اربع اعمده مختلفة.glb <small>23.86 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-15.37.0 · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: Object_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2|TEXCOORD_3 mat=0<br>Object_1#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2|TEXCOORD_3 mat=0<br>Object_2#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2|TEXCOORD_3 mat=0<br>Object_3#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1 mat=1<br>Object_4#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2|TEXCOORD_3 mat=2<br>Object_5#0: COLOR_0=false UVs=TEXCOORD_0 mat=3<br>Object_6#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Object_7#0: COLOR_0=false UVs=TEXCOORD_0 mat=5</p>
+        <p>nodes with TRS/matrix: 2 / 17</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Hebe_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#3 (image/jpeg)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>bufferView#4 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Hebe-Sule_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#5 (image/jpeg)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>bufferView#6 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Spiral_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#7 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#8 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Sule_Unkanneliert_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#9 (image/jpeg)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>bufferView#10 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>SuleFancy_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#11 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#12 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>SuleKanneliert_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#13 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#14 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/اعمدة.glb">
+        <h2>assets/اعمدة.glb <small>7.81 MB · glTF 2</small></h2>
+        <p>generator: https://github.com/mikedh/trimesh · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>bufferView#3 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/الاستقبال.glb">
+        <h2>assets/الاستقبال.glb <small>10.53 MB · glTF 2</small></h2>
+        <p>generator: https://github.com/mikedh/trimesh · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>bufferView#3 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/الجدارية.glb">
+        <h2>assets/الجدارية.glb <small>12.92 MB · glTF 2</small></h2>
+        <p>generator: https://github.com/mikedh/trimesh · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>bufferView#3 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/المباخر.glb">
+        <h2>assets/المباخر.glb <small>10.35 MB · glTF 2</small></h2>
+        <p>generator: https://github.com/mikedh/trimesh · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>bufferView#3 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/باب الاجنحة.glb">
+        <h2>assets/باب الاجنحة.glb <small>4.32 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: OpenDoors, CloseDoors · embedded lights: — · cameras: —</p>
+        <p>primitives: tripo_mesh_1505de05-b676-47fb-aff4-0b5b1273947a#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Fixed_Frame_Lapis_Gold#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Left_Door_Leaf_Lapis_Gold#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Right_Door_Leaf_Lapis_Gold#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Left_Hinge_Barrel_1#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Left_Leaf_Collision_Box#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>FrameCollision_LeftJamb#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>FrameCollision_Header#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>FrameCollision_Threshold#0: COLOR_0=false UVs=TEXCOORD_0 mat=2</p>
+        <p>nodes with TRS/matrix: 17 / 17</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>tripo_material_1505de05-b676-47fb-aff4-0b5b1273947a</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Aged_Reflective_Gold_Hinges</td>
+          <td><code>[0.88,0.47,0.08,1]</code></td>
+          <td>—</td>
+          <td>0.88</td>
+          <td>0.24</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Collision_Proxy_Invisible</td>
+          <td><code>[0,0,0,0]</code></td>
+          <td>—</td>
+          <td>0</td>
+          <td>1</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>BLEND</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/ثريا المجلس .glb">
+        <h2>assets/ثريا المجلس .glb <small>6.84 MB · glTF 2</small></h2>
+        <p>generator: https://tripo3d.ai · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: tripo_mesh_a335a137-60b3-48ab-8aac-8f6d54fdfa50#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Polished gold metal with enhanced blue enamel</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>1</td>
+          <td>0.58</td>
+          <td>bufferView#5 (image/jpeg)</td>
+          <td>bufferView#6 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/جزيئات.glb">
+        <h2>assets/جزيئات.glb <small>8.40 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-12.64.0 · extensions: KHR_materials_unlit</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: Object_0#0: COLOR_0=true UVs=none mat=0<br>Object_1#0: COLOR_0=true UVs=none mat=0<br>Object_2#0: COLOR_0=true UVs=none mat=0<br>Object_3#0: COLOR_0=true UVs=none mat=0<br>Object_4#0: COLOR_0=true UVs=none mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 7</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Scene_-_Root</td>
+          <td><code>[0.9098979575871283,0.9098979575871283,0.9098979575871283,0.3024130066461404]</code></td>
+          <td>—</td>
+          <td>0</td>
+          <td>1</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>KHR_materials_unlit</code></td>
+          <td>BLEND</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/درج.glb">
+        <h2>assets/درج.glb <small>8.10 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: Step_01#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_01#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_01_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_01_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_02#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_02#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_02_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_02_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_03#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_03#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_03_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_03_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_04#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_04#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_04_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_04_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_05#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_05#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_05_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_05_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_06#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_06#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_06_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_06_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_07#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_07#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_07_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_07_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_08#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_08#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_08_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_08_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_09#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_09#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_09_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_09_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_10#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_10#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_10_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_10_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_11#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_11#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_11_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_11_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_12#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_12#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_12_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_12_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_13#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_13#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_13_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_13_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_14#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_14#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_14_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_14_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_15#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_15#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_15_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_15_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_16#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_16#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_16_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_16_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_17#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_17#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_17_Nosing#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Step_17_Nosing#1: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Parapet_L#0: COLOR_0=false UVs=TEXCOORD_0 mat=3<br>Parapet_L#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Parapet_Foot_L#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Parapet_Foot_L#1: COLOR_0=false UVs=TEXCOORD_0 mat=6<br>Parapet_Foot_L#2: COLOR_0=false UVs=TEXCOORD_0 mat=3<br>Parapet_R#0: COLOR_0=false UVs=TEXCOORD_0 mat=3<br>Parapet_R#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Parapet_Foot_R#0: COLOR_0=false UVs=TEXCOORD_0 mat=6<br>Parapet_Foot_R#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Parapet_Foot_R#2: COLOR_0=false UVs=TEXCOORD_0 mat=3<br>Base#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Base#1: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Lion_Block#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Lion_Block#1: COLOR_0=false UVs=TEXCOORD_0 mat=5<br>Lion_Block#2: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Moulding#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Moulding#1: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Collar#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Collar#1: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Torch_Front_L_Bowl#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Torch_Front_L_Bowl#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Flame_Card_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Flame_Card_1#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Flame_Card_2#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Base#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Base#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Lion_Block#0: COLOR_0=false UVs=TEXCOORD_0 mat=5<br>Lion_Block#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Lion_Block#2: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Moulding#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Moulding#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Collar#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Collar#1: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Torch_Front_R_Bowl#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Torch_Front_R_Bowl#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Flame_Card_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Flame_Card_1#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Flame_Card_2#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Base#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Base#1: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Lion_Block#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Lion_Block#1: COLOR_0=false UVs=TEXCOORD_0 mat=5<br>Lion_Block#2: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Moulding#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Moulding#1: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Upper_Block#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Upper_Block#1: COLOR_0=false UVs=TEXCOORD_0 mat=7<br>Upper_Block#2: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Upper_Moulding#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Upper_Moulding#1: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Collar#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Collar#1: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Torch_Back_L_Bowl#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Torch_Back_L_Bowl#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Flame_Card_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Flame_Card_1#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Flame_Card_2#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Base#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Base#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Lion_Block#0: COLOR_0=false UVs=TEXCOORD_0 mat=5<br>Lion_Block#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Lion_Block#2: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Moulding#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Moulding#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Upper_Block#0: COLOR_0=false UVs=TEXCOORD_0 mat=7<br>Upper_Block#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Upper_Block#2: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Upper_Moulding#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Upper_Moulding#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Collar#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Collar#1: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Torch_Back_R_Bowl#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Torch_Back_R_Bowl#1: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Flame_Card_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Flame_Card_1#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Flame_Card_2#0: COLOR_0=false UVs=TEXCOORD_0 mat=8</p>
+        <p>nodes with TRS/matrix: 4 / 84</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Stone_Front_Projected</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#0 (image/png)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>bufferView#2 (image/png)</td>
+          <td>bufferView#1 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Torch_Front_Projected</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#3 (image/png)</td>
+          <td>0.35</td>
+          <td>0.5</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Stone_Steps</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/png)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>bufferView#6 (image/png)</td>
+          <td>bufferView#5 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Stone_Parapet</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#7 (image/png)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>bufferView#9 (image/png)</td>
+          <td>bufferView#8 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Gold_Bronze</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#10 (image/png)</td>
+          <td>0.35</td>
+          <td>0.45</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Lion_Panel_Large</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#11 (image/png)</td>
+          <td>0.25</td>
+          <td>0.5</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Lion_Panel_Small</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#12 (image/png)</td>
+          <td>0.25</td>
+          <td>0.5</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Lion_Panel_Upper</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#13 (image/png)</td>
+          <td>0.25</td>
+          <td>0.5</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Flame</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#14 (image/png)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[1,1,1]</code></td>
+          <td>bufferView#14 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td>BLEND</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/سقف المجلس.glb">
+        <h2>assets/سقف المجلس.glb <small>9.07 MB · glTF 2</small></h2>
+        <p>generator: https://tripo3d.ai · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: tripo_mesh_dbe5ace6-9b09-4bdc-977a-6bf0268faf9d#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>tripo_material_dbe5ace6-9b09-4bdc-977a-6bf0268faf9d</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#5 (image/jpeg)</td>
+          <td>bufferView#6 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/‎⁨سين_وقوف_ساكن_سينمائي⁩.glb">
+        <h2>assets/‎⁨سين_وقوف_ساكن_سينمائي⁩.glb <small>8.72 MB · glTF 2</small></h2>
+        <p>generator: THREE.GLTFExporter r172 · extensions: —</p>
+        <p>animations: walk_relaxed, climb_ladder_up, push_object, monstertransformation_quaternius, bandage_loop_quaternius, push_enter_quaternius, idle_impatient, sprint_loop_quaternius, walk_casual · embedded lights: — · cameras: —</p>
+        <p>primitives: mesh0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 52 / 55</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#1778 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#1777 (image/jpeg)</td>
+          <td>bufferView#1779 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/شتله.glb">
+        <h2>assets/شتله.glb <small>3.34 MB · glTF 2</small></h2>
+        <p>generator: gltfpack 1.2 · extensions: KHR_mesh_quantization, EXT_meshopt_compression</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: mesh0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>tripo_material_10884275-41fe-4aa0-8998-f033197cbf11</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#0 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#1 (image/jpeg)</td>
+          <td>bufferView#2 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/طاولة الخرائط.glb">
+        <h2>assets/طاولة الخرائط.glb <small>2.06 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_texture_webp, KHR_draco_mesh_compression</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: tripo_mesh_f35dc951-6d97-4eeb-8cbe-1d6b812f1dbb#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>tripo_material_f35dc951-6d97-4eeb-8cbe-1d6b812f1dbb</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/عرش البطل.glb">
+        <h2>assets/عرش البطل.glb <small>15.06 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-16.14.0 · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: BladesTop_BladesTop_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2 mat=0<br>BladesTop_Swords_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2 mat=1<br>Swords_Hilt_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1 mat=2<br>Swords_Swords_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2 mat=1<br>Swords_SwordsFull_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=3<br>BladesBottom_BladesBottom_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2 mat=4<br>ThroneBaseStone_ThroneStone_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2 mat=5<br>FabricShall_Fabric_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2 mat=6</p>
+        <p>nodes with TRS/matrix: 7 / 16</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>BladesTop</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/png)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#5 (image/png)</td>
+          <td>bufferView#6 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Swords</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#7 (image/png)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#8 (image/png)</td>
+          <td>bufferView#9 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Hilt</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#10 (image/png)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>bufferView#11 (image/png)</td>
+          <td>bufferView#12 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>SwordsFull</td>
+          <td><code>[0.0122166,0.0122166,0.0122166,1]</code></td>
+          <td>—</td>
+          <td>0</td>
+          <td>0.9982971048</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>BladesBottom</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#13 (image/png)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#14 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>ThroneStone</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#15 (image/png)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>bufferView#16 (image/png)</td>
+          <td>bufferView#17 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Fabric</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#18 (image/png)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>bufferView#19 (image/png)</td>
+          <td>bufferView#20 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>BLEND</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/غبار.glb">
+        <h2>assets/غبار.glb <small>9.49 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-16.58.0 · extensions: —</p>
+        <p>animations: Scene · embedded lights: — · cameras: —</p>
+        <p>primitives: Dust looping rigged_Material_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1005 / 1010</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Material</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#9 (image/jpeg)</td>
+          <td>0</td>
+          <td>1</td>
+          <td>bufferView#10 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/قمر دموي.glb">
+        <h2>assets/قمر دموي.glb <small>2.29 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-12.65.0 · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: Object_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1 mat=0</p>
+        <p>nodes with TRS/matrix: 2 / 5</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Default_OBJ.005</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/png)</td>
+          <td>0</td>
+          <td>0.9</td>
+          <td>—</td>
+          <td>bufferView#5 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[0.1,0.1,0.1]</code></td>
+          <td>bufferView#4 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/مجسم الباب.glb">
+        <h2>assets/مجسم الباب.glb <small>2.50 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-16.12.0 · extensions: —</p>
+        <p>animations: Cube.004|Cube.004Action · embedded lights: — · cameras: —</p>
+        <p>primitives: Cube.000__0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Cube.004__0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 4 / 8</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>RootNode</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#6 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#7 (image/png)</td>
+          <td>bufferView#8 (image/png) ×1</td>
+          <td>bufferView#7 (image/png) s=1</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/مجموعة غراض غير متلاصقة.glb">
+        <h2>assets/مجموعة غراض غير متلاصقة.glb <small>9.79 MB · glTF 2</small></h2>
+        <p>generator: https://github.com/mikedh/trimesh · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>bufferView#3 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/مجموعة غراض.glb">
+        <h2>assets/مجموعة غراض.glb <small>9.42 MB · glTF 2</small></h2>
+        <p>generator: https://github.com/mikedh/trimesh · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>bufferView#3 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/مشعل اسود.glb">
+        <h2>assets/مشعل اسود.glb <small>2.53 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-12.66.0 · extensions: KHR_materials_pbrSpecularGlossiness</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: torchholder_Mat_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2|TEXCOORD_3 mat=0<br>torch_2_Mat_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2|TEXCOORD_3 mat=0</p>
+        <p>nodes with TRS/matrix: 4 / 8</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>material</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>—</td>
+          <td>1</td>
+          <td>1</td>
+          <td>—</td>
+          <td>bufferView#7 (image/png) ×1</td>
+          <td>bufferView#8 (image/png) s=1</td>
+          <td><code>[1,1,1]</code></td>
+          <td>bufferView#6 (image/png)</td>
+          <td>—</td>
+          <td><code>KHR_materials_pbrSpecularGlossiness</code></td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="assets/مشعل خشب.glb">
+        <h2>assets/مشعل خشب.glb <small>4.47 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-12.82.2 · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: torch_torch_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1|TEXCOORD_2|TEXCOORD_3 mat=0<br>flames_flames_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1 mat=1</p>
+        <p>nodes with TRS/matrix: 4 / 7</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>torch</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/png)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#5 (image/png)</td>
+          <td>bufferView#7 (image/png) ×1</td>
+          <td>—</td>
+          <td><code>[1,1,1]</code></td>
+          <td>bufferView#6 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>flames</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#8 (image/png)</td>
+          <td>0</td>
+          <td>0.8211145618000169</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[1,1,1]</code></td>
+          <td>bufferView#9 (image/png)</td>
+          <td>—</td>
+          <td>—</td>
+          <td>BLEND</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/K1_RoyalReceptionHall_lod25.glb">
+        <h2>ارضيات وسقوف/optimized/K1_RoyalReceptionHall_lod25.glb <small>3.96 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_texture_webp, KHR_lights_punctual, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: [{&quot;name&quot;:&quot;L_K1_Torch_West_1&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_West_2&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_West_3&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_East_1&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_East_2&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_East_3&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Gate_South&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.7,0.4],&quot;intensity&quot;:90,&quot;range&quot;:18},{&quot;name&quot;:&quot;L_K1_Gate_North&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.7,0.4],&quot;intensity&quot;:90,&quot;range&quot;:18}] · cameras: —</p>
+        <p>primitives: SM_K1_Ceiling#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Floor#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Wall#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Gate#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Column#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_VaseLarge#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Sconce#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_VaseSmall#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_PanelFigure#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_CarpetReception#0: COLOR_0=false UVs=TEXCOORD_0 mat=1</p>
+        <p>nodes with TRS/matrix: 83 / 93</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>M_K1_BabylonKit</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>M_K1_CarpetReception</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>0.95</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/K1_RoyalReceptionHall.glb">
+        <h2>ارضيات وسقوف/optimized/K1_RoyalReceptionHall.glb <small>4.46 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_lights_punctual, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: [{&quot;name&quot;:&quot;L_K1_Torch_West_1&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_West_2&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_West_3&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_East_1&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_East_2&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Torch_East_3&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.62,0.32],&quot;intensity&quot;:120,&quot;range&quot;:22},{&quot;name&quot;:&quot;L_K1_Gate_South&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.7,0.4],&quot;intensity&quot;:90,&quot;range&quot;:18},{&quot;name&quot;:&quot;L_K1_Gate_North&quot;,&quot;type&quot;:&quot;point&quot;,&quot;color&quot;:[1,0.7,0.4],&quot;intensity&quot;:90,&quot;range&quot;:18}] · cameras: —</p>
+        <p>primitives: SM_K1_Ceiling#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Floor#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Wall#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Gate#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Column#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_VaseLarge#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_Sconce#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_VaseSmall#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_PanelFigure#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>SM_K1_CarpetReception#0: COLOR_0=false UVs=TEXCOORD_0 mat=1</p>
+        <p>nodes with TRS/matrix: 83 / 93</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>M_K1_BabylonKit</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>M_K1_CarpetReception</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>0.95</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/k4/k4_front_mural.glb">
+        <h2>ارضيات وسقوف/optimized/k4/k4_front_mural.glb <small>0.60 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: k4_frontMural#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0.3</td>
+          <td>0.5</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/k4/k4_kit_a.glb">
+        <h2>ارضيات وسقوف/optimized/k4/k4_kit_a.glb <small>1.65 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: k4_altarTable#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_shelfCabinet#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_throneA#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_goldChest#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_lamassuSmall#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_vaseA#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_banner#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_candelabra#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 8 / 8</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/k4/k4_kit_b.glb">
+        <h2>ارضيات وسقوف/optimized/k4/k4_kit_b.glb <small>1.99 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: k4_throneB#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_chandelier#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_lionSphinx#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_kingStatue#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_brazier#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_bannerB#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_wingedDisc#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_vaseB#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 8 / 8</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/k4/k4_kit_c.glb">
+        <h2>ارضيات وسقوف/optimized/k4/k4_kit_c.glb <small>2.28 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: k4_column#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>k4_priestStatue#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>k4_palmPot#0: COLOR_0=false UVs=TEXCOORD_0 mat=2</p>
+        <p>nodes with TRS/matrix: 3 / 3</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>tripo_material_8b81bb86-1b34-4b05-9b8c-637ef22145bc</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>tripo_material_90388d41-10dc-4758-bb02-d319297517fc</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>tripo_material_1c9b2f99-8a11-4eb8-ad3b-b652fddfdcea</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/lion_winged-lod1.glb">
+        <h2>ارضيات وسقوف/optimized/lion_winged-lod1.glb <small>1.02 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/lion_winged.glb">
+        <h2>ارضيات وسقوف/optimized/lion_winged.glb <small>2.43 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/props-set.glb">
+        <h2>ارضيات وسقوف/optimized/props-set.glb <small>9.79 MB · glTF 2</small></h2>
+        <p>generator: https://github.com/mikedh/trimesh · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#2 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>bufferView#3 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/اربع اعمده مختلفة.glb">
+        <h2>ارضيات وسقوف/optimized/اربع اعمده مختلفة.glb <small>5.16 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: Object_0#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1 mat=0<br>Object_1#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1 mat=0<br>Object_2#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1 mat=0<br>Object_3#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Object_4#0: COLOR_0=false UVs=TEXCOORD_0|TEXCOORD_1 mat=2<br>Object_5#0: COLOR_0=false UVs=TEXCOORD_0 mat=3<br>Object_6#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Object_7#0: COLOR_0=false UVs=TEXCOORD_0 mat=5</p>
+        <p>nodes with TRS/matrix: 10 / 17</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Hebe_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>1</td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Hebe-Sule_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>1</td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Spiral_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Sule_Unkanneliert_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>1</td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>SuleFancy_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>SuleKanneliert_BAKED</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/اعمدة-lod1.glb">
+        <h2>ارضيات وسقوف/optimized/اعمدة-lod1.glb <small>0.69 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/اعمدة.glb">
+        <h2>ارضيات وسقوف/optimized/اعمدة.glb <small>1.76 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/الجدارية.glb">
+        <h2>ارضيات وسقوف/optimized/الجدارية.glb <small>3.40 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 2</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/المباخر-lod1.glb">
+        <h2>ارضيات وسقوف/optimized/المباخر-lod1.glb <small>1.14 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/المباخر.glb">
+        <h2>ارضيات وسقوف/optimized/المباخر.glb <small>2.72 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: geometry_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/ثريا-المجلس.glb">
+        <h2>ارضيات وسقوف/optimized/ثريا-المجلس.glb <small>3.00 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_texture_webp</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: tripo_mesh_a335a137-60b3-48ab-8aac-8f6d54fdfa50#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Polished gold metal with enhanced blue enamel</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>0.58</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/درج.glb">
+        <h2>ارضيات وسقوف/optimized/درج.glb <small>0.26 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: Step_01#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Step_01#1: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Parapet_L#0: COLOR_0=false UVs=TEXCOORD_0 mat=3<br>Parapet_Foot_L#0: COLOR_0=false UVs=TEXCOORD_0 mat=6<br>Base#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Base#1: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>Lion_Block#0: COLOR_0=false UVs=TEXCOORD_0 mat=5<br>Flame_Card_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=8<br>Upper_Block#0: COLOR_0=false UVs=TEXCOORD_0 mat=7</p>
+        <p>nodes with TRS/matrix: 7 / 7</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>Stone_Front_Projected</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>1</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Torch_Front_Projected</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0.35</td>
+          <td>0.5</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Stone_Steps</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>1</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Stone_Parapet</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>1</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Gold_Bronze</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0.35</td>
+          <td>0.45</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Lion_Panel_Large</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0.25</td>
+          <td>0.5</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Lion_Panel_Small</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0.25</td>
+          <td>0.5</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Lion_Panel_Upper</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0.25</td>
+          <td>0.5</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr><tr>
+          <td>Flame</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>1</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[1,1,1]</code></td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td>BLEND</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/سقف-المجلس.glb">
+        <h2>ارضيات وسقوف/optimized/سقف-المجلس.glb <small>3.23 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_texture_webp</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: tripo_mesh_dbe5ace6-9b09-4bdc-977a-6bf0268faf9d#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>tripo_material_dbe5ace6-9b09-4bdc-977a-6bf0268faf9d</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/شتله.glb">
+        <h2>ارضيات وسقوف/optimized/شتله.glb <small>1.91 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: mesh0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 1 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>tripo_material_10884275-41fe-4aa0-8998-f033197cbf11</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/عرش البطل.glb">
+        <h2>ارضيات وسقوف/optimized/عرش البطل.glb <small>1.63 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: BladesTop_BladesTop_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>BladesTop_Swords_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=1<br>Swords_Hilt_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=2<br>Swords_SwordsFull_0#0: COLOR_0=false UVs=none mat=3<br>BladesBottom_BladesBottom_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=4<br>ThroneBaseStone_ThroneStone_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=5<br>FabricShall_Fabric_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=6</p>
+        <p>nodes with TRS/matrix: 7 / 7</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>BladesTop</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Swords</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Hilt</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>SwordsFull</td>
+          <td><code>[0.0122166,0.0122166,0.0122166,1]</code></td>
+          <td>—</td>
+          <td>0</td>
+          <td>0.9982971048</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>BladesBottom</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>ThroneStone</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>Fabric</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>BLEND</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/عمود-المجلس.glb">
+        <h2>ارضيات وسقوف/optimized/عمود-المجلس.glb <small>2.21 MB · glTF 2</small></h2>
+        <p>generator: sin-k2-column · extensions: —</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: K2-column#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 0 / 1</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>(material 0)</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#4 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#6 (image/jpeg)</td>
+          <td>bufferView#5 (image/jpeg) ×1</td>
+          <td>—</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/مجسم الباب.glb">
+        <h2>ارضيات وسقوف/optimized/مجسم الباب.glb <small>2.50 MB · glTF 2</small></h2>
+        <p>generator: Sketchfab-16.12.0 · extensions: —</p>
+        <p>animations: Cube.004|Cube.004Action · embedded lights: — · cameras: —</p>
+        <p>primitives: Cube.000__0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>Cube.004__0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 4 / 8</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>RootNode</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>bufferView#6 (image/jpeg)</td>
+          <td>1</td>
+          <td>1</td>
+          <td>bufferView#7 (image/png)</td>
+          <td>bufferView#8 (image/png) ×1</td>
+          <td>bufferView#7 (image/png) s=1</td>
+          <td><code>[0,0,0]</code></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/مشعل اسود.glb">
+        <h2>ارضيات وسقوف/optimized/مشعل اسود.glb <small>0.31 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_materials_pbrSpecularGlossiness, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: torchholder_Mat_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>torch_2_Mat_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0</p>
+        <p>nodes with TRS/matrix: 6 / 8</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>material</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td>—</td>
+          <td>1</td>
+          <td>1</td>
+          <td>—</td>
+          <td> ×1</td>
+          <td> s=1</td>
+          <td><code>[1,1,1]</code></td>
+          <td></td>
+          <td>—</td>
+          <td><code>KHR_materials_pbrSpecularGlossiness</code></td>
+          <td>OPAQUE</td>
+          <td>false</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+<section class="card" id="ارضيات وسقوف/optimized/مشعل خشب.glb">
+        <h2>ارضيات وسقوف/optimized/مشعل خشب.glb <small>0.88 MB · glTF 2</small></h2>
+        <p>generator: glTF-Transform v4.5.1 · extensions: EXT_meshopt_compression, EXT_texture_webp, KHR_mesh_quantization</p>
+        <p>animations: — · embedded lights: — · cameras: —</p>
+        <p>primitives: torch_torch_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=0<br>flames_flames_0#0: COLOR_0=false UVs=TEXCOORD_0 mat=1</p>
+        <p>nodes with TRS/matrix: 6 / 7</p>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>material</th><th>baseColorFactor</th><th>baseColorTexture</th>
+            <th>metal</th><th>rough</th><th>mrMap</th><th>normal</th><th>occlusion</th>
+            <th>emissive</th><th>emissiveMap</th><th>emiStrength</th><th>other KHR</th>
+            <th>alpha</th><th>doubleSided</th>
+          </tr></thead>
+          <tbody><tr>
+          <td>torch</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>1</td>
+          <td>1</td>
+          <td></td>
+          <td> ×1</td>
+          <td>—</td>
+          <td><code>[1,1,1]</code></td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td>OPAQUE</td>
+          <td>true</td>
+        </tr><tr>
+          <td>flames</td>
+          <td><code>[1,1,1,1]</code></td>
+          <td></td>
+          <td>0</td>
+          <td>0.8211145618000169</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><code>[1,1,1]</code></td>
+          <td></td>
+          <td>—</td>
+          <td>—</td>
+          <td>BLEND</td>
+          <td>true</td>
+        </tr></tbody>
+        </table></div>
+      </section>
+  <h2 id="images">Image files</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>path</th><th>resolution</th><th>format</th><th>size</th><th>used by (slot → colorSpace)</th></tr></thead>
+    <tbody><tr>
+        <td>assets/canal_color.jpg</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>200.4 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/canal_normal.jpg</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>215.1 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/canal_rough.jpg</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>217.8 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/canal_water.jpg</td>
+        <td>420×1536</td>
+        <td>jpeg</td>
+        <td>116.2 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/grass_dark.jpg</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>392.5 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/grass_lawn.jpg</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>565.1 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/grass_moss.jpg</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>384.1 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/ground_zones.png</td>
+        <td>1024×1024</td>
+        <td>png</td>
+        <td>131.3 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/IMG_2962.JPG</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>146.1 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/marble.webp</td>
+        <td>1024×1024</td>
+        <td>webp</td>
+        <td>114.6 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/palace-glimpse.webp</td>
+        <td>1280×721</td>
+        <td>webp</td>
+        <td>209.3 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/plaza_mosaic.jpg</td>
+        <td>1254×1254</td>
+        <td>jpeg</td>
+        <td>744.7 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/plaza_paving.jpg</td>
+        <td>1254×1254</td>
+        <td>jpeg</td>
+        <td>625.3 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/plaza_stone.jpg</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>391.3 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/sky_babylon_blood.jpeg</td>
+        <td>1920×960</td>
+        <td>jpeg</td>
+        <td>197.8 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/skyline_ring_a.jpg</td>
+        <td>3768×627</td>
+        <td>jpeg</td>
+        <td>274.2 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/skyline_ring_b.jpg</td>
+        <td>3768×627</td>
+        <td>jpeg</td>
+        <td>270.2 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/ارضية الخرائط.JPG</td>
+        <td>1254×1254</td>
+        <td>jpeg</td>
+        <td>260.7 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/ارضية المجلس.PNG</td>
+        <td>1254×1254</td>
+        <td>png</td>
+        <td>3596.9 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/ارضية الممرات.JPG</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>146.1 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/ارضية غرفة الملوك.PNG</td>
+        <td>1254×1254</td>
+        <td>png</td>
+        <td>4465.9 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/ارضية.JPG</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>351.6 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/السجاد.JPG</td>
+        <td>512×2064</td>
+        <td>jpeg</td>
+        <td>377.7 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/السقف.JPG</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>353.3 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/المدالية المركزية.JPG</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>372.9 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/جدار الخرائط 2.JPG</td>
+        <td>2172×724</td>
+        <td>jpeg</td>
+        <td>249.3 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/جدار الخرائط.JPG</td>
+        <td>2172×724</td>
+        <td>jpeg</td>
+        <td>240.8 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/جدار المجلس .PNG</td>
+        <td>1536×1024</td>
+        <td>png</td>
+        <td>4000.6 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/جدار الممرات.jpg</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>294.4 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/جدار خلف عرش البطل.PNG</td>
+        <td>1536×1024</td>
+        <td>png</td>
+        <td>4000.6 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/جدران الباب.PNG</td>
+        <td>1254×1254</td>
+        <td>png</td>
+        <td>4290.2 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/سجاد الارضية.jpg</td>
+        <td>1067×1809</td>
+        <td>jpeg</td>
+        <td>735.6 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/سجاد الاستقبال.jpg</td>
+        <td>1186×1818</td>
+        <td>jpeg</td>
+        <td>1390.3 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/سجاد الممرات.JPG</td>
+        <td>585×1774</td>
+        <td>jpeg</td>
+        <td>440.5 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/سقف الخرائط .JPG</td>
+        <td>1254×1254</td>
+        <td>jpeg</td>
+        <td>376.1 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/سقف القصر .PNG</td>
+        <td>1254×1254</td>
+        <td>png</td>
+        <td>3351.5 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/سقف الممرات.PNG</td>
+        <td>1254×1254</td>
+        <td>png</td>
+        <td>3703.6 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/سماء سين.JPG</td>
+        <td>2086×754</td>
+        <td>jpeg</td>
+        <td>221.9 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/نقوش جدارية 2.JPG</td>
+        <td>1456×720</td>
+        <td>jpeg</td>
+        <td>325.1 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>assets/نقوش جدارية.JPG</td>
+        <td>1024×1024</td>
+        <td>jpeg</td>
+        <td>374.1 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/floor-orm.webp</td>
+        <td>512×512</td>
+        <td>webp</td>
+        <td>1.7 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/k4/ارضية-الخزانة.jpg</td>
+        <td>1672×941</td>
+        <td>jpeg</td>
+        <td>282.8 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/k4/جدارية-ايمن-الخزانة.jpg</td>
+        <td>1817×728</td>
+        <td>jpeg</td>
+        <td>224.6 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/k4/سقف-الخزانة.jpg</td>
+        <td>1672×941</td>
+        <td>jpeg</td>
+        <td>324.4 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/marble.webp</td>
+        <td>1024×1024</td>
+        <td>webp</td>
+        <td>114.6 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/ارضية.webp</td>
+        <td>1024×1024</td>
+        <td>webp</td>
+        <td>325.3 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/السجاد.webp</td>
+        <td>508×2048</td>
+        <td>webp</td>
+        <td>334.1 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/المدالية المركزية.webp</td>
+        <td>1024×1024</td>
+        <td>webp</td>
+        <td>353.2 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/جدار-المجلس.webp</td>
+        <td>1536×1024</td>
+        <td>webp</td>
+        <td>836.9 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/جدار-خلف-العرش.webp</td>
+        <td>1536×1024</td>
+        <td>webp</td>
+        <td>707.1 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/جدران-الباب.webp</td>
+        <td>1024×1024</td>
+        <td>webp</td>
+        <td>443.5 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/سجاد-الارضية.webp</td>
+        <td>1067×1809</td>
+        <td>webp</td>
+        <td>394.5 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/سقف-القصر.webp</td>
+        <td>1024×1024</td>
+        <td>webp</td>
+        <td>327.8 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/سقف-الممرات.webp</td>
+        <td>1254×1254</td>
+        <td>webp</td>
+        <td>646.7 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/لمحة-القصر.webp</td>
+        <td>768×1115</td>
+        <td>webp</td>
+        <td>162.5 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/نقوش جدارية 2.webp</td>
+        <td>1456×720</td>
+        <td>webp</td>
+        <td>290.3 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr>
+<tr>
+        <td>ارضيات وسقوف/optimized/نقوش جدارية.webp</td>
+        <td>1024×1024</td>
+        <td>webp</td>
+        <td>318.4 KB</td>
+        <td><em>not referenced by audited GLB uri (may be loaded by code path / embedded)</em></td>
+      </tr></tbody>
+  </table></div>
+</body>
+</html>
