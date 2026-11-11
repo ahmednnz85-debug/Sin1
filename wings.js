@@ -30,6 +30,11 @@
   // precompile -> atomic reveal -> LRU eviction). See zone-streamer.js and
   // ADDING_CONTENT.md. Streamed rooms are registered in WING_ZONES below.
   const zoneStreamer = window.SinZoneStreamer ? window.SinZoneStreamer.create({
+    // Three streamed dress rooms (K2/K3/K4) must stay resident at normal
+    // memory so a sprint-and-return finds them already settled. They fit
+    // comfortably in the 420/180 geometry/texture budget (measured peak
+    // 251 geo / 131 tex with all three ready).
+    cacheZones: { normal: 3, watch: 2, critical: 0 },
     log: function (kind, msg) { try { if (window.SinMemoryOverlay) SinMemoryOverlay.note(kind, msg); } catch (_) {} }
   }) : null;
 
@@ -2368,6 +2373,21 @@
   }
   const visibilityPlanner = window.SinWingVisibility ? window.SinWingVisibility.createPlanner() : null;
   const triCache = new Map();
+  function cachedTriangles(id, g, force) {
+    if (force || !triCache.has(id)) {
+      // Count all meshes regardless of current visibility so a diagnostics
+      // total does not change just because a room was hidden last frame.
+      const was = g.visible; g.visible = true;
+      triCache.set(id, groupTriangleCount(g));
+      g.visible = was;
+    }
+    return triCache.get(id);
+  }
+  // Visual-regression fix: wing GLB materials are used as authored again.
+  // Forcing metalness / envMapIntensity on streamed materials was a
+  // compensation for textures that were never uploaded. No-op retained
+  // because dress / door / prop paths still call it.
+  function softenWingMetal(m) { void m; }
   function prepareRoomMaterials(g) {
     if (!g) return;
     g.traverse(o => {
@@ -2405,7 +2425,7 @@
   const zoneDone = new Set();
   function streamedName(id) { const re = new RegExp('^' + id + '-'); return function (ch) { return !!(ch.userData && ch.userData.streamDress) || !!(ch.name && re.test(ch.name)); }; }
   const WING_ZONES = [
-    { id: 'K2', prefetchHops: 2, priority: 0,
+    { id: 'K2', prefetchHops: 8, priority: 0,
       load: function () { dressK2(); },
       isComplete: function () { return zoneDone.has('K2') || !!(state.k2Dress && state.k2Dress.chandelier && state.k2Dress.columns && state.k2Dress.table); },
       unload: function (api) {
@@ -2414,12 +2434,12 @@
         if (api.group) api.group.userData.k2Dressed = false;
       },
       ownsObject: streamedName('K2') },
-    { id: 'K3', prefetchHops: 2, priority: 1,
+    { id: 'K3', prefetchHops: 8, priority: 1,
       load: function () { dressK3(); },
       isComplete: function () { return zoneDone.has('K3') || !!(state.k3Dress && state.k3Dress.furniture); },
       unload: function (api) { state.k3Lights = null; state.k3LightBase = null; if (api.group) api.group.userData.k3Dressed = false; },
       ownsObject: streamedName('K3') },
-    { id: 'K4', prefetchHops: 2, priority: 2,
+    { id: 'K4', prefetchHops: 8, priority: 2,
       load: function () { dressK4(); loadK4Assets(); },
       isComplete: function () { return zoneDone.has('K4') || !!(state.k4Dress && state.k4Dress.loadStarted && state.k4Dress._assetsCommitted); },
       unload: function (api) { state.k4Dress = null; if (api.group) api.group.userData.k4Dressed = false; },
