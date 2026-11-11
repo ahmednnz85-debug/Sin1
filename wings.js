@@ -2865,7 +2865,6 @@
       if (!THREE.DRACOLoader) { finish(null); return; }
       const d = new THREE.DRACOLoader();
       d.setDecoderPath('vendor/draco/');
-      d.setDecoderConfig({ type: 'wasm' });
       d.setWorkerLimit(2);
       finish(d);
     };

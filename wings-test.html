@@ -9,13 +9,15 @@
     #panel{position:fixed;z-index:2;left:10px;top:10px;width:min(680px,92vw);max-height:90vh;overflow:auto;background:rgba(5,4,3,.93);border:1px solid #8d7348;padding:12px;white-space:pre-wrap}
     button{background:#342718;color:#f5e4c3;border:1px solid #9d7b48;padding:8px 12px;margin:0 8px 8px 0}a{color:#e7c27f}
   </style>
+  <script type="importmap">
+  {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}
+  </script>
 </head>
 <body>
   <div id="panel"><strong>PALACE WINGS · INDEPENDENT TESTS</strong><br><button id="run">Run all first-stage tests</button><button id="view">Cutaway overview</button><span id="status">Loading…</span><div id="out"></div></div>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
-  <script src="vendor/clipper.js"></script>
-  <script src="wings.js"></script>
-  <script>
+  <script type="text/plain" data-legacy-script data-src="vendor/clipper.js"></script>
+  <script type="text/plain" data-legacy-script data-src="wings.js"></script>
+  <script type="text/plain" data-legacy-script>
     const out=document.getElementById('out'),status=document.getElementById('status');
     const scene=new THREE.Scene();scene.background=new THREE.Color(0x0b0907);
     const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,500);
@@ -34,5 +36,6 @@
     addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
     if(new URLSearchParams(location.search).has('autorun'))run();
   </script>
+  <script type="module" src="three-compat.js?v=r187engine"></script>
 </body>
 </html>

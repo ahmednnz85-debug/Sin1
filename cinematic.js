@@ -1,4 +1,4 @@
-/* Sîn — cinematic lighting / camera / quality layer (three r147, classic script).
+/* Sîn — cinematic lighting / camera / quality layer (three r187, classic script).
  *
  * Performance-first design:
  *  - Height fog + sun in-scattering are done INSIDE the existing fog shader chunk
@@ -106,7 +106,8 @@
       if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
     }
     if (!ctx.interior() && force) {
-      const wantType = E.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+      // r181+: PCFSoftShadowMap is removed/deprecated; PCFShadowMap is soft.
+      const wantType = THREE.PCFShadowMap;
       let recompile = false;
       if (R.shadowMap.enabled !== E.shadow) { R.shadowMap.enabled = E.shadow; recompile = true; }
       if (R.shadowMap.type !== wantType) { R.shadowMap.type = wantType; recompile = true; }
@@ -285,11 +286,11 @@
     hq() { return base !== 'low'; },
     settings() { return E; },
     pixelRatio() {
-      // Mobile retina DPR multiplies pixel work without improving the UI, so
-      // keep the game buffer at CSS resolution and let the governor scale lower.
+      // Cap DPR so Retina stays sharp without uncapped 3× pixel fill on phones.
+      // iPhone 16-class: allow up to 1.25×; the dynamic-resolution governor still
+      // scales down under frame pressure. Desktop stays at the same 1.25× ceiling.
       const dpr = Number(window.devicePixelRatio) || 1;
-      const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '') || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent || ''));
-      return Math.min(mobile ? 1 : 1.25, Math.max(1, dpr)) * E.scale;
+      return Math.min(1.25, Math.max(1, dpr)) * E.scale;
     },
     mode() { return mode; },
     tier() { return base; },
