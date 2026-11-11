@@ -44,10 +44,13 @@ test('palace loading starts only after the fade, exterior disposal and reference
   assert.match(palace, /if \(state === 'LOADING'\)[\s\S]{0,160}startPalaceLoad\(ctx\)/);
   const threshold = palace.slice(palace.indexOf("if (state === 'IDLE')"), palace.indexOf("if (state === 'FADING_OUT')"));
   assert.doesNotMatch(threshold, /loadPalaceAssets\(\)/);
-  assert.match(palace, /keepDuringPalace/);
+  // Outside is a one-way phase: releaseCity keeps only hero + palace group.
+  assert.match(palace, /Outside is a one-way phase/);
   assert.match(palace, /retainedResources\.has\(g\)/);
   assert.match(palace, /window\.__releaseExteriorStage/);
+  assert.match(palace, /flushReleasedGPU/);
   assert.match(index, /extras\.length=0;colliders\.length=0;marketOpenings\.length=0;vegChunks\.length=0;palMeshes\.length=0;palBVH=null/);
+  assert.match(index, /__sinCityReleased/);
 });
 
 test('all palace wings share one stable ambient source and synchronized subtle flicker', () => {

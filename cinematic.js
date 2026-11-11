@@ -27,14 +27,19 @@
     // Start near native resolution; the previous 0.88/0.92 scales made the
     // whole game visibly soft. The governor still lowers scale only after a
     // sustained FPS drop, avoiding a permanent blurry image.
+    // iPhone: never allocate a 2048 shadow map — that alone can tip Safari into
+    // a memory kill after palace entry (confirmed crash with Tier HIGH / 2048).
     low:    { scale: 0.94, shadow: true,  res: 1024, extent: 88, soft: false, veg: 0.70, pots: 58,  potShadow: 18, dust: 220 },
     medium: { scale: 0.98, shadow: true,  res: 1024, extent: 88, soft: false, veg: 0.78, pots: 70,  potShadow: 22, dust: 320 },
-    high:   { scale: 1.00, shadow: true,  res: 2048, extent: 88, soft: true,  veg: 1.00, pots: 110, potShadow: 46, dust: 500 }
+    high:   { scale: 1.00, shadow: true,  res: 2048, extent: 88, soft: false, veg: 1.00, pots: 110, potShadow: 46, dust: 500 }
   };
   const ORDER = ['low', 'medium', 'high'];
-  function detectTier() {
+  function isMobileUA() {
     const ua = navigator.userAgent || '';
-    const mobile = /iPhone|iPad|iPod|Android/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+    return /iPhone|iPad|iPod|Android/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+  }
+  function detectTier() {
+    const mobile = isMobileUA();
     const mem = navigator.deviceMemory || 8, cores = navigator.hardwareConcurrency || 4;
     if (mobile) return (mem <= 3 || cores <= 4) ? 'low' : 'medium';
     return (cores <= 4) ? 'medium' : 'high';
@@ -57,6 +62,9 @@
     // drop shadows, change shadow filtering, or cull scene detail as a reaction
     // to a short frame-time spike.
     t.shadow = true;
+    // Cap shadow map size on phones even if the user picks HIGH — 2048² shadow
+    // RT is a confirmed Safari memory killer once the palace is loaded.
+    if (isMobileUA() && t.res > 1024) t.res = 1024;
     t.scale = dynamicResolution ? Math.min(t.scale, dynamicResolution.value()) : t.scale;
     return t;
   }
@@ -315,7 +323,18 @@
     potShadowRange() { return E.potShadow; },
     dustCount() { return E.dust; },
     // called once per rAF, before simulation
-    frame(ts, busy) { govern(ts, busy); hud(ts); },
+    frame(ts, busy) {
+      govern(ts, busy); hud(ts);
+      try {
+        if (window.SinMemoryOverlay && SinMemoryOverlay.on()) {
+          SinMemoryOverlay.render({
+            renderer: R,
+            scene: scene,
+            phase: window.PalaceInterior && PalaceInterior.status && PalaceInterior.status().phase
+          });
+        }
+      } catch (_) {}
+    },
     // called once per simulation step, after the camera has been placed
     update(dt, info) { updateAtmo(dt, info); cameraFrame(dt, ctx.interior(), info && info.running); },
     status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, shadowPolicy: !!E.shadow, shadowMapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg }; }

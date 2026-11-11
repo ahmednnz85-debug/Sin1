@@ -154,12 +154,13 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 
 
 <script type="text/plain" data-legacy-script data-src="dynamic-resolution.js?v=20261109a"></script>
-<script type="text/plain" data-legacy-script data-src="cinematic.js?v=20261109a&r187=pcf"></script>
+<script type="text/plain" data-legacy-script data-src="memory-overlay.js?v=mem1"></script>
+<script type="text/plain" data-legacy-script data-src="cinematic.js?v=20261109a&r187=pcf&mem=1"></script>
 <script type="text/plain" data-legacy-script data-src="vendor/clipper.js"></script>
-<script type="text/plain" data-legacy-script data-src="palaceInterior.js?v=hall26&cam=20261108c&preload=20261108c&loadingFix=20261109&r187=floor"></script>
+<script type="text/plain" data-legacy-script data-src="palaceInterior.js?v=hall26&cam=20261108c&preload=20261108c&loadingFix=20261109&r187=floor&mem=stream"></script>
 <script type="text/plain" data-legacy-script data-src="wing-gpu-residency.js?v=20261109k4"></script>
 <script type="text/plain" data-legacy-script data-src="wing-render-budget.js?v=20261109b"></script>
-<script type="text/plain" data-legacy-script data-src="wing-visibility.js?v=20261109k4"></script>
+<script type="text/plain" data-legacy-script data-src="wing-visibility.js?v=20261109k4&mem=hop1"></script>
 <script type="text/plain" data-legacy-script data-src="smart-memory-manager.js?v=20261109a"></script>
 <script type="text/plain" data-legacy-script data-src="wings.js?corridors=20261108c&k2=20261108c&preload=20261108c&k3=20261108c&loadingfix=20261109&residency=20261109b&visibility=20261109c&k4=20261109k4"></script>
 <script type="text/plain" data-legacy-script>
@@ -1955,10 +1956,10 @@ function loop(ts){requestAnimationFrame(loop);try{if(window.SinGfx){const ps_=wi
   else{if(insideHall&&window.PalaceInterior.clampFollowTarget)window.PalaceInterior.clampFollowTarget(want);else{let ct=clipFollowCamera(want,hx,hy,hz);if(window.SinGfx)ct=SinGfx.smoothClip(ct,dt);if(ct<1){want.x=hx+(want.x-hx)*ct;want.y=hy+(want.y-hy)*ct;want.z=hz+(want.z-hz)*ct;}}camera.position.lerp(want,introT>=0?1-Math.pow(.0008,dt):1);followCam=true;}
   if(window.PalaceInterior&&PalaceInterior.constrainCamera)PalaceInterior.constrainCamera(camera,hp);
   if(followCam)camera.lookAt(hx,hy,hz);
-  sky.position.copy(camera.position);updateSkyline();
+  if(!window.__sinCityReleased&&sky){sky.position.copy(camera.position);updateSkyline();}
   // Keep the outdoor shadow camera anchored to the gate-to-palace route; following
   // the hero here moved the whole shadow frustum and made nearby shadows swim.
-  sun.target.position.set(0,0,93);sun.position.set(0,0,93).addScaledVector(SUN,80);sun.target.updateMatrixWorld();
+  if(!window.__sinCityReleased&&sun&&sun.target){sun.target.position.set(0,0,93);sun.position.set(0,0,93).addScaledVector(SUN,80);sun.target.updateMatrixWorld();}
   if(window.SinGfx)SinGfx.update(dt,{babylon:skyTransition.started,courtyard:hp.z>PL_Z0+4&&!isInteriorNow(),running:!!run&&moving});
   updateDust(tAcc);updateWater(tAcc);if(!(window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround()))updateExtras();}if(window.PalaceInterior&&PalaceInterior.holdCull)PalaceInterior.holdCull(scene,heroRoot);const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';if(palaceState!=='FADING_OUT'&&palaceState!=='LOADING'&&palaceState!=='SETUP'&&palaceState!=='FAILED'&&palaceState!=='REVEAL')renderer.render(scene,camera);}catch(e){console.error('loop',e);}}
 init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);});
@@ -1966,8 +1967,28 @@ window.__releaseExteriorStage=function(){
   _cityGroups.clear();_cityPrepared.clear();if(cityResidency&&cityResidency.reset)cityResidency.reset();
   extras.length=0;colliders.length=0;marketOpenings.length=0;vegChunks.length=0;palMeshes.length=0;palBVH=null;
   mixers.forEach(m=>{try{m.stopAllAction();}catch(_){}});mixers.length=0;
-  waterT=null;dust=null;
+  try{if(sun&&sun.shadow&&sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}if(sun){sun.castShadow=false;sun.intensity=0;}}catch(_){}
+  try{if(hemi)hemi.intensity=0;if(fillL)fillL.intensity=0;}catch(_){}
+  waterT=null;dust=null;sky=null;
+  window.__sinCityReleased=true;
+  try{if(window.SinMemoryOverlay)SinMemoryOverlay.note('teardown','exterior stage refs cleared');}catch(_){}
 };
+})();
+</script>
+<script type="text/plain" data-legacy-script>
+(function(){
+  function pauseForHide(){
+    try{if(window.SinMemoryOverlay)SinMemoryOverlay.note('info','pagehide');}catch(_){}
+    try{if(window.__sinRaf){cancelAnimationFrame(window.__sinRaf);window.__sinRaf=0;}}catch(_){}
+  }
+  function resumeShow(){
+    try{if(window.SinMemoryOverlay)SinMemoryOverlay.note('info','pageshow');}catch(_){}
+  }
+  addEventListener('pagehide', pauseForHide);
+  addEventListener('pageshow', resumeShow);
+  addEventListener('visibilitychange', function(){
+    if(document.hidden) pauseForHide(); else resumeShow();
+  });
 })();
 </script>
 <script type="module" src="three-compat.js?v=r187engine"></script>
