@@ -1972,8 +1972,8 @@ window.__releaseExteriorStage=function(){
   _cityGroups.clear();_cityPrepared.clear();if(cityResidency&&cityResidency.reset)cityResidency.reset();
   extras.length=0;colliders.length=0;marketOpenings.length=0;vegChunks.length=0;palMeshes.length=0;palBVH=null;
   mixers.forEach(m=>{try{m.stopAllAction();}catch(_){}});mixers.length=0;
-  try{if(sun&&sun.shadow&&sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}if(sun){sun.castShadow=false;sun.intensity=0;}}catch(_){}
-  try{if(hemi)hemi.intensity=0;if(fillL)fillL.intensity=0;}catch(_){}
+  try{if(sun&&sun.shadow&&sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}if(sun){sun.castShadow=false;}}catch(_){}
+  // hemi/sun/fill keep their intensities: they light the palace interior exactly as before the engine upgrade.
   // Outdoor-only sky: blood sky + skyline rings must not survive into the palace.
   // Users of sky_babylon_blood.jpeg: makeSkyPhoto redMap + skyTransition swap only.
   try{

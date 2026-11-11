@@ -40,10 +40,14 @@
     maxPalaceBytes: 25 * 1024 * 1024,
     archWidthRatio: 0.30,
     archHeightRatio: 0.64,
-    lodDistanceH: 10,
+    // Pre-upgrade LOD switch distance (10H moved the far-LOD swap into
+    // normal play range and made columns/lions/braziers visibly pop).
+    lodDistanceH: 14,
     // Beyond this distance (× H) instanced hall props are not drawn at all.
-    // Still covers a full hall length so the look stays the same from play cameras.
-    cullDistanceH: 22
+    // The hall is 30H long (33H diagonal): the old 22H value removed the far
+    // half of the hall from view and re-added it while walking. 40H keeps
+    // every prop inside the hall drawn; it only trims draws from far wings.
+    cullDistanceH: 40
   };
 
   const PLAN = (function () {
@@ -530,53 +534,62 @@
   }
 
   // After the GPU has a copy, drop CPU-side ImageBitmap / HTMLImage pixels.
-  function armTextureCpuRelease(tex) {
-    if (!tex || !tex.isTexture || tex.userData._cpuReleaseArmed) return;
-    tex.userData._cpuReleaseArmed = true;
-    const prev = tex.onUpdate;
-    tex.onUpdate = function () {
-      try { if (typeof prev === 'function') prev.call(this); } catch (_) {}
-      try {
-        const img = this.image;
-        if (img && typeof img.close === 'function') img.close();
-        if (!this.isCompressedTexture) this.image = null;
-      } catch (_) {}
-      this.onUpdate = null;
-    };
+  // Visual-regression fix: the previous version nulled `texture.image` one
+  // texture at a time (and from an onUpdate hook), and also for the loose
+  // floor/wall/ceiling/carpet pictures. In r187 `texture.image` is the shared
+  // `texture.source.data`, so every texture.clone() (tiledMap, carpetSeg,
+  // floor/border/back/ceiling maps) and every glTF texture that shares an
+  // image source lost its pixels BEFORE it was uploaded. Those textures were
+  // bound as the 1x1 empty texture (rgba 0,0,0,0): black albedo, roughness 0
+  // and metalness 0 from the zeroed ORM map, a broken normal map — so only
+  // the warm-gold environment reflection was left ("gold and black").
+  // Now: (1) only parsed glTF results are released (loose pictures are clone
+  // templates and keep their pixels), (2) every texture of the glTF is
+  // uploaded first, (3) pixels are dropped only for sources whose textures
+  // all have a live GPU copy, and (4) nothing is dropped without a renderer.
+  const CPU_RELEASE_KEYS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'bumpMap', 'displacementMap', 'lightMap'];
+  function textureUploaded(renderer, t) {
+    try {
+      const p = renderer.properties && renderer.properties.get(t);
+      return !!(p && p.__webglTexture && p.__version === t.version);
+    } catch (_) { return false; }
   }
-
   function releaseCpuFromObject(root, renderer) {
-    if (!root || !root.traverse) return;
+    if (!root || !root.traverse || !renderer || typeof renderer.initTexture !== 'function') return;
+    const bySource = new Map();
     root.traverse(function (o) {
       const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
       mats.forEach(function (m) {
         if (!m) return;
-        ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'bumpMap', 'displacementMap', 'envMap', 'lightMap'].forEach(function (k) {
+        CPU_RELEASE_KEYS.forEach(function (k) {
           const t = m[k];
-          if (!t || !t.isTexture) return;
-          armTextureCpuRelease(t);
-          try {
-            if (renderer && renderer.initTexture) renderer.initTexture(t);
-            const img = t.image;
-            if (img && typeof img.close === 'function') img.close();
-            if (!t.isCompressedTexture) t.image = null;
-          } catch (_) {}
+          if (!t || !t.isTexture || t.isCompressedTexture || t.isRenderTargetTexture || !t.source) return;
+          const list = bySource.get(t.source) || [];
+          if (list.indexOf(t) < 0) list.push(t);
+          bySource.set(t.source, list);
         });
       });
+    });
+    // Pass 1: upload every texture while the pixels are still present.
+    bySource.forEach(function (list) {
+      list.forEach(function (t) { try { if (t.image) renderer.initTexture(t); } catch (_) {} });
+    });
+    // Pass 2: drop pixels only for sources fully resident on the GPU.
+    bySource.forEach(function (list, source) {
+      if (!source.data || !list.every(function (t) { return textureUploaded(renderer, t); })) return;
+      try {
+        const img = source.data;
+        source.data = null;
+        if (img && typeof img.close === 'function') img.close();
+      } catch (_) {}
     });
   }
 
   function releaseCpuFromResult(result, renderer) {
     if (!result) return;
-    if (result.isTexture) {
-      armTextureCpuRelease(result);
-      try {
-        if (renderer && renderer.initTexture) renderer.initTexture(result);
-        if (result.image && typeof result.image.close === 'function') result.image.close();
-        if (!result.isCompressedTexture) result.image = null;
-      } catch (_) {}
-      return;
-    }
+    // Loose textures (tex/wtex) are cloned per surface at build time and
+    // handed to the wings; they must keep their pixels.
+    if (result.isTexture) return;
     if (result.scene) releaseCpuFromObject(result.scene, renderer);
   }
 
@@ -664,7 +677,6 @@
           tex.magFilter = THREE.LinearFilter;
           tex.needsUpdate = true;
         } else srgb(tex);
-        armTextureCpuRelease(tex);
         resolve(tex);
       };
       img.onerror = function () {
@@ -675,13 +687,17 @@
     });
   }
 
-  // Stone/wood GLBs ship metallicFactor=1 + mrMap. Leaving that intact makes
-  // doors/columns pure black under weak IBL. Soften regardless of metalnessMap.
+  // Visual-regression fix: restore the pre-upgrade rule. Only a material
+  // that is fully metallic WITHOUT a metallic-roughness map is clamped; when
+  // the GLB ships an ORM map the authored per-texel metalness is respected.
+  // (The 'soften regardless of metalnessMap' override rewrote every stone,
+  // wood and gold surface to 0.22 metal to hide what was really the
+  // unuploaded-texture bug + the missing PI scale on point lights.)
   function softenPalaceMetal(m) {
     if (!m || !m.isMeshStandardMaterial) return m;
-    if (m.metalness == null || m.metalness >= 0.85) {
-      m.metalness = 0.22;
-      if (m.roughness == null || m.roughness < 0.35) m.roughness = 0.55;
+    if ((m.metalness == null || m.metalness >= 0.99) && !m.metalnessMap) {
+      m.metalness = 0.3;
+      m.roughness = 0.5;
     }
     return m;
   }
@@ -1115,12 +1131,22 @@
       });
     }
     // Outside is a one-way phase: after palace entry the player never returns.
-    // Keep ONLY the hero and the palace group. Outdoor lights, sky, trees,
-    // gate and courtyard are fully torn down so they cannot share GPU memory
-    // with the hall (that overlap is what iOS kills at ~99%).
+    // Trees, gate, courtyard, sky meshes and their textures are torn down so
+    // they cannot share GPU memory with the hall. Visual-regression fix: the
+    // pre-upgrade interior was lit by the three tagged outdoor lights
+    // (hemi / sun / cold fill, userData.keepDuringPalace) and by the outdoor
+    // sky PMREM as scene.environment. Dropping them (4de3f03) is what made
+    // the palace dark; they cost no geometry/texture memory (the sun's shadow
+    // map is still disposed in __releaseExteriorStage), so keep them again.
     hold(hero); hold(group);
+    scene.traverse(function (o) {
+      if (!o.userData || !o.userData.keepDuringPalace) return;
+      let root = o;
+      while (root.parent && root.parent !== scene) root = root.parent;
+      if (root.parent === scene) hold(root);
+    });
     scene.children.forEach(function (ch) { if (keptNodes.has(ch) || ch === hero || ch === group) collectResources(ch); });
-    // Do not retain outdoor environment/background — palace installs its own.
+    retainResource(scene.environment); retainResource(scene.background);
     const drop = scene.children.filter(function (ch) { return !keptNodes.has(ch) && ch !== hero && ch !== group; });
     const geometries = new Set(), materials = new Set(), textures = new Set();
     drop.forEach(function (root) {
@@ -1137,17 +1163,10 @@
         });
       });
     });
-    // Drop outdoor env/background textures if present and not shared.
-    const outdoorEnv = scene.environment;
-    const outdoorBg = scene.background && scene.background.isTexture ? scene.background : null;
-    scene.environment = null;
-    if (outdoorBg) scene.background = new THREE.Color(0x000000);
     drop.forEach(function (root) { scene.remove(root); });
     geometries.forEach(function (g) { if (!retainedResources.has(g) && !(g.userData && g.userData.palaceShared) && g.dispose) g.dispose(); });
     materials.forEach(function (m) { if (!retainedResources.has(m) && !(m.userData && m.userData.palaceShared) && m.dispose) m.dispose(); });
     textures.forEach(function (t) { if (!retainedResources.has(t) && !(t.userData && t.userData.palaceShared) && t.dispose) t.dispose(); });
-    if (outdoorEnv && outdoorEnv.dispose && !retainedResources.has(outdoorEnv)) try { outdoorEnv.dispose(); } catch (_) {}
-    if (outdoorBg && outdoorBg.dispose && !retainedResources.has(outdoorBg)) try { outdoorBg.dispose(); } catch (_) {}
     scene.userData.cityReleased = true;
     try { if (window.__releaseExteriorStage) window.__releaseExteriorStage(); } catch (e) { note('exterior refs ' + (e && e.message || e)); }
     note('city released ' + drop.length + ' roots, ' + geometries.size + ' geometries, ' + materials.size + ' materials, ' + textures.size + ' textures');
@@ -1554,7 +1573,7 @@
     m.side = THREE.DoubleSide;
     if (palaceEnv) {
       m.envMap = palaceEnv;
-      m.envMapIntensity = Math.max(0.85, m.envMapIntensity || 0);
+      m.envMapIntensity = 0.6;
     }
     return m;
   }
@@ -1580,22 +1599,24 @@
 
   function makePalaceEnv(renderer) {
     const c = document.createElement('canvas');
-    c.width = 256;
-    c.height = 128;
+    // Original (pre-upgrade) hall probe. The brightened gold probe was a
+    // compensation for the PI-dark point lights and is what tinted every
+    // texture-less surface gold.
+    c.width = 128;
+    c.height = 64;
     const g = c.getContext('2d');
-    const grd = g.createLinearGradient(0, 0, 0, 128);
-    // Brighter warm probe so MeshStandard metals/stone read after outdoor IBL is gone.
-    grd.addColorStop(0, '#2a2218');
-    grd.addColorStop(0.35, '#6a4a2c');
-    grd.addColorStop(0.5, '#f0b56a');
-    grd.addColorStop(0.62, '#8a5a30');
-    grd.addColorStop(1, '#1a1410');
+    const grd = g.createLinearGradient(0, 0, 0, 64);
+    grd.addColorStop(0, '#100e0c');
+    grd.addColorStop(0.4, '#3a2618');
+    grd.addColorStop(0.52, '#e39a45');
+    grd.addColorStop(0.64, '#5c381f');
+    grd.addColorStop(1, '#0c0a09');
     g.fillStyle = grd;
-    g.fillRect(0, 0, 256, 128);
-    g.fillStyle = 'rgba(255,230,180,0.98)';
-    [[36, 68], [92, 72], [148, 66], [208, 70], [64, 58], [180, 60]].forEach(function (p) {
+    g.fillRect(0, 0, 128, 64);
+    g.fillStyle = 'rgba(255,214,150,0.95)';
+    [[18, 34], [46, 36], [74, 33], [104, 35]].forEach(function (p) {
       g.beginPath();
-      g.arc(p[0], p[1], 5.5, 0, 6.283);
+      g.arc(p[0], p[1], 3.2, 0, 6.283);
       g.fill();
     });
     const tex = new THREE.CanvasTexture(c);
@@ -1730,25 +1751,10 @@
 
   function updatePalaceLights(dt, hero) {
     if (window.__perfLab && window.__perfLab.flags.skipLightWork) return;
-    void dt;
-    // Keep at most 4 real PointLights near the hero; the rest stay at intensity 0.
-    // Glow sprites cover distant braziers so the look does not go flat.
-    if (!lights.length || !lightTargets.length || !hero || !group) return;
-    const hx = hero.position.x - group.position.x;
-    const hz = hero.position.z - group.position.z;
-    const ranked = lightTargets.map(function (t, i) {
-      return { i: i, d2: (t.x - hx) * (t.x - hx) + (t.z - hz) * (t.z - hz), t: t };
-    }).sort(function (a, b) { return a.d2 - b.d2; });
-    const ACTIVE = 4;
-    const on = {};
-    for (let k = 0; k < ranked.length && k < ACTIVE; k++) on[ranked[k].i] = true;
-    for (let i = 0; i < lights.length; i++) {
-      const t = lightTargets[i];
-      if (!t) continue;
-      lights[i].position.set(t.x, t.y, t.z);
-      lights[i].intensity = on[i] ? t.baseIntensity : 0;
-      lights[i].distance = 11 * H;
-    }
+    // Lights are assigned once to fixed braziers during build(). Re-ranking them
+    // by hero distance (the 4-nearest switcher) made light pools jump on/off and
+    // travel across walls while walking. Keep the baked positions/intensities.
+    void dt; void hero;
   }
 
 
@@ -1791,8 +1797,9 @@
       palaceEnv = ctx.renderer ? makePalaceEnv(ctx.renderer) : null;
       if (palaceEnv) {
         palaceEnv.userData.palaceShared = true;
-        // Scene-level IBL so wing/streamed meshes without per-material env still lit.
-        if (ctx.scene) ctx.scene.environment = palaceEnv;
+        // scene.environment stays the outdoor sky PMREM (pre-upgrade look);
+        // only when it is missing does the hall probe become the scene IBL.
+        if (ctx.scene && !ctx.scene.environment) ctx.scene.environment = palaceEnv;
       }
     } catch (envErr) {
       palaceEnv = null;
@@ -2196,8 +2203,9 @@
         o.receiveShadow = true;
         o.frustumCulled = false;
         if (o.material) {
-          const src = Array.isArray(o.material) ? o.material[0] : o.material;
-          o.material = palaceMat(src);
+          // Pre-upgrade door path: keep the authored GLB material (clone only).
+          o.material = o.material.clone();
+          o.material.side = THREE.DoubleSide;
         }
       });
       const holder = new THREE.Group();
@@ -2240,15 +2248,11 @@
     ceiling.position.y = CH - 0.22;
     ceiling.name = 'ceiling';
     ceiling.material.color = new THREE.Color(0xffffff);
-    ceiling.material.roughness = 0.72;
-    ceiling.material.metalness = 0.04;
-    ceiling.material.emissive = new THREE.Color(0x4a3418);
-    ceiling.material.emissiveIntensity = 0.14;
+    ceiling.material.roughness = 0.62;
+    ceiling.material.metalness = 0.16;
+    ceiling.material.emissive = new THREE.Color(0x3a2a16);
+    ceiling.material.emissiveIntensity = 0.08;
     ceiling.material.side = THREE.DoubleSide;
-    if (palaceEnv) {
-      ceiling.material.envMap = palaceEnv;
-      ceiling.material.envMapIntensity = 0.55;
-    }
     ceiling.frustumCulled = false;
     if (ceiling.geometry && ceiling.geometry.computeBoundingSphere) ceiling.geometry.computeBoundingSphere();
     group.add(ceiling);
@@ -2630,15 +2634,15 @@
 
     // Intensities tuned for r187 + three-compat (point lights keep author units;
     // hemi/ambient receive ×π only while rendering). Outdoor sun/hemi are zeroed.
-    const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.58);
+    const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.18);
     hemi.name = 'PalaceHallHemi';
     group.add(hemi);
-    const fill = new THREE.AmbientLight(0xffd0a4, 0.12);
+    const fill = new THREE.AmbientLight(0xffd0a4, 0.035);
     fill.name = 'PalaceHallAmbient';
     group.add(fill);
     lights = [];
     for (let i = 0; i < CONFIG.lightCount; i++) {
-      const pl = new THREE.PointLight(0xffb15a, 0, 11 * H, 2);
+      const pl = new THREE.PointLight(0xffb15a, 0, 9 * H, 2);
       pl.castShadow = false;
       pl.position.set(0, 2.2 * H, L * 0.45);
       pl.name = 'PalaceHallPoint' + i;
@@ -2725,44 +2729,14 @@
       for (let i = 0; i < lights.length; i++) {
         const f = sorted[Math.min(sorted.length - 1, Math.round(i * (sorted.length - 1) / Math.max(1, lights.length - 1)))];
         lights[i].position.set(f.x, ly, f.z);
-        const baseIntensity = 1.45 * Math.max(0.6, Math.min(1.7, Number(f.intensity) || 1));
+        const baseIntensity = 0.82 * Math.max(0.6, Math.min(1.7, Number(f.intensity) || 1));
         lights[i].intensity = baseIntensity;
-        lights[i].distance = 11 * H;
+        lights[i].distance = 9 * H;
         lightTargets[i] = { x: f.x, y: ly, z: f.z, baseIntensity: baseIntensity, seed: Number(f.seed) || i };
       }
-      // Soft glow sprites at every brazier so distant torches still read when
-      // only the 3–4 nearest PointLights are active near the hero.
-      try {
-        const gc = document.createElement('canvas');
-        gc.width = gc.height = 64;
-        const gg = gc.getContext('2d');
-        const rad = gg.createRadialGradient(32, 32, 2, 32, 32, 30);
-        rad.addColorStop(0, 'rgba(255,210,120,0.95)');
-        rad.addColorStop(0.35, 'rgba(255,140,40,0.45)');
-        rad.addColorStop(1, 'rgba(0,0,0,0)');
-        gg.fillStyle = rad;
-        gg.fillRect(0, 0, 64, 64);
-        const glowTex = new THREE.CanvasTexture(gc);
-        glowTex.encoding = THREE.sRGBEncoding;
-        const glowMat = new THREE.SpriteMaterial({
-          map: glowTex, color: 0xffc878, transparent: true, depthWrite: false,
-          blending: THREE.AdditiveBlending, opacity: 0.72
-        });
-        fireList.forEach(function (f, fi) {
-          const spr = new THREE.Sprite(glowMat);
-          spr.position.set(f.x, f.y + 0.15 * H, f.z);
-          const s = 0.55 * H * Math.max(0.7, Math.min(1.4, Number(f.intensity) || 1));
-          spr.scale.set(s, s, 1);
-          spr.name = 'torch-glow';
-          spr.frustumCulled = false;
-          spr.renderOrder = 4;
-          spr.userData.torchGlow = true;
-          spr.userData.fireIndex = fi;
-          group.add(spr);
-        });
-      } catch (glowErr) {
-        console.warn('torch glow sprites', glowErr && glowErr.message);
-      }
+      // (Additive torch-glow sprites removed: they only existed to fake light
+      // from braziers whose PointLights had been switched off by the 4-nearest
+      // switcher; all brazier lights are restored, so the sprites changed the look.)
     }
 
     const TYPE_COLOR = {
@@ -3248,10 +3222,9 @@
         if (!o.material) return;
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         mats.forEach(function (m) {
-          if (!m.isMeshStandardMaterial) return;
-          softenPalaceMetal(m);
-          if (!m.envMap) m.envMap = palaceEnv;
-          if (!m.envMapIntensity || m.envMapIntensity < 0.7) m.envMapIntensity = 0.85;
+          if (!m.isMeshStandardMaterial || m.envMap) return;
+          m.envMap = palaceEnv;
+          if (!m.envMapIntensity) m.envMapIntensity = 0.45;
         });
       });
     }

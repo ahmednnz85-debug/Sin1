@@ -126,21 +126,43 @@
     wingLoadChain = run.catch(function () {});
     return run;
   }
+  // Visual-regression fix: this used to null every texture.image right after
+  // parse, BEFORE the texture had ever been uploaded. Every streamed wing
+  // model (room doors, K2-K4 dress) then sampled the empty 1x1 texture
+  // (black albedo, zero roughness/metalness, broken normals) and only the
+  // gold environment reflection remained. Upload first, then drop CPU pixels
+  // only for image sources whose textures all have a live GPU copy.
   function releaseGltfCpu(gltf) {
-    if (!gltf || !gltf.scene) return;
+    const renderer = state.ctx && state.ctx.renderer;
+    if (!gltf || !gltf.scene || !renderer || typeof renderer.initTexture !== 'function') return;
+    const bySource = new Map();
     gltf.scene.traverse(function (o) {
       const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
       mats.forEach(function (m) {
         if (!m) return;
         ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'].forEach(function (k) {
           const t = m[k];
-          if (!t || !t.isTexture) return;
-          try {
-            if (t.image && typeof t.image.close === 'function') t.image.close();
-            if (!t.isCompressedTexture) t.image = null;
-          } catch (_) {}
+          if (!t || !t.isTexture || t.isCompressedTexture || !t.source) return;
+          const list = bySource.get(t.source) || [];
+          if (list.indexOf(t) < 0) list.push(t);
+          bySource.set(t.source, list);
         });
       });
+    });
+    bySource.forEach(function (list) {
+      list.forEach(function (t) { try { if (t.image) renderer.initTexture(t); } catch (_) {} });
+    });
+    bySource.forEach(function (list, source) {
+      if (!source.data) return;
+      const resident = list.every(function (t) {
+        try { const p = renderer.properties.get(t); return !!(p && p.__webglTexture && p.__version === t.version); } catch (_) { return false; }
+      });
+      if (!resident) return;
+      try {
+        const img = source.data;
+        source.data = null;
+        if (img && typeof img.close === 'function') img.close();
+      } catch (_) {}
     });
   }
   // Every wing model goes through here: a preloaded model is handed out as a
@@ -2240,7 +2262,7 @@
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0; state.gpuResidency = null; state.renderBudget = null;
-    dressedRooms.clear(); dressFailures.length = 0; state.deferredDress.clear(); state._preparedKey = '';
+    dressedRooms.clear(); dressLeftAt.clear(); dressFailures.length = 0; state.deferredDress.clear(); state._preparedKey = '';
   }
   function wingMark(msg) {
     try { if (window.PalaceInterior && PalaceInterior.mark) PalaceInterior.mark(msg); } catch (e) { /* marks are diagnostic only */ }
@@ -2257,12 +2279,9 @@
     state.root.position.set(ctx.portal.x, hall.floorY || 0, ctx.portal.frontZ); ctx.scene.add(state.root);
     // One fixed ambient source serves every wing and corridor, so brightness
     // does not jump when regional geometry is culled or the hero changes rooms.
-    state.unifiedAmbient = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.95);
+    state.unifiedAmbient = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.78);
     state.unifiedAmbient.name = 'PalaceWingsUnifiedAmbient';
     state.root.add(state.unifiedAmbient);
-    state.unifiedFill = new THREE.AmbientLight(0xffd0a4, 0.10);
-    state.unifiedFill.name = 'PalaceWingsFill';
-    state.root.add(state.unifiedFill);
     const layout = solveLayout(hall);
     wingMark('wings layout');
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
@@ -2342,18 +2361,12 @@
   // Spread texture uploads across frames; compileAsync when available.
   const uploadQueue = [];
   let warmBusy = false;
-  function softenWingMetal(m) {
-    if (!m || !m.isMeshStandardMaterial) return;
-    if (m.metalness == null || m.metalness >= 0.85) {
-      m.metalness = 0.2;
-      if (m.roughness == null || m.roughness < 0.35) m.roughness = 0.55;
-    }
-    const env = state.ctx && state.ctx.scene && state.ctx.scene.environment;
-    if (env && !m.envMap) {
-      m.envMap = env;
-      m.envMapIntensity = Math.max(0.75, m.envMapIntensity || 0);
-    }
-  }
+  // Visual-regression fix: wing GLB materials are used as authored again
+  // (pre-upgrade behaviour). Forcing metalness 0.2 / envMapIntensity >= 0.75
+  // on every streamed material was a compensation for textures that were
+  // never uploaded; it changed every stone, wood and metal surface.
+  // scene.environment still supplies IBL to materials without an envMap.
+  function softenWingMetal(m) { void m; }
   function queueRoomUploads(g) {
     if (!g) return;
     g.traverse(o => {
@@ -2396,20 +2409,27 @@
     const was = g.visible;
     warmBusy = true;
     try {
-      g.visible = true;
+      // renderer.compile/compileAsync only need the group visible during
+      // their SYNCHRONOUS traversal. The previous version left the hidden
+      // room visible until the async promise resolved (several frames), so
+      // rooms behind walls were drawn, then hidden again by finish() — which
+      // could also hide a room the culling pass had just made visible.
       queueRoomUploads(g);
+      let pending = null;
+      g.visible = true;
+      try {
+        if (typeof ctx.renderer.compileAsync === 'function') pending = ctx.renderer.compileAsync(g, ctx.camera);
+        else if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(g, ctx.camera);
+      } finally {
+        g.visible = was;
+      }
       const finish = function () {
         pumpUploads(ctx.renderer, 4);
-        g.visible = was;
         if (g.userData) g.userData.warmReady = true;
         warmBusy = false;
       };
-      if (typeof ctx.renderer.compileAsync === 'function') {
-        Promise.resolve(ctx.renderer.compileAsync(g, ctx.camera)).then(finish).catch(finish);
-      } else {
-        if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(g, ctx.camera);
-        finish();
-      }
+      if (pending && typeof pending.then === 'function') Promise.resolve(pending).then(finish, finish);
+      else finish();
     } catch (e) {
       g.visible = was;
       warmBusy = false;
@@ -2433,6 +2453,8 @@
   const dressedRooms = new Set();
   const dressPending = new Set();
   const dressFailures = [];
+  const dressLeftAt = new Map();
+  const DRESS_UNLOAD_GRACE_MS = 20000;
   function markDressReady(id) {
     if (!dressPending.has(id) && dressedRooms.has(id)) return;
     dressPending.delete(id);
@@ -2474,6 +2496,17 @@
       if (!o.isMesh && !o.isInstancedMesh && !o.isPoints && !o.isSprite) return;
       o.visible = false;
       o.userData.hideUntilDressReady = true;
+    });
+    // Callers add the object to its room group right after this call. If that
+    // room was already revealed (e.g. a slow model arriving after the 14 s
+    // fallback), show it at once instead of leaving it hidden forever.
+    Promise.resolve().then(function () {
+      let ready = false;
+      for (let n = obj.parent; n; n = n.parent) { if (n.userData && n.userData.dressReady) { ready = true; break; } }
+      if (!ready) return;
+      obj.traverse(function (o) {
+        if (o.userData && o.userData.hideUntilDressReady) { o.visible = true; delete o.userData.hideUntilDressReady; }
+      });
     });
   }
   function unloadStreamedDress(id) {
@@ -2582,12 +2615,24 @@
         preparedIds = smartMemory.selectPrepared(visibleIds, preparedIds, meta, id);
       }
       const key = Array.from(preparedIds).sort().join(',');
-      if (gpuResidency && (force || key !== state._preparedKey)) {
-        // Fully unload streamed dress for rooms that left the hop≤1 set BEFORE
-        // GPU sync, so materials/textures are not held by detached meshes.
-        state.regions.forEach(rr => {
-          if (!preparedIds.has(rr.id)) unloadStreamedDress(rr.id);
-        });
+      // Streamed dress (K2-K4 props) of rooms that left the prepared set is
+      // still released, but only after a short grace period (immediately under
+      // critical memory pressure). Unloading on the very frame a room left the
+      // hop<=1 set made props vanish at doorways and re-stream (empty room ->
+      // pop-in) every time the player stepped back into a previous room.
+      let dressUnloaded = false;
+      const nowMs = performance.now();
+      const critical = !!(smartMemory && smartMemory.state && smartMemory.state().level === 'critical');
+      STREAM_DRESS_ROOMS.forEach(rid => {
+        if (preparedIds.has(rid)) { dressLeftAt.delete(rid); return; }
+        if (!dressedRooms.has(rid) && !dressPending.has(rid)) { dressLeftAt.delete(rid); return; }
+        if (!dressLeftAt.has(rid)) dressLeftAt.set(rid, nowMs);
+        if (critical || nowMs - dressLeftAt.get(rid) >= DRESS_UNLOAD_GRACE_MS) {
+          if (unloadStreamedDress(rid)) dressUnloaded = true;
+          dressLeftAt.delete(rid);
+        }
+      });
+      if (gpuResidency && (force || dressUnloaded || key !== state._preparedKey)) {
         state._preparedKey = key;
         state.gpuResidency = gpuResidency.sync(state.ctx.scene, state.root, state.regionGroups, preparedIds);
         // Anything the residency manager released must be re-warmed next time.

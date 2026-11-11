@@ -22,9 +22,14 @@
     prefetchMargin: 0.18,  // prepare the next doorway slightly before the hero arrives
     prefetchDistance: 6,   // start dress a few metres before the door (still hop-capped)
     nearPad: 1.25,         // only the immediate camera volume bypasses the wedge
-    // Memory hard rule: keep the current room + directly connected rooms only.
-    maxHops: 1,
-    linger: 0.35,          // short hysteresis prevents flicker at doorways
+    // Visibility reach (portal hops the camera can see through). Restored to
+    // the pre-upgrade value: with 1 hop, a room seen through two doorways or
+    // down a corridor was simply not drawn and popped in as the player walked.
+    maxHops: 6,
+    // Memory hard rule (unchanged): besides what the camera can see, only the
+    // current room + directly connected rooms stay prepared/GPU-resident.
+    prepareHops: 1,
+    linger: 0.45,          // pre-upgrade hysteresis; prevents flicker at doorways
     memory: 0              // no LRU of distant rooms — hop≤1 is the residency budget
   };
 
@@ -105,7 +110,8 @@
         if (seen || lingering) { visible.add(r.id); touch(r.id); }
         // Prepared = GPU-resident. Strict hop≤1 from the hero's room — no
         // distant prefetch. Visible rooms are always prepared too.
-        if (h <= opt.maxHops || visible.has(r.id)) prepared.add(r.id);
+        const prepHops = Number.isFinite(opt.prepareHops) ? opt.prepareHops : opt.maxHops;
+        if (h <= prepHops || visible.has(r.id)) prepared.add(r.id);
         meta.set(r.id, { hops: h, distance: near, inView: seen });
       });
       if (opt.memory > 0) recent.forEach(id => prepared.add(id));

@@ -76,10 +76,12 @@ function lightsFor(scene) {
   return entry;
 }
 // r147 point/spot lights (physicallyCorrectLights off) faded with a windowed
-// power, not inverse-square. r187 only has the physical formula, so palace
-// braziers went black or blew out. Restore the r147 function. Directional and
-// hemisphere lights still get the r155 intensity * PI scale below; point and
-// spot lights do not, because the legacy formula has no PI factor.
+// power, not inverse-square. r187 only has the physical formula, so restore
+// the r147 falloff function here. NOTE: r147's WebGLLights multiplied EVERY
+// punctual light (ambient, hemisphere, directional, point AND spot) by
+// scaleFactor = Math.PI when physicallyCorrectLights was off, so the render
+// hook below must scale point/spot lights too; skipping them left every
+// brazier/torch PI-times (~3.1x) darker than the original game.
 const lightsChunk = ThreeModule.ShaderChunk && ThreeModule.ShaderChunk.lights_pars_begin;
 if (lightsChunk && lightsChunk.indexOf('getDistanceAttenuation') >= 0) {
   ThreeModule.ShaderChunk.lights_pars_begin = lightsChunk.replace(
@@ -94,8 +96,8 @@ ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
     const light = entry.lights[i];
     const intensity = light.intensity;
     entry.intensities[i] = intensity;
-    const legacyFalloff = light.isPointLight || light.isSpotLight;
-    if (!legacyFalloff && intensity !== 0 && Number.isFinite(intensity)) light.intensity = intensity * Math.PI;
+    // RectAreaLight / LightProbe were never PI-scaled in r147; every other light was.
+    if (!light.isRectAreaLight && !light.isLightProbe && intensity !== 0 && Number.isFinite(intensity)) light.intensity = intensity * Math.PI;
   }
   try {
     return renderWithModernLights.call(this, scene, camera);

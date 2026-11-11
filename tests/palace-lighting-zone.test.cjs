@@ -10,21 +10,27 @@ const wings = fs.readFileSync(path.join(root, 'wings.js'), 'utf8');
 const compat = fs.readFileSync(path.join(root, 'three-compat.js'), 'utf8');
 const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
-test('metalness clamp applies even when metalnessMap exists', () => {
+test('authored ORM metalness is respected (clamp only without metalnessMap)', () => {
   assert.match(palace, /function softenPalaceMetal/);
-  assert.match(palace, /m\.metalness = 0\.22/);
-  assert.match(palace, /softenPalaceMetal\(m\)/);
+  assert.match(palace, /m\.metalness >= 0\.99\) && !m\.metalnessMap/);
+  assert.doesNotMatch(palace, /m\.metalness = 0\.22/);
 });
 
-test('palace installs brighter PMREM and scene.environment', () => {
+test('palace keeps the original hall PMREM probe as scene.environment', () => {
   assert.match(palace, /makePalaceEnv/);
   assert.match(palace, /ctx\.scene\.environment = palaceEnv/);
-  assert.match(palace, /c\.width = 256/);
+  assert.match(palace, /c\.width = 128/);
 });
 
-test('zone switches to palace indoors and cuts fog', () => {
-  assert.match(cinematic, /palace:\s*\{[^}]*fog: 0\.18/);
+test('zone label switches to palace indoors without re-grading fog/exposure', () => {
   assert.match(cinematic, /zoneName = 'palace'/);
+  const i = cinematic.indexOf("zoneName = 'palace'");
+  assert.match(cinematic.slice(i, i + 40), /^zoneName = 'palace';\s*return;/);
+});
+
+test('r147 legacy PI scale applies to point and spot lights too', () => {
+  assert.doesNotMatch(compat, /legacyFalloff && intensity/);
+  assert.match(compat, /!light\.isRectAreaLight && !light\.isLightProbe && intensity !== 0/);
 });
 
 test('light cache rebuilds promptly for new palace lights', () => {
@@ -42,6 +48,8 @@ test('wing dress reveals when ready and spreads GPU uploads', () => {
   assert.match(wings, /function hideUntilReady/);
   assert.match(wings, /compileAsync/);
   assert.match(wings, /pumpUploads/);
+  // the room must not stay visible while the async compile is pending
+  assert.match(wings, /\} finally \{\s*g\.visible = was;\s*\}/);
 });
 
 test('per-asset load timing is recorded', () => {

@@ -155,16 +155,11 @@
   function updateAtmo(dt, info) {
     if (!baseAtmo) captureBase();
     if (ctx.interior()) {
-      // Keep the HUD zone truthful and dial fog/exposure for the palace.
+      // Keep the HUD zone truthful, but leave exposure/fog exactly as the
+      // pre-upgrade game did (the palace hall owns its own lighting). Ramping
+      // fog to x0.18 and exposure to x1.06 over ~1 s after entry changed the
+      // whole interior look and read as surfaces slowly fading in.
       zoneName = 'palace';
-      const z = ZONES.palace, k = 1 - Math.exp(-dt / 0.9);
-      cur.exp += (z.exp - cur.exp) * k; cur.fog += (z.fog - cur.fog) * k;
-      for (let i = 0; i < 3; i++) cur.fogTint[i] += (z.fogTint[i] - cur.fogTint[i]) * k;
-      R.toneMappingExposure = baseAtmo.exp * cur.exp;
-      if (scene.fog) {
-        scene.fog.density = baseAtmo.fogD * cur.fog;
-        scene.fog.color.setRGB(baseAtmo.fogC.r * cur.fogTint[0], baseAtmo.fogC.g * cur.fogTint[1], baseAtmo.fogC.b * cur.fogTint[2]);
-      }
       return;
     }
     zoneName = info && info.courtyard ? 'courtyard' : info && info.babylon ? 'babylon' : 'approach';

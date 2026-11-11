@@ -11,8 +11,11 @@ test('palace GLBs settle strictly one at a time and free buffers', () => {
   assert.match(palace, /MAX_INFLIGHT = 1/);
   assert.match(palace, /for \(let i = 0; i < specs\.length; i\+\+\)/);
   assert.match(palace, /spec\.buf = null/);
-  assert.match(palace, /armTextureCpuRelease/);
   assert.match(palace, /releaseCpuFromResult/);
+  // CPU pixels are dropped only after every texture sharing the source is on the GPU.
+  assert.doesNotMatch(palace, /armTextureCpuRelease/);
+  assert.match(palace, /function textureUploaded/);
+  assert.match(palace, /if \(result\.isTexture\) return;/);
   const loadStart = palace.indexOf('function loadPalaceAssets');
   const loadEnd = palace.indexOf('function mat(map, opts)', loadStart);
   const loadFn = palace.slice(loadStart, loadEnd);
@@ -22,7 +25,8 @@ test('palace GLBs settle strictly one at a time and free buffers', () => {
 });
 
 test('hall uses distance cull and prop instancing', () => {
-  assert.match(palace, /cullDistanceH:\s*22/);
+  // Hall is 30H long: the cull distance must cover the whole hall (no pop-in).
+  assert.match(palace, /cullDistanceH:\s*40/);
   assert.match(palace, /dist > cull/);
   assert.match(palace, /InstancedMesh\(part\.geometry/);
   assert.match(palace, /mode: instanced \? 'instanced' : 'real'/);
@@ -32,6 +36,8 @@ test('wing GLBs share a serial queue; K3 table then furniture', () => {
   assert.match(wings, /function enqueueWingLoad/);
   assert.match(wings, /res\.arrayBuffer\(\)/);
   assert.match(wings, /releaseGltfCpu/);
+  const rel = wings.slice(wings.indexOf('function releaseGltfCpu'), wings.indexOf('function wingGLB'));
+  assert.ok(rel.indexOf('initTexture') >= 0 && rel.indexOf('initTexture') < rel.indexOf('source.data = null'));
   const dress = wings.slice(wings.indexOf('function dressK3'), wings.indexOf('window.PalaceWings'));
   const tableAt = dress.indexOf('K3_LAZY.table');
   const furnAt = dress.indexOf('K3_LAZY.furn');
