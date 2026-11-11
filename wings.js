@@ -143,6 +143,23 @@
       });
     });
   }
+  // Color spaces only — never invent metalness/roughness/envMap on wing GLBs.
+  function applyWingAuthoredColorSpaces(root) {
+    if (!root || !root.traverse) return;
+    root.traverse(function (o) {
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      mats.forEach(function (m) {
+        if (!m) return;
+        if (m.map) { m.map.encoding = THREE.sRGBEncoding; m.map.needsUpdate = true; }
+        if (m.emissiveMap) { m.emissiveMap.encoding = THREE.sRGBEncoding; m.emissiveMap.needsUpdate = true; }
+        ['normalMap', 'roughnessMap', 'metalnessMap', 'aoMap'].forEach(function (k) {
+          if (!m[k]) return;
+          m[k].encoding = THREE.LinearEncoding;
+          m[k].needsUpdate = true;
+        });
+      });
+    });
+  }
   // Every wing model goes through here: a preloaded model is handed out as a
   // fresh clone (geometry, materials and textures shared, nothing downloaded);
   // otherwise it is fetched exactly as before — but never in parallel.
@@ -150,6 +167,7 @@
     const fail = onError || (e => console.warn('Wing model failed', url, e));
     if (!THREE.GLTFLoader) { fail(new Error('GLTFLoader not available')); return; }
     const deliver = gltf => {
+      try { if (gltf && gltf.scene) applyWingAuthoredColorSpaces(gltf.scene); } catch (_) {}
       onLoad(gltf);
       if (state.built && !state.building) updateCulling(true);
     };

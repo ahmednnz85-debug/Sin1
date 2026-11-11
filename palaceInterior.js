@@ -458,6 +458,27 @@
     return tex;
   }
 
+  // Linear data maps (normal / metallicRoughness / occlusion) must not use sRGB.
+  function linearTex(tex) {
+    if (!tex) return tex;
+    tex.encoding = THREE.LinearEncoding;
+    tex.anisotropy = aniso.v;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  // Apply only colorSpace + anisotropy. Never invent metalness/roughness/side/envMap.
+  function applyAuthoredTextureColorSpaces(m) {
+    if (!m) return m;
+    if (m.map) srgb(m.map);
+    if (m.emissiveMap) srgb(m.emissiveMap);
+    if (m.normalMap) linearTex(m.normalMap);
+    if (m.roughnessMap) linearTex(m.roughnessMap);
+    if (m.metalnessMap) linearTex(m.metalnessMap);
+    if (m.aoMap) linearTex(m.aoMap);
+    return m;
+  }
+
   function fetchOnce(spec) {
     return new Promise(function (resolve, reject) {
       const xhr = new XMLHttpRequest();
@@ -680,17 +701,13 @@
       if (!o.isMesh || !o.material) return;
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       mats.forEach(function (m) {
+        applyAuthoredTextureColorSpaces(m);
         ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap'].forEach(function (k) {
-          if (!m[k]) return;
-          m[k].userData.palaceShared = true;
-          if (k === 'map' || k === 'emissiveMap') srgb(m[k]);
-          else { m[k].anisotropy = aniso.v; m[k].needsUpdate = true; }
+          if (m[k]) m[k].userData.palaceShared = true;
         });
         m.userData.palaceShared = true;
-        if ((m.metalness == null || m.metalness >= 0.99) && !m.metalnessMap) {
-          m.metalness = 0.3;
-          m.roughness = 0.5;
-        }
+        // Asset fidelity: keep metallicFactor / roughnessFactor / doubleSided
+        // exactly as authored in the GLB. Do not invent clamps or envMaps here.
       });
     });
     return gltf;
@@ -1525,15 +1542,10 @@
     const base = Array.isArray(src) ? src[0] : src;
     const m = base.clone();
     m.userData = Object.assign({}, m.userData, { palaceShared: false });
-    if ((m.metalness == null || m.metalness >= 0.99) && !m.metalnessMap) {
-      m.metalness = 0.3;
-      m.roughness = 0.5;
-    }
-    m.side = THREE.DoubleSide;
-    if (palaceEnv) {
-      m.envMap = palaceEnv;
-      m.envMapIntensity = 0.6;
-    }
+    applyAuthoredTextureColorSpaces(m);
+    // Preserve authored side (GLTF doubleSided → FrontSide/DoubleSide).
+    // Do not attach synthetic envMap — that is not in the asset file.
+    // High-metal authored materials without IBL are reported in runtime-diff.html.
     return m;
   }
 
@@ -2117,8 +2129,8 @@
         o.receiveShadow = true;
         o.frustumCulled = true;
         if (o.material) {
-          o.material = o.material.clone();
-          o.material.side = THREE.DoubleSide;
+          const src = Array.isArray(o.material) ? o.material[0] : o.material;
+          o.material = palaceMat(src);
         }
       });
       const holder = new THREE.Group();
@@ -3119,17 +3131,12 @@
       const ext = ctx.scene.getObjectByName('PalaceExterior');
       if (ext) ext.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
     }
-    if (palaceEnv) {
-      group.traverse(function (o) {
-        if (!o.material) return;
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        mats.forEach(function (m) {
-          if (!m.isMeshStandardMaterial || m.envMap) return;
-          m.envMap = palaceEnv;
-          if (!m.envMapIntensity) m.envMapIntensity = 0.45;
-        });
-      });
-    }
+    // Asset fidelity: do NOT blanket-assign palaceEnv onto authored GLB materials.
+    // Procedural meshes that already set envMap in their builders keep those values.
+    // High-metal GLB materials without IBL are listed in runtime-diff.html for approval.
+    try {
+      if (window.SinFidelityProbe && SinFidelityProbe.snapshot) SinFidelityProbe.snapshot('post-palace-build', group);
+    } catch (_) {}
     function geomLoad() {
       let draws = 0, tris = 0;
       group.traverse(function (o) {

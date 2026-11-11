@@ -1,0 +1,763 @@
+{
+  "overrides": [
+    {
+      "id": "tuneGLTF-metal-clamp",
+      "where": "palaceInterior.js tuneGLTF",
+      "fileValue": "metallicFactor as authored (often 1.0)",
+      "runtimeValue": "metalness=0.3, roughness=0.5 when metalness>=0.99 && !metalnessMap",
+      "cause": "old main code (pre-engine-upgrade look patch)",
+      "action": "REMOVE — restore file values"
+    },
+    {
+      "id": "palaceMat-metal-clamp",
+      "where": "palaceInterior.js palaceMat",
+      "fileValue": "authored metal/rough + doubleSided",
+      "runtimeValue": "metalness/roughness clamp + side=DoubleSide + envMap + envMapIntensity=0.6",
+      "cause": "old main code",
+      "action": "REMOVE inventiveness — clone + colorSpace only; side from file"
+    },
+    {
+      "id": "palaceEnv-final-traverse",
+      "where": "palaceInterior.js build() final traverse",
+      "fileValue": "no envMap in GLB",
+      "runtimeValue": "assign palaceEnv @ intensity 0.45 if missing",
+      "cause": "old main code",
+      "action": "REMOVE from GLB-sourced materials"
+    },
+    {
+      "id": "makePalaceEnv",
+      "where": "palaceInterior.js makePalaceEnv",
+      "fileValue": "n/a (not in assets)",
+      "runtimeValue": "synthetic PMREM assigned onto materials",
+      "cause": "old main code",
+      "action": "Do not assign onto authored GLB materials; keep only if a procedural mesh historically used it — report"
+    },
+    {
+      "id": "door-doubleSide",
+      "where": "palaceInterior.js entry door clone",
+      "fileValue": "doubleSided from GLB (often true)",
+      "runtimeValue": "force DoubleSide",
+      "cause": "old main code",
+      "action": "Use GLTFLoader/file doubleSided"
+    },
+    {
+      "id": "ceiling-invented-pbr",
+      "where": "palaceInterior.js ceiling plane",
+      "fileValue": "ceiling image only",
+      "runtimeValue": "roughness=0.62 metalness=0.16 emissive invented",
+      "cause": "old main code (procedural mesh)",
+      "action": "KEEP as code-authored procedural (not a GLB) — listed separately"
+    },
+    {
+      "id": "carpet-invented-pbr",
+      "where": "palaceInterior.js carpet",
+      "fileValue": "carpet image",
+      "runtimeValue": "roughness=0.84 metalness=0.02",
+      "cause": "old main code (procedural)",
+      "action": "KEEP procedural; not a GLB material"
+    },
+    {
+      "id": "srgb-on-maps",
+      "where": "palaceInterior.js srgb() / tuneGLTF",
+      "fileValue": "baseColor/emissive sRGB; normal/mr/ao linear",
+      "runtimeValue": "srgb() on map/emissive; other maps anisotropy only (linear not forced)",
+      "cause": "engine upgrade colorSpace + incomplete linear tagging",
+      "action": "Set explicit colorSpace per slot"
+    },
+    {
+      "id": "three-compat-colormanagement",
+      "where": "three-compat.js",
+      "fileValue": "n/a",
+      "runtimeValue": "ColorManagement.enabled=false; dir/hemi ×π; point falloff r147",
+      "cause": "engine upgrade migration (intentional r147 parity)",
+      "action": "KEEP for original look under r187 units"
+    },
+    {
+      "id": "light-cache-1s",
+      "where": "three-compat.js lightsFor",
+      "fileValue": "authored light intensity",
+      "runtimeValue": "new hemi/ambient can miss ×π for up to 1s",
+      "cause": "performance patch after engine upgrade",
+      "action": "Rebuild promptly (not a value invent; fidelity)"
+    },
+    {
+      "id": "lighting-fix-PR40",
+      "where": "cursor/palace-lighting-zone-5ced (NOT on this branch)",
+      "fileValue": "main hall hemi 0.18 / ambient 0.035 / metal clamp skipped with mrMap",
+      "runtimeValue": "raised hemi/ambient, soften metal, brighter PMREM, palace fog zone",
+      "cause": "recent lighting fix",
+      "action": "NOT present on asset-fidelity branch (based on main)"
+    },
+    {
+      "id": "wings-clone-metal",
+      "where": "wings.js column extract / materials",
+      "fileValue": "authored GLB factors",
+      "runtimeValue": "clone as-is (usually); some procedural mats invent metalness 0.01–0.18",
+      "cause": "old main code",
+      "action": "GLB clones: no invent; procedural mats listed as code-authored"
+    }
+  ],
+  "brokenCandidates": [
+    {
+      "file": "assets/babylonian_wall.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/houses.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/K1_RoyalReceptionHall.glb",
+      "material": "M_K1_BabylonKit",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/kiosk.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/lion_winged.glb.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/market_pot.glb",
+      "material": "DefaultMaterial",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/palace.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/stalls.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/اثاث_الخرائط.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/اجتماعات .glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/اربع اعمده مختلفة.glb",
+      "material": "Spiral_BAKED",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/اربع اعمده مختلفة.glb",
+      "material": "SuleFancy_BAKED",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/اربع اعمده مختلفة.glb",
+      "material": "SuleKanneliert_BAKED",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/اعمدة.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/الاستقبال.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/الجدارية.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/المباخر.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/باب الاجنحة.glb",
+      "material": "tripo_material_1505de05-b676-47fb-aff4-0b5b1273947a",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/باب الاجنحة.glb",
+      "material": "Aged_Reflective_Gold_Hinges",
+      "metallicFactor": 0.88,
+      "roughnessFactor": 0.24,
+      "hasBaseColorTexture": false,
+      "hasMetallicRoughnessTexture": false,
+      "doubleSided": false,
+      "risk": "Full metal, no mrMap → black without envMap",
+      "proposedSmallestFix": "Per-material: optional metalnessFactor override table (default = file 1.0)"
+    },
+    {
+      "file": "assets/ثريا المجلس .glb",
+      "material": "Polished gold metal with enhanced blue enamel",
+      "metallicFactor": 1,
+      "roughnessFactor": 0.58,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/سقف المجلس.glb",
+      "material": "tripo_material_dbe5ace6-9b09-4bdc-977a-6bf0268faf9d",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/‎⁨سين_وقوف_ساكن_سينمائي⁩.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/شتله.glb",
+      "material": "tripo_material_10884275-41fe-4aa0-8998-f033197cbf11",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/طاولة الخرائط.glb",
+      "material": "tripo_material_f35dc951-6d97-4eeb-8cbe-1d6b812f1dbb",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": false,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/عرش البطل.glb",
+      "material": "BladesTop",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/عرش البطل.glb",
+      "material": "Swords",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/عرش البطل.glb",
+      "material": "BladesBottom",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/مجسم الباب.glb",
+      "material": "RootNode",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/مجموعة غراض غير متلاصقة.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/مجموعة غراض.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "assets/مشعل اسود.glb",
+      "material": "material",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": false,
+      "hasMetallicRoughnessTexture": false,
+      "doubleSided": false,
+      "risk": "Full metal, no mrMap → black without envMap",
+      "proposedSmallestFix": "Per-material: optional metalnessFactor override table (default = file 1.0)"
+    },
+    {
+      "file": "assets/مشعل خشب.glb",
+      "material": "torch",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/K1_RoyalReceptionHall_lod25.glb",
+      "material": "M_K1_BabylonKit",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/K1_RoyalReceptionHall.glb",
+      "material": "M_K1_BabylonKit",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/k4/k4_kit_a.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/k4/k4_kit_b.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/k4/k4_kit_c.glb",
+      "material": "tripo_material_8b81bb86-1b34-4b05-9b8c-637ef22145bc",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/k4/k4_kit_c.glb",
+      "material": "tripo_material_90388d41-10dc-4758-bb02-d319297517fc",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/k4/k4_kit_c.glb",
+      "material": "tripo_material_1c9b2f99-8a11-4eb8-ad3b-b652fddfdcea",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/lion_winged-lod1.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/lion_winged.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/props-set.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/اربع اعمده مختلفة.glb",
+      "material": "Spiral_BAKED",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/اربع اعمده مختلفة.glb",
+      "material": "SuleFancy_BAKED",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/اربع اعمده مختلفة.glb",
+      "material": "SuleKanneliert_BAKED",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/اعمدة-lod1.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/اعمدة.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/الجدارية.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/المباخر-lod1.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/المباخر.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/ثريا-المجلس.glb",
+      "material": "Polished gold metal with enhanced blue enamel",
+      "metallicFactor": 1,
+      "roughnessFactor": 0.58,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/سقف-المجلس.glb",
+      "material": "tripo_material_dbe5ace6-9b09-4bdc-977a-6bf0268faf9d",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/شتله.glb",
+      "material": "tripo_material_10884275-41fe-4aa0-8998-f033197cbf11",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/عرش البطل.glb",
+      "material": "BladesTop",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/عرش البطل.glb",
+      "material": "Swords",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/عرش البطل.glb",
+      "material": "BladesBottom",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/عمود-المجلس.glb",
+      "material": "(material 0)",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/مجسم الباب.glb",
+      "material": "RootNode",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/مشعل اسود.glb",
+      "material": "material",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": false,
+      "hasMetallicRoughnessTexture": false,
+      "doubleSided": false,
+      "risk": "Full metal, no mrMap → black without envMap",
+      "proposedSmallestFix": "Per-material: optional metalnessFactor override table (default = file 1.0)"
+    },
+    {
+      "file": "ارضيات وسقوف/optimized/مشعل خشب.glb",
+      "material": "torch",
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "hasBaseColorTexture": true,
+      "hasMetallicRoughnessTexture": true,
+      "doubleSided": true,
+      "risk": "Factor×mrMap may still sample high metal → dark without IBL",
+      "proposedSmallestFix": "Per-material: leave factors; add ONLY a tiny local envMapIntensity or leave as-authored pending approval"
+    }
+  ],
+  "generatedAt": "2026-11-11T11:57:39.738Z"
+}
