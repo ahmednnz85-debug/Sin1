@@ -92,7 +92,7 @@ test('teleport stands at the entrance, not on the table at bbox centre', () => {
 });
 
 test('index.html cache-busts the completeness wings build', () => {
-  assert.match(index, /wings\.js\?v=20261112ios21/);
+  assert.match(index, /wings\.js\?v=20261112ios22/);
 });
 
 test('arch thresholds are complete portals, not empty-room failures', () => {

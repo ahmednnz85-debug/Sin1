@@ -3789,6 +3789,7 @@
         const saved = ctx;
         setupTask = (async function () {
           try {
+            try { window.__palaceSetupBusy = true; } catch (_) {}
             const tBuild = performance.now();
             try { console.info('[palace load] SETUP build-start'); } catch (_) {}
             await build(saved);
@@ -3821,6 +3822,7 @@
             fadeT = 0;
             warmFrame = false;
             warmMeshes = null;
+            try { window.__palaceSetupBusy = false; } catch (_) {}
             try { console.info('[palace load] REVEAL-enter'); } catch (_) {}
           } catch (err) {
             console.error(err);

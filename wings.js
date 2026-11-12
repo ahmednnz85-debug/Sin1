@@ -2460,12 +2460,10 @@
     try { if (window.PalaceInterior && PalaceInterior.mark) PalaceInterior.mark(msg); } catch (e) { /* marks are diagnostic only */ }
   }
   function yieldWing() {
-    return new Promise(function (r) {
-      let d = false;
-      const go = function () { if (!d) { d = true; r(); } };
-      try { requestAnimationFrame(go); } catch (_) {}
-      setTimeout(go, 0);
-    });
+    // setTimeout only. Sharing requestAnimationFrame with the game loop
+    // let a single expensive frame (software GL, scene walk) delay SETUP
+    // for minutes and freeze the tab.
+    return new Promise(function (r) { setTimeout(r, 0); });
   }
   async function build(ctx, hall) {
     assertDeps(); dispose();
@@ -2488,7 +2486,8 @@
     state.root.add(state.unifiedAmbient);
     const Arch = window.PalaceWingArchitecture;
     const layout = (Arch && Arch.solveLayout) ? Arch.solveLayout(hall) : solveLayout(hall);
-    wingMark('wings layout'); phase('layout'); await yieldWing();
+    wingMark('wings layout'); phase('layout');
+    try { console.info('[palace load] wings-layout-to-bake'); } catch (_) {}
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
     state.regions = state.rooms.concat(state.connectors); state.links = layout.links; state.sealed = layout.sealed; state.back = layout.back;
     // Prefer the build-time bake (data/palace-colliders.json): Clipper K1-diff and
