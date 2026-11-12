@@ -24,7 +24,7 @@ function load() {
 }
 
 test('outdoor-perf is on the page and original outdoor GLBs are not replaced', () => {
-  assert.match(index, /data-src="outdoor-perf\.js\?v=20261112r7"/);
+  assert.match(index, /data-src="outdoor-perf\.js\?v=20261112r8"/);
   // Originals still referenced by the game (index loadX paths).
   assert.match(index, /babylonian_wall/);
   assert.match(index, /grass_tuft_a/);
@@ -52,6 +52,15 @@ test('baked LOD pack exists, is smaller than the sources, and records tight erro
   assert.ok(g2.lods.play.error < 0.03);
   const g0 = pack.meshes.grass_a_lod0;
   assert.ok(g0.lods.play.tris < 2500 && g0.lods.play.error < 0.02);
+  const palms = Object.keys(pack.meshes).filter((k) => k.startsWith('palm_'));
+  assert.ok(palms.length >= 3, 'palm meshes ' + palms.length);
+  for (const k of palms) {
+    const lods = pack.meshes[k].lods;
+    assert.ok(lods.play && lods.mid && lods.far, k + ' mid/far');
+    assert.ok(lods.mid.tris < lods.play.tris, k + ' mid ' + lods.mid.tris);
+    assert.ok(lods.far.tris < lods.mid.tris, k + ' far ' + lods.far.tris);
+    assert.ok(lods.far.tris <= 400, k + ' far ' + lods.far.tris);
+  }
 });
 
 test('wall occlusion: forest outside the corridor is hidden, props at the ends stay', () => {
@@ -101,8 +110,13 @@ test('cross-band grass ladder steps down at mid and far distances', () => {
   assert.match(src, /function pickVegLod/);
   assert.match(src, /function attachLodLadder/);
   assert.match(src, /_lod2/);
-  assert.match(src, /dn > 90/);
-  assert.match(src, /dn > 28/);
+  assert.match(src, /VEG_MID_D = 12/);
+  assert.match(src, /VEG_FAR_D = 24/);
+  assert.match(src, /VEG_HLOD_D = 36/);
+  assert.match(src, /SHADOW_D = 16/);
+  assert.match(src, /handleVeg\(state\.palms, optOn\(\)\)/);
+  assert.match(src, /function pushHlod/);
+  assert.match(src, /function applyShadowCull/);
 });
 
 test('palaceInterior drains CPU during REVEAL warm, not only at the end', () => {

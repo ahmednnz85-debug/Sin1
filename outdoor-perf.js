@@ -22,18 +22,23 @@
  *      stay in assets/.
  *   2. Occludes vegetation behind the city walls when the camera is on
  *      the inner side of a wall plane (no visible change on the path).
- *   3. Uses the unused maxHQ/maxLQ-style far hide only past heavy fog
- *      (transmittance ≤ ~12 %, ~340 m) so silhouettes stay.
- *   4. Restricts shadow casting on heavy extras to near the hero
- *      (SinGfx.potShadowRange already exists; we also skip far walls).
- *   5. Records a before/after inventory on window.__sinOutdoorPerf.
+ *   3. Stronger distance LOD (mid 12 m, far 24 m) on grass, palms and
+ *      walls, validated per-view by SSIM >= 0.99. Palms now have baked
+ *      mid/far ladders (clustered offline; original GLBs untouched).
+ *   4. Far-field HLOD: vegetation past 36 m is merged into a handful of
+ *      InstancedMeshes using the baked far geos. Distant city geometry
+ *      is replaced by a baked impostor (assets/lod/outdoor-hlod.json)
+ *      built offline from the originals, which stay untouched.
+ *   5. Tighter wall occlusion (8 m end slack) and a 90 m far-hide cap
+ *      (20 % fog transmittance). Shadow casters past 16 m are culled.
+ *   6. Records a before/after inventory on window.__sinOutdoorPerf.
  *
  * Visuals are verified with SSIM at the same camera stations.
  */
 (function (root) {
   'use strict';
 
-  const LOD_URL = 'assets/lod/outdoor-lod.json?v=20261112r5';
+  const LOD_URL = 'assets/lod/outdoor-lod.json?v=20261112r6';
   const state = {
     ready: false,
     lod: null,
@@ -44,7 +49,10 @@
     walls: [],         // { mesh, group, x, z, r, lods }
     wallPlane: null,   // { x, start, end, h }
     lastVis: { tris: 0, draws: 0, culled: 0, occluded: 0 },
-    before: null
+    before: null,
+    city: [],
+    hlod: {},
+    hlodImpostor: null
   };
 
   function b64ToU8(s) {
@@ -290,6 +298,73 @@
     return n;
   }
 
+
+  // Far-field city HLOD: a handful of merged, simplified meshes baked
+  // offline from the original stall/house/palm field (originals untouched).
+  // Loaded from assets/lod/outdoor-hlod.json and shown in place of the
+  // distant originals (those originals are hidden past VEG_HLOD_D when
+  // e.hlodCovered is set).
+  const HLOD_URL = 'assets/lod/outdoor-hlod.json?v=20261112r1';
+  function citySig(o) {
+    const g = o && o.geometry;
+    if (!g) return null;
+    const pos = g.attributes && g.attributes.position;
+    if (!pos) return null;
+    const t = (g.userData && g.userData.srcTris) || (g.index ? Math.floor(g.index.count / 3) : Math.floor(pos.count / 3));
+    if (!g.boundingBox) { try { g.computeBoundingBox(); } catch (_) {} }
+    const b = g.boundingBox;
+    const bb = b ? [b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z].map(function (v) { return +v.toFixed(2); }).join(',') : '';
+    return t + '@' + bb + 'x' + pos.count;
+  }
+  function attachHlodImpostor(scene, THREE) {
+    if (!state._hlodPack || !THREE) return null;
+    const pack = state._hlodPack;
+    if (!state._hlodGeos) state._hlodGeos = {};
+    const meshes = pack.meshes || {};
+    for (const sig in meshes) {
+      if (state._hlodGeos[sig]) continue;
+      const lods = meshes[sig].lods || {};
+      const built = {};
+      try {
+        if (lods.mid) built.mid = makeGeo(lods.mid, THREE);
+        if (lods.far) built.far = makeGeo(lods.far, THREE);
+      } catch (e) { try { console.warn('hlod geo', sig, e); } catch (_) {} }
+      state._hlodGeos[sig] = built;
+    }
+    let n = 0;
+    const list = state.city || [];
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (!e.mesh || e.lodFar) continue;
+      const sig = e.sig || citySig(e.mesh);
+      e.sig = sig;
+      const built = sig && state._hlodGeos[sig];
+      if (!built) continue;
+      e.origGeo = e.origGeo || e.mesh.geometry;
+      e.lodMid = built.mid || null;
+      e.lodFar = built.far || null;
+      e.hlodCovered = true;
+      n++;
+    }
+    state._hlodAttached = true;
+    try { console.log('[outdoor-perf] city-hlod attached', n, '/', list.length, 'sigs', Object.keys(state._hlodGeos).length); } catch (_) {}
+    return n;
+  }
+    function loadHlod(THREE) {
+    if (state._hlodPromise) return state._hlodPromise;
+    state._hlodPromise = fetch(HLOD_URL).then(function (r) {
+      if (!r.ok) throw new Error('hlod ' + r.status);
+      return r.json();
+    }).then(function (pack) {
+      state._hlodPack = pack;
+      return pack;
+    }).catch(function (e) {
+      try { console.warn('outdoor-perf hlod', e && e.message || e); } catch (_) {}
+      state._hlodPack = null;
+    });
+    return state._hlodPromise;
+  }
+
   function classify(scene, THREE) {
     if (!scene || state.classified) return;
     state.grass = [];
@@ -373,12 +448,22 @@
           if (!o.userData) o.userData = {};
           o.userData.sinLodApplied = palmKey;
         }
+        attachLodLadder(state.palms[state.palms.length - 1]);
         snapshotInstances(state.palms[state.palms.length - 1], THREE);
       } else if (t >= 40000 && t <= 60000) {
         // Babylonian wall sections (50,680 tris), not instanced.
-        const wp = new THREE.Vector3();
-        o.getWorldPosition(wp);
-        const x = wp.x, z = wp.z;
+        // The mesh is nested inside a Y-rotated group that sits at
+        // x = ±10.4. Walk ancestors for that anchor — the mesh's own
+        // world position is offset (~5–6 m) and is not the plane.
+        let x = 0, z = 0, anchored = false;
+        let node = o;
+        while (node) {
+          if (node.position && Math.abs(node.position.x) >= 8 && Math.abs(node.position.x) <= 14) {
+            x = node.position.x; z = node.position.z; anchored = true; break;
+          }
+          node = node.parent;
+        }
+        if (!anchored) return;
         let r = 8, h = 6;
         try {
           if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
@@ -395,7 +480,7 @@
         walls.push({ mesh: o, x: x, z: z, r: r, h: h, origGeo: o.geometry });
         if (z < wallMinZ) wallMinZ = z;
         if (z > wallMaxZ) wallMaxZ = z;
-        if (Math.abs(x) > 2) wallX = Math.abs(x);
+        if (Math.abs(x) > 8) wallX = Math.abs(x);
         if (h > wallH) wallH = h;
       }
     });
@@ -415,6 +500,49 @@
     if (walls.length) {
       state.wallPlane = { x: wallX, start: wallMinZ - (walls[0].r || 6), end: wallMaxZ + (walls[0].r || 6), h: wallH * 1.05 };
     }
+    // Stalls, houses, pots — same occlusion / far-hide / shadow cull as veg.
+    // The Ishtar gate and the processional ground stay untouched (SSIM).
+    state.city = [];
+    const used = new Set();
+    function markUsed(list) { for (let i = 0; i < list.length; i++) if (list[i].mesh) used.add(list[i].mesh); }
+    markUsed(state.grass); markUsed(state.palms); markUsed(state.walls);
+    scene.traverse(function (o) {
+      if ((!o.isMesh && !o.isInstancedMesh) || used.has(o)) return;
+      if (o.userData && (o.userData.sinHlod || o.userData.sinHlodImpostor)) return;
+      const name = ((o.name || '') + ' ' + ((o.parent && o.parent.name) || '')).toLowerCase();
+      if (/sky|cloud|sun|hero|player|water|canal|ground|terrain|floor|road|path|gate|ishtar|portal|door|shadow|fill|hemi/.test(name)) return;
+      // Skip enormous unique meshes (ground plane, palace shell) — only
+      // repeated city dressing belongs in this list.
+      const t = srcTrisOf(o);
+      const inst = o.isInstancedMesh;
+      if (!inst && (t < 20 || t > 30000)) return;
+      if (inst && t > 30000) return;
+      const wp = new THREE.Vector3();
+      try { o.getWorldPosition(wp); } catch (_) { return; }
+      let r = 4;
+      try {
+        if (o.geometry) {
+          if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+          if (o.geometry.boundingSphere) r = Math.max(2, o.geometry.boundingSphere.radius || 4);
+        }
+        if (inst && o.count) {
+          const m = new THREE.Matrix4(), p = new THREE.Vector3();
+          let minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9;
+          const step = Math.max(1, Math.floor(o.count / 8));
+          for (let i = 0; i < o.count; i += step) {
+            o.getMatrixAt(i, m); p.setFromMatrixPosition(m);
+            if (p.x < minx) minx = p.x; if (p.x > maxx) maxx = p.x;
+            if (p.z < minz) minz = p.z; if (p.z > maxz) maxz = p.z;
+          }
+          wp.x = (minx + maxx) * 0.5; wp.z = (minz + maxz) * 0.5;
+          r = Math.max(r, Math.hypot(maxx - minx, maxz - minz) * 0.5 + 2);
+        }
+      } catch (_) {}
+      const e = { mesh: o, x: wp.x, z: wp.z, r: r, srcTris: t, city: true, sig: citySig(o), origGeo: o.geometry };
+      if (inst) snapshotInstances(e, THREE);
+      state.city.push(e);
+    });
+    attachHlodImpostor(scene, THREE);
     // Only lock the inventory once the outdoor scene is actually populated.
     // A classify during the loading screen would freeze us at 0 grass forever.
     if (state.grass.length || state.walls.length || state.palms.length) {
@@ -430,7 +558,7 @@
     if (!plane || !cam) return false;
     const camX = cam.position.x, camZ = cam.position.z, camY = cam.position.y;
     if (camY > plane.h - 0.3) return false;
-    const slack = 12;
+    const slack = 8;
     for (let s = -1; s <= 1; s += 2) {
       const planeX = s * plane.x;
       const sphOuter = s > 0 ? (x - r > planeX + 0.4) : (x + r < planeX - 0.4);
@@ -486,7 +614,10 @@
       attachLodLadder(e);
       if (!(e.mesh.userData && e.mesh.userData.sinLodApplied)) swap(e, 'play');
     }
-    for (let i = 0; i < state.palms.length; i++) swap(state.palms[i], 'play');
+    for (let i = 0; i < state.palms.length; i++) {
+      attachLodLadder(state.palms[i]);
+      if (!(state.palms[i].mesh.userData && state.palms[i].mesh.userData.sinLodApplied)) swap(state.palms[i], 'play');
+    }
     for (let i = 0; i < state.walls.length; i++) {
       const e = state.walls[i];
       const lods = state.geos.wall && state.geos.wall.lods;
@@ -495,21 +626,32 @@
     return n;
   }
 
-    // lod0 grass only has a "play" mesh (1799 tris). At mid/far distances
-    // step down to lod1.play (700) then lod2.play/far (137/53) so a 520 m
-    // fog sight-range does not keep 11k high-LOD tufts in the frame.
+    // Stronger distance LOD: mid at 12 m, far at 24 m. Palms now have
+    // baked mid/far ladders (clustered offline from the play mesh;
+    // original palm GLBs are untouched). Per-view SSIM >= 0.99 is the bar.
+    const VEG_MID_D = 12;
+    const VEG_FAR_D = 24;
+    const VEG_HLOD_D = 36;
+    const SHADOW_D = 16;
+    function optOn() { return typeof window === 'undefined' || window.__sinOutdoorOpt !== false; }
+    function vegMidD() { return optOn() ? VEG_MID_D : 28; }
+    function vegFarD() { return optOn() ? VEG_FAR_D : 90; }
+    function vegHlodD() { return optOn() ? VEG_HLOD_D : 1e9; }
+    function shadowD() { return optOn() ? SHADOW_D : 28; }
+    function farLimitCap() { return optOn() ? 80 : 400; }
     function pickVegLod(e, dn) {
       if (e.lodNear || e.lodMid || e.lodFar) {
-        if (dn > 90) return e.lodFar || e.lodMid || e.lodNear;
-        if (dn > 28) return e.lodMid || e.lodNear;
+        if (dn > vegFarD()) return e.lodFar || e.lodMid || e.lodNear;
+        if (dn > vegMidD()) return e.lodMid || e.lodNear;
         return e.lodNear;
       }
       const key = e.key;
       const own = key && state.geos[key] && state.geos[key].lods;
       if (!own) return null;
-      if (own.far && dn > 55) return own.far;
+      if (own.far && dn > vegFarD()) return own.far;
+      if (own.mid && dn > vegMidD()) return own.mid;
       if (own.play) return own.play;
-      return null;
+      return own.far || own.mid || null;
     }
     function attachLodLadder(e) {
       if (!e || !e.key) return;
@@ -519,8 +661,61 @@
       const g = state.geos;
       const own = (g[key] && g[key].lods) || {};
       e.lodNear = own.play || null;
-      e.lodMid = (v && g[v + '_lod1'] && g[v + '_lod1'].lods && g[v + '_lod1'].lods.play) || own.play || null;
-      e.lodFar = (v && g[v + '_lod2'] && g[v + '_lod2'].lods && (g[v + '_lod2'].lods.far || g[v + '_lod2'].lods.play)) || own.far || own.play || null;
+      e.lodMid = (v && g[v + '_lod1'] && g[v + '_lod1'].lods && g[v + '_lod1'].lods.play) || own.mid || own.play || null;
+      e.lodFar = (v && g[v + '_lod2'] && g[v + '_lod2'].lods && (g[v + '_lod2'].lods.far || g[v + '_lod2'].lods.play)) || own.far || own.mid || own.play || null;
+    }
+
+    function resetHlod() {
+      const h = state.hlod;
+      for (const k in h) h[k].n = 0;
+    }
+    function pushHlod(e, THREE, scene) {
+      const mesh = e.mesh;
+      if (!mesh || !mesh.isInstancedMesh) return false;
+      const far = e.lodFar || mesh.geometry;
+      if (!far) return false;
+      const mat = mesh.material;
+      const k = (e.key || 'x') + ':' + ((mat && mat.uuid) || 'm');
+      let h = state.hlod[k];
+      if (!h) {
+        const cap = 8192;
+        const im = new THREE.InstancedMesh(far, mat, cap);
+        im.count = 0;
+        im.castShadow = false;
+        im.receiveShadow = !!mesh.receiveShadow;
+        im.frustumCulled = true;
+        im.name = 'sin-hlod-' + (e.key || 'veg');
+        im.userData.sinHlod = true;
+        im.matrixAutoUpdate = true;
+        im.position.set(0, 0, 0);
+        im.rotation.set(0, 0, 0);
+        im.scale.set(1, 1, 1);
+        // World-space instance matrices (same as the source packs).
+        scene.add(im);
+        h = state.hlod[k] = { mesh: im, n: 0, cap: cap };
+      }
+      const n = mesh.count || 0;
+      if (n <= 0) return true;
+      if (h.n + n > h.cap) return false;
+      h.mesh.instanceMatrix.array.set(mesh.instanceMatrix.array.subarray(0, n * 16), h.n * 16);
+      h.n += n;
+      return true;
+    }
+    function flushHlod() {
+      for (const k in state.hlod) {
+        const h = state.hlod[k];
+        h.mesh.count = h.n;
+        h.mesh.instanceMatrix.needsUpdate = true;
+        h.mesh.visible = h.n > 0;
+        h.mesh.castShadow = false;
+        try { if (h.n && h.mesh.computeBoundingSphere) h.mesh.computeBoundingSphere(); } catch (_) {}
+      }
+    }
+    function applyShadowCull(mesh, dn) {
+      if (!mesh) return;
+      if (mesh.userData._sinCast == null) mesh.userData._sinCast = !!mesh.castShadow;
+      if (!mesh.userData._sinCast) return;
+      mesh.castShadow = dn <= shadowD();
     }
 
     function applyFrame(scene, camera) {
@@ -528,15 +723,22 @@
     const plane = state.wallPlane;
     const cx = camera.position.x, cz = camera.position.z;
     const frustum = outdoorCullOn() ? cameraFrustum(camera, window.THREE) : null;
-    let occluded = 0, farHide = 0;
+    let occluded = 0, farHide = 0, hlodChunks = 0, shadowsOff = 0;
     let instKept = 0, instFull = 0;
     const fog = scene && scene.fog;
-    // Hide only when almost fully fogged (~12 % remaining): sqrt(-ln(0.12))/d.
-    let farLimit = 400;
+    // 20% fog transmittance and a hard 90 m cap: past that a baked
+    // HLOD impostor carries the distant city, not the full instance field.
+    const cap = farLimitCap();
+    const trans = optOn() ? 0.20 : 0.12;
+    let farLimit = cap;
     if (fog && fog.isFogExp2 && fog.density > 0) {
-      farLimit = Math.sqrt(-Math.log(0.12)) / fog.density;
+      farLimit = Math.min(cap, Math.sqrt(-Math.log(trans)) / fog.density);
     } else if (camera.far) {
-      farLimit = Math.min(farLimit, camera.far);
+      farLimit = Math.min(cap, camera.far);
+    }
+    resetHlod();
+    if (state.hlodImpostor) {
+      state.hlodImpostor.visible = false;
     }
 
     function handleVeg(list, farLod) {
@@ -550,11 +752,13 @@
           if (mesh.userData._sinWantVis == null) mesh.userData._sinWantVis = mesh.visible;
           mesh.visible = false;
           occluded++;
+          applyShadowCull(mesh, 1e6);
           continue;
         }
         if (dn > farLimit) {
           mesh.visible = false;
           farHide++;
+          applyShadowCull(mesh, dn);
           continue;
         }
         // Restore if we hid it last frame and the game's updateVeg has
@@ -562,7 +766,7 @@
         // If we left it false, updateVeg on the PARENT group is what
         // matters; for grass the visible flag lives on the LOD group
         // (parent). Force-hiding the InstancedMesh is enough, so we
-        // must restore when no longer occluded.
+        // must restore when no longer occluded / HLOD-merged.
         if (mesh.userData && mesh.userData._sinWantVis != null) {
           mesh.visible = mesh.userData._sinWantVis !== false;
           mesh.userData._sinWantVis = null;
@@ -570,34 +774,153 @@
         if (farLod) {
           const g = pickVegLod(e, dn);
           if (g && mesh.geometry !== g) mesh.geometry = g;
+        } else if (e.lodNear && mesh.geometry !== e.lodNear) {
+          mesh.geometry = e.lodNear;
         }
         if (mesh.isInstancedMesh) {
           instFull += e.fullCount || 0;
           instKept += compactOutdoor(e, frustum, window.THREE);
         }
+        applyShadowCull(mesh, dn);
+        if (!mesh.castShadow && mesh.userData._sinCast) shadowsOff++;
+        // Merge far vegetation into a handful of HLOD InstancedMeshes
+        // (baked far geos, originals untouched). Cuts hundreds of draws.
+        // Grass only: palm HLOD drew canopy over rooftops (cluster mid/far
+        // is fine at a distance, but merging a hidden grove chunk made
+        // palms pop up behind the market houses). Palms still use mid/far
+        // distance LOD and instance cull.
+        const allowHlod = farLod && !(e.key && String(e.key).indexOf('palm_') === 0);
+        if (allowHlod && dn > vegHlodD() && mesh.isInstancedMesh && mesh.count > 0) {
+          let parentVis = true;
+          let p = mesh.parent;
+          while (p) { if (p.visible === false) { parentVis = false; break; } p = p.parent; }
+          if (parentVis && mesh.visible !== false && pushHlod(e, window.THREE, scene)) {
+            if (mesh.userData._sinWantVis == null) mesh.userData._sinWantVis = mesh.visible;
+            mesh.visible = false;
+            hlodChunks++;
+          }
+        }
       }
     }
     handleVeg(state.grass, true);
-    handleVeg(state.palms, false);
+    handleVeg(state.palms, optOn());
+    flushHlod();
 
     for (let i = 0; i < state.walls.length; i++) {
       const w = state.walls[i];
       const d = Math.hypot(w.x - cx, w.z - cz);
       let which = 'far';
-      if (d < 22) which = 'near';
-      else if (d < 55) which = 'mid';
+      // Near stays out to 22 m so the relief on the opposite corridor
+      // wall (≈16–20 m) does not drop to mid (SSIM 0.98 at that swap).
+      if (d < (optOn() ? 22 : 22)) which = 'near';
+      else if (d < (optOn() ? 45 : 55)) which = 'mid';
       const g = w.lods && (w.lods[which] || w.lods.mid || w.lods.near);
       if (g && w.mesh.geometry !== g) { w.mesh.geometry = g; w.current = which; }
       // Far wall sections still visible (same side of the corridor) but
       // should not cast shadows — the proxy box on layer 1 already does
       // close shadows. We only flip the high-poly mesh.
-      if (w.mesh.castShadow && d > 28) w.mesh.castShadow = false;
+      applyShadowCull(w.mesh, d);
     }
 
-    state.lastVis = { occluded: occluded, farHide: farHide, instKept: instKept, instFull: instFull };
+    // Stalls, houses, pots: same occlusion, far-hide, and shadow cull.
+    // Distant ones are covered by the baked city HLOD impostor.
+    const cityList = state.city || [];
+    for (let i = 0; i < cityList.length; i++) {
+      const e = cityList[i], mesh = e.mesh;
+      if (!mesh || (mesh.userData && mesh.userData.sinHlod)) continue;
+      const dx = e.x - cx, dz = e.z - cz;
+      const dn = Math.max(0, Math.sqrt(dx * dx + dz * dz) - (e.r || 0));
+      const occ = occludedByWall(e.x, e.z, e.r || 4, camera, plane);
+      // Only far-hide at the fog cap. Do not drop stalls at VEG_HLOD_D:
+      // the clustered house impostor was visually unacceptable, so there
+      // is no replacement mesh for houses. Pots swap geos, they stay visible.
+      const hideFar = dn > farLimit;
+      if (occ || hideFar) {
+        if (mesh.userData._sinWantVis == null) mesh.userData._sinWantVis = mesh.visible;
+        mesh.visible = false;
+        if (occ) occluded++; else farHide++;
+        applyShadowCull(mesh, 1e6);
+        continue;
+      }
+      if (mesh.userData && mesh.userData._sinWantVis != null) {
+        mesh.visible = mesh.userData._sinWantVis !== false;
+        mesh.userData._sinWantVis = null;
+      }
+      if (frustum && outdoorCullOn() && !mesh.isInstancedMesh && window.THREE) {
+        const fwd = applyFrame._fwd || (applyFrame._fwd = new window.THREE.Vector3());
+        camera.getWorldDirection(fwd);
+        const depth = (e.x - cx) * fwd.x + (e.z - cz) * fwd.z;
+        const sph = (applyFrame._citySph || (applyFrame._citySph = new window.THREE.Sphere()));
+        sph.center.set(e.x, 1.2, e.z);
+        sph.radius = Math.min(e.r || 4, 14) + 1.5;
+        if (depth < -10 || !frustum.intersectsSphere(sph)) {
+          if (mesh.userData._sinWantVis == null) mesh.userData._sinWantVis = mesh.visible;
+          mesh.visible = false;
+          farHide++;
+          applyShadowCull(mesh, dn);
+          continue;
+        }
+      }
+      if (mesh.isInstancedMesh && e.matrices) {
+        instFull += e.fullCount || 0;
+        instKept += compactOutdoor(e, frustum, window.THREE);
+      }
+      if (optOn() && (e.lodMid || e.lodFar)) {
+        // Clustered house/stall mid-far destroyed awnings (SSIM 0.87).
+        // Only pots (rounded, 3840-tri, 441 instances = 1.69 M) and
+        // truly distant monuments (dn > 80) use the baked HLOD geos.
+        const isPot = e.srcTris === 3840 || /pot/i.test(mesh.name || '');
+        const isMonument = e.srcTris > 40000 && !e.matrices;
+        if (!isPot && !isMonument) {
+          // Heavy houses/stalls at > 55 m: mid HLOD (same material, ~5–15 %
+          // tris). At that distance they sit in fog; closer they keep the
+          // original geo (cluster at 18 m crushed the awnings).
+          const isFarHouse = e.srcTris >= 8000;
+          if (isFarHouse && dn > 55) {
+            const next = (dn > 70 && e.lodFar) ? e.lodFar : (e.lodMid || e.lodFar);
+            if (next && mesh.geometry !== next) mesh.geometry = next;
+          } else if (e.origGeo && mesh.geometry !== e.origGeo) {
+            mesh.geometry = e.origGeo;
+          }
+        } else {
+        const midD = isMonument ? 80 : 16;
+        const farD = isMonument ? 120 : 32;
+        let next = e.origGeo || mesh.geometry;
+        if (dn > farD && e.lodFar) next = e.lodFar;
+        else if (dn > midD && e.lodMid) next = e.lodMid;
+        if (next && mesh.geometry !== next) mesh.geometry = next;
+        }
+      } else if (!optOn() && e.origGeo && mesh.geometry !== e.origGeo) {
+        mesh.geometry = e.origGeo;
+      }
+      applyShadowCull(mesh, dn);
+      // Merge far instanced city (pots) into HLOD batches to cut draws.
+      if (optOn() && dn > vegHlodD() && mesh.isInstancedMesh && mesh.count > 0 && e.lodFar) {
+        let parentVis = true;
+        let p = mesh.parent;
+        while (p) { if (p.visible === false) { parentVis = false; break; } p = p.parent; }
+        if (parentVis && mesh.visible !== false && pushHlod(e, window.THREE, scene)) {
+          if (mesh.userData._sinWantVis == null) mesh.userData._sinWantVis = mesh.visible;
+          mesh.visible = false;
+          hlodChunks++;
+        }
+      }
+    }
+
+    let visTris = 0, visDraws = 0;
+    try {
+      const inv = inventory(scene);
+      visTris = inv.visTris;
+      visDraws = inv.visDraws;
+    } catch (_) {}
+    state.lastVis = {
+      occluded: occluded, farHide: farHide, hlodChunks: hlodChunks,
+      instKept: instKept, instFull: instFull, shadowsOff: shadowsOff,
+      visTris: visTris, visDraws: visDraws, farLimit: farLimit
+    };
     if (frustum && !applyFrame._loggedCull) {
       applyFrame._loggedCull = true;
-      try { console.info('[outdoor-perf] instance-cull', instKept + '/' + instFull, 'occluded', occluded, 'farHide', farHide); } catch (_) {}
+      try { console.info('[outdoor-perf] instance-cull', instKept + '/' + instFull, 'occluded', occluded, 'farHide', farHide, 'hlod', hlodChunks, 'tris', visTris, 'draws', visDraws); } catch (_) {}
     }
     return state.lastVis;
   }
@@ -611,6 +934,9 @@
     } else if (state.lod && state.grass.length && !state.grass[0].mesh.userData.sinLodApplied) {
       // Pack arrived after the first classify: swap geometries now.
       try { state.classified = false; classify(scene, window.THREE); } catch (e) {}
+    }
+    if (state.classified && state._hlodPack && !state._hlodAttached) {
+      try { attachHlodImpostor(scene, window.THREE); state._hlodAttached = true; } catch (_) {}
     }
     if (state.classified) {
       try { applyFrame(scene, camera); } catch (e) { try { console.warn('outdoor-perf frame', e); } catch (_) {} }
@@ -683,6 +1009,7 @@
       if (!state._lodStarted) {
         state._lodStarted = true;
         loadLod(THREE).catch(function () { state.ready = true; });
+        loadHlod(THREE);
       }
       return true;
     };
