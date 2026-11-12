@@ -595,6 +595,19 @@
       return new Promise(res => r.waiters.push(res));
     }
     function forceEvict(id) { const r = zones.get(id); return r && r.state !== 'cold' ? evict(r, 'forced') : 0; }
+    // Player is standing in (or was teleported into) this room. Start it
+    // even if the hop map or budget defer would have left it cold.
+    function forceLoad(id) {
+      const rec = zones.get(id);
+      if (!rec) return 'unregistered';
+      if (rec.state === 'cold') {
+        evictToFit(incoming(rec));
+        rec.deferred = false;
+        rec.deferredAt = 0;
+        start(rec, now());
+      }
+      return rec.state;
+    }
     function reset() {
       zones.forEach(r => { r.state = 'cold'; r.pending.clear(); r.leftAt = 0; r.lastWanted = 0; r.done = false; r.waiters.length = 0; });
       uploadQueue = []; releasable.clear(); warmQ.length = 0; warmBusy = false; memLevel = 'normal';
@@ -615,7 +628,7 @@
       zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected, deferred: !!r.deferred }; });
       return out;
     }
-    return { register, unregister, attach, update, status, isReady, whenReady, markReleasable, queueTextures: (obj) => queueTextures(null, obj, 50), pumpUploads, pumpWarm, enqueueWarm, forgetWarm, sample, memoryState, forceEvict, reset, report, hide: hideObject, reveal: revealObject, zones: () => Array.from(order) };
+    return { register, unregister, attach, update, status, isReady, whenReady, markReleasable, queueTextures: (obj) => queueTextures(null, obj, 50), pumpUploads, pumpWarm, enqueueWarm, forgetWarm, sample, memoryState, forceEvict, forceLoad, reset, report, hide: hideObject, reveal: revealObject, zones: () => Array.from(order) };
   }
   return { create, HIDE_FLAG };
 });

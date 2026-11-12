@@ -93,7 +93,7 @@ test('teleport stands at the entrance, not on the table at bbox centre', () => {
 });
 
 test('index.html cache-busts the completeness wings build', () => {
-  assert.match(index, /wings\.js\?v=20261112ios31/);
+  assert.match(index, /wings\.js\?v=20261112ios32/);
 });
 
 test('entry corridor plant and torches parse during LOADING, not mid-SETUP', () => {
@@ -134,4 +134,16 @@ test('K4 dress is re-issued after eviction', () => {
   // Disposed preloaded maps are not reused for the second dress.
   assert.match(wings, /function textureDisposed/);
   assert.match(wings, /preloaded\.delete\(url\)/);
+});
+
+test('teleport force-dresses K4 and unload drops k4 colliders', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
+  const streamer = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
+  const tel = wings.slice(wings.indexOf('function teleport('), wings.indexOf('function createDebugUI('));
+  assert.match(tel, /ensureCurrentDress\(id\)/);
+  assert.match(wings, /state\.colliders = state\.colliders\.filter\(function \(c\) \{ return !c\._k4Prop/);
+  assert.match(streamer, /function forceLoad\(id\)/);
+  assert.match(wings, /zoneStreamer\.forceLoad\(origin\)/);
 });

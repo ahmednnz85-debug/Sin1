@@ -215,3 +215,27 @@ test('current cold zone is wanted even when hops are missing', async () => {
   }
   assert.strictEqual(s.status('K4'), 'ready');
 });
+
+test('forceLoad starts a cold current zone even with no hop entry', async () => {
+  const scene = obj('scene'); const g = obj('K4'); scene.add(g);
+  const R = renderer();
+  const s = Z.create({ uploadsPerFrame: 8, uploadMsPerFrame: 100 });
+  let loads = 0;
+  s.register({
+    id: 'K4', prefetchHops: 1,
+    load(api) { loads++; api.add(mesh('K4-treasury-floor-artwork', tex())); api.done(); },
+    isComplete() { return loads > 0; }
+  });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: id => (id === 'K4' ? g : null) });
+  assert.ok(typeof s.forceLoad === 'function');
+  const st = s.forceLoad('K4');
+  assert.notStrictEqual(st, 'cold');
+  assert.ok(loads >= 1, 'forceLoad must call load(), loads=' + loads);
+  let frames = 0;
+  while (s.status('K4') !== 'ready' && frames < 20) {
+    s.update({ current: 'K4', distances: new Map(), prepared: new Set(['K4']), visible: new Set(['K4']) });
+    await tick();
+    frames++;
+  }
+  assert.strictEqual(s.status('K4'), 'ready');
+});

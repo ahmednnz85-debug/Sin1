@@ -2773,7 +2773,7 @@
     { id: 'K4', prefetchHops: deviceProfile.prefetchHops, priority: 2,
       load: function () { dressK4(); loadK4Assets(); },
       isComplete: function () { return roomCompleteness('K4').complete; },
-      unload: function (api) { state.k4Dress = null; if (api.group) api.group.userData.k4Dressed = false; },
+      unload: function (api) { state.k4Dress = null; state.colliders = state.colliders.filter(function (c) { return !c._k4Prop; }); if (api.group) api.group.userData.k4Dressed = false; },
       ownsObject: streamedName('K4') }
   ];
   function zonePrepare(api) {
@@ -2852,10 +2852,14 @@
   // dress even when the streamer has not yet called load() this visit — and
   // let isComplete() then drive upload / compile / reveal.
   function ensureCurrentDress(origin) {
-    if (!origin || !STREAM_EXPECT[origin]) return;
+    if (!origin) return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
-    if (c && c.complete) return;
+    if (c && c.complete) {
+      try { console.info('[palace load] ensure-dress', origin, 'already-complete'); } catch (_) {}
+      return;
+    }
+    try { console.info('[palace load] ensure-dress', origin, 'complete', !!(c && c.complete), 'k4Dress', !!state.k4Dress, 'group', !!(state.regionGroups && state.regionGroups.get(origin))); } catch (_) {}
     if (origin === 'K4') {
       try {
         dressK4();
@@ -2863,6 +2867,9 @@
       } catch (e) {
         try { console.warn('[palace load] K4 re-dress', e && (e.message || e)); } catch (_) {}
       }
+    }
+    if (zoneStreamer && typeof zoneStreamer.forceLoad === 'function' && STREAM_EXPECT[origin]) {
+      try { zoneStreamer.forceLoad(origin); } catch (e) { try { console.warn('[palace load] forceLoad', origin, e && (e.message || e)); } catch (_) {} }
     }
   }
   function updateCulling(force) {
@@ -3079,7 +3086,12 @@
     }
     state.ctx.camera.lookAt(lx, p.y + 1.25, lz);
     if (window.PalaceInterior) PalaceInterior.constrainCamera(state.ctx.camera, state.ctx.hero);
-    resolveCamera(state.ctx.camera); updateCulling(true); drawMinimap();
+    resolveCamera(state.ctx.camera); updateCulling(true);
+    // updateCulling may return early (stream hold / non-DONE phase) before
+    // streamZones. The teleport target must still be dressed — this is the
+    // K4 second-visit path (playthrough-2 still timed out at 60 s).
+    ensureCurrentDress(id);
+    drawMinimap();
     return true;
   }
 
