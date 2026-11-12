@@ -2535,7 +2535,7 @@
       other.enabled = false; a.enabled = true; a.paused = false;
       a.time = opening ? cclip.duration * d.progress : cclip.duration * (1 - d.progress);
       m.update(0); a.paused = true;
-      if (!opening && d.progress <= .001) { d.progress = 0; d.state = 'Closed'; d.crossed = false; d.autoCloseTimer = 0; d.heroPushActive = false; }
+      if (!opening && d.progress <= .001) { d.progress = 0; d.state = 'Closed'; d.crossed = false; d.autoCloseTimer = 0; d.heroPushActive = false; if (state.activeDoor === d) state.activeDoor = null; }
       else if (opening && d.progress >= .999) {
         d.progress = 1; d.state = 'Open';
         if (d.heroPushActive) { const anim = state.ctx && state.ctx.combat; if (anim && anim.releasePush) anim.releasePush(); d.heroPushActive = false; }
@@ -2546,7 +2546,20 @@
     updatePassageGates();
   }
   function canInteract() { return false; }
-  function doorLocked() { return !!state.activeDoor && (state.activeDoor.state === 'Opening' || state.activeDoor.state === 'Closing'); }
+  function doorLocked() {
+    // Freeze the hero only for the door they are actually opening or standing in.
+    // A far door auto-closing after eviction (zone no longer ready) must not pin
+    // the player in another room — that looked like a hang while standing or walking
+    // the hall. Opening with heroPushActive is always a local lock.
+    const d = state.activeDoor;
+    if (!d || (d.state !== 'Opening' && d.state !== 'Closing')) return false;
+    if (d.heroPushActive) return true;
+    if (!state.ctx || !state.ctx.hero) return false;
+    try {
+      const c = doorCoordinates(d, state.ctx.hero.position);
+      return !!(nearDoor(d, c) || doorOccupied(d));
+    } catch (_) { return false; }
+  }
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
   function dispose() {
