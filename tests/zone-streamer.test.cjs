@@ -540,6 +540,7 @@ test('approach rooms are wanted for prefetch even when hops exceed prefetchHops'
   assert.match(src, /view\.approach/);
   assert.match(src, /approaching/);
   assert.match(src, /swap-before-prefetch/);
+  assert.match(src, /prefetchExtra/);
   const scene = obj('scene');
   const g = obj('K2');
   scene.add(g);

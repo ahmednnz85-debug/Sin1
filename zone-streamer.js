@@ -402,7 +402,13 @@
             stats.budgetEvictions++;
           });
         }
-        if (!wouldExceed(extra)) {
+        // 40 MB prefetch headroom: K2 at 592 + est 50 passed the raw 650
+        // check but K3's real cost (~66) stacked to 658. Defer until the
+        // room just left can be evicted (swap), then admit.
+        const prefetchExtra = (o.processBudgetMB > 0 && o.processBudgetMB <= 650)
+          ? { processMB: extra.processMB + 40, gpuMB: extra.gpuMB, cpuMB: extra.cpuMB }
+          : extra;
+        if (!wouldExceed(prefetchExtra)) {
           if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
             let currentBusy = false;
             zones.forEach(function (r) {
