@@ -102,6 +102,7 @@
   let camBack = 3.6;
   let entranceLeft = 0;
   let state = 'IDLE';
+  let setupTask = null;
   let busy = false;
   let contextLost = false;
   const CONTEXT_RELOAD_KEY = 'sinContextReload';
@@ -116,7 +117,7 @@
   let holdT = 0;
   let loadPromise = null;
   let palaceLoadStarted = false;
-  let loadOk = null;
+  let loadOk = null; setupTask = null;
   let loadError = null;
   let H = 1.8;
   let group = null;
@@ -163,6 +164,7 @@
   let palaceEnv = null;
   let fireMats = [];
   let lodPacks = [];
+  let instanceWallPacks = [];
   let propCullList = [];
   let fireList = [];
   let wingRuntime = null;
@@ -175,6 +177,11 @@
   let warmSlow = 0;
   let warmProxy = null;
   let warmProxyI = null;
+  let warmScene = null;
+  let warmPending = false;
+  let liveCompilePending = false;
+  let liveCompileDone = false;
+  let streamHoldFrames = 0;
   const aniso = { v: 4 };
   const runtimeErrors = [];
   const LOG = [];
@@ -464,7 +471,7 @@
     preTeardownInfo = null;
     postTeardownInfo = null;
     warmMeshes = null;
-    loadOk = null;
+    loadOk = null; setupTask = null;
     loadError = null;
     palaceLoadStarted = false;
     holdT = CONFIG.minBlackHoldSeconds;
@@ -579,32 +586,122 @@
       return !!(p && (p.__webglTexture || p.__webglInit));
     } catch (_) { return false; }
   }
-  function releaseCpuFromObject(root, renderer) {
-    if (!root || !root.traverse || !renderer || typeof renderer.initTexture !== 'function') return;
-    const bySource = new Map();
+  // GPU uploads during palace LOADING used to run synchronously inside
+  // settle() — every material of props-set / throne / K1 in one
+  // initTexture burst. On WebKit that blocked the main thread for minutes
+  // and grew process RSS to ~3.6 GB (the estimator only saw ~98 MB: the
+  // extra is the software-GL / ImageBitmap blind spot), which is what
+  // jetsams iPhone Safari after palace entry.
+  const gpuUploadQ = [];
+  const loadProfile = [];
+  function collectTextures(root, into) {
+    const out = into || [];
+    if (!root) return out;
+    function add(t) {
+      if (!t || !t.isTexture || t.isCompressedTexture || t.isRenderTargetTexture) return;
+      if (out.indexOf(t) < 0) out.push(t);
+    }
+    if (root.isTexture) { add(root); return out; }
+    if (!root.traverse) return out;
     root.traverse(function (o) {
       const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
       mats.forEach(function (m) {
         if (!m) return;
-        CPU_RELEASE_KEYS.forEach(function (k) {
-          const t = m[k];
-          if (!t || !t.isTexture || t.isCompressedTexture || t.isRenderTargetTexture || !t.source) return;
-          const list = bySource.get(t.source) || [];
-          if (list.indexOf(t) < 0) list.push(t);
-          bySource.set(t.source, list);
+        CPU_RELEASE_KEYS.forEach(function (k) { add(m[k]); });
+        if (m.uniforms) Object.keys(m.uniforms).forEach(function (uk) {
+          const v = m.uniforms[uk] && m.uniforms[uk].value;
+          if (v && v.isTexture) add(v);
         });
       });
     });
-    // Pass 1: upload every texture while the pixels are still present.
-    bySource.forEach(function (list) {
-      list.forEach(function (t) { try { if (t.image) renderer.initTexture(t); } catch (_) {} });
+    return out;
+  }
+  function capCpuTexture(t) {
+    if (!t) return;
+    try {
+      const max = (window.SinDevice && SinDevice.detect && SinDevice.detect().maxTextureSize) || 0;
+      if (max && window.SinDevice && SinDevice.capTexture) SinDevice.capTexture(t, max);
+    } catch (_) {}
+  }
+  function enqueueGpu(root) {
+    collectTextures(root, gpuUploadQ);
+  }
+  // At most budgetMs of initTexture + cap work, then return. Caller yields.
+  let pumpStamp = -1;
+  function pumpGpuUploads(renderer, budgetMs) {
+    renderer = renderer || (lastContext && lastContext.renderer);
+    if (!renderer || typeof renderer.initTexture !== 'function') { gpuUploadQ.length = 0; return true; }
+    const t0 = performance.now();
+    // One pump per animation frame — LOADING tick and the async loader
+    // share this gate so we never spend 2×50 ms on the same frame.
+    const stamp = Math.floor(t0 / 16);
+    if (stamp === pumpStamp) return gpuUploadQ.length === 0;
+    pumpStamp = stamp;
+    const budget = budgetMs != null ? budgetMs : 50;
+    let n = 0;
+    while (gpuUploadQ.length && performance.now() - t0 < budget) {
+      const t = gpuUploadQ.shift();
+      if (!t) continue;
+      try { capCpuTexture(t); } catch (_) {}
+      try {
+        const img = t.image || (t.source && t.source.data);
+        const w = img && (img.width || img.naturalWidth) || 0;
+        const h = img && (img.height || img.naturalHeight) || 0;
+        if (w && Math.max(w, h) > 1024) {
+          try { console.warn('[palace load] uncapped tex', w, h); } catch (_) {}
+          try { capCpuTexture(t); } catch (_) {}
+        }
+        if ((t.image || (t.source && t.source.data)) && !textureUploaded(renderer, t)) {
+          const tU = performance.now();
+          renderer.initTexture(t);
+          const dtU = performance.now() - tU;
+          n++;
+          if (dtU > 30) {
+            try { console.info('[palace load] initTexture', Math.round(dtU) + 'ms', w, 'x', h, 'mips', !!t.generateMipmaps); } catch (_) {}
+          }
+          // One expensive upload is enough for this frame — the 50 ms
+          // budget cannot preempt a single initTexture, so yield next.
+          if (dtU > 16) break;
+        }
+      } catch (_) {}
+      try {
+        if (window.SinProcessMemory && SinProcessMemory.dropTextureCpu && textureUploaded(renderer, t)) {
+          SinProcessMemory.dropTextureCpu(t);
+        }
+      } catch (_) {}
+    }
+    const dt = performance.now() - t0;
+    if (n || dt > 20) {
+      try { note('gpu pump ' + n + ' tex ' + Math.round(dt) + 'ms q=' + gpuUploadQ.length); } catch (_) {}
+    }
+    return gpuUploadQ.length === 0;
+  }
+  function releaseCpuFromObject(root, renderer, opts) {
+    if (!root || !root.traverse || !renderer || typeof renderer.initTexture !== 'function') return;
+    const upload = !!(opts && opts.upload);
+    const bySource = new Map();
+    const list = collectTextures(root);
+    list.forEach(function (t) {
+      capCpuTexture(t);
+      if (!t.source) return;
+      const arr = bySource.get(t.source) || [];
+      if (arr.indexOf(t) < 0) arr.push(t);
+      bySource.set(t.source, arr);
     });
-    // Pass 2: drop pixels only for sources fully resident on the GPU.
-    bySource.forEach(function (list, source) {
-      if (!source.data || !list.every(function (t) { return textureUploaded(renderer, t); })) return;
+    if (upload) {
+      list.forEach(function (t) { try { if (t.image) renderer.initTexture(t); } catch (_) {} });
+    } else if (!opts || opts.enqueue !== false) {
+      list.forEach(function (tex) {
+        if (!textureUploaded(renderer, tex) && gpuUploadQ.indexOf(tex) < 0) gpuUploadQ.push(tex);
+      });
+    }
+    // Drop pixels only for sources already on the GPU.
+    bySource.forEach(function (arr, source) {
+      if (!source.data || !arr.every(function (t) { return textureUploaded(renderer, t); })) return;
       try {
         const img = source.data;
         source.data = null;
+        arr.forEach(function (t) { try { t.image = null; } catch (_) {} });
         if (img && typeof img.close === 'function') img.close();
       } catch (_) {}
     });
@@ -612,12 +709,16 @@
 
   function drainCpuNow(ctx, tag) {
     if (!ctx || !ctx.renderer) return;
-    const roots = [group, wingRuntime && wingRuntime.root, ctx.hero, ctx.scene];
+    // Do not walk ctx.scene: it already contains group and the wings, and
+    // any leftover outdoor node would make this a multi-minute traverse
+    // on WebKit software GL. GPU uploads already ran during LOADING.
+    const roots = [group, wingRuntime && wingRuntime.root, ctx.hero];
     for (let i = 0; i < roots.length; i++) {
       if (!roots[i]) continue;
-      try { releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
-      try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
+      try { releaseCpuFromObject(roots[i], ctx.renderer, { upload: false, enqueue: false }); } catch (_) {}
+      try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer, { upload: false }); } catch (_) {}
     }
+    try { pumpGpuUploads(ctx.renderer, 50); } catch (_) {}
     if (tag && window.SinProcessMemory) {
       try {
         const pe = SinProcessMemory.estimate({ renderer: ctx.renderer, scene: ctx.scene, phase: 'REVEAL' });
@@ -629,12 +730,17 @@
   function releaseCpuFromResult(result, renderer) {
     if (!result) return;
     // Loose textures (tex/wtex) are cloned per surface at build time and
-    // handed to the wings; they must keep their pixels.
-    if (result.isTexture) return;
-    if (result.scene) releaseCpuFromObject(result.scene, renderer);
+    // handed to the wings; they must keep their pixels until then — but
+    // still cap to maxTextureSize so a 4K bitmap is not held.
+    if (result.isTexture) { capCpuTexture(result); enqueueGpu(result); return; }
+    const root = result.scene || result;
+    collectTextures(root).forEach(capCpuTexture);
+    enqueueGpu(root);
+    // Never initTexture here: that was the multi-minute main-thread block.
+    releaseCpuFromObject(root, renderer, { upload: false });
     try {
-      if (window.SinProcessMemory && result.scene) {
-        SinProcessMemory.releaseCpuFromObject(result.scene, renderer);
+      if (window.SinProcessMemory && root) {
+        SinProcessMemory.releaseCpuFromObject(root, renderer, { upload: false });
       }
     } catch (_) {}
   }
@@ -799,12 +905,25 @@
 
   // Wing models are handed to PalaceWings untouched (no tuneGLTF), exactly as
   // its own GLTFLoader used to read them.
-  function parseRawGLB(buf) {
+  function parseRawGLB(buf, name) {
     const loader = new THREE.GLTFLoader();
+    const label = name || '__parse';
     return waitDecoder().then(function (dec) {
       if (dec) loader.setMeshoptDecoder(dec);
       return new Promise(function (resolve, reject) {
-        loader.parse(buf, '', resolve, function (e) {
+        const tParse = performance.now();
+        loader.parse(buf, '', function (res) {
+          const dt = performance.now() - tParse;
+          try {
+            if (dt > (window.__palaceMaxSliceMs || 0)) {
+              window.__palaceMaxSliceMs = Math.round(dt);
+              window.__palaceMaxSliceName = label;
+            }
+            loadProfile.push({ name: label, ms: Math.round(dt) });
+            console.info('[palace load] parse-done', label, Math.round(dt) + 'ms');
+          } catch (_) {}
+          resolve(res);
+        }, function (e) {
           reject(new Error('تعذّر قراءة النموذج — ' + ((e && (e.message || e)) || 'GLB')));
         });
       });
@@ -864,7 +983,7 @@
           PalaceWings.provideAsset(a.url, own.result);
           own.wingShared = true;
         } else if (own.buf) {
-          PalaceWings.provideAsset(a.url, a.kind === 'tex' ? await textureFromBytes(own.buf, own.name, false) : await parseRawGLB(own.buf));
+          PalaceWings.provideAsset(a.url, a.kind === 'tex' ? await textureFromBytes(own.buf, own.name, false) : await parseRawGLB(own.buf, a.url));
           own.wingShared = true;
           own.buf = null;
         }
@@ -880,10 +999,11 @@
       if (!spec.buf) spec.buf = await fetchWithRetry(spec);
       tAfterDl = performance.now();
       const byteLen = spec.buf ? spec.buf.byteLength : 0;
+      try { console.info('[palace load] parse-start', spec.name, spec.kind, byteLen); } catch (_) {}
       if (spec.kind === 'js') spec.result = await installDecoder(spec.buf);
       else if (spec.kind === 'tex') spec.result = await textureFromBytes(spec.buf, spec.name, spec.linear);
       else if (spec.kind === 'wtex') spec.result = await textureFromBytes(spec.buf, spec.name, false);
-      else if (spec.kind === 'wglb') spec.result = await parseRawGLB(spec.buf);
+      else if (spec.kind === 'wglb') spec.result = await parseRawGLB(spec.buf, spec.name);
       else if (spec.kind === 'wglb-draco') spec.result = await parseDracoGLB(spec.buf);
       else {
         await waitDecoder();
@@ -1011,6 +1131,28 @@
     await Promise.all(jobs);
   }
 
+
+  let colliderBakePromise = null;
+  function loadColliderBake() {
+    if (colliderBakePromise) return colliderBakePromise;
+    colliderBakePromise = fetch('data/palace-colliders.json?v=20261112bake3', { cache: 'no-cache' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (j) {
+        try { window.__palaceColliderBake = j; } catch (_) {}
+        if (window.PalaceWings && typeof PalaceWings.provideBake === 'function') PalaceWings.provideBake(j);
+        try { console.info('[palace load] collider-bake-loaded', (j.colliders || []).length, 'boxes'); } catch (_) {}
+        return j;
+      })
+      .catch(function (e) {
+        try { console.warn('[palace load] collider-bake-missing', e && e.message); } catch (_) {}
+        return null;
+      });
+    return colliderBakePromise;
+  }
+
   function loadPalaceAssets() {
     // Refuse to parse/create palace assets until outdoor teardown verified.
     if (teardownPhase < 4) {
@@ -1025,11 +1167,20 @@
     loadPromise = (async function () {
       if (teardownPhase < 4) throw new Error('palace load blocked mid-flight tear=' + teardownPhase);
       loadStage = 0; paint();
+      loadColliderBake();
       await attachExistingPropSpecs();
       attachWingSpecs();
       loadStage = 1; paint();
       // One GLB/texture at a time — never parse the next until the previous
       // ArrayBuffer has been freed.
+      function nextFrame() {
+        return new Promise(function (r) {
+          let done = false;
+          const go = function () { if (done) return; done = true; r(); };
+          try { requestAnimationFrame(function () { go(); }); } catch (_) {}
+          setTimeout(go, 0); // yield to the event loop even if rAF is paused (headless / blocked WebGL)
+        });
+      }
       for (let i = 0; i < specs.length; i++) {
         const s = specs[i];
         try {
@@ -1043,6 +1194,41 @@
           }
         }
         s.buf = null;
+        try {
+          if (s.timing) loadProfile.push(Object.assign({ name: s.name, kind: s.kind }, s.timing));
+        } catch (_) {}
+        // Yield every asset so a single GLB parse cannot freeze the tab.
+        // GPU upload is deferred to the 50 ms pump below — never initTexture
+        // the whole hall in this loop.
+        try {
+          if (window.SinProcessMemory && lastContext) {
+            if (s.result) SinProcessMemory.releaseCpuFromObject(s.result.scene || s.result, lastContext.renderer, { upload: false });
+            SinProcessMemory.releaseCpuFromObject(lastContext.scene, lastContext.renderer, { upload: false });
+          }
+        } catch (_) {}
+        await nextFrame();
+      }
+      // Black-screen GPU upload, ≤50 ms per frame. This is the work that
+      // previously ran inside settle() and held the main thread for minutes
+      // at ~3.6 GB RSS on WebKit.
+      {
+        const renderer = lastContext && lastContext.renderer;
+        specs.forEach(function (s) { if (s.result) enqueueGpu(s.result.scene || s.result); });
+        const tUp = performance.now();
+        let pumps = 0;
+        try { console.info('[palace load] gpu-pump-start q=' + gpuUploadQ.length); } catch (_) {}
+        await nextFrame();
+        while (!pumpGpuUploads(renderer, 50)) {
+          pumps++;
+          if (statusEl) statusEl.textContent = 'جارٍ تجهيز القاعة';
+          try { paint(); } catch (_) {}
+          await nextFrame();
+          if (pumps > 2000) break;
+        }
+        loadProfile.push({ name: '__gpuUpload', uploadMs: Math.round(performance.now() - tUp), pumps: pumps, leftover: gpuUploadQ.length });
+        try { window.__palaceLoadProfile = loadProfile.slice(); } catch (_) {}
+        try { console.info('[palace load] gpu-pump-end', 'pumps=' + pumps, Math.round(performance.now() - tUp) + 'ms', 'leftover', gpuUploadQ.length); } catch (_) {}
+        note('gpu upload done pumps=' + pumps + ' ' + Math.round(performance.now() - tUp) + 'ms');
       }
       loadStage = 4; paint();
       await shareWingAssets();
@@ -1219,8 +1405,16 @@
     try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('teardown', 'city released g' + geometries.size + ' t' + textures.size); } catch (_) {}
     try {
       if (window.SinProcessMemory) {
-        const pe = SinProcessMemory.estimate({ scene: scene, phase: 'teardown' });
-        note('process after city release ~' + (pe && pe.processMB) + 'MB cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB));
+        const renderer = (lastContext && lastContext.renderer) || (scene && scene.userData && scene.userData.renderer) || (typeof window !== 'undefined' && window.__R) || null;
+        if (SinProcessMemory.purgeOrphanTextures && renderer) {
+          const pur = SinProcessMemory.purgeOrphanTextures(renderer, scene);
+          note('orphan purge ' + JSON.stringify(pur));
+        }
+        if (SinProcessMemory.releaseCpuFromObject && renderer) {
+          SinProcessMemory.releaseCpuFromObject(scene, renderer, { upload: false });
+        }
+        const pe = SinProcessMemory.estimate({ scene: scene, renderer: renderer, phase: 'teardown', detail: true });
+        note('process after city release ~' + (pe && pe.processMB) + 'MB cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB) + ' orphans-top ' + (pe && pe.topTextures && pe.topTextures.slice(0, 4).map(function (r) { return r.w + 'x' + r.h + '@' + r.gpuMB; })));
       }
     } catch (_) {}
   }
@@ -1423,6 +1617,8 @@
   }
 
   function holdCull(scene, hero) {
+    const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
+    const _tHc = (_tr && performance.now) ? performance.now() : 0;
     if (!scene || !group) return;
     // After the exterior teardown there are no outdoor meshes left to hide,
     // but the kept outdoor lights (sun / hemi / fill, keepDuringPalace) must
@@ -1444,6 +1640,7 @@
     const onLights = state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED' || (state === 'DONE' && occupant);
     if (onLights && !lightsCulled) cullOutsideLights(scene, true);
     if (!onLights && lightsCulled) cullOutsideLights(scene, false);
+    if (_tr) _tr('holdCull-end');
   }
 
   function setExteriorVisible(scene, visible) {
@@ -1482,7 +1679,7 @@
     ramp = null;
     flames = [];
     fireMats = [];
-    lodPacks = [];
+    lodPacks = []; instanceWallPacks = [];
     fireList = [];
     lightAssignAt = 0;
   }
@@ -1650,7 +1847,17 @@
     near.name = 'lod-near';
     far.name = 'lod-far';
     group.add(near, far);
-    lodPacks.push({ near: near, far: far, matrices: matrices, local: locals, limitH: limitH });
+    if (geo0 && !geo0.boundingSphere && geo0.computeBoundingSphere) geo0.computeBoundingSphere();
+    if (geo1 && !geo1.boundingSphere && geo1.computeBoundingSphere) geo1.computeBoundingSphere();
+    const ns = geo0 && geo0.boundingSphere;
+    const fs = geo1 && geo1.boundingSphere;
+    lodPacks.push({
+      near: near, far: far, matrices: matrices, local: locals, limitH: limitH,
+      nearCenter: ns ? ns.center.clone() : new THREE.Vector3(),
+      nearRadius: ns ? ns.radius : 1,
+      farCenter: fs ? fs.center.clone() : new THREE.Vector3(),
+      farRadius: fs ? fs.radius : 1
+    });
   }
 
   function makePalaceEnv(renderer) {
@@ -1759,16 +1966,70 @@
     material.customProgramCacheKey = function () { return 'palaceMarble7'; };
   }
 
+  function instanceCullOn() {
+    try { return !(typeof window !== 'undefined' && window.__sinNoInstanceCull); } catch (_) { return true; }
+  }
+  function cameraFrustum(cam) {
+    if (!cam || !cam.projectionMatrix || !cam.matrixWorldInverse) return null;
+    try { cam.updateMatrixWorld(); } catch (_) {}
+    const fr = cameraFrustum._fr || (cameraFrustum._fr = new THREE.Frustum());
+    const m = cameraFrustum._m || (cameraFrustum._m = new THREE.Matrix4());
+    m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    fr.setFromProjectionMatrix(m);
+    return fr;
+  }
+  function instanceInFrustum(frustum, worldMat, instMat, geoCenter, geoRadius) {
+    const tmp = instanceInFrustum._tmp || (instanceInFrustum._tmp = new THREE.Matrix4());
+    const sphere = instanceInFrustum._s || (instanceInFrustum._s = new THREE.Sphere());
+    const c = instanceInFrustum._c || (instanceInFrustum._c = new THREE.Vector3());
+    tmp.multiplyMatrices(worldMat, instMat);
+    c.copy(geoCenter || instanceInFrustum._z || (instanceInFrustum._z = new THREE.Vector3()));
+    c.applyMatrix4(tmp);
+    const e = tmp.elements;
+    const sx = Math.sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]);
+    const sy = Math.sqrt(e[4] * e[4] + e[5] * e[5] + e[6] * e[6]);
+    const sz = Math.sqrt(e[8] * e[8] + e[9] * e[9] + e[10] * e[10]);
+    const scale = Math.max(sx, sy, sz, 1e-6);
+    sphere.center.copy(c);
+    // Conservative: geo sphere * max axis scale, plus a 0.5 m pad so a
+    // grazing edge never pops (look must be unchanged).
+    sphere.radius = (geoRadius || 1) * scale + 0.5;
+    return frustum.intersectsSphere(sphere);
+  }
+  function compactInstanced(mesh, matrices, worldMat, frustum, geoCenter, geoRadius) {
+    if (!mesh || !matrices) return 0;
+    let n = 0;
+    if (!frustum) {
+      n = matrices.length;
+      for (let i = 0; i < n; i++) mesh.setMatrixAt(i, matrices[i]);
+    } else {
+      for (let i = 0; i < matrices.length; i++) {
+        if (instanceInFrustum(frustum, worldMat, matrices[i], geoCenter, geoRadius)) {
+          mesh.setMatrixAt(n++, matrices[i]);
+        }
+      }
+    }
+    mesh.count = n;
+    mesh.visible = n > 0;
+    if (n) mesh.instanceMatrix.needsUpdate = true;
+    return n;
+  }
   function updateLODs(cam) {
-    if (!cam || !group || !lodPacks.length) return;
+    if (!cam || !group) return;
     group.updateMatrixWorld(true);
     const wp = updateLODs._wp || (updateLODs._wp = new THREE.Vector3());
+    const frustum = instanceCullOn() ? cameraFrustum(cam) : null;
+    const worldMat = group.matrixWorld;
     for (let p = 0; p < lodPacks.length; p++) {
       const pack = lodPacks[p];
       const lim = (pack.limitH || CONFIG.lodDistanceH) * H;
       const cull = (pack.cullH != null ? pack.cullH : CONFIG.cullDistanceH) * H;
       let ni = 0;
       let fi = 0;
+      const nCenter = pack.nearCenter;
+      const nRad = pack.nearRadius;
+      const fCenter = pack.farCenter;
+      const fRad = pack.farRadius;
       for (let i = 0; i < pack.local.length; i++) {
         wp.copy(pack.local[i]);
         group.localToWorld(wp);
@@ -1776,6 +2037,14 @@
         if (dist > cull) {
           if (pack.nearState) pack.nearState[i] = false;
           continue; // distance cull: draw neither near nor far LOD
+        }
+        if (frustum) {
+          const rad = Math.max(nRad || 0, fRad || 0);
+          const ctr = nCenter || fCenter;
+          if (!instanceInFrustum(frustum, worldMat, pack.matrices[i], ctr, rad)) {
+            if (pack.nearState) pack.nearState[i] = false;
+            continue;
+          }
         }
         if (!pack.nearState) pack.nearState = new Array(pack.local.length).fill(false);
         const wasNear = pack.nearState[i];
@@ -1791,6 +2060,24 @@
       if (ni) pack.near.instanceMatrix.needsUpdate = true;
       if (fi) pack.far.instanceMatrix.needsUpdate = true;
     }
+    // Per-instance frustum for wall / back-wall packs (same look, fewer tris).
+    if (instanceWallPacks && instanceWallPacks.length) {
+      for (let w = 0; w < instanceWallPacks.length; w++) {
+        const pack = instanceWallPacks[w];
+        compactInstanced(pack.mesh, pack.matrices, worldMat, frustum, pack.center, pack.radius);
+      }
+    }
+    if (frustum && !updateLODs._loggedCull) {
+      updateLODs._loggedCull = true;
+      try {
+        const bits = lodPacks.map(function (pk) {
+          return (pk.near && pk.near.name || 'lod') + ' ' + (pk.matrices ? pk.matrices.length : 0) + '->' + ((pk.near && pk.near.count) || 0) + '+' + ((pk.far && pk.far.count) || 0);
+        }).concat(instanceWallPacks.map(function (pk) {
+          return (pk.mesh && pk.mesh.name || 'wall') + ' ' + (pk.matrices ? pk.matrices.length : 0) + '->' + ((pk.mesh && pk.mesh.count) || 0);
+        }));
+        console.info('[palace load] instance-cull', bits.join(' | '));
+      } catch (_) {}
+    }
     // Distance-cull non-instanced prop roots (look unchanged at play distances).
     if (propCullList && propCullList.length) {
       const cullProp = CONFIG.cullDistanceH * H;
@@ -1803,12 +2090,49 @@
     }
   }
 
+  // When the hero is in a wing room (hops from the hall > 1), drop the
+  // hall's high-poly near-LOD InstancedMeshes from the scene and release
+  // their GPU geometry. The far-LOD packs stay as a cheap stand-in if the
+  // hall is glimpsed through a doorway. Returning to the hall restores
+  // the near packs (BufferGeometry.dispose releases GPU only; attributes
+  // remain and re-upload on the next draw).
+  let hallDeep = false;
+  function setDeepWing(deep) {
+    deep = !!deep;
+    if (hallDeep === deep) return hallDeep;
+    hallDeep = deep;
+    for (let p = 0; p < lodPacks.length; p++) {
+      const pack = lodPacks[p];
+      if (!pack || !pack.near) continue;
+      if (deep) {
+        pack.near.visible = false;
+        pack.near.count = 0;
+        if (pack.near.parent && !pack._nearParent) {
+          pack._nearParent = pack.near.parent;
+          pack.near.parent.remove(pack.near);
+        }
+        try { if (pack.near.geometry && pack.near.geometry.dispose) pack.near.geometry.dispose(); } catch (_) {}
+      } else {
+        if (pack._nearParent && pack.near.parent !== pack._nearParent) {
+          pack._nearParent.add(pack.near);
+        }
+        pack._nearParent = null;
+        if (pack.near.geometry) pack.near.geometry.needsUpdate = true;
+      }
+    }
+    return hallDeep;
+  }
+
   function animateHall(dt, ctx) {
     if (!group) return;
+    const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     const cam = ctx.camera;
     if (cam) updateLODs(cam);
+    if (_tr) _tr('animateHall-updateLODs');
     updatePalaceLights(dt, ctx.hero);
+    if (_tr) _tr('animateHall-updatePalaceLights');
     if (wingRuntime && window.PalaceWings) PalaceWings.tick(dt, ctx);
+    if (_tr) _tr('animateHall-PalaceWings.tick');
   }
 
   function updatePalaceLights(dt, hero) {
@@ -1820,7 +2144,22 @@
   }
 
 
-  function build(ctx) {
+  async function build(ctx) {
+    const _y0 = { t: performance.now() };
+    function yieldBuild() {
+      return new Promise(function (r) {
+        let d = false;
+        const go = function () { if (!d) { d = true; r(); } };
+        try { requestAnimationFrame(go); } catch (_) {}
+        setTimeout(go, 0);
+      });
+    }
+    async function yieldSlice(force) {
+      if (!force && performance.now() - _y0.t < 45) return;
+      try { console.info('[palace load] build-yield', Math.round(performance.now() - _y0.t) + 'ms', force ? 'force' : ''); } catch (_) {}
+      await yieldBuild();
+      _y0.t = performance.now();
+    }
     const W = CONFIG.hallWidthH * H, L = CONFIG.hallLengthH * H;
     let CH = CONFIG.hallHeightH * H;
     const portal = ctx.portal;
@@ -1844,7 +2183,7 @@
     slotModes = [];
     overlapNotes = [];
     ramp = null;
-    lodPacks = [];
+    lodPacks = []; instanceWallPacks = [];
     propCullList = [];
     fireList = [];
     fireMats = [];
@@ -1920,6 +2259,13 @@
     wallMats.forEach(function (m, i) { wallsMesh.setMatrixAt(i, m); });
     wallsMesh.instanceMatrix.needsUpdate = true;
     group.add(wallsMesh);
+    if (wallSrc.geo && !wallSrc.geo.boundingSphere && wallSrc.geo.computeBoundingSphere) wallSrc.geo.computeBoundingSphere();
+    const wallBs = wallSrc.geo && wallSrc.geo.boundingSphere;
+    instanceWallPacks.push({
+      mesh: wallsMesh, matrices: wallMats,
+      center: wallBs ? wallBs.center.clone() : new THREE.Vector3(),
+      radius: wallBs ? wallBs.radius : 4
+    });
     slotModes.push({ id: 'wall', count: wallMats.length, mode: 'real' });
     mark('phase walls n=' + wallMats.length);
 
@@ -2233,6 +2579,13 @@
       mats.forEach(function (m, i) { fill.setMatrixAt(i, m); });
       fill.instanceMatrix.needsUpdate = true;
       group.add(fill);
+      if (wallSrc.geo && !wallSrc.geo.boundingSphere && wallSrc.geo.computeBoundingSphere) wallSrc.geo.computeBoundingSphere();
+      const fillBs = wallSrc.geo && wallSrc.geo.boundingSphere;
+      instanceWallPacks.push({
+        mesh: fill, matrices: mats.slice(),
+        center: fillBs ? fillBs.center.clone() : new THREE.Vector3(),
+        radius: fillBs ? fillBs.radius : 4
+      });
       slotModes.push({ id: 'backFill', count: mats.length, mode: 'real' });
       const seamMat = new THREE.MeshStandardMaterial({ color: 0x4a3824, roughness: 0.72, metalness: 0.18 });
       if (palaceEnv) { seamMat.envMap = palaceEnv; seamMat.envMapIntensity = 0.2; }
@@ -2398,7 +2751,7 @@
     addLOD(brzSrc.geo, brzMat, brzLod.geo === brzSrc.geo ? brzSrc.geo.clone() : brzLod.geo, brzMat, brzMatrices, brzLocals, 7);
     slotModes.push({ id: 'brazier', count: brzMatrices.length, mode: 'real' });
 
-    function splitProps(gltf) {
+    async function splitProps(gltf) {
       const parts = [];
       if (!gltf || !gltf.scene) return parts;
       gltf.scene.updateMatrixWorld(true);
@@ -2406,12 +2759,14 @@
       gltf.scene.traverse(function (o) { if (o.isMesh) meshes.push(o); });
       if (!meshes.length) return parts;
       if (meshes.length > 2) {
-        meshes.forEach(function (o, i) {
+        for (let i = 0; i < meshes.length; i++) {
+          const o = meshes[i];
           const geo = o.geometry.clone();
           geo.applyMatrix4(o.matrixWorld);
           recenterGeo(geo);
           parts.push({ geo: geo, size: geoSize(geo), material: o.material, name: o.name || ('part' + i) });
-        });
+          if ((i & 7) === 7) await yieldSlice();
+        }
         return parts;
       }
       const mesh = meshes[0];
@@ -2422,6 +2777,7 @@
       const nrm = src.attributes.normal;
       const uv = src.attributes.uv;
       const ntri = index.count / 3;
+      try { console.info('[palace load] splitProps ntri=' + ntri + ' meshes=' + meshes.length); } catch (_) {}
       const voxel = 0.012;
       const parent = new Uint32Array(ntri);
       for (let i = 0; i < ntri; i++) parent[i] = i;
@@ -2446,8 +2802,12 @@
         const list = cells.get(key);
         if (list) list.push(t);
         else cells.set(key, [t]);
+        if ((t & 2047) === 2047) await yieldSlice();
       }
-      cells.forEach(function (tris, key) {
+      const cellKeys = Array.from(cells.keys());
+      for (let c = 0; c < cellKeys.length; c++) {
+        const key = cellKeys[c];
+        const tris = cells.get(key);
         for (let i = 1; i < tris.length; i++) union(tris[0], tris[i]);
         const bits = key.split(',');
         const x = parseInt(bits[0], 10), y = parseInt(bits[1], 10), z = parseInt(bits[2], 10);
@@ -2460,17 +2820,21 @@
             }
           }
         }
-      });
+        if ((c & 255) === 255) await yieldSlice();
+      }
       const groups = new Map();
       for (let t = 0; t < ntri; t++) {
         const r = find(t);
         const g = groups.get(r);
         if (g) g.push(t);
         else groups.set(r, [t]);
+        if ((t & 2047) === 2047) await yieldSlice();
       }
       let pi = 0;
-      groups.forEach(function (tris) {
-        if (tris.length < 40) return;
+      const groupList = Array.from(groups.values());
+      for (let gi = 0; gi < groupList.length; gi++) {
+        const tris = groupList[gi];
+        if (tris.length < 40) continue;
         const mapV = new Map();
         const positions = [];
         const normals = [];
@@ -2491,11 +2855,12 @@
           }
           indices.push(n);
         }
-        tris.forEach(function (t) {
-          add(index.getX(t * 3));
-          add(index.getX(t * 3 + 1));
-          add(index.getX(t * 3 + 2));
-        });
+        for (let ti = 0; ti < tris.length; ti++) {
+          const tt = tris[ti];
+          add(index.getX(tt * 3));
+          add(index.getX(tt * 3 + 1));
+          add(index.getX(tt * 3 + 2));
+        }
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
         if (normals.length) geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
@@ -2505,14 +2870,20 @@
         recenterGeo(geo);
         const size = geoSize(geo);
         parts.push({ geo: geo, size: size, material: mesh.material, name: 'piece' + (pi++) });
-      });
+        await yieldSlice();
+      }
+      try { console.info('[palace load] splitProps parts=' + parts.length); } catch (_) {}
       return parts;
     }
     let propParts = [];
-    try { propParts = splitProps(assets.props); }
-    catch (propErr) { console.warn('فصل الأغراض فشل', propErr); note('props split ' + (propErr && propErr.message)); }
+    try { propParts = await splitProps(assets.props); } catch (propErr) { console.warn('فصل الأغراض فشل', propErr); note('props split ' + (propErr && propErr.message)); }
+    try { console.info('[palace load] after-split'); } catch (_) {}
+    await yieldSlice(true);
     note('props parts=' + propParts.length);
+    await yieldSlice(true);
+    try { console.info('[palace load] palaceMat'); } catch (_) {}
     const propMat = propParts.length ? palaceMat(propParts[0].material) : null;
+    try { console.info('[palace load] palaceMat-done'); } catch (_) {}
     function dropProp(part, x, z, rot, targetH, y) {
       if (!part) return;
       y = y || 0;
@@ -2602,12 +2973,16 @@
       return a && b ? [a, b] : [part];
     }
     const banners = [], lows = [], vessels = [];
-    propParts.forEach(function (part) {
+    try { console.info('[palace load] role-start', propParts.length); } catch (_) {}
+    for (let pi = 0; pi < propParts.length; pi++) {
+      const part = propParts[pi];
       const role = roleOf(part.size);
       if (role === 'banner') splitBanner(part).forEach(function (b) { banners.push(b); });
       else if (role === 'low') lows.push(part);
       else vessels.push(part);
-    });
+      await yieldSlice();
+    }
+    try { console.info('[palace load] role-done banners', banners.length, 'lows', lows.length); } catch (_) {}
     lows.sort(function (a, b) { return (b.size.x * b.size.z) - (a.size.x * a.size.z); });
     vessels.sort(function (a, b) { return b.size.y - a.size.y; });
     const couch = lows[0] || null;
@@ -2637,6 +3012,7 @@
         rot: longIsX ? Math.PI / 2 : 0
       };
     }
+    try { console.info('[palace load] furniture-start'); } catch (_) {}
     if (couch && chest) {
       const stations = 3;
       const z0 = 4.2 * H;
@@ -2665,6 +3041,8 @@
       }
       slotModes.push({ id: 'furniture', count: stations * 2, mode: 'arranged' });
     }
+    try { console.info('[palace load] furniture-done'); } catch (_) {}
+    await yieldSlice(true);
     (function hangBanners() {
       const flags = banners.length ? banners : [];
       if (!flags.length) return;
@@ -2696,6 +3074,8 @@
 
     // Intensities tuned for r187 + three-compat (point lights keep author units;
     // hemi/ambient receive ×π only while rendering). Outdoor sun/hemi are zeroed.
+    try { console.info('[palace load] banners-done'); } catch (_) {}
+    await yieldSlice(true);
     const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.18);
     hemi.name = 'PalaceHallHemi';
     group.add(hemi);
@@ -2711,7 +3091,9 @@
       group.add(pl);
       lights.push(pl);
     }
+    try { console.info('[palace load] lights-done'); } catch (_) {}
     console.info('قاعة', n, 'وحدات، ارتفاع', (CH / H).toFixed(2), 'H، مباخر', brzMatrices.length, 'أقواس', CONFIG.PASSAGES.length);
+    await yieldSlice(true);
 
     function buildFires() {
       if (!fireList.length) return;
@@ -3159,13 +3541,19 @@
       }
     });
 
+    try { console.info('[palace load] props-slots-done'); } catch (_) {}
+    await yieldSlice(true);
     if (CONFIG.useWings && window.PalaceWings) {
       const tWings = performance.now();
       mark('phase wings start');
-      wingRuntime = PalaceWings.build(ctx, {
+      try { console.info('[palace load] wings-start'); } catch (_) {}
+      const baked = await loadColliderBake();
+      if (baked && typeof PalaceWings.provideBake === 'function') PalaceWings.provideBake(baked);
+      wingRuntime = await PalaceWings.build(ctx, {
         width: W, length: L, wallThickness: wallThick, alcoveDepth: 1.15 * H,
-        floorY: gy, passages: CONFIG.PASSAGES
+        floorY: gy, passages: CONFIG.PASSAGES, H: H
       });
+      try { console.info('[palace load] wings-end', Math.round(performance.now() - tWings) + 'ms'); } catch (_) {}
       note('wings ' + Math.round(performance.now() - tWings) + 'ms');
       wingRuntime.fires.forEach(function (f) { f._wing = true; fireList.push(f); });
     }
@@ -3436,6 +3824,361 @@
   }
 
   let lastDt = 0.016;
+
+
+
+  // Walk only palace roots (never leftover outdoor) and report what the
+  // first DONE frame would submit: visible meshes / tris / draws, shadow
+  // casters and passes, region vis, leftover city. Logs before the
+  // blackout lifts so a later llvmpipe stall cannot swallow the numbers.
+  function prepareHallFrustumCull(root) {
+    if (!root || !root.traverse) return 0;
+    try { root.updateMatrixWorld(true); } catch (_) {}
+    let n = 0;
+    root.traverse(function (o) {
+      if (!o.isMesh || o.isInstancedMesh || o.isSprite || o.isPoints) return;
+      if (o.frustumCulled !== false) return;
+      try {
+        if (o.geometry) {
+          if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+          if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        }
+        o.frustumCulled = true;
+        n++;
+      } catch (_) {}
+    });
+    return n;
+  }
+
+  function censusPendingFrame(ctx, tag) {
+    const t0 = performance.now();
+    const out = {
+      tag: tag,
+      cityReleased: false,
+      leftoverVisible: [],
+      roots: [],
+      lights: 0,
+      shadowLights: 0,
+      pointShadowPasses: 0,
+      dirSpotShadowPasses: 0,
+      shadowMapEnabled: false,
+      meshes: 0,
+      visMeshes: 0,
+      visDraws: 0,
+      visTris: 0,
+      visCasters: 0,
+      unculledVis: 0,
+      unculledVisTris: 0,
+      inFrustum: 0,
+      inFrustumTris: 0,
+      hallVis: 0,
+      hallTris: 0,
+      wingVis: 0,
+      wingTris: 0,
+      heroVis: 0,
+      heroTris: 0,
+      otherVis: 0,
+      otherTris: 0,
+      regions: null,
+      regionCount: 0,
+      ms: 0
+    };
+    try {
+      const scene = ctx && ctx.scene, cam = ctx && ctx.camera, renderer = ctx && ctx.renderer;
+      if (!scene) { out.ms = performance.now() - t0; console.info('[palace load] frame-census', JSON.stringify(out)); return out; }
+      out.cityReleased = !!(scene.userData && scene.userData.cityReleased);
+      out.shadowMapEnabled = !!(renderer && renderer.shadowMap && renderer.shadowMap.enabled);
+      const keep = { PalaceInterior: 1, PalaceWings: 1 };
+      (scene.children || []).forEach(function (ch) {
+        const name = ch.name || ch.type || '?';
+        out.roots.push(name + ':vis=' + !!ch.visible + (ch.isLight ? ':light' : ''));
+        if (ch === (ctx && ctx.hero) || (ctx && ctx.hero && ch === ctx.hero.parent)) return;
+        if (keep[name] || (ch.userData && ch.userData.keepDuringPalace) || ch.isLight || ch.isCamera) return;
+        if (ch.visible) out.leftoverVisible.push(name);
+      });
+      let frustum = null;
+      try {
+        if (cam && THREE.Frustum && THREE.Matrix4) {
+          cam.updateMatrixWorld();
+          frustum = new THREE.Frustum();
+          const m = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+          frustum.setFromProjectionMatrix(m);
+        }
+      } catch (_) {}
+      function trisOf(o) {
+        const g = o.geometry;
+        if (!g) return 0;
+        const t = g.index ? g.index.count / 3 : (g.attributes && g.attributes.position ? g.attributes.position.count / 3 : 0);
+        return t * (o.isInstancedMesh && o.count ? o.count : 1);
+      }
+      function worldVisible(o) {
+        let p = o;
+        while (p) { if (p.visible === false) return false; p = p.parent; }
+        return true;
+      }
+      function kindOf(o) {
+        let p = o;
+        while (p) {
+          if (p.name === 'PalaceInterior') return 'hall';
+          if (p.name === 'PalaceWings') return 'wing';
+          if (ctx && ctx.hero && (p === ctx.hero || p.name === 'hero' || p.name === 'Hero')) return 'hero';
+          p = p.parent;
+        }
+        return 'other';
+      }
+      function walk(root) {
+        if (!root || !root.traverse) return;
+        root.traverse(function (o) {
+          if (o.isLight) {
+            out.lights++;
+            const on = o.intensity == null || o.intensity > 0;
+            if (o.castShadow && on) {
+              out.shadowLights++;
+              if (o.isPointLight) out.pointShadowPasses += 6;
+              else out.dirSpotShadowPasses += 1;
+            }
+            return;
+          }
+          if (!o.isMesh && !o.isSprite && !o.isPoints && !o.isInstancedMesh) return;
+          out.meshes++;
+          if (!worldVisible(o)) return;
+          const tris = trisOf(o);
+          const draws = 1;
+          out.visMeshes++;
+          out.visDraws += draws;
+          out.visTris += tris;
+          if (o.castShadow) out.visCasters++;
+          if (o.frustumCulled === false) { out.unculledVis++; out.unculledVisTris += tris; }
+          let inF = false;
+          if (frustum) {
+            try {
+              if (o.isSprite || o.isPoints) inF = true;
+              else if (typeof frustum.intersectsObject === 'function') inF = frustum.intersectsObject(o);
+              else inF = true;
+            } catch (_) { inF = true; }
+          }
+          if (inF) { out.inFrustum++; out.inFrustumTris += tris; }
+          const k = kindOf(o);
+          if (k === 'hall') { out.hallVis++; out.hallTris += tris; }
+          else if (k === 'wing') { out.wingVis++; out.wingTris += tris; }
+          else if (k === 'hero') { out.heroVis++; out.heroTris += tris; }
+          else { out.otherVis++; out.otherTris += tris; }
+          if (!out.top) out.top = [];
+          out.top.push({ n: o.name || o.type || '?', k: k, tris: Math.round(tris), cull: o.frustumCulled !== false, f: inF, sh: !!o.castShadow, inst: !!o.isInstancedMesh });
+        });
+      }
+      walk(group);
+      if (wingRuntime && wingRuntime.root) walk(wingRuntime.root);
+      if (ctx && ctx.hero) walk(ctx.hero);
+      // Lights that live on the scene (kept outdoor hemi/sun) — shallow.
+      (scene.children || []).forEach(function (ch) {
+        if (ch.isLight) {
+          out.lights++;
+          const on = ch.intensity == null || ch.intensity > 0;
+          if (ch.castShadow && on) {
+            out.shadowLights++;
+            if (ch.isPointLight) out.pointShadowPasses += 6;
+            else out.dirSpotShadowPasses += 1;
+          }
+        }
+      });
+      try {
+        const vis = window.PalaceWings && PalaceWings.state && PalaceWings.state.visibility;
+        const v = vis && vis.visible;
+        out.regions = v ? (Array.isArray(v) ? v.slice() : Array.from(v)) : null;
+        out.regionCount = out.regions ? out.regions.length : 0;
+        const st = window.PalaceWings && PalaceWings.state;
+        if (st && st.regionGroups && st.regionGroups.forEach) {
+          const shown = [];
+          st.regionGroups.forEach(function (g, id) { if (g && g.visible) shown.push(id); });
+          out.regionGroupsVisible = shown;
+          out.regionGroupsVisibleCount = shown.length;
+        }
+      } catch (_) {}
+      out.visTris = Math.round(out.visTris);
+      out.hallTris = Math.round(out.hallTris);
+      out.wingTris = Math.round(out.wingTris);
+      out.unculledVisTris = Math.round(out.unculledVisTris);
+      out.inFrustumTris = Math.round(out.inFrustumTris);
+    } catch (e) {
+      out.err = String(e && e.message || e).slice(0, 160);
+    }
+    out.ms = Math.round(performance.now() - t0);
+    try {
+      console.info('[palace load] frame-census', out.tag,
+        'cityReleased', out.cityReleased,
+        'leftover', (out.leftoverVisible || []).join(',') || 'none',
+        'shadowMap', out.shadowMapEnabled,
+        'lights', out.lights, 'shadowLights', out.shadowLights,
+        'pointPasses', out.pointShadowPasses, 'dirPasses', out.dirSpotShadowPasses,
+        'casters', out.visCasters);
+      console.info('[palace load] frame-census-draw',
+        'visMeshes', out.visMeshes, 'visDraws', out.visDraws, 'visTris', out.visTris,
+        'unculled', out.unculledVis, 'unculledTris', out.unculledVisTris,
+        'inFrustum', out.inFrustum, 'inFrustumTris', out.inFrustumTris);
+      console.info('[palace load] frame-census-roots',
+        'hall', out.hallVis, out.hallTris,
+        'wing', out.wingVis, out.wingTris,
+        'hero', out.heroVis, out.heroTris,
+        'other', out.otherVis, out.otherTris,
+        'regions', out.regionGroupsVisibleCount, (out.regionGroupsVisible || []).join(','),
+        'ms', out.ms);
+      console.info('[palace load] frame-census-scene', (out.roots || []).join(' | '));
+      if (out.top && out.top.length) {
+        out.top.sort(function (a, b) { return b.tris - a.tris; });
+        out.top.slice(0, 12).forEach(function (m, i) {
+          console.info('[palace load] frame-census-mesh', i + 1, m.n, m.k, 'tris', m.tris, 'frustumCulled', m.cull, 'inF', m.f, 'castShadow', m.sh, 'inst', m.inst);
+        });
+      }
+    } catch (_) {}
+    return out;
+  }
+
+  // When KHR_parallel_shader_compile is missing, isReady() is immediately
+  // true and the next GL call can stall 30–90 s on a still-linking program.
+  // A WebGL2 fence after compile lets us poll GPU completion without a
+  // blocking gl.finish(), so the JS heartbeat keeps running on the iPhone
+  // and in the lab alike.
+  function waitForGlIdle(gl) {
+    return new Promise(function (resolve) {
+      if (!gl || typeof gl.fenceSync !== 'function') { resolve(); return; }
+      let sync;
+      try { sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); } catch (_) { resolve(); return; }
+      if (!sync) { resolve(); return; }
+      try { gl.flush(); } catch (_) {}
+      function poll() {
+        let r;
+        try { r = gl.clientWaitSync(sync, 0, 0); } catch (_) { r = gl.WAIT_FAILED; }
+        if (r === gl.ALREADY_SIGNALED || r === gl.CONDITION_SATISFIED || r === gl.WAIT_FAILED) {
+          try { gl.deleteSync(sync); } catch (_) {}
+          resolve();
+          return;
+        }
+        setTimeout(poll, 10);
+      }
+      poll();
+    });
+  }
+
+  // Restore hall / wing / hero visibility and drop the stand-in compile scene.
+  function restoreWarmRoots(ctx) {
+    const restored = new Set();
+    if (warmMeshes) {
+      warmMeshes.forEach(function (e2) {
+        if (restored.has(e2.obj)) return;
+        restored.add(e2.obj);
+        e2.obj.visible = e2.obj.userData._warmVis !== false;
+        delete e2.obj.userData._warmVis;
+      });
+    }
+    if (ctx && ctx.hero && ctx.hero.userData._warmHero != null) {
+      ctx.hero.visible = ctx.hero.userData._warmHero !== false;
+      delete ctx.hero.userData._warmHero;
+    }
+    if (group && group.userData._warmRootVis != null) {
+      group.visible = group.userData._warmRootVis !== false;
+      delete group.userData._warmRootVis;
+    }
+    if (wingRuntime && wingRuntime.root && wingRuntime.root.userData._warmRootVis != null) {
+      wingRuntime.root.visible = wingRuntime.root.userData._warmRootVis !== false;
+      delete wingRuntime.root.userData._warmRootVis;
+    }
+    if (warmProxy) {
+      if (warmScene) warmScene.remove(warmProxy);
+      else if (ctx && ctx.scene) ctx.scene.remove(warmProxy);
+      try { warmProxy.geometry.dispose(); } catch (_) {}
+      warmProxy = null;
+    }
+    if (warmProxyI) {
+      if (warmScene) warmScene.remove(warmProxyI);
+      else if (ctx && ctx.scene) ctx.scene.remove(warmProxyI);
+      try { warmProxyI.geometry.dispose(); } catch (_) {}
+      warmProxyI = null;
+    }
+    if (warmScene) { warmScene.environment = null; warmScene = null; }
+  }
+
+  function finishWarm(ctx) {
+    restoreWarmRoots(ctx);
+    warmPending = false;
+    warmFrame = true;
+    mark('warm slices max=' + Math.round(warmSlow) + 'ms n=' + warmIndex);
+    try { console.info('[palace load] warm-done', warmIndex, 'max', Math.round(warmSlow) + 'ms'); } catch (_) {}
+    warmMeshes = null;
+    renderUI();
+  }
+
+  // Fresh shader compiles can stall the GL driver 30–90 s AFTER compile()
+  // returns, on the next GL call. r187 compileAsync runs compile() then
+  // polls program.isReady() through KHR_parallel_shader_compile (non-blocking)
+  // every 10 ms. The next material starts only when that program is ready.
+  // Cached programs resolve in a few ms; we start the next one in this turn
+  // up to WARM_BUDGET_MS so 65 entry materials finish in a couple of frames.
+  // This is the same path on the iPhone and in the lab — no webdriver gate.
+  const WARM_BUDGET_MS = 12;
+
+  function beginWarmSlice(ctx) {
+    if (warmPending || warmFrame || !warmMeshes) return;
+    if (warmIndex >= warmMeshes.length) { finishWarm(ctx); return; }
+    const e = warmMeshes[warmIndex];
+    const o = e && e.obj;
+    const heavy = o && (o.isSprite || o.isPoints || o.isSkinnedMesh);
+    const proxy = !o ? null : heavy ? o : (o.isInstancedMesh ? warmProxyI : warmProxy);
+    if (proxy && proxy !== o) {
+      proxy.material = e.mat;
+      const dir = new THREE.Vector3();
+      ctx.camera.getWorldDirection(dir);
+      proxy.position.copy(ctx.camera.position).addScaledVector(dir, 0.45);
+      proxy.quaternion.copy(ctx.camera.quaternion);
+      proxy.visible = true;
+    } else if (o) {
+      o.visible = o.userData._warmVis !== false;
+      if (e.mat) o.material = o.material;
+    }
+    try { console.info('[palace load] warm-begin', warmIndex, '/', warmMeshes.length, e && e.mat && (e.mat.name || e.mat.type) || '', e && e.obj && (e.obj.name || e.obj.type) || ''); } catch (_) {}
+    const tWarm = performance.now();
+    const target = warmScene || ctx.scene;
+    try { if (ctx.renderer.debug) ctx.renderer.debug.checkShaderErrors = false; } catch (_) {}
+
+    function afterCompile() {
+      const gl = ctx.renderer.getContext && ctx.renderer.getContext();
+      return waitForGlIdle(gl).then(finishSlice);
+    }
+
+    function finishSlice() {
+      const took = performance.now() - tWarm;
+      try { console.info('[palace load] warm', warmIndex, '/', warmMeshes.length, Math.round(took) + 'ms'); } catch (_) {}
+      if (took > warmSlow) warmSlow = took;
+      if (took > 120) mark('warm ' + Math.round(took) + 'ms ' + ((e && e.mat && (e.mat.name || e.mat.type)) || (o && (o.name || o.type)) || '?'));
+      if (proxy && proxy !== o) proxy.visible = false;
+      else if (o) o.visible = false;
+      warmIndex += 1;
+      if (statusEl) statusEl.textContent = 'جارٍ تجهيز القاعة';
+      renderUI();
+      try { console.info('[palace load] warm-slice-end', warmIndex); } catch (_) {}
+      warmPending = false;
+      if (!warmMeshes || warmIndex >= warmMeshes.length) { finishWarm(ctx); return; }
+      if (took < WARM_BUDGET_MS) beginWarmSlice(ctx);
+    }
+
+    warmPending = true;
+    try {
+      if (typeof ctx.renderer.compileAsync === 'function') {
+        Promise.resolve(ctx.renderer.compileAsync(target, ctx.camera)).then(afterCompile, function (err) {
+          mark('render ' + (err && err.message));
+          afterCompile();
+        });
+      } else {
+        if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(target, ctx.camera);
+        else ctx.renderer.render(target, ctx.camera);
+        afterCompile();
+      }
+    } catch (renderErr) {
+      mark('render ' + (renderErr && renderErr.message));
+      afterCompile();
+    }
+  }
+
   function tick(dt, ctx) {
     rig.idle++; // frames since the camera rig last ran (a re-entry snaps instead of swinging)
     try { tickInner(dt, ctx); }
@@ -3487,7 +4230,7 @@
         state = 'FADING_OUT';
         fadeT = 0;
         holdT = 0;
-        loadOk = null;
+        loadOk = null; setupTask = null;
         loadError = null;
         hallBuilt = false;
         warmFrame = false;
@@ -3531,6 +4274,9 @@
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
       renderUI();
+      // Keep GPU uploads inside the 50 ms budget even if the async loader
+      // is between assets. Never do an unbounded initTexture burst here.
+      try { pumpGpuUploads(ctx.renderer, 50); } catch (_) {}
       // Strict order: pause → dispose outside → confirm drop → only then load.
       if (teardownPhase < 5) {
         advanceTeardownGate(ctx);
@@ -3550,34 +4296,57 @@
       return;
     }
     if (state === 'SETUP') {
-      try {
-        if (statusEl) statusEl.textContent = 'جارٍ بناء القاعة';
-        renderUI();
-        const tBuild = performance.now();
-        build(ctx);
-        hallBuilt = true;
-        placeHero(ctx);
-        // Hide the city before any palace frame. Drawing the whole avenue
-        // together with the new hall uploads enough geometry to kill the tab,
-        // which reloads the game back to the opening loading screen at 99%.
-        holdCull(ctx.scene, ctx.hero);
-        note('built ' + Math.round(performance.now() - tBuild) + 'ms');
-        try {
-          snapshotMeshBudget('post-palace-build', ctx);
-          if (window.SinMemoryOverlay) SinMemoryOverlay.reportHeaviest(ctx.scene, 'post-palace-build');
-        } catch (_) {}
-        window.__sinEntryBlackout = false;
-        renderUI();
-        state = 'REVEAL';
-        fadeT = 0;
-        warmFrame = false;
-    warmMeshes = null;
-      } catch (err) {
-        console.error(err);
-        runtimeErrors.push('SETUP: ' + (err && (err.stack || err.message) || err));
-        loadError = err;
-        state = 'FAILED';
-        showFail(err);
+      if (statusEl) statusEl.textContent = 'جارٍ بناء القاعة';
+      renderUI();
+      if (!setupTask) {
+        const saved = ctx;
+        setupTask = (async function () {
+          try {
+            try { window.__palaceSetupBusy = true; } catch (_) {}
+            const tBuild = performance.now();
+            try { console.info('[palace load] SETUP build-start'); } catch (_) {}
+            await build(saved);
+            try { console.info('[palace load] SETUP build-end', Math.round(performance.now() - tBuild) + 'ms'); } catch (_) {}
+            hallBuilt = true;
+            const tPost = performance.now();
+            placeHero(saved);
+            try { console.info('[palace load] SETUP placeHero', Math.round(performance.now() - tPost) + 'ms'); } catch (_) {}
+            // Hide the city before any palace frame. Drawing the whole avenue
+            // together with the new hall uploads enough geometry to kill the tab,
+            // which reloads the game back to the opening loading screen at 99%.
+            holdCull(saved.scene, saved.hero);
+            try { console.info('[palace load] SETUP holdCull', Math.round(performance.now() - tPost) + 'ms'); } catch (_) {}
+            note('built ' + Math.round(performance.now() - tBuild) + 'ms');
+            try { console.info('[palace load] SETUP after-note'); } catch (_) {}
+            // Do not schedule reportHeaviest(scene) here. A setTimeout(0)
+            // walk of the full scene raced the first REVEAL warm slice and
+            // froze WebKit for 30s+ (it still traversed leftover outdoor
+            // nodes). Diagnostics run on palace roots after DONE.
+            try { console.info('[palace load] SETUP to-reveal'); } catch (_) {}
+            // Keep the blackout through REVEAL warm-up so the main loop does
+            // not draw a full palace frame (that compiles every shader at once
+            // and kills the iPhone tab). Tick still runs the one-material warm.
+            renderUI();
+            state = 'REVEAL';
+            fadeT = 0;
+            warmFrame = false;
+            warmMeshes = null;
+            warmScene = null;
+            warmPending = false;
+            liveCompilePending = false;
+            liveCompileDone = false;
+            streamHoldFrames = 0;
+            try { window.__sinStreamHold = false; } catch (_) {}
+            try { window.__palaceSetupBusy = false; } catch (_) {}
+            try { console.info('[palace load] REVEAL-enter'); } catch (_) {}
+          } catch (err) {
+            console.error(err);
+            runtimeErrors.push('SETUP: ' + (err && (err.stack || err.message) || err));
+            loadError = err;
+            state = 'FAILED';
+            showFail(err);
+          }
+        })();
       }
       return;
     }
@@ -3587,8 +4356,9 @@
       // the opening screen while the bar is stuck at 99%. Compile one material
       // per frame on a tiny stand-in, then draw the real hall once.
       if (!warmFrame) {
-        holdCull(ctx.scene, ctx.hero);
+        if (!warmPending) holdCull(ctx.scene, ctx.hero);
         if (!warmMeshes) {
+          try { console.info('[palace load] REVEAL-warm-collect'); } catch (_) {}
           const seen = new Set();
           warmMeshes = [];
           const consider = function (root, visibleOnly) {
@@ -3645,7 +4415,6 @@
           warmProxy.frustumCulled = false;
           warmProxy.visible = false;
           warmProxy.name = 'warm-proxy';
-          ctx.scene.add(warmProxy);
           warmProxyI = new THREE.InstancedMesh(tiny.clone(), new THREE.MeshBasicMaterial(), 1);
           warmProxyI.frustumCulled = false;
           warmProxyI.visible = false;
@@ -3654,93 +4423,49 @@
           idm.updateMatrix();
           warmProxyI.setMatrixAt(0, idm.matrix);
           warmProxyI.instanceMatrix.needsUpdate = true;
-          ctx.scene.add(warmProxyI);
+          // Isolated compile scene: the first renderer.render(ctx.scene) after
+          // SETUP walked every leftover outdoor node (updateMatrixWorld) and
+          // compiled hall shaders against the full graph — a multi-minute
+          // software-GL stall at REVEAL-warm-n. Lights are cloned so the
+          // compiled program matches the first real hall frame.
+          warmScene = new THREE.Scene();
+          warmScene.environment = ctx.scene.environment;
+          if (ctx.scene.environmentIntensity != null) warmScene.environmentIntensity = ctx.scene.environmentIntensity;
+          if (ctx.scene.fog) warmScene.fog = ctx.scene.fog;
+          const addLights = function (root) {
+            if (!root || !root.traverse) return;
+            root.traverse(function (o) {
+              if (!o.isLight || (o.intensity != null && o.intensity <= 0)) return;
+              try {
+                const c = o.clone();
+                const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
+                o.getWorldPosition(wp); o.getWorldQuaternion(wq); o.getWorldScale(ws);
+                c.position.copy(wp); c.quaternion.copy(wq); c.scale.copy(ws);
+                warmScene.add(c);
+              } catch (_) {}
+            });
+          };
+          addLights(group);
+          addLights(wingRuntime && wingRuntime.root);
+          warmScene.add(warmProxy);
+          warmScene.add(warmProxyI);
           warmIndex = 0;
           warmSlow = 0;
           mark('warm materials ' + warmMeshes.length);
-          try { drainCpuNow(ctx, 'warm-start'); } catch (_) {}
-        }
-        const e = warmMeshes[warmIndex];
-        const o = e && e.obj;
-        const heavy = o && (o.isSprite || o.isPoints || o.isSkinnedMesh);
-        const proxy = !o ? null : heavy ? o : (o.isInstancedMesh ? warmProxyI : warmProxy);
-        if (proxy && proxy !== o) {
-          proxy.material = e.mat;
-          const dir = new THREE.Vector3();
-          ctx.camera.getWorldDirection(dir);
-          proxy.position.copy(ctx.camera.position).addScaledVector(dir, 0.45);
-          proxy.quaternion.copy(ctx.camera.quaternion);
-          proxy.visible = true;
-        } else if (o) {
-          o.visible = o.userData._warmVis !== false;
-          if (e.mat) o.material = o.material;
-        }
-        const tWarm = performance.now();
-        try { ctx.renderer.render(ctx.scene, ctx.camera); }
-        catch (renderErr) { mark('render ' + (renderErr && renderErr.message)); }
-        const took = performance.now() - tWarm;
-        if (took > warmSlow) warmSlow = took;
-        if (took > 120) mark('warm ' + Math.round(took) + 'ms ' + ((e && e.mat && (e.mat.name || e.mat.type)) || (o && (o.name || o.type)) || '?'));
-        if (proxy && proxy !== o) proxy.visible = false;
-        else if (o) o.visible = false;
-        warmIndex += 1;
-        if (statusEl) statusEl.textContent = 'جارٍ تجهيز القاعة';
-        renderUI();
-        // Drain after every slice so CPU ImageBitmaps never sit alongside
-        // the growing GPU program set — that overlap peaked at 1305 MB.
-        try { drainCpuNow(ctx, (warmIndex % 16 === 0) ? ('warm-' + warmIndex) : null); } catch (_) {}
-        if (warmIndex >= warmMeshes.length) {
-          const restored = new Set();
-          warmMeshes.forEach(function (e2) {
-            if (restored.has(e2.obj)) return;
-            restored.add(e2.obj);
-            e2.obj.visible = e2.obj.userData._warmVis !== false;
-            delete e2.obj.userData._warmVis;
-          });
-          if (ctx.hero && ctx.hero.userData._warmHero != null) {
-            ctx.hero.visible = ctx.hero.userData._warmHero !== false;
-            delete ctx.hero.userData._warmHero;
-          }
-          if (group && group.userData._warmRootVis != null) {
-            group.visible = group.userData._warmRootVis !== false;
-            delete group.userData._warmRootVis;
-          }
-          if (wingRuntime && wingRuntime.root && wingRuntime.root.userData._warmRootVis != null) {
-            wingRuntime.root.visible = wingRuntime.root.userData._warmRootVis !== false;
-            delete wingRuntime.root.userData._warmRootVis;
-          }
-          if (warmProxy) { ctx.scene.remove(warmProxy); warmProxy.geometry.dispose(); warmProxy = null; }
-          if (warmProxyI) { ctx.scene.remove(warmProxyI); warmProxyI.geometry.dispose(); warmProxyI = null; }
-          // Do not render the entire palace here. The next normal game-loop frame
-          // will draw it after the fade transition; rendering it synchronously at
-          // 99% can spike GPU memory and reset the mobile tab.
-          //
-          // Measured on a tight Chromium iPhone pass: process memory climbed
-          // 230 MB (post-city-release LOADING) → 1190 MB at the last REVEAL
-          // warm slice → 1457 MB on the first FADING_IN frame, then settled
-          // at ~570 MB. The 548 MB of that peak was CPU-side ImageBitmaps
-          // still held after GPU upload — exactly the overlap that jetsams
-          // iOS Safari while the player is standing still. Drain them HERE,
-          // before the first full hall frame, and give the GC a slice during
-          // the reveal-hold.
+          try { console.info('[palace load] REVEAL-warm-n', warmMeshes.length); } catch (_) {}
+          // Sync drainCpuNow here walked the hall and wings long enough to
+          // freeze WebKit for minutes. GPU uploads already ran during LOADING.
+          // A deferred drain still runs after the last warm slice.
+          try { console.info('[palace load] REVEAL-warm-ready'); } catch (_) {}
           try {
-            const roots = [group, wingRuntime && wingRuntime.root, ctx.hero, ctx.scene];
-            for (let i = 0; i < roots.length; i++) {
-              if (!roots[i]) continue;
-              try { releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
-              try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
-            }
-            if (window.SinProcessMemory) {
-              const pe = SinProcessMemory.estimate({ renderer: ctx.renderer, scene: ctx.scene, phase: 'REVEAL' });
-              mark('cpu drain after warm ~proc ' + (pe && pe.processMB) + ' cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB));
-            }
-            try { if (typeof globalThis.gc === 'function') globalThis.gc(); } catch (_) {}
-          } catch (drainErr) { mark('cpu drain ' + (drainErr && drainErr.message)); }
-          warmFrame = true;
-          mark('warm slices max=' + Math.round(warmSlow) + 'ms deferred-full n=' + warmMeshes.length);
-          warmMeshes = null;
-          renderUI();
+            const gl = ctx.renderer.getContext();
+            const extInfo = gl && gl.getExtension('WEBGL_debug_renderer_info');
+            const rn = extInfo ? String(gl.getParameter(extInfo.UNMASKED_RENDERER_WEBGL) || '') : '';
+            const khr = !!(gl && gl.getExtension('KHR_parallel_shader_compile'));
+            console.info('[palace load] gl-renderer', rn || '(hidden)', 'khr-parallel', khr, 'compileAsync', typeof ctx.renderer.compileAsync === 'function');
+          } catch (_) {}
         }
+        if (!warmPending) beginWarmSlice(ctx);
         return;
       }
       fadeT += dt;
@@ -3749,9 +4474,14 @@
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
       if (fadeT >= CONFIG.revealHoldSeconds && shownPercent() >= 100) {
+        // Keep the blackout through the load fade so the first full hall
+        // renderer.render (and its shader compiles) cannot freeze WebKit
+        // before we reach DONE. The game loop ticks FADING_IN without a
+        // 3D present; blackout lifts when state becomes DONE.
         state = 'FADING_IN';
         fadeT = 0;
         note('reveal');
+        try { console.info('[palace load] FADING_IN'); } catch (_) {}
       }
       return;
     }
@@ -3761,16 +4491,75 @@
       loadEl.style.opacity = String(1 - easeOut(u));
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
-      if (u >= 1) {
+      // Entrance materials were compiled on proxies. The first live
+      // renderer.render can still compile new program variants (skinning,
+      // shadows, the real light list). Do that here, on the real scene,
+      // while the blackout is up, then lift it.
+      if (u >= 1 && !liveCompileDone) {
+        if (!liveCompilePending) {
+          liveCompilePending = true;
+          try { console.info('[palace load] live-compile-begin'); } catch (_) {}
+          const tLive = performance.now();
+          function afterLive() {
+            const took = performance.now() - tLive;
+            try { console.info('[palace load] live-compile-end', Math.round(took) + 'ms'); } catch (_) {}
+            const gl = ctx.renderer.getContext && ctx.renderer.getContext();
+            waitForGlIdle(gl).then(function () {
+              liveCompilePending = false;
+              liveCompileDone = true;
+            });
+          }
+          try {
+            if (ctx.renderer.debug) ctx.renderer.debug.checkShaderErrors = false;
+            if (typeof ctx.renderer.compileAsync === 'function') {
+              Promise.resolve(ctx.renderer.compileAsync(ctx.scene, ctx.camera)).then(afterLive, afterLive);
+            } else if (typeof ctx.renderer.compile === 'function') {
+              ctx.renderer.compile(ctx.scene, ctx.camera);
+              afterLive();
+            } else {
+              afterLive();
+            }
+          } catch (e) {
+            mark('live-compile ' + (e && e.message));
+            afterLive();
+          }
+        }
+        return;
+      }
+      if (u >= 1 && liveCompileDone) {
         loadEl.style.opacity = '0';
         loadEl.style.pointerEvents = 'none';
         // Finish the load fade directly into gameplay; skip the scripted entrance walk/camera shot.
+        // Force a cull with the current camera so the census (and the
+        // first present) see the same region vis as a steady hall frame.
+        try { if (wingRuntime && window.PalaceWings && PalaceWings.tick) PalaceWings.tick(0, ctx); } catch (_) {}
+        // PMREM + interior look while still blacked out (see SinGfx.prepareInteriorLook).
+        try { if (window.SinGfx && SinGfx.prepareInteriorLook) SinGfx.prepareInteriorLook(); } catch (_) {}
+        try {
+          const n = prepareHallFrustumCull(group);
+          console.info('[palace load] hall-frustum-cull', n);
+        } catch (_) {}
+        try { if (ctx && ctx.camera) updateLODs(ctx.camera); } catch (_) {}
+        try { censusPendingFrame(ctx, 'pre-DONE'); } catch (ce) { try { console.info('[palace load] frame-census-fail', String(ce).slice(0, 160)); } catch (_) {} }
         state = 'DONE';
         fadeT = 0;
         entranceLeft = 0;
         entryCut = true;
         note('done (entrance cinematic skipped)');
         renderDebug();
+        streamHoldFrames = 3;
+        try { window.__sinStreamHold = true; } catch (_) {}
+        window.__sinEntryBlackout = false;
+        try { console.info('[palace load] DONE'); } catch (_) {}
+        setTimeout(function () {
+          try {
+            snapshotMeshBudget('post-palace-build', ctx);
+            if (window.SinMemoryOverlay) {
+              if (group) SinMemoryOverlay.reportHeaviest(group, 'post-palace-build');
+              if (wingRuntime && wingRuntime.root) SinMemoryOverlay.reportHeaviest(wingRuntime.root, 'post-palace-build-wings');
+            }
+          } catch (_) {}
+        }, 500);
       }
       return;
     }
@@ -3796,6 +4585,15 @@
       return;
     }
     if (state === 'DONE') {
+      const _trD = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
+      if (_trD) _trD('PalaceInterior.tick-DONE-enter');
+      if (streamHoldFrames > 0) {
+        streamHoldFrames -= 1;
+        try { window.__sinStreamHold = streamHoldFrames > 0; } catch (_) {}
+        if (streamHoldFrames <= 0) {
+          try { console.info('[palace load] stream-hold-lifted'); } catch (_) {}
+        }
+      }
       const lx = ctx.hero.position.x - portalX;
       const lz = ctx.hero.position.z - portalFront;
       const inHall = lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;
@@ -4029,7 +4827,15 @@
     loadPalaceAssets: loadPalaceAssets,
     state: function () { return state; },
     status: function () {
-      const wingRoom = (wingRuntime && wingRuntime.current) || (window.PalaceWings && PalaceWings.metrics && PalaceWings.metrics().current) || null;
+      // Cheap current-room only. PalaceWings.metrics() walks the whole wings
+      // graph and then asks zoneStreamer.report() → SinProcessMemory.estimate()
+      // which used to call this status() again — an infinite recurse that
+      // froze the first DONE frame whenever the hero was still in the hall
+      // (current === null, so the metrics() fallback always ran).
+      const wingRoom = (wingRuntime && wingRuntime.current)
+        || (window.PalaceWings && typeof PalaceWings.current === 'function' && PalaceWings.current())
+        || (window.PalaceWings && PalaceWings.state && PalaceWings.state.current)
+        || null;
       const room = wingRoom || (hallBuilt || state === 'DONE' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' ? 'Palace' : (state === 'LOADING' || state === 'FADING_OUT' || state === 'FAILED' ? 'entry' : 'outside'));
       return {
         phase: state,
@@ -4049,6 +4855,16 @@
     percent: shownPercent,
     debugText: debugText,
     mark: mark,
+    // Used by the streamer's onBudgetStall hook so a deferred door can
+    // drop leftover exterior memory rather than wait forever.
+    releaseCity: function (scene, hero) {
+      const s = scene || (lastContext && lastContext.scene);
+      const h = hero || (lastContext && lastContext.hero);
+      return releaseCity(s, h);
+    },
+    loadProfile: function () { return loadProfile.slice(); },
+    gpuUploadPending: function () { return gpuUploadQ.length; },
+    setDeepWing: setDeepWing,
     metrics: function () { return { H: H, length: hallLen, width: hallW, front: portalFront, x: portalX, state: state, occupant: occupant, lights: lights.length + 1, ramp: ramp ? ramp.yTop : 0 }; }
   };
   if (debugOn()) { ensureLoadScreen(); renderDebug(); }

@@ -22,6 +22,9 @@
 
   let lastSample = null;
   let lastWriteAt = 0;
+  let lastEstimateAt = 0;
+  let lastMetricsAt = 0;
+  let lastWings = null;
   let fpsEma = 0;
   const fpsRing = [];
   let fpsLow1 = null;
@@ -180,9 +183,32 @@
       usedMB: +(performance.memory.usedJSHeapSize / 1048576).toFixed(1),
       totalMB: +(performance.memory.totalJSHeapSize / 1048576).toFixed(1)
     } : null;
-    const wings = window.PalaceWings && PalaceWings.metrics ? PalaceWings.metrics() : null;
+    const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
+    if (_tr) _tr('overlay-sample-enter');
+    // metrics() is a full wings walk. Calling it every rAF from this
+    // diagnostic (and before the first hall present) was a
+    // diagnostic-to-diagnostic tax — not a recurse after the
+    // metrics↔estimate break, but still a stall on standing frames.
+    // Cheap current() is enough for the room label between TICK_MS samples;
+    // skip the walk entirely until the first present has returned.
+    const firstPresent = (typeof window !== 'undefined' && window.__sinFirstPresentLogged);
+    const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    let wings = lastWings;
+    const metricsDue = !lastMetricsAt || (nowMs - lastMetricsAt >= TICK_MS);
+    if (firstPresent && metricsDue && window.PalaceWings && PalaceWings.metrics) {
+      lastMetricsAt = nowMs;
+      wings = PalaceWings.metrics();
+      lastWings = wings;
+      if (_tr) _tr('overlay-PalaceWings.metrics');
+    } else if (window.PalaceWings && typeof PalaceWings.current === 'function') {
+      const cur = PalaceWings.current();
+      wings = lastWings ? Object.assign({}, lastWings, { current: cur || lastWings.current }) : { current: cur };
+      if (_tr) _tr('overlay-PalaceWings.current');
+    }
     const palace = window.PalaceInterior && PalaceInterior.status ? PalaceInterior.status() : null;
+    if (_tr) _tr('overlay-PalaceInterior.status');
     const gfx = window.SinGfx && SinGfx.status ? SinGfx.status() : null;
+    if (_tr) _tr('overlay-SinGfx.status');
     const now = performance.now();
     if (lastFrameTs) {
       const instDt = Math.max(1, now - lastFrameTs);
@@ -231,7 +257,14 @@
     if (Array.isArray(info && info.programs)) lastSample.programs = info.programs.length;
     else if (Array.isArray(mem.programs)) lastSample.programs = mem.programs.length;
     try {
-      if (root.SinProcessMemory && typeof SinProcessMemory.estimate === 'function') {
+      // estimate() traverses the scene. Doing that on the first DONE frame
+      // (and every rAF after) raced the first hall present and burned tens
+      // of seconds in WebKit software GL. Wait until the first present has
+      // returned, then sample at the same 500 ms cadence as the black box.
+      const firstPresent = (typeof window !== 'undefined' && window.__sinFirstPresentLogged);
+      const estNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (firstPresent && root.SinProcessMemory && typeof SinProcessMemory.estimate === 'function' && (estNow - lastEstimateAt >= TICK_MS)) {
+        lastEstimateAt = estNow;
         const pe = SinProcessMemory.estimate({ renderer: renderer, scene: ctx.scene, phase: lastSample.phase, room: lastSample.room });
         if (pe) {
           lastSample.texMB = pe.gpuTexMB;

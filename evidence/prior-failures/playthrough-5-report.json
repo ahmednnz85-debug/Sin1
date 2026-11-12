@@ -1,0 +1,103 @@
+{
+  "pass": {
+    "menu": true,
+    "gate": true,
+    "palace": true,
+    "kingComplete": true,
+    "peakUnder650": false,
+    "noContextLoss": true,
+    "noGrowth": true,
+    "landscapeGate": true,
+    "landscapeRestored": true,
+    "menus": true
+  },
+  "truePeak": 693.1,
+  "passDetail": {},
+  "kingComplete": null,
+  "peakUnder650": null,
+  "faults": [],
+  "kVisits": [
+    {
+      "id": "K1",
+      "proc": 481.9,
+      "peak": 483.3,
+      "lost": false,
+      "loop": 0,
+      "wait": 260
+    },
+    {
+      "id": "K2",
+      "proc": 585.8,
+      "peak": 585.8,
+      "lost": false,
+      "loop": 0,
+      "wait": 9672
+    },
+    {
+      "id": "K3",
+      "proc": 653.8,
+      "peak": 653.8,
+      "lost": false,
+      "loop": 0,
+      "wait": 3513
+    },
+    {
+      "id": "K4",
+      "proc": 693.1,
+      "peak": 693.1,
+      "lost": false,
+      "loop": 0,
+      "wait": 4538
+    },
+    {
+      "id": "K5",
+      "proc": 659,
+      "peak": 693.1,
+      "lost": false,
+      "loop": 0,
+      "wait": 126
+    },
+    {
+      "id": "K1",
+      "proc": 490.1,
+      "peak": 693.1,
+      "lost": false,
+      "loop": 1,
+      "wait": 263
+    },
+    {
+      "id": "K2",
+      "proc": 585.6,
+      "peak": 693.1,
+      "lost": false,
+      "loop": 1,
+      "wait": 8787
+    },
+    {
+      "id": "K3",
+      "proc": 653.8,
+      "peak": 693.1,
+      "lost": false,
+      "loop": 1,
+      "wait": 3216
+    },
+    {
+      "id": "K4",
+      "proc": 693.1,
+      "peak": 693.1,
+      "lost": false,
+      "loop": 1,
+      "wait": 4254
+    },
+    {
+      "id": "K5",
+      "proc": 659,
+      "peak": 693.1,
+      "lost": false,
+      "loop": 1,
+      "wait": 128
+    }
+  ],
+  "nVisits": 31,
+  "note": "Slimmed for repo hygiene; full logs live under /workspace/Sin1-report/now/ (not in the game repo)."
+}

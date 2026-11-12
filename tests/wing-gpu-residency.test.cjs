@@ -76,7 +76,9 @@ test('wing culling calls GPU residency synchronization and is camera-driven, dra
   const tickAt = wings.indexOf('function tick(dt)', cullingAt);
   assert.ok(cullingAt >= 0 && tickAt > cullingAt);
   const culling = wings.slice(cullingAt, tickAt);
-  assert.match(culling, /visibilityPlanner\.plan\(state\.regions, state\.links, origin, view/);
+  // plan() takes the hall-inclusive planRegions (so the hall is a first-class
+  // region) and a clock; the old state.regions-only signature is stale.
+  assert.match(culling, /visibilityPlanner\.plan\(planRegions, state\.links, origin, view/);
   assert.doesNotMatch(culling, /distM < 18/);
   assert.doesNotMatch(culling, /renderBudget\.choose\(/);
   assert.match(culling, /state\.palaceNear = id === 'Palace' \|\| isArch/);

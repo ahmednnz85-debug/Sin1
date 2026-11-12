@@ -46,6 +46,25 @@
     maxTextureSize: deviceProfile.maxTextureSize || 0,
     geometryBudget: deviceProfile.geometryBudget,
     textureBudget: deviceProfile.textureBudget,
+    processBudgetMB: deviceProfile.processBudgetMB,
+    gpuBudgetMB: deviceProfile.gpuBudgetMB,
+    cpuBudgetMB: deviceProfile.cpuBudgetMB,
+    deferStallMs: 3000,
+    onBudgetStall: function (rec) {
+      try {
+        const st = window.PalaceInterior && PalaceInterior.state && PalaceInterior.state();
+        // During palace LOADING/SETUP the city is already gone. A purge of
+        // the loader cache on the same tick as a GLB parse would block the
+        // main thread and was a suspected stall -> evict -> re-admit loop.
+        if (st === 'LOADING' || st === 'FADING_OUT' || st === 'SETUP') return;
+        if (window.PalaceInterior && typeof PalaceInterior.releaseCity === 'function') PalaceInterior.releaseCity();
+        if (window.__releaseExteriorStage) window.__releaseExteriorStage();
+        const PM = window.SinProcessMemory;
+        const R = window.__R, S = window.__S;
+        if (PM && PM.purgeOrphanTextures && R) PM.purgeOrphanTextures(R, S);
+        if (PM && PM.releaseCpuFromObject && S) PM.releaseCpuFromObject(S, R, { upload: false });
+      } catch (e) { try { console.warn('onBudgetStall', rec && rec.id, e); } catch (_) {} }
+    },
     log: function (kind, msg) { try { if (window.SinMemoryOverlay) SinMemoryOverlay.note(kind, msg); } catch (_) {} }
   }) : null;
 
@@ -106,10 +125,24 @@
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
   function assetList() {
-    const entryAssets = new Set([WING_FILES.k1]);
-    return Object.keys(WING_FILES).filter(k => entryAssets.has(WING_FILES[k]))
-      .map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
-      .filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
+    // Entry-visible corridor models must parse during LOADING (already
+    // yielded and logged between files). If they stay off this list,
+    // dressCorridors starts a fetch+GLTFLoader.parse mid-SETUP; at high
+    // WebKit RSS that parse raced the post-corridors yield and blocked
+    // the main thread for minutes.
+    const entryAssets = new Set([
+      WING_FILES.k1,
+      WING_FILES.plant,
+      WING_FILES.torchBlack,
+      WING_FILES.torchWood,
+      WING_DOOR_FILE
+    ]);
+    const list = Object.keys(WING_FILES).filter(k => entryAssets.has(WING_FILES[k]))
+      .map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }));
+    if (entryAssets.has(WING_DOOR_FILE) && !list.some(function (a) { return a.url === WING_DOOR_FILE; })) {
+      list.push({ url: WING_DOOR_FILE, kind: 'glb' });
+    }
+    return list.filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
   }
   function provideAsset(url, value) { if (url && value) preloaded.set(url, value); }
   function preloadReport() {
@@ -119,12 +152,31 @@
     const t = preloaded.get(url);
     return t && t.isTexture ? t : null;
   }
-  function flushDeferredLoads() {
+  async function flushDeferredLoads() {
+    // building must be false before any queued wingGLB runs, otherwise
+    // the uncached path would re-queue itself forever.
     state.building = false;
+    let i = 0;
+    const n = deferredLoads.length;
+    try { console.info('[palace load] deferred-start', n); } catch (_) {}
     while (deferredLoads.length) {
       const run = deferredLoads.shift();
-      try { run(); } catch (e) { console.error('Wing model setup failed', e); }
+      const t0 = performance.now();
+      try { await Promise.resolve(run()); } catch (e) { console.error('Wing model setup failed', e); }
+      try { console.info('[palace load] deferred', i, Math.round(performance.now() - t0) + 'ms', 'left', deferredLoads.length); } catch (_) {}
+      i++;
+      await yieldWing();
     }
+    const tChain = performance.now();
+    try {
+      await Promise.race([
+        wingLoadChain,
+        new Promise(function (_, rej) { setTimeout(function () { rej(new Error('wingLoadChain timeout')); }, 8000); })
+      ]);
+    } catch (e) {
+      try { console.warn('[palace load] deferred-chain', e && e.message, Math.round(performance.now() - tChain) + 'ms'); } catch (_) {}
+    }
+    try { console.info('[palace load] deferred-end', n, 'chain', Math.round(performance.now() - tChain) + 'ms'); } catch (_) {}
   }
   function withMeshopt(go) {
     const D = window.MeshoptDecoder;
@@ -199,13 +251,27 @@
     const fail = onError || (e => console.warn('Wing model failed', url, e));
     if (!THREE.GLTFLoader) { fail(new Error('GLTFLoader not available')); return; }
     const deliver = gltf => {
-      onLoad(gltf);
-      if (state.built && !state.building) updateCulling(true);
+      const t0 = performance.now();
+      let p;
+      try { p = Promise.resolve(onLoad(gltf)); } catch (e) { p = Promise.reject(e); }
+      return p.then(function () {
+        try { console.info('[palace load] wing-deliver', (url || '').split('/').pop(), Math.round(performance.now() - t0) + 'ms'); } catch (_) {}
+        if (state.built && !state.building) updateCulling(true);
+      }, fail);
     };
     const cached = preloaded.get(url);
     if (cached && cached.scene) {
       const run = () => deliver({ scene: cached.scene.clone(true), animations: cached.animations || [] });
       if (state.building) deferredLoads.push(run); else run();
+      return;
+    }
+    // Uncached fetch+parse used to start here even during SETUP. The parse
+    // callback then raced the post-corridors yield and ran GLTFLoader.parse
+    // of the plant and both torch GLBs on the main thread — the multi-minute
+    // WebKit block after visuals-corridors. Queue the whole load until
+    // flushDeferredLoads (building is false then).
+    if (state.building) {
+      deferredLoads.push(function () { wingGLB(url, onLoad, onError); });
       return;
     }
     enqueueWingLoad(function () {
@@ -215,15 +281,57 @@
             if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url);
             return res.arrayBuffer();
           }).then(function (buf) {
-            return new Promise(function (resOk, resFail) {
-              const loader = new THREE.GLTFLoader();
-              if (dec) loader.setMeshoptDecoder(dec);
-              loader.parse(buf, '', function (gltf) {
-                try { releaseGltfCpu(gltf); } catch (_) {}
-                // buf dropped when this closure ends — no long-lived ArrayBuffer.
-                deliver(gltf);
-                resOk();
-              }, resFail);
+            const file = (url || '').split('/').pop();
+            const big = !!(buf && buf.byteLength >= 1500000);
+            // After the first hall present, a 2–4 s GLTFLoader.parse
+            // (عمود-المجلس, سقف-المجلس) must not run on the same turn as
+            // standing frames. Wait out the stream hold, then yield a
+            // few rAFs (more for large files) so the hall can paint.
+            const waitToParse = function () {
+              return new Promise(function (ready) {
+                const step = function () {
+                  try {
+                    if (typeof window !== 'undefined' && window.__sinStreamHold) {
+                      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(step);
+                      else setTimeout(step, 16);
+                      return;
+                    }
+                    const presented = typeof window !== 'undefined' && window.__sinFirstPresentLogged;
+                    if (presented) {
+                      const need = big ? 12 : 2;
+                      const held = window.__sinWingParseYields || 0;
+                      if (held < need) {
+                        window.__sinWingParseYields = held + 1;
+                        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(step);
+                        else setTimeout(step, 16);
+                        return;
+                      }
+                    }
+                  } catch (_) {}
+                  ready();
+                };
+                step();
+              });
+            };
+            return waitToParse().then(function () {
+              return new Promise(function (resOk, resFail) {
+                const loader = new THREE.GLTFLoader();
+                if (dec) loader.setMeshoptDecoder(dec);
+                const tParse = performance.now();
+                try { console.info('[palace load] wing-parse-start', file, buf && buf.byteLength); } catch (_) {}
+                loader.parse(buf, '', function (gltf) {
+                  const dt = Math.round(performance.now() - tParse);
+                  try { console.info('[palace load] wing-parse', file, dt + 'ms'); } catch (_) {}
+                  try {
+                    if (typeof window !== 'undefined' && dt > (window.__palaceMaxSliceMs || 0)) {
+                      window.__palaceMaxSliceMs = dt;
+                      window.__palaceMaxSliceName = 'wing:' + file;
+                    }
+                  } catch (_) {}
+                  try { releaseGltfCpu(gltf); } catch (_) {}
+                  Promise.resolve(deliver(gltf)).then(resOk, resFail);
+                }, resFail);
+              });
             });
           }).catch(function (e) {
             fail(e);
@@ -298,6 +406,8 @@
   }
   function pointInSolids(x, z, solids) {
     for (const s of solids || []) {
+      if (!s._bb && s.outer) s._bb = bbox(s.outer);
+      if (s._bb && (x < s._bb.x0 || x > s._bb.x1 || z < s._bb.z0 || z > s._bb.z1)) continue;
       if (!pointInPoly(x, z, s.outer)) continue;
       let hole = false;
       for (const h of s.holes || []) if (pointInPoly(x, z, h)) { hole = true; break; }
@@ -548,15 +658,24 @@
     if (name && /^K[234]-/.test(name)) m.userData.streamDress = true;
     (parent || state.root).add(m); return m;
   }
-  function makeColliders(solids, caps) {
+  async function makeColliders(solids, caps) {
     let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
     solids.forEach(s => { const b = bbox(s.outer); minX = Math.min(minX, b.x0); minZ = Math.min(minZ, b.z0); maxX = Math.max(maxX, b.x1); maxZ = Math.max(maxZ, b.z1); });
     const nx = Math.ceil((maxX - minX) / GRID), nz = Math.ceil((maxZ - minZ) / GRID);
+    try { console.info('[palace load] colliders-grid', nx, 'x', nz, 'solids', (solids||[]).length); } catch (_) {}
     const occupied = new Uint8Array(nx * nz);
-    for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) {
-      const x = minX + (ix + 0.5) * GRID, z = minZ + (iz + 0.5) * GRID;
-      if (pointInSolids(x, z, solids)) occupied[iz * nx + ix] = 1;
+    const tGrid = performance.now();
+    for (let iz = 0; iz < nz; iz++) {
+      for (let ix = 0; ix < nx; ix++) {
+        const x = minX + (ix + 0.5) * GRID, z = minZ + (iz + 0.5) * GRID;
+        if (pointInSolids(x, z, solids)) occupied[iz * nx + ix] = 1;
+      }
+      if ((iz & 7) === 7) {
+        try { console.info('[palace load] colliders-row', iz, '/', nz, Math.round(performance.now()-tGrid)+'ms'); } catch (_) {}
+        await yieldWing();
+      }
     }
+    try { console.info('[palace load] colliders-grid-done', Math.round(performance.now()-tGrid)+'ms'); } catch (_) {}
     const rects = [];
     for (let iz = 0; iz < nz; iz++) {
       let ix = 0;
@@ -884,22 +1003,45 @@
     state.k1ModelColliderCount = added;
     rebuildSpatial();
   }
-  function buildVisuals(layout) {
+  async function buildVisuals(layout) {
+    const tV = performance.now();
+    function vis(name) {
+      try { console.info('[palace load] visuals-' + name, Math.round(performance.now() - tV) + 'ms'); } catch (_) {}
+    }
+    vis('start');
+    await yieldWing();
+    vis('after-first-yield');
     state.floorSupport = [];
     state.wallMat = gridMaterial(0x8d7a63, 0.9, 0x1c1510);
     state.darkMat = new THREE.MeshStandardMaterial({ color: 0x070706, roughness: 1, emissive: 0x010101, emissiveIntensity: 0.1 });
     state.sealMat = new THREE.MeshStandardMaterial({ color: 0xa58a61, roughness: 0.72, metalness: 0.18 });
     state.materials.push(state.darkMat, state.sealMat);
-    const capGeos = state.caps.map(c => extrudeSolids(c.solids, c.door.height, MAX_H));
+    vis('materials');
+    const tCaps = performance.now();
+    const capGeos = (state.caps || []).map(function (c, i) {
+      const t1 = performance.now();
+      const g = extrudeSolids(c.solids, c.door.height, MAX_H);
+      const dt = performance.now() - t1;
+      if (dt > 16) {
+        try { console.info('[palace load] visuals-slow-cap', i, c.door && c.door.id, Math.round(dt) + 'ms'); } catch (_) {}
+      }
+      return g;
+    });
+    vis('caps ' + Math.round(performance.now() - tCaps) + 'ms n=' + capGeos.length);
+    await yieldWing();
     // The palace's own decorated wall modules already fill the band |x| <= hall half-width + wall thickness.
     // Drawing the wing threshold walls inside that band makes their flat plaster faces poke through the
     // relief around the open arches. Colliders still use the full baseWall, so walking limits are unchanged.
     const hwv = state.hall.width * 0.5, wtv = state.hall.wallThickness || 0;
     const palaceBand = solid(polyRect(-hwv - wtv - 0.02, -0.5, (hwv + wtv + 0.02) * 2, state.hall.length + 1));
     const visualWall = difference(state.baseWall, palaceBand);
+    vis('wall-diff');
+    await yieldWing();
     state.wallGeometry = mergeGeometries([extrudeSolids(visualWall, 0, MAX_H)].concat(capGeos));
     wingMark('wings wall mesh');
     state.wallMesh = mesh(state.wallGeometry, state.wallMat, 'wings-unified-watertight-walls');
+    vis('wall-mesh');
+    await yieldWing();
     const floorMats = {
       Kings: gridMaterial(0x80705a, 0.94, 0x1d1710), Temple: gridMaterial(0x65756e, 0.94, 0x121c18),
       Library: gridMaterial(0x756b7e, 0.94, 0x19151d), Shared: gridMaterial(0x746653, 0.94, 0x19150f)
@@ -932,8 +1074,10 @@
       const g = extrudeSolids(skirt, -0.25, wi * 0.002);
       state.floorMeshes.push(mesh(g, floorMats[wing], 'wings-floor-' + wing));
     });
+    vis('floors');
+    await yieldWing();
     state.ceilings = [];
-    state.regions.forEach(r => {
+    for (const r of state.regions) {
       const g = new THREE.Group(); g.name = 'wing-region-' + r.id; state.root.add(g); state.regionGroups.set(r.id, g);
       if (r.ceiling !== false) {
         let poly = solid(r.poly);
@@ -956,19 +1100,33 @@
         if (r.id !== 'K4') addFutureZones(r, g);
         if (r.id !== 'K2' && r.id !== 'K3' && r.id !== 'K4') addTorches(r);
       }
-    });
+    }
+    vis('regions');
+    await yieldWing();
     addSpecials();
-    dressCorridors();
+    vis('specials');
+    await yieldWing();
+    await dressCorridors();
+    vis('corridors');
     wingMark('wings corridors');
+    try { console.info('[palace load] visuals-post-corridors fires', state.fires.length); } catch (_) {}
+    await yieldWing();
+    try { console.info('[palace load] visuals-post-corridors-yield'); } catch (_) {}
     wingMark('wings k2');
     wingMark('wings k3');
     wingMark('wings k4');
-    const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
-    const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
-    const dummy = new THREE.Object3D();
-    state.fires.forEach((f, i) => { dummy.position.set(f.x, f.y, f.z); dummy.updateMatrix(); torches.setMatrixAt(i, dummy.matrix); });
-    torches.instanceMatrix.needsUpdate = true; state.root.add(torches);
+    const tTorch = performance.now();
+    if (state.fires.length) {
+      const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
+      const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
+      const dummy = new THREE.Object3D();
+      state.fires.forEach((f, i) => { dummy.position.set(f.x, f.y, f.z); dummy.updateMatrix(); torches.setMatrixAt(i, dummy.matrix); });
+      torches.instanceMatrix.needsUpdate = true; state.root.add(torches);
+    }
+    try { console.info('[palace load] visuals-torches', Math.round(performance.now() - tTorch) + 'ms'); } catch (_) {}
+    const tMx = performance.now();
     state.root.updateMatrixWorld(true);
+    try { console.info('[palace load] visuals-matrix', Math.round(performance.now() - tMx) + 'ms'); } catch (_) {}
   }
   /* ---------------------------------------------------------------------------
      Corridor dressing: every corridor/gallery region of the Kings, Library and
@@ -986,8 +1144,18 @@
     floor: WING_FILES.corridorFloor, carpet: WING_FILES.corridorCarpet, ceiling: WING_FILES.corridorCeiling,
     wall: WING_FILES.corridorWall, plant: WING_FILES.plant
   };
+  function textureDisposed(t) {
+    // Evict calls dispose() and may null the CPU pixels (source.data / image).
+    // A preloaded map in that state must not be reused for a second dress.
+    if (!t) return true;
+    const img = t.image || (t.source && t.source.data);
+    if (t.source && t.source.data === null && !t.image) return true;
+    if (img === null) return true;
+    return false;
+  }
   function corridorTexture(url) {
-    const cached = preloadedTexture(url);
+    let cached = preloadedTexture(url);
+    if (cached && textureDisposed(cached)) { preloaded.delete(url); cached = null; }
     const tex = cached || new THREE.TextureLoader().load(encodeURI(url), t => { t.needsUpdate = true; });
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.encoding = THREE.sRGBEncoding;
     tex.anisotropy = 8; if (cached) tex.needsUpdate = true; return tex;
@@ -1108,7 +1276,12 @@
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.computeBoundingBox(); g.computeBoundingSphere(); return g;
   }
-  function dressCorridors() {
+  async function dressCorridors() {
+    const tDress = performance.now();
+    function dressLog(name) {
+      try { console.info('[palace load] dress-' + name, Math.round(performance.now() - tDress) + 'ms'); } catch (_) {}
+    }
+    dressLog('start');
     const corridors = state.connectors.filter(r => r.kind === 'corridor' || r.kind === 'gallery');
     const mats = {
       floor: corridorMaterial(CORRIDOR_ASSETS.floor, 0.86),
@@ -1123,11 +1296,12 @@
     state.corridorCeilings = [];
     let claimed = [], claimedDoors = [];
     const plantSlots = [], report = [], torchSlots = [];
-    corridors.forEach(r => {
-      const g = state.regionGroups.get(r.id); if (!g) return;
+    for (const r of corridors) {
+      const g = state.regionGroups.get(r.id); if (!g) continue;
+      const tC = performance.now();
       const piece = difference(difference(solid(r.poly), roomsSolid), claimed);
       claimed = union(claimed, piece);
-      if (!piece.length) return;
+      if (!piece.length) continue;
       // door strips through the 1 m walls that open from this corridor
       let doorStrip = [];
       state.doors.filter(d => d.kind !== 'arch' && d.floorPoly && (d.from === r.id || d.to === r.id)).forEach(d => { doorStrip = union(doorStrip, solid(d.floorPoly)); });
@@ -1142,6 +1316,7 @@
       // door walls may stand inside the corridor footprint, so keep every wall
       // solid touching the corridor and sample only its free (walkable) side
       const wallsHere = intersection(state.baseWall, offset(area, 1.6));
+      const wallsPad = offset(wallsHere, 0.4);
       const freeArea = difference(area, state.baseWall);
       const runs = corridorWallRuns(wallsHere, freeArea);
       const lintelRuns = [], soffits = [];
@@ -1191,7 +1366,7 @@
           for (const shift of [0, 1.0, -1.0]) {
             const ss = s + shift; if (ss < run.s0 + 0.6 || ss > run.s1 - 0.6) continue;
             x = run.a[0] + run.tx * ss - run.nx * off; z = run.a[1] + run.tz * ss - run.nz * off;
-            if (!pointInSolids(x, z, freeArea) || pointInSolids(x, z, offset(wallsHere, 0.4))) continue;
+            if (!pointInSolids(x, z, freeArea) || pointInSolids(x, z, wallsPad)) continue;
             if (state.fires.some(f => Math.hypot(f.x - x, f.z - z) < 0.7)) continue;
             if (torchSlots.some(t => Math.hypot(t.x - x, t.z - z) < 1.1)) continue;
             if (plantSlots.some(p => Math.hypot(p.x - x, p.z - z) < spacing * 0.6)) continue;
@@ -1203,7 +1378,10 @@
         }
       });
       report.push({ id: r.id, wing: r.wing, bbox: r.bbox, width, plants: count, wallRuns: runs.length, lintels: lintels.length });
-    });
+      try { console.info('[palace load] dress-corridor', r.id, Math.round(performance.now() - tC) + 'ms', 'plants', count); } catch (_) {}
+      if (performance.now() - tDress > 45) await yieldWing();
+    }
+    dressLog('corridors-done n=' + corridors.length);
     state.corridorReport = report;
     state.corridorPlants = plantSlots;
     // footprint colliders so the hero walks around the pots
@@ -1786,9 +1964,14 @@
         im.instanceMatrix.needsUpdate = true;
         hideUntilReady(im);
         g.add(im);
-        state.k2Dress.columns = pairs.length;
-        state.k2Dress.columnH = targetH;
-        state.root.updateMatrixWorld(true);
+        // Eviction can null k2Dress between request and this callback
+        // (seen as "null is not an object (evaluating 'state.k2Dress.columns = …')",
+        // which aborted the council-hall dress and left K2 empty).
+        if (state.k2Dress) {
+          state.k2Dress.columns = pairs.length;
+          state.k2Dress.columnH = targetH;
+        }
+        if (state.root) state.root.updateMatrixWorld(true);
         rebuildSpatial();
       } finally {
         placeK2TableModel();
@@ -1844,9 +2027,11 @@
       });
       hideUntilReady(holder);
       g.add(holder);
-      state.k2Dress.table = true;
-      state.k2Dress.tableH = (box.max.y - box.min.y) * s;
-      state.root.updateMatrixWorld(true);
+      if (state.k2Dress) {
+        state.k2Dress.table = true;
+        state.k2Dress.tableH = (box.max.y - box.min.y) * s;
+      }
+      if (state.root) state.root.updateMatrixWorld(true);
     });
   }
   // Small, warm flame tongues seated in each chandelier cup; no PointLights are attached.
@@ -1892,7 +2077,7 @@
     const embers = new THREE.Points(eg, mats.ember);
     embers.name = 'K2-chandelier-embers'; embers.frustumCulled = false; embers.renderOrder = 5;
     g.add(embers);
-    state.k2Dress.fires = cups.length;
+    if (state.k2Dress) state.k2Dress.fires = cups.length;
   }
   // PalaceInterior owns a fixed light budget. Keeping room-specific PointLights
   // out of the scene prevents the renderer's lighting program layout changing
@@ -1916,6 +2101,7 @@
     const floorGeo = k2FloorSheet(state.k2FloorSolids || solid(r.poly), 0.014, b);
     const floorMesh = mesh(floorGeo, floorMat, 'K2-majlis-floor', g);
     floorMesh.renderOrder = 2;
+    hideUntilReady(floorMesh);
     state.k2Dress.floor = true;
     if (state.floorMeshes) state.floorMeshes.push(floorMesh);
     placeK2Columns(r, g);
@@ -1941,7 +2127,8 @@
       k2WallQuads(runs, () => [0, h], b, fitU, tileV),
       k2WallQuads(lintelRuns, l => [Math.min(l.door.height, h), h], b, fitU, tileV)
     ]);
-    mesh(wallGeo, wallMat, 'K2-majlis-walls', g);
+    const k2WallMesh = mesh(wallGeo, wallMat, 'K2-majlis-walls', g);
+    hideUntilReady(k2WallMesh);
     state.k2Dress.walls = true;
 
     // 2) Ceiling panels, then the chandelier seated on them
@@ -1980,7 +2167,7 @@
             g.add(im); ceilingMeshes.push(im);
             (state.corridorCeilings || (state.corridorCeilings = [])).push(im);
           });
-          state.k2Dress.ceiling = nx * nz;
+          if (state.k2Dress) state.k2Dress.ceiling = nx * nz;
         }
       }
       state.root.updateMatrixWorld(true);
@@ -2016,8 +2203,8 @@
         hideUntilReady(holder);
         g.add(holder);
       });
-      state.k2Dress.lions = lionSlots.length;
-      state.root.updateMatrixWorld(true);
+      if (state.k2Dress) state.k2Dress.lions = lionSlots.length;
+      if (state.root) state.root.updateMatrixWorld(true);
     });
 
     // 4) Six large potted plants, three on each side wall, evenly spaced
@@ -2050,7 +2237,7 @@
         hideUntilReady(im);
         g.add(im);
       });
-      state.k2Dress.plants = plantSlots.length;
+      if (state.k2Dress) state.k2Dress.plants = plantSlots.length;
       state.root.updateMatrixWorld(true);
     });
   }
@@ -2105,11 +2292,13 @@
       addK2ChandelierFire(g, cups);
       const fireY = cups.reduce((s0, cup) => s0 + cup.y, 0) / cups.length;
       addK2Lights(r, g, fireY);
-      state.k2Dress.chandelier = true;
-      state.k2Dress.chandelierTop = seat;
-      state.k2Dress.chandelierH = chH;
-      state.k2Dress.fireY = fireY;
-      state.root.updateMatrixWorld(true);
+      if (state.k2Dress) {
+        state.k2Dress.chandelier = true;
+        state.k2Dress.chandelierTop = seat;
+        state.k2Dress.chandelierH = chH;
+        state.k2Dress.fireY = fireY;
+      }
+      if (state.root) state.root.updateMatrixWorld(true);
       // Table may still be loading; the zone streamer reveals once columns+table+chandelier are set.
     });
   }
@@ -2180,12 +2369,22 @@
     wingDoorLoadStarted = true;
     const roomDoors = state.doors.filter(isRoomDoor);
     roomDoors.forEach(d => { d._roomDoor = true; d.state = 'Closed'; d.progress = 0; d.target = 0; });
-    wingGLB(WING_DOOR_FILE, template => {
+    wingGLB(WING_DOOR_FILE, function (template) {
       if (!state.root) return;
-      roomDoors.forEach(d => {
+      try { console.info('[palace load] doors-fit-start', roomDoors.length, roomDoors.map(function (d) { return d.id; }).join(',')); } catch (_) {}
+      for (let i = 0; i < roomDoors.length; i++) {
+        const d = roomDoors[i];
         const room = ROOM_DOOR_ROOMS.has(d.to) ? d.to : d.from;
-        fitWingDoor({ scene: template.scene.clone(true), animations: template.animations || [] }, d, state.regionGroups.get(room) || state.root);
-      });
+        try { console.info('[palace load] doors-fit-begin', i, d.id); } catch (_) {}
+        const t0 = performance.now();
+        try {
+          fitWingDoor({ scene: template.scene.clone(true), animations: template.animations || [] }, d, state.regionGroups.get(room) || state.root);
+        } catch (e) {
+          try { console.error('[palace load] doors-fit-err', d.id, e && (e.stack || e.message) || e); } catch (_) {}
+        }
+        try { console.info('[palace load] doors-fit', d.id, Math.round(performance.now() - t0) + 'ms'); } catch (_) {}
+      }
+      try { console.info('[palace load] doors-fit-done', roomDoors.length); } catch (_) {}
     }, err => { console.warn('تعذّر تحميل باب الأجنحة', err); wingDoorLoadStarted = false; });
   }
   function doorCoordinates(d, p) {
@@ -2336,7 +2535,7 @@
       other.enabled = false; a.enabled = true; a.paused = false;
       a.time = opening ? cclip.duration * d.progress : cclip.duration * (1 - d.progress);
       m.update(0); a.paused = true;
-      if (!opening && d.progress <= .001) { d.progress = 0; d.state = 'Closed'; d.crossed = false; d.autoCloseTimer = 0; d.heroPushActive = false; }
+      if (!opening && d.progress <= .001) { d.progress = 0; d.state = 'Closed'; d.crossed = false; d.autoCloseTimer = 0; d.heroPushActive = false; if (state.activeDoor === d) state.activeDoor = null; }
       else if (opening && d.progress >= .999) {
         d.progress = 1; d.state = 'Open';
         if (d.heroPushActive) { const anim = state.ctx && state.ctx.combat; if (anim && anim.releasePush) anim.releasePush(); d.heroPushActive = false; }
@@ -2347,7 +2546,20 @@
     updatePassageGates();
   }
   function canInteract() { return false; }
-  function doorLocked() { return !!state.activeDoor && (state.activeDoor.state === 'Opening' || state.activeDoor.state === 'Closing'); }
+  function doorLocked() {
+    // Freeze the hero only for the door they are actually opening or standing in.
+    // A far door auto-closing after eviction (zone no longer ready) must not pin
+    // the player in another room — that looked like a hang while standing or walking
+    // the hall. Opening with heroPushActive is always a local lock.
+    const d = state.activeDoor;
+    if (!d || (d.state !== 'Opening' && d.state !== 'Closing')) return false;
+    if (d.heroPushActive) return true;
+    if (!state.ctx || !state.ctx.hero) return false;
+    try {
+      const c = doorCoordinates(d, state.ctx.hero.position);
+      return !!(nearDoor(d, c) || doorOccupied(d));
+    } catch (_) { return false; }
+  }
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
   function dispose() {
@@ -2369,13 +2581,32 @@
   function wingMark(msg) {
     try { if (window.PalaceInterior && PalaceInterior.mark) PalaceInterior.mark(msg); } catch (e) { /* marks are diagnostic only */ }
   }
-  function build(ctx, hall) {
+  function yieldWing() {
+    // setTimeout only. Sharing requestAnimationFrame with the game loop
+    // let a single expensive frame (software GL, scene walk) delay SETUP
+    // for minutes and freeze the tab.
+    return new Promise(function (r) {
+      const t0 = performance.now();
+      setTimeout(function () {
+        const dt = performance.now() - t0;
+        if (dt > 50) {
+          try { console.info('[palace load] yield-slow', Math.round(dt) + 'ms'); } catch (_) {}
+        }
+        r();
+      }, 0);
+    });
+  }
+  async function build(ctx, hall) {
     assertDeps(); dispose();
     state.building = true; deferredLoads.length = 0;
-    try { return buildNow(ctx, hall); }
+    try { return await buildNow(ctx, hall); }
     finally { state.building = false; deferredLoads.length = 0; }
   }
-  function buildNow(ctx, hall) {
+  async function buildNow(ctx, hall) {
+    const t0 = performance.now();
+    function phase(name) {
+      try { console.info('[palace load] wings-' + name, Math.round(performance.now() - t0) + 'ms'); } catch (_) {}
+    }
     state.ctx = ctx; state.hall = hall; state.debug = /(?:[?&#])debug=1(?:&|#|$)/.test(location.href);
     state.root = new THREE.Group(); state.root.name = 'PalaceWings';
     state.root.position.set(ctx.portal.x, hall.floorY || 0, ctx.portal.frontZ); ctx.scene.add(state.root);
@@ -2384,28 +2615,67 @@
     state.unifiedAmbient = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.78);
     state.unifiedAmbient.name = 'PalaceWingsUnifiedAmbient';
     state.root.add(state.unifiedAmbient);
-    const layout = solveLayout(hall);
-    wingMark('wings layout');
+    const Arch = window.PalaceWingArchitecture;
+    const layout = (Arch && Arch.solveLayout) ? Arch.solveLayout(hall) : solveLayout(hall);
+    wingMark('wings layout'); phase('layout');
+    try { console.info('[palace load] wings-layout-to-bake'); } catch (_) {}
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
     state.regions = state.rooms.concat(state.connectors); state.links = layout.links; state.sealed = layout.sealed; state.back = layout.back;
-    prepareArchitecture(layout);
-    wingMark('wings architecture');
-    // Remove procedural walls inside K1 so the GLB model is the only interior
-    const k1 = state.rooms.find(r => r.id === 'K1');
-    if (k1) {
-      state.baseWall = difference(state.baseWall, solid(k1.poly));
-      state.wallSolid = difference(state.wallSolid, solid(k1.poly));
+    // Prefer the build-time bake (data/palace-colliders.json): Clipper K1-diff and
+    // the 0.5 m collider grid are identical to a live compute (see palace-collider-bake test)
+    // and cost a JSON parse instead of minutes on the main thread.
+    const baked = state.bake || window.__palaceColliderBake;
+    const useBake = !!(Arch && baked && Arch.hallMatches(baked.hall, hall));
+    if (useBake) {
+      Arch.applyColliderBake(state, baked);
+      try { console.info('[palace load] wings-baked-colliders', (baked.colliders || []).length, 'boxes'); } catch (_) {}
+      wingMark('wings baked-colliders'); phase('baked-colliders'); await yieldWing();
+    } else if (Arch && Arch.computeBake) {
+      try {
+        const why = (!baked) ? 'no-json' : (window.PalaceWingArchitecture && PalaceWingArchitecture.hallMismatchReason
+          ? PalaceWingArchitecture.hallMismatchReason(baked.hall, hall)
+          : 'hall-mismatch');
+        console.info('[palace load] wings-bake-miss', why, JSON.stringify({
+          live: { w: hall.width, l: hall.length, wt: hall.wallThickness, ad: hall.alcoveDepth, H: hall.H, nPass: (hall.passages || []).length },
+          baked: baked && baked.hall && { w: baked.hall.width, l: baked.hall.length, wt: baked.hall.wallThickness, ad: baked.hall.alcoveDepth, H: baked.hall.H, nPass: (baked.hall.passages || []).length }
+        }));
+      } catch (_) {}
+      const tC = performance.now();
+      const live = Arch.computeBake(hall);
+      Arch.applyColliderBake(state, live);
+      try { console.info('[palace load] wings-computed-colliders', Math.round(performance.now() - tC) + 'ms', (live.colliders || []).length); } catch (_) {}
+      wingMark('wings computed-colliders'); phase('computed-colliders'); await yieldWing();
+    } else {
+      prepareArchitecture(layout);
+      wingMark('wings architecture'); phase('architecture'); await yieldWing();
+      const k1 = state.rooms.find(r => r.id === 'K1');
+      if (k1) {
+        try { console.info('[palace load] k1-diff-start'); } catch (_) {}
+        const tDiff = performance.now();
+        state.baseWall = difference(state.baseWall, solid(k1.poly));
+        state.wallSolid = difference(state.wallSolid, solid(k1.poly));
+        try { console.info('[palace load] k1-diff-end', Math.round(performance.now() - tDiff) + 'ms'); } catch (_) {}
+      }
+      await yieldWing();
+      await makeColliders(state.baseWall, state.caps);
+      wingMark('wings colliders'); phase('colliders'); await yieldWing();
     }
-    makeColliders(state.baseWall, state.caps);
-    wingMark('wings colliders');
-    buildVisuals(layout); wingMark('wings visuals'); rebuildSpatial(); loadRoomDoors();
+    await buildVisuals(layout); wingMark('wings visuals'); phase('visuals'); await yieldWing();
+    rebuildSpatial(); loadRoomDoors(); phase('doors'); await yieldWing();
+    try { console.info('[palace load] wings-after-doors'); } catch (_) {}
     state.built = true;
     if (state.debug) createDebugUI();
+    const tCull = performance.now();
     updateCulling(true);
+    try { console.info('[palace load] wings-cull-1', Math.round(performance.now() - tCull) + 'ms'); } catch (_) {}
+    await yieldWing();
     // Models already downloaded behind the palace loading screen are attached
     // now, in the same order the network callbacks used to run after build.
-    flushDeferredLoads();
-    updateCulling(true);
+    await flushDeferredLoads(); phase('deferred');
+    await yieldWing();
+    const tCull2 = performance.now();
+    updateCulling(true); phase('cull-2');
+    try { console.info('[palace load] wings-cull-2', Math.round(performance.now() - tCull2) + 'ms'); } catch (_) {}
     return {
       root: state.root,
       fires: state.fires,
@@ -2501,7 +2771,7 @@
   const WING_ZONES = [
     { id: 'K2', prefetchHops: deviceProfile.prefetchHops, priority: 0,
       load: function () { dressK2(); },
-      isComplete: function () { return zoneDone.has('K2') || !!(state.k2Dress && state.k2Dress.chandelier && state.k2Dress.columns && state.k2Dress.table); },
+      isComplete: function () { return roomCompleteness('K2').complete; },
       unload: function (api) {
         state.colliders = state.colliders.filter(function (c) { return !c._k2Prop; });
         state.k2Lights = null; state.k2LightBase = null; state.k2Dress = null;
@@ -2510,13 +2780,13 @@
       ownsObject: streamedName('K2') },
     { id: 'K3', prefetchHops: deviceProfile.prefetchHops, priority: 1,
       load: function () { dressK3(); },
-      isComplete: function () { return zoneDone.has('K3') || !!(state.k3Dress && state.k3Dress.furniture); },
+      isComplete: function () { return roomCompleteness('K3').complete; },
       unload: function (api) { state.k3Lights = null; state.k3LightBase = null; if (api.group) api.group.userData.k3Dressed = false; },
       ownsObject: streamedName('K3') },
     { id: 'K4', prefetchHops: deviceProfile.prefetchHops, priority: 2,
       load: function () { dressK4(); loadK4Assets(); },
-      isComplete: function () { return zoneDone.has('K4') || !!(state.k4Dress && state.k4Dress.loadStarted && state.k4Dress._assetsCommitted); },
-      unload: function (api) { state.k4Dress = null; if (api.group) api.group.userData.k4Dressed = false; },
+      isComplete: function () { return roomCompleteness('K4').complete; },
+      unload: function (api) { state.k4Dress = null; state.colliders = state.colliders.filter(function (c) { return !c._k4Prop; }); if (api.group) api.group.userData.k4Dressed = false; },
       ownsObject: streamedName('K4') }
   ];
   function zonePrepare(api) {
@@ -2590,7 +2860,51 @@
     (visibleIds || new Set()).forEach(function (id) { const g = state.regionGroups.get(id); if (g && warmGroups.indexOf(g) < 0) warmGroups.push(g); });
     return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds, memoryLevel: level, warmGroups: warmGroups });
   }
+  // After LRU eviction a streamed room (K4 in particular) can sit complete=false
+  // with its dress refs nulled. If the player is standing in it, re-issue the
+  // dress even when the streamer has not yet called load() this visit — and
+  // let isComplete() then drive upload / compile / reveal.
+  function ensureCurrentDress(origin) {
+    // A teleport locks the dress target so a one-frame (or few-second)
+    // regionAt flicker cannot start the previous room and evict the one
+    // we just entered (playthrough-6: ensure-dress K2 after teleport K3).
+    if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
+      origin = state._dressLock.id;
+    }
+    if (!origin) return;
+    let c = null;
+    try { c = roomCompleteness(origin); } catch (_) { c = null; }
+    if (c && c.complete) {
+      // Assets are resident but may still be hidden if the streamer never
+      // stepped to reveal. Pump forceLoad so upload/compile/reveal run.
+      if (!c.revealed && zoneStreamer && typeof zoneStreamer.forceLoad === 'function') {
+        try { zoneStreamer.forceLoad(origin); } catch (_) {}
+      }
+      return;
+    }
+    // Once per room per dress attempt — every-tick logs froze the WebKit console.
+    if (state._ensureLog !== origin + (state.k4Dress ? ':d' : ':n')) {
+      state._ensureLog = origin + (state.k4Dress ? ':d' : ':n');
+      try { console.info('[palace load] ensure-dress', origin, 'complete', !!(c && c.complete), 'k4Dress', !!state.k4Dress, 'group', !!(state.regionGroups && state.regionGroups.get(origin))); } catch (_) {}
+    }
+    if (origin === 'K4') {
+      const inflight = state.k4Dress && state.k4Dress.loadStarted && !state.k4Dress._assetsCommitted;
+      if (!inflight) {
+        try {
+          dressK4();
+          loadK4Assets();
+        } catch (e) {
+          try { console.warn('[palace load] K4 re-dress', e && (e.message || e)); } catch (_) {}
+        }
+      }
+    }
+    if (zoneStreamer && typeof zoneStreamer.forceLoad === 'function' && STREAM_EXPECT[origin]) {
+      try { zoneStreamer.forceLoad(origin); } catch (e) { try { console.warn('[palace load] forceLoad', origin, e && (e.message || e)); } catch (_) {} }
+    }
+  }
   function updateCulling(force) {
+    const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
+    if (_tr) _tr('updateCulling-enter force=' + !!force);
     if (!state.built || !state.ctx || !state.ctx.hero) return;
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
     const r = regionAt(x, z), id = r ? r.id : 'Palace';
@@ -2602,13 +2916,35 @@
     }
     const isArch = !!(r && r.kind === 'threshold');
     state.palaceNear = id === 'Palace' || isArch;
-    const origin = isArch && r.linkRoom ? r.linkRoom : id;
+    // Free hall near-LOD GPU packs once the player is more than one hop
+    // into a wing — they cannot be seen and were part of the 700 MB peak.
+    try {
+      if (window.PalaceInterior && typeof PalaceInterior.setDeepWing === 'function') {
+        const hopsToHall = (id === 'Palace' || isArch) ? 0 : (zoneDist && zoneDist.has('Palace') ? zoneDist.get('Palace') : (id === origin ? 2 : 1));
+        PalaceInterior.setDeepWing(!state.palaceNear && hopsToHall > 1);
+      }
+    } catch (_) {}
+    let origin = isArch && r.linkRoom ? r.linkRoom : id;
+    // Honour a teleport dress-lock so streamZones cannot treat a regionAt
+    // flicker as the new current room and evict the one just entered.
+    if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
+      origin = state._dressLock.id;
+    }
+    try { console.info('[palace load] cull-enter'); } catch (_) {}
     const view = cameraView(state.root.position.x, state.root.position.z);
     let visibleIds, preparedIds, meta = null;
     if (visibilityPlanner && view) {
       // Camera-driven: what the camera can see (through open portals) is drawn,
       // what it could see after a turn stays prepared.
-      const planned = visibilityPlanner.plan(state.regions, state.links, origin, view, performance.now() / 1000);
+      const tPlan = performance.now();
+      const hall = state.hall || {};
+      const hw = hall.width || 14, hl = hall.length || 30;
+      const hallReg = { id: 'Palace', bbox: { x0: -hw / 2, x1: hw / 2, z0: 0, z1: hl, cx: 0, cz: hl / 2 } };
+      const planRegions = (state.regions || []).some(function (r) { return r.id === 'Palace'; })
+        ? state.regions
+        : (state.regions || []).concat([hallReg]);
+      const planned = visibilityPlanner.plan(planRegions, state.links, origin, view, performance.now() / 1000);
+      try { console.info('[palace load] cull-plan', Math.round(performance.now()-tPlan)+'ms', 'vis', planned.visible.size); } catch (_) {}
       if (isArch) planned.visible.add(id);
       meta = planned.meta;
       const candidates = [];
@@ -2645,19 +2981,43 @@
       // (never visible / adjacent / in-frustum zones). Memory pressure is
       // sampled inside the streamer.
       state._streamSets = { origin, visible: visibleIds, prepared: preparedIds };
-      streamZones(origin, visibleIds, preparedIds);
+      // During SETUP the game is still behind the blackout. Starting zone
+      // streams here compiles shaders and walks dress on the main thread and
+      // can freeze WebKit for minutes. PalaceWings.tick runs this after REVEAL.
+      const palacePhase = window.PalaceInterior && PalaceInterior.state && PalaceInterior.state();
+      // SETUP, REVEAL and FADING_IN stay on the blackout. streamZones
+      // compiles room shaders and starts dress loads; doing that at
+      // FADING_IN froze WebKit for 90s after palace entry reached the fade.
+      // Streaming begins at DONE, after the load screen is gone. Rooms
+      // still use hideUntilReady, so nothing pops in front of the player.
+      if (palacePhase === 'SETUP' || palacePhase === 'REVEAL' || palacePhase === 'FADING_IN' || window.__sinStreamHold) {
+        try { console.info('[palace load] cull-stream-deferred', palacePhase || 'hold', window.__sinStreamHold ? 'hold' : ''); } catch (_) {}
+        return;
+      }
+      {
+        const tS = performance.now();
+        streamZones(origin, visibleIds, preparedIds);
+        ensureCurrentDress(origin);
+        try { console.info('[palace load] cull-stream', Math.round(performance.now()-tS)+'ms'); } catch (_) {}
+      }
       const zr = zoneStreamer ? zoneStreamer.report() : null;
       state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: zr ? zr.warmPending : 0, memory: zr ? zr.memory : null, dressFailures: dressFailures.slice(-8), zones: zr };
     } else if (state._streamSets) {
       streamZones(state._streamSets.origin, state._streamSets.visible, state._streamSets.prepared);
+      ensureCurrentDress(state._streamSets.origin);
     }
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
+    if (_tr) _tr('updateCulling-end');
   }
   function tick(dt) {
+    const _trT = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     if (!state.built) return;
+    if (_trT) _trT('PalaceWings.tick-enter');
     updateRoomDoors(Math.max(.001, Math.min(.05, Number(dt) || .016)));
+    if (_trT) _trT('PalaceWings.updateRoomDoors');
     updateCulling(false);
+    if (_trT) _trT('PalaceWings.updateCulling');
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
     if ((state.k2Lights && state.k2Lights.length) || (state.k3Lights && state.k3Lights.length)) {
       const t = performance.now() * 0.001;
@@ -2708,20 +3068,77 @@
   function localToWorld(x, z, y) {
     return new THREE.Vector3(state.root.position.x + x, state.root.position.y + (y || 0), state.root.position.z + z);
   }
-  function teleport(id) {
+  function entranceLocal(id) {
+    const r = state.regions.find(function (rr) { return rr.id === id; });
+    if (!r || !r.bbox) return null;
+    const doors = (state.doors || []).filter(function (dd) { return dd.from === id || dd.to === id; });
+    let door = null, best = -1;
+    doors.forEach(function (dd) {
+      const other = dd.from === id ? dd.to : dd.from;
+      const score = other && /C|REAR|MP|Palace/.test(other) ? 2 : 1;
+      if (score >= best) { best = score; door = dd; }
+    });
+    const cx = r.bbox.cx, cz = r.bbox.cz;
+    const from = door ? { x: door.x, z: door.z } : { x: cx, z: r.bbox.z0 };
+    const dx = cx - from.x, dz = cz - from.z, len = Math.hypot(dx, dz) || 1;
+    const ux = dx / len, uz = dz / len;
+    // Walk inward from the door until the capsule is clear of the door leaf,
+    // columns and props. Spawning at a fixed 2.8 m put the hero inside a T2
+    // column and left the 4.2 m follow-cam inside K2/K3/K4 door reliefs.
+    let x = from.x + ux * 2.6, z = from.z + uz * 2.6, found = false;
+    const maxD = Math.min(len * 0.55, 10);
+    for (let dist = 2.6; dist <= maxD; dist += 0.4) {
+      const tx = from.x + ux * dist, tz = from.z + uz * dist;
+      if (!capsuleBlocked(tx, tz, 0.5)) { x = tx; z = tz; found = true; break; }
+    }
+    if (!found || capsuleBlocked(x, z, 0.5)) {
+      const sides = [0.9, -0.9, 1.8, -1.8, 2.7, -2.7];
+      for (let i = 0; i < sides.length; i++) {
+        const sx = x - uz * sides[i], sz = z + ux * sides[i];
+        if (!capsuleBlocked(sx, sz, 0.5)) { x = sx; z = sz; found = true; break; }
+      }
+    }
+    return { x: x, z: z, yaw: Math.atan2(ux, uz), lookX: cx, lookZ: cz };
+  }
+  function teleport(id, opts) {
     if (!state.built || !state.ctx) return false;
+    opts = opts || {};
     const r = state.regions.find(rr => rr.id === id);
     const d = state.doors.find(dd => dd.id === id);
-    let x, z;
-    if (r) { x = r.bbox.cx; z = r.bbox.cz; }
+    let x, z, yaw = 0, lookX = null, lookZ = null;
+    // Default: stand just inside the entrance looking at the room centre, so
+    // we are not on top of the K2/K3 table / K4 altar (bbox centre).
+    const ent = (!opts.center && r) ? entranceLocal(id) : null;
+    if (ent) { x = ent.x; z = ent.z; yaw = ent.yaw || 0; lookX = ent.lookX; lookZ = ent.lookZ; }
+    else if (r) { x = r.bbox.cx; z = r.bbox.cz; }
     else if (d) { x = d.x; z = d.z; }
     else if (id === 'Palace') { x = 0; z = Math.min(8, state.hall.length * 0.2); }
     else return false;
     const y = floorAt(x, z) || 0, p = localToWorld(x, z, y);
-    state.ctx.hero.position.copy(p); state.ctx.setFacing(0);
-    state.ctx.camera.position.set(p.x, p.y + 1.8, p.z - 4.2); state.ctx.camera.lookAt(p.x, p.y + 1.3, p.z + 4);
+    state.ctx.hero.position.copy(p); state.ctx.setFacing(yaw);
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    // At a doorway, a 4.2 m follow pulls the lens back through the door leaf
+    // (K2/K3/K4 frames were gold-stud close-ups with the room out of view).
+    // Keep the original 4.2 m hall shot when we are not at an entrance.
+    const back = (opts.camBack != null) ? opts.camBack : (ent ? 1.15 : 4.2);
+    state.ctx.camera.position.set(p.x - fx * back, p.y + 1.7, p.z - fz * back);
+    let lx = p.x + fx * 8, lz = p.z + fz * 8;
+    if (lookX != null && lookZ != null) {
+      const look = localToWorld(lookX, lookZ, y + 1.15);
+      lx = look.x; lz = look.z;
+    }
+    state.ctx.camera.lookAt(lx, p.y + 1.25, lz);
     if (window.PalaceInterior) PalaceInterior.constrainCamera(state.ctx.camera, state.ctx.hero);
-    resolveCamera(state.ctx.camera); updateCulling(true); drawMinimap();
+    resolveCamera(state.ctx.camera);
+    // Lock before updateCulling so a stale regionAt cannot forceLoad the
+    // room we just left and evict the target mid-load.
+    state._dressLock = { id: id, until: (typeof performance !== 'undefined' ? performance.now() : Date.now()) + 8000 };
+    updateCulling(true);
+    // updateCulling may return early (stream hold / non-DONE phase) before
+    // streamZones. The teleport target must still be dressed — this is the
+    // K4 second-visit path (playthrough-2 still timed out at 60 s).
+    ensureCurrentDress(id);
+    drawMinimap();
     return true;
   }
 
@@ -3083,7 +3500,18 @@
     report.tests.forEach(t => { if (t.bad && t.bad.length) lines.push(t.name + ': ' + JSON.stringify(t.bad.slice(0, 5))); });
     return lines.join('\n');
   }
+  let metricsBusy = false;
+  let metricsLast = null;
+  function current() { return state.current || null; }
   function metrics() {
+    const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
+    const _tM = (_tr && performance.now) ? performance.now() : 0;
+    if (metricsBusy) {
+      if (_tr) _tr('PalaceWings.metrics-reenter');
+      return metricsLast || { current: state.current || null, meshes: 0, triangles: 0, visibleMeshes: 0, visibleTriangles: 0, reentrant: true };
+    }
+    metricsBusy = true;
+    try {
     let meshes = 0, triangles = 0, visibleMeshes = 0, visibleTriangles = 0;
     const topVisibleMeshes = [], regionByGroup = new Map();
     if (!state.root) return { meshes: 0, triangles: 0, visibleMeshes: 0, visibleTriangles: 0 };
@@ -3114,7 +3542,10 @@
       });
       visibleRegionTriangles[id] = Math.round(n);
     });
-    return {
+    // report() must stay cheap (cached memory, never a fresh estimate()) so
+    // a diagnostic walk cannot re-enter this function via status().
+    const zones = zoneStreamer ? zoneStreamer.report() : null;
+    const out = {
       current: state.current || null,
       meshes, triangles, visibleMeshes, visibleTriangles, visibleRegionTriangles,
       topVisibleMeshes: topVisibleMeshes.slice(0, 12),
@@ -3122,7 +3553,7 @@
       visibility: state.visibility || null,
       renderBudget: state.renderBudget || null,
       dressed: Array.from(dressedRooms),
-      zones: zoneStreamer ? zoneStreamer.report() : null,
+      zones: zones,
       dressFailures: dressFailures.slice(-8),
       colliders: state.colliders.length,
       k1ModelColliders: state.k1ModelColliderCount,
@@ -3131,6 +3562,13 @@
       rooms: state.rooms.length,
       regions: state.regions.length
     };
+    metricsLast = out;
+    if (_tr && !(typeof window !== 'undefined' && window.__sinMetricsTraced)) {
+      if (typeof window !== 'undefined') window.__sinMetricsTraced = true;
+      _tr('PalaceWings.metrics-end ' + Math.round((performance.now && performance.now() || 0) - _tM) + 'ms meshes=' + meshes);
+    }
+    return out;
+    } finally { metricsBusy = false; }
   }
 
   /* ---------------------------------------------------------------------------
@@ -3407,24 +3845,32 @@
     const loaded = [];
     let pending = kits.length;
     const finish = function () {
-      if (pending || state.k4Dress !== dress || state.root !== rootAtRequest) return;
+      if (pending || state.root !== rootAtRequest) return;
+      // If the dress object was replaced mid-flight, still commit onto a
+      // waiting dress for the same host rather than discarding a completed parse.
+      let target = dress;
+      if (state.k4Dress !== dress) {
+        const cur = state.k4Dress;
+        if (cur && cur.host === dress.host && !cur._assetsCommitted) target = cur;
+        else return;
+      }
       loaded.forEach(function (entry) {
         entry.gltf.scene.updateMatrixWorld(true);
-        dress.assetSpecs.filter(function (spec) { return spec.url === entry.url; }).forEach(function (spec) {
+        (target.assetSpecs || dress.assetSpecs).filter(function (spec) { return spec.url === entry.url; }).forEach(function (spec) {
           const src = entry.gltf.scene.getObjectByName(spec.item);
-          if (!src) dress.errors.push(spec.name + ': missing node ' + spec.item);
-          else k4PlaceAsset(dress, spec, src, rootAtRequest);
+          if (!src) target.errors.push(spec.name + ': missing node ' + spec.item);
+          else k4PlaceAsset(target, spec, src, rootAtRequest);
         });
       });
       rebuildSpatial();
       rootAtRequest.updateMatrixWorld(true);
-      dress._assetsCommitted = true;
-      if (dress.host && dress.host.userData) dress.host.userData.k4Dressed = true;
+      target._assetsCommitted = true;
+      if (target.host && target.host.userData) target.host.userData.k4Dressed = true;
       markDressReady('K4');
     };
     kits.forEach(function (url) {
       wingGLB(url, function (gltf) {
-        if (gltf && state.root === rootAtRequest && state.k4Dress === dress) loaded.push({ url: url, gltf: gltf });
+        if (gltf && state.root === rootAtRequest) loaded.push({ url: url, gltf: gltf });
         else if (!gltf) dress.errors.push(url + ': failed to decode');
         pending -= 1;
         finish();
@@ -3439,7 +3885,21 @@
   function dressK4() {
     const r = state.rooms.find(function (room) { return room.id === 'K4'; });
     const g = state.regionGroups.get('K4');
-    if (!r || !g) return;
+    if (!r || !g) {
+      try { console.warn('[palace load] K4 dress skipped', !r ? 'no-room' : 'no-group'); } catch (_) {}
+      return;
+    }
+    // Second visit after eviction must re-dress, but an in-flight load must
+    // never be replaced: finish() used to no-op when k4Dress changed, and
+    // ensureCurrentDress then started a new 12 s parse (playthrough-4 first
+    // K4: five re-parses, complete false, 60 s). Keep the in-flight dress.
+    if (state.k4Dress && state.k4Dress.loadStarted && !state.k4Dress._assetsCommitted) return;
+    // Two overlapping load() calls must not stack a second floor on a
+    // still-resident first dress.
+    if (state.k4Dress && state.k4Dress.host === g) {
+      const floors = findNamed(g, 'K4-treasury-floor-artwork');
+      if (floors && floors.length) return;
+    }
     const b = r.bbox, h = r.height, w = b.x1 - b.x0, d = b.z1 - b.z0;
     const dress = state.k4Dress = {
       host: g, bbox: b, floor: false, walls: false, ceiling: false, frontWall: false,
@@ -3463,6 +3923,7 @@
     floor.receiveShadow = true;
     floor.renderOrder = 2;
     g.add(floor);
+    hideUntilReady(floor);
     if (state.floorMeshes) state.floorMeshes.push(floor);
     dress.floor = true;
 
@@ -3482,7 +3943,7 @@
     });
     const wallGeo = k3WallQuads(runs.concat(lintels), b, h);
     if (wallGeo.attributes.position.count) {
-      mesh(wallGeo, k3WallMaterial(WING_FILES.k4SideWall), 'K4-treasury-decorated-walls', g);
+      hideUntilReady(mesh(wallGeo, k3WallMaterial(WING_FILES.k4SideWall), 'K4-treasury-decorated-walls', g));
     } else wallGeo.dispose();
     dress.walls = true;
 
@@ -3500,6 +3961,7 @@
     ceiling.userData.ceiling = true;
     ceiling.visible = !state.cutaway;
     g.add(ceiling);
+    hideUntilReady(ceiling);
     state.ceilings.push(ceiling);
     dress.ceiling = true;
 
@@ -3657,6 +4119,7 @@
     meshObj.castShadow = false;
     meshObj.receiveShadow = true;
     holder.add(meshObj);
+    hideUntilReady(holder);
     host.add(holder);
     const hx = seated.size.x * 0.5, hz = seated.size.z * 0.5;
     const c = Math.abs(Math.cos(rot)), sn = Math.abs(Math.sin(rot));
@@ -3710,6 +4173,7 @@
     state.materials.push(floorMat);
     const floorMesh = mesh(k3FloorSheet(state.k3FloorSolids || solid(r.poly), 0.014, b), floorMat, 'K3-map-floor', g);
     floorMesh.renderOrder = 2;
+    hideUntilReady(floorMesh);
     state.k3Dress.floor = true;
     if (state.floorMeshes) state.floorMeshes.push(floorMesh);
 
@@ -3726,9 +4190,9 @@
     // Outward normal -X is the far (west) wall, opposite the door.
     runs.concat(lintelRuns).forEach(seg => { (seg.nx < -0.5 ? far : side).push(seg); });
     const farGeo = k3WallQuads(far, b, h), sideGeo = k3WallQuads(side, b, h);
-    if (farGeo.attributes.position.count) mesh(farGeo, k3WallMaterial(WING_FILES.k3WallFar), 'K3-map-wall-far', g);
+    if (farGeo.attributes.position.count) hideUntilReady(mesh(farGeo, k3WallMaterial(WING_FILES.k3WallFar), 'K3-map-wall-far', g));
     else farGeo.dispose();
-    if (sideGeo.attributes.position.count) mesh(sideGeo, k3WallMaterial(WING_FILES.k3Wall), 'K3-map-wall-side', g);
+    if (sideGeo.attributes.position.count) hideUntilReady(mesh(sideGeo, k3WallMaterial(WING_FILES.k3Wall), 'K3-map-wall-side', g));
     else sideGeo.dispose();
     state.k3Dress.walls = true;
     // Tile the supplied Babylonian ceiling artwork across the actual room footprint.
@@ -3745,6 +4209,7 @@
     ceiling.userData.ceiling = true;
     ceiling.visible = !state.cutaway;
     g.add(ceiling);
+    hideUntilReady(ceiling);
     state.ceilings.push(ceiling);
     state.k3Dress.ceiling = true;
 
@@ -3804,13 +4269,149 @@
           dress2.pieceReport = pieces.map(p => ({ kind: k3Kind(p), size: [p.size.x, p.size.y, p.size.z].map(n => +n.toFixed(3)) }));
         }
         k3PlaceFurniture();
-        if (g.userData) g.userData.k3Dressed = true;
-        markDressReady('K3');
+        // Do NOT mark ready if the table or a furniture kind is missing —
+        // that was revealing an empty (walls-only) K3 and opening the door
+        // onto a pop-in. The door gate waits on zoneIsReady / isComplete.
+        if (state.k3Dress && state.k3Dress.furniture && state.k3Dress.table) {
+          if (g.userData) g.userData.k3Dressed = true;
+          markDressReady('K3');
+        }
       });
     });
   }
 
-  window.PalaceWings = {
+
+  // Named assets that MUST be resident before a streamed room is revealed or
+  // its door opens. Walls-only is not complete (the K3/K4 pop-in). Visibility
+  // is checked separately (`revealed`) after the atomic dress reveal.
+  const STREAM_EXPECT = {
+    K2: [
+      'K2-majlis-floor', 'K2-majlis-walls', 'K2-majlis-ceiling',
+      'K2-council-table', 'K2-majlis-columns',
+      'K2-winged-lion-1', 'K2-winged-lion-2',
+      'K2-majlis-chandelier', 'K2-majlis-plants'
+    ],
+    K3: [
+      'K3-map-floor', 'K3-map-wall-far', 'K3-map-wall-side', 'K3-map-ceiling',
+      'K3-map-table',
+      'K3-shelf-a', 'K3-shelf-b', 'K3-arch', 'K3-scrolls',
+      'K3-brazier-s', 'K3-brazier-n', 'K3-easel',
+      'K3-chair-head', 'K3-chair-n1', 'K3-chair-n2', 'K3-chair-s1', 'K3-chair-s2'
+    ],
+    K4: [
+      'K4-treasury-floor-artwork', 'K4-treasury-decorated-walls', 'K4-treasury-ceiling-artwork',
+      'K4-frontMural', 'K4-altarTable', 'K4-kingStatue',
+      'K4-column', 'K4-banner', 'K4-palmPot', 'K4-chandelier',
+      'K4-brazier', 'K4-goldChest', 'K4-vase', 'K4-shelfCabinet',
+      'K4-candelabra', 'K4-lionSphinx'
+    ]
+  };
+  const STREAM_EXPECT_MIN = { K4: { 'K4-column': 2, 'K4-banner': 2, 'K4-palmPot': 3, 'K4-brazier': 2, 'K4-goldChest': 4, 'K4-vase': 4, 'K4-shelfCabinet': 2 } };
+
+  function expectedNames(id) {
+    if (id === 'K4' && state.k4Dress && Array.isArray(state.k4Dress.assetSpecs) && state.k4Dress.assetSpecs.length) {
+      return STREAM_EXPECT.K4.filter(function (n) { return n.indexOf('K4-treasury-') === 0; })
+        .concat(state.k4Dress.assetSpecs.map(function (s) { return s.name; }));
+    }
+    return (STREAM_EXPECT[id] || []).slice();
+  }
+
+  function findNamed(root, name) {
+    if (!root || !root.traverse) return [];
+    const out = [];
+    root.traverse(function (o) {
+      if (!o.name) return;
+      if (o.name === name || o.name.indexOf(name + '-') === 0 || o.name.indexOf(name) === 0) out.push(o);
+    });
+    return out;
+  }
+  function isWorldVisible(o) {
+    let n = o, v = true;
+    while (n) { if (n.visible === false) v = false; n = n.parent; }
+    return v;
+  }
+  function groupFor(id) {
+    if (id === 'Palace') {
+      return (state.ctx && state.ctx.scene && (state.ctx.scene.getObjectByName('PalaceInterior') || state.ctx.scene.getObjectByName('PalaceWings'))) || state.root;
+    }
+    return (state.regionGroups && state.regionGroups.get(id)) || null;
+  }
+
+  function roomCompleteness(id) {
+    const region = (state.regions || []).find(function (rr) { return rr.id === id; });
+    // Arch thresholds are portal volumes with no independent mesh group —
+    // their geometry lives on the hall / passage. Treating 0 meshes as a
+    // failure was a false negative (ARCH_L3/R1/R3).
+    if (region && region.kind === 'threshold') {
+      return {
+        id: id, expect: [], present: [], missing: [], hidden: [],
+        meshes: 0, visMeshes: 0, complete: true, revealed: true,
+        ready: true, streamed: false, hasGroup: false, threshold: true
+      };
+    }
+    const g = groupFor(id);
+    const expect = expectedNames(id);
+    const mins = STREAM_EXPECT_MIN[id] || {};
+    const present = [], missing = [], hidden = [], visNames = [];
+    let meshes = 0, visMeshes = 0;
+    if (g && g.traverse) {
+      g.traverse(function (o) {
+        if (!o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh) return;
+        meshes++;
+        if (isWorldVisible(o)) { visMeshes++; if (o.name) visNames.push(o.name); }
+      });
+    }
+    function covered(name) {
+      // Exact, or any node whose name starts with the expect token.
+      const nodes = g ? findNamed(g, name) : [];
+      if (!nodes.length) return { ok: false, vis: 0, n: 0 };
+      let vis = 0;
+      nodes.forEach(function (n) {
+        const hasMesh = n.isMesh || n.isInstancedMesh || n.isSkinnedMesh;
+        let any = hasMesh && isWorldVisible(n);
+        if (!hasMesh && n.traverse) n.traverse(function (c) {
+          if ((c.isMesh || c.isInstancedMesh) && isWorldVisible(c)) any = true;
+        });
+        if (any) vis++;
+      });
+      return { ok: vis > 0, vis: vis, n: nodes.length };
+    }
+    expect.forEach(function (name) {
+      const c = covered(name);
+      const need = mins[name] || 1;
+      if (!c.n || c.n < need) missing.push(name);
+      else {
+        present.push(name);
+        if (c.vis < need) hidden.push(name);
+      }
+    });
+    // "complete" = every expected asset is RESIDENT in the graph. Visibility
+    // is separate: hideUntilReady keeps props and shells hidden until the
+    // streamer reveals them atomically, and isComplete() is what the streamer
+    // waits on — requiring world-visible here would deadlock and never open
+    // the door. After reveal, `revealed` is true when nothing is still hidden.
+    const streamed = !!STREAM_EXPECT[id];
+    const complete = streamed
+      ? (missing.length === 0 && expect.length > 0)
+      : !!(g && meshes > 0 && (id !== 'Palace' || meshes >= 20));
+    const revealed = complete && hidden.length === 0 && (streamed ? visMeshes > 0 : true);
+    return {
+      id: id,
+      expect: expect,
+      present: present,
+      missing: missing,
+      hidden: hidden,
+      meshes: meshes,
+      visMeshes: visMeshes,
+      complete: complete,
+      revealed: revealed,
+      ready: zoneIsReady(id),
+      streamed: streamed,
+      hasGroup: !!g
+    };
+  }
+
+    window.PalaceWings = {
     // Data-driven streaming: register a new streamed zone (see ADDING_CONTENT.md).
     registerZone: registerZone,
     zones: function () { return zoneStreamer ? zoneStreamer.report() : null; },
@@ -3819,12 +4420,17 @@
     streamedTargets: streamedTargets,
     zoneGateOpen: zoneGateOpen,
     zoneIsReady: zoneIsReady,
+    roomCompleteness: roomCompleteness,
+    expectedNames: expectedNames,
+    STREAM_EXPECT: STREAM_EXPECT,
     deviceProfile: deviceProfile,
     palaceVisible: function () { return state.palaceNear !== false; },
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
-    teleport, overview, runTests, formatReport, cameraTour, metrics, corridorReport: () => state.corridorReport,
+    teleport, overview, runTests, formatReport, cameraTour, current, metrics, corridorReport: () => state.corridorReport,
     shortestPath,
     assetList, provideAsset, preloadReport,
+    provideBake: function (data) { state.bake = data; if (typeof window !== 'undefined') window.__palaceColliderBake = data; },
+
     get report() { return state.report; },
     get state() { return state; }
   };

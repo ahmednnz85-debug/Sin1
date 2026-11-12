@@ -1,0 +1,221 @@
+{
+  "pass": true,
+  "truePeak": 603.9,
+  "passDetail": {
+    "entered": true,
+    "allComplete": true,
+    "kingComplete": true,
+    "anyLost": false,
+    "faults": 0,
+    "loops": 2,
+    "truePeak": 603.9,
+    "growth": 7.600000000000023,
+    "maxSlice": 761,
+    "maxSliceName": "\u0628\u0627\u0628 \u0627\u0644\u0627\u062c\u0646\u062d\u0629.glb"
+  },
+  "kingComplete": true,
+  "peakUnder650": null,
+  "faults": [],
+  "kVisits": [
+    {
+      "id": "K1",
+      "ok": true,
+      "proc": 482.7,
+      "peak": 483.3,
+      "lost": false,
+      "loop": 1,
+      "wait": 721
+    },
+    {
+      "id": "KC12",
+      "ok": true,
+      "proc": 472.2,
+      "peak": 483.3,
+      "lost": false,
+      "loop": 1,
+      "wait": 1536
+    },
+    {
+      "id": "K2",
+      "ok": true,
+      "proc": 593.2,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 1,
+      "wait": 5279
+    },
+    {
+      "id": "KC2",
+      "ok": true,
+      "proc": 593.2,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 1,
+      "wait": 10
+    },
+    {
+      "id": "K3",
+      "ok": true,
+      "proc": 545.7,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 1,
+      "wait": 2017
+    },
+    {
+      "id": "KC3",
+      "ok": true,
+      "proc": 545.7,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 1,
+      "wait": 187
+    },
+    {
+      "id": "K4",
+      "ok": true,
+      "proc": 513.6,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 1,
+      "wait": 2551
+    },
+    {
+      "id": "KC4",
+      "ok": true,
+      "proc": 513.6,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 1,
+      "wait": 613
+    },
+    {
+      "id": "K5",
+      "ok": true,
+      "proc": 492.9,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 1,
+      "wait": 7
+    },
+    {
+      "id": "KC5R",
+      "ok": true,
+      "proc": 490.7,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 1,
+      "wait": 1178
+    },
+    {
+      "id": "KC1",
+      "ok": true,
+      "proc": 500.8,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 1,
+      "wait": 699
+    },
+    {
+      "id": "K1",
+      "ok": true,
+      "proc": 491.9,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 2,
+      "wait": 9
+    },
+    {
+      "id": "KC12",
+      "ok": true,
+      "proc": 481.9,
+      "peak": 593.2,
+      "lost": false,
+      "loop": 2,
+      "wait": 826
+    },
+    {
+      "id": "K2",
+      "ok": true,
+      "proc": 593.8,
+      "peak": 593.8,
+      "lost": false,
+      "loop": 2,
+      "wait": 4461
+    },
+    {
+      "id": "KC2",
+      "ok": true,
+      "proc": 593.8,
+      "peak": 593.8,
+      "lost": false,
+      "loop": 2,
+      "wait": 537
+    },
+    {
+      "id": "K3",
+      "ok": true,
+      "proc": 536.9,
+      "peak": 603.9,
+      "lost": false,
+      "loop": 2,
+      "wait": 1863
+    },
+    {
+      "id": "KC3",
+      "ok": true,
+      "proc": 559.6,
+      "peak": 603.9,
+      "lost": false,
+      "loop": 2,
+      "wait": 9
+    },
+    {
+      "id": "K4",
+      "ok": true,
+      "proc": 514.3,
+      "peak": 603.9,
+      "lost": false,
+      "loop": 2,
+      "wait": 2471
+    },
+    {
+      "id": "KC4",
+      "ok": true,
+      "proc": 514.3,
+      "peak": 603.9,
+      "lost": false,
+      "loop": 2,
+      "wait": 769
+    },
+    {
+      "id": "K5",
+      "ok": true,
+      "proc": 489,
+      "peak": 603.9,
+      "lost": false,
+      "loop": 2,
+      "wait": 956
+    },
+    {
+      "id": "KC5R",
+      "ok": true,
+      "proc": 500.8,
+      "peak": 603.9,
+      "lost": false,
+      "loop": 2,
+      "wait": 651
+    },
+    {
+      "id": "KC1",
+      "ok": true,
+      "proc": 500.8,
+      "peak": 603.9,
+      "lost": false,
+      "loop": 2,
+      "wait": 710
+    }
+  ],
+  "nVisits": 91,
+  "note": "Slimmed for repo hygiene; full logs live under /workspace/Sin1-report/now/ (not in the game repo)."
+}

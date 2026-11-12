@@ -191,7 +191,11 @@
   const lookLights = [];
   function interiorEnvironment(renderer) {
     if (interiorEnv) return interiorEnv;
-    const r = renderer || R; if (!r || !THREE.PMREMGenerator || !THREE.DataTexture) return null;
+    try { if (typeof window !== 'undefined' && window.__sinTraceOn) console.info('[palace load] trace PMREM-begin'); } catch (_) {}
+    const r = renderer || R; if (!r || !THREE.PMREMGenerator || !THREE.DataTexture) {
+      try { if (typeof window !== 'undefined' && window.__sinTraceOn) console.info('[palace load] trace PMREM-skip'); } catch (_) {}
+      return null;
+    }
     // 128x64 float equirect: dark cool upper room, warm floor bounce, a ring of
     // HDR fire hot-spots near the horizon (strong but small -> controlled
     // highlights on metal/gold, readable stone/wood).
@@ -218,7 +222,9 @@
     tex.mapping = THREE.EquirectangularReflectionMapping;
     tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
     const pm = new THREE.PMREMGenerator(r);
+    const _tPm = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     interiorEnv = pm.fromEquirectangular(tex).texture;
+    try { if (typeof window !== 'undefined' && window.__sinTraceOn) console.info('[palace load] trace PMREM-fromEquirectangular', Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - _tPm) + 'ms'); } catch (_) {}
     pm.dispose(); tex.dispose();
     interiorEnv.name = 'SinInteriorHDR';
     interiorEnv.userData.palaceShared = true;
@@ -227,6 +233,7 @@
   }
   function setRGB(c, a) { if (c && a) c.setRGB(a[0], a[1], a[2]); }
   function scanLookLights() {
+    const _tSc = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     lookLights.length = 0;
     scene.traverse(function (o) {
       if (!o.isLight) return;
@@ -234,6 +241,7 @@
       for (let p = o.parent; p; p = p.parent) if (p.name === 'PalaceInterior' || p.name === 'PalaceWings') { inside = true; break; }
       if (inside) lookLights.push(o);
     });
+    try { if (typeof window !== 'undefined' && window.__sinTraceOn) console.info('[palace load] trace scanLookLights', Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - _tSc) + 'ms', 'n', lookLights.length); } catch (_) {}
   }
   function applyInteriorLook(t) {
     const L = Object.assign({}, LOOK.interior, LOOK.tier[base] || {});
@@ -385,7 +393,47 @@
       orig(s, c);
       if (q) { gl.endQuery(tq.TIME_ELAPSED_EXT); pendingQ = q; }
       // Record tris/draws even when the on-screen HUD is off (diag / estimator).
-      if (isMain) { perf.calls = R.info.render.calls; perf.tris = R.info.render.triangles; }
+      if (isMain) {
+        perf.calls = R.info.render.calls; perf.tris = R.info.render.triangles;
+        // Instance R.render shadows the process-memory prototype hook, so
+        // outdoor CPU ImageBitmaps (~375 MB) never dropped and process
+        // memory sat at ~994 MB (iOS jetsam range). Drain here, throttled,
+        // after the GPU has the copy. Same rule as palace: shared sources
+        // only after every clone is resident.
+        try {
+          if (window.SinProcessMemory && SinProcessMemory.releaseCpuFromObject) {
+            const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+            // Every 2 s was too slow: during REVEAL and K2 dress, new
+            // ImageBitmaps arrive faster than the drain, so CPU (~230 MB)
+            // overlapped GPU (~690 MB) and process peaked at 1081–1137 MB
+            // (iOS jetsam). Drain every frame while the palace is busy or
+            // a wing is still streaming; otherwise keep the 2 s cadence.
+            let busy = false;
+            try {
+              const ps = window.PalaceInterior && PalaceInterior.state && PalaceInterior.state();
+              busy = ['LOADING','SETUP','FADING_OUT','FADING_IN','REVEAL','ENTRANCE','SETTLE'].indexOf(ps) >= 0;
+              const zs = window.PalaceWings && PalaceWings.zones && PalaceWings.zones();
+              if (zs && zs.zones) {
+                const rows = Array.isArray(zs.zones) ? zs.zones : Object.keys(zs.zones).map(function (k) { return zs.zones[k]; });
+                for (let i = 0; i < rows.length; i++) {
+                  const st = rows[i] && (rows[i].state || rows[i].status);
+                  if (st && st !== 'ready' && st !== 'cold' && st !== 'evicted' && st !== 'unregistered') { busy = true; break; }
+                }
+              }
+            } catch (_) {}
+            // First ~3 s of outdoor load has the same overlap (city
+            // ImageBitmaps + GPU copies → peak 998 before the palace).
+            if (R.__sinCpuRelFrames == null) R.__sinCpuRelFrames = 0;
+            R.__sinCpuRelFrames++;
+            const interval = (busy || R.__sinCpuRelFrames < 180) ? 0 : 2000;
+            if (!R.__sinCpuRelAt || now - R.__sinCpuRelAt > interval) {
+              R.__sinCpuRelAt = now;
+              const rel = SinProcessMemory.releaseCpuFromObject(s, R, { upload: false });
+              try { window.__sinCpuRelease = rel; } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
     };
   }
   function pollGpu() {
@@ -397,10 +445,22 @@
   function hud(ts) {
     if (!perf.on) { if (perf.el) { perf.el.remove(); perf.el = null; } return; }
     ensureHud(); pollGpu();
+    // Ignore harness/tab-stall gaps so a single long pause does not
+    // empty the 1 s window and flash "FPS 0   - ms" (r5 lab + any
+    // real >1 s hitch). Keep the last good reading.
+    const hudStall = 500;
+    if (perf._lastTs && ts - perf._lastTs > hudStall) perf.frames = [];
+    perf._lastTs = ts;
     perf.frames.push(ts);
-    while (perf.frames.length && ts - perf.frames[0] > 1000) perf.frames.shift();
+    while (perf.frames.length > 2 && ts - perf.frames[0] > 1000) perf.frames.shift();
     if (ts - perf.t < 400) return; perf.t = ts;
-    const fr = perf.frames.length > 1 ? (perf.frames.length - 1) * 1000 / (ts - perf.frames[0]) : 0;
+    let fr = perf._lastFr || 0;
+    if (perf.frames.length > 1 && ts > perf.frames[0]) {
+      const cand = (perf.frames.length - 1) * 1000 / (ts - perf.frames[0]);
+      if (Number.isFinite(cand) && cand > 0) { fr = cand; perf._lastFr = cand; }
+    } else if (!fr && perf.avg > 0 && perf.avg < 2000) {
+      fr = 1000 / perf.avg;
+    }
     const mapOn = !!(R && R.shadowMap && R.shadowMap.enabled);
     perf.el.textContent =
       'FPS ' + fr.toFixed(0) + '   ' + (fr ? (1000 / fr).toFixed(1) : '-') + ' ms\n' +
@@ -478,10 +538,36 @@
     potRange() { return E.pots; },
     potShadowRange() { return E.potShadow; },
     dustCount() { return E.dust; },
+    // Generate the interior PMREM and apply hall look behind the entry
+    // blackout. fromEquirectangular is a multi-pass GPU convolution; doing
+    // it on the first DONE rAF stalled WebKit software GL for ~90 s before
+    // the first present (and is the same spike on a real iPhone). The look
+    // is unchanged: same texture, same applyInteriorLook, just earlier.
+    prepareInteriorLook() {
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      try { console.info('[palace load] interior-look-begin'); } catch (_) {}
+      try {
+        if (!wasInterior) {
+          outdoorEnv = scene.environment !== interiorEnv ? scene.environment : outdoorEnv;
+          lookScanAt = 0;
+        }
+        applyInteriorLook((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+        wasInterior = true;
+      } catch (e) {
+        try { console.info('[palace load] interior-look-err', e && e.message); } catch (_) {}
+      }
+      try { console.info('[palace load] interior-look-end', Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0) + 'ms'); } catch (_) {}
+    },
     // called once per rAF, before simulation
     frame(ts, busy) {
-      govern(ts, busy); hud(ts);
+      const _tr = typeof window !== 'undefined' && window.__sinTrace;
+      if (_tr) _tr('SinGfx.frame-enter busy=' + !!busy);
+      govern(ts, busy);
+      if (_tr) _tr('SinGfx.govern');
+      hud(ts);
+      if (_tr) _tr('SinGfx.hud');
       try { lookFrame(); } catch (_) {}
+      if (_tr) _tr('SinGfx.lookFrame');
       try {
         if (window.SinMemoryOverlay) {
           const memCtx = {
@@ -494,6 +580,7 @@
           else if (SinMemoryOverlay.on()) SinMemoryOverlay.render(memCtx);
         }
       } catch (_) {}
+      if (_tr) _tr('SinGfx.memoryOverlay');
     },
     // called once per simulation step, after the camera has been placed
     look: LOOK,
@@ -501,7 +588,10 @@
     update(dt, info) { updateAtmo(dt, info); cameraFrame(dt, ctx.interior(), info && info.running); },
     renderer() { return R; },
     scene() { return scene; },
-    camera() { return camera; },
+    // MUST NOT be named camera(): that overwrote camera: CAM, so
+    // SinGfx.camera.shoulder was undefined, follow-cam want became NaN,
+    // and the 3D view went fully black after NEW GAME (r5 / PR #45).
+    getCamera() { return camera; },
     status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, shadowPolicy: !!E.shadow, shadowMapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg, calls: perf.calls, tris: perf.tris }; }
   };
   window.SinGfx = API;

@@ -54,6 +54,23 @@
     return Math.hypot(dx, dz);
   }
 
+  // Doorway between two axis-aligned rooms: the (padded) overlap of their
+  // AABBs, or the shortest connecting strip if they only touch through a wall.
+  function portalBox(a, b) {
+    const pad = 0.75;
+    let x0 = Math.max(a.x0, b.x0) - pad, x1 = Math.min(a.x1, b.x1) + pad;
+    let z0 = Math.max(a.z0, b.z0) - pad, z1 = Math.min(a.z1, b.z1) + pad;
+    if (x0 >= x1 || z0 >= z1) {
+      const ax = Math.max(a.x0, Math.min(a.x1, (b.x0 + b.x1) / 2));
+      const az = Math.max(a.z0, Math.min(a.z1, (b.z0 + b.z1) / 2));
+      const bx = Math.max(b.x0, Math.min(b.x1, (a.x0 + a.x1) / 2));
+      const bz = Math.max(b.z0, Math.min(b.z1, (a.z0 + a.z1) / 2));
+      x0 = Math.min(ax, bx) - pad; x1 = Math.max(ax, bx) + pad;
+      z0 = Math.min(az, bz) - pad; z1 = Math.max(az, bz) + pad;
+    }
+    return { x0: x0, z0: z0, x1: x1, z1: z1 };
+  }
+
   // Does the AABB intersect the 2D wedge (camera at x,z looking along dir)?
   function inWedge(b, cam, halfAngle, maxDist) {
     if (nearestDistance(b, cam.x, cam.z) > maxDist) return false;
@@ -94,18 +111,59 @@
        cam: {x,z,dirX,dirZ,halfFov}, now: seconds */
     function plan(regions, links, currentId, cam, now) {
       const t = Number.isFinite(now) ? now : 0;
-      const reach = hops(links, currentId, opt.maxHops);
+      const hopLimit = Math.max(opt.maxHops, Number.isFinite(opt.prepareHops) ? opt.prepareHops : 0);
+      const reach = hops(links, currentId, hopLimit);
       const half = (cam.halfFov || 0.6) + opt.frustumMargin;
       const visible = new Set(), prepared = new Set(), meta = new Map();
-      regions.forEach(r => {
+      const byId = new Map();
+      (regions || []).forEach(function (r) { if (r && r.id) byId.set(r.id, r); });
+      const adj = new Map();
+      (links || []).forEach(function (l) {
+        const a = l[0], b = l[1];
+        if (!adj.has(a)) adj.set(a, []);
+        if (!adj.has(b)) adj.set(b, []);
+        adj.get(a).push(b); adj.get(b).push(a);
+      });
+      // Portal flood: a neighbour is drawn only when the doorway itself is
+      // in the camera wedge. Testing the whole room AABB against a 400 m
+      // sight line marked ~half the palace visible from the entrance, so
+      // the first hall frame submitted far more than a steady visible frame.
+      const q = [];
+      function see(id) {
+        if (!id || visible.has(id)) return;
+        visible.add(id);
+        q.push(id);
+      }
+      see(currentId);
+      (regions || []).forEach(function (r) {
+        if (r.id === currentId) return;
+        if (nearestDistance(r.bbox, cam.x, cam.z) <= opt.nearPad) see(r.id);
+      });
+      while (q.length) {
+        const a = q.shift();
+        (adj.get(a) || []).forEach(function (b) {
+          if (visible.has(b)) return;
+          const h = reach.has(b) ? reach.get(b) : Infinity;
+          if (h > opt.maxHops) return;
+          const ra = byId.get(a), rb = byId.get(b);
+          if (ra && ra.bbox && rb && rb.bbox) {
+            if (!inWedge(portalBox(ra.bbox, rb.bbox), cam, half, opt.viewDistance)) return;
+          } else if (rb && rb.bbox) {
+            if (!inWedge(rb.bbox, cam, half, opt.viewDistance)) return;
+          } else {
+            return;
+          }
+          see(b);
+        });
+      }
+      (regions || []).forEach(function (r) {
         const h = reach.has(r.id) ? reach.get(r.id) : Infinity;
         const near = nearestDistance(r.bbox, cam.x, cam.z);
-        let seen = false;
-        if (r.id === currentId || near <= opt.nearPad) seen = true;
-        else if (h <= opt.maxHops && inWedge(r.bbox, cam, half, opt.viewDistance)) seen = true;
+        const seen = visible.has(r.id);
         if (seen) lastSeen.set(r.id, t);
         const lingering = lastSeen.has(r.id) && t - lastSeen.get(r.id) <= opt.linger && h <= opt.maxHops;
-        if (seen || lingering) { visible.add(r.id); touch(r.id); }
+        if (lingering) { visible.add(r.id); touch(r.id); }
+        else if (seen) touch(r.id);
         // Prepared (GPU-resident + prefetch) is based on the PLAYER'S region,
         // with a hop radius. Camera direction must not start loads or evicts
         // (a 360° spin must not churn zones). Visible rooms are still drawn,
@@ -113,7 +171,7 @@
         // eviction, but membership of `prepared` itself does not follow the camera.
         const prepHops = Number.isFinite(opt.prepareHops) ? opt.prepareHops : opt.maxHops;
         if (h <= prepHops) prepared.add(r.id);
-        meta.set(r.id, { hops: h, distance: near, inView: seen });
+        meta.set(r.id, { hops: h, distance: near, inView: visible.has(r.id) });
       });
       if (opt.memory > 0) recent.forEach(id => prepared.add(id));
       // Always keep the current room prepared even if hops map missed it.
@@ -124,7 +182,7 @@
     return { plan, reset, options: opt };
   }
 
-  const api = { createPlanner, inWedge, hops, nearestDistance, DEFAULTS };
+  const api = { createPlanner, inWedge, hops, nearestDistance, portalBox, DEFAULTS };
   root.SinWingVisibility = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

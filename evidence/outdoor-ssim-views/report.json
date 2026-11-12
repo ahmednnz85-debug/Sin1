@@ -1,0 +1,168 @@
+{
+  "pass": false,
+  "allSsim": true,
+  "allLoad": false,
+  "bars": {
+    "ssim": 0.99,
+    "tris": 1500000,
+    "draws": 250
+  },
+  "results": [
+    {
+      "id": "walkway",
+      "note": "just after the first gate, looking down the walkway",
+      "ssim": 0.9958,
+      "mae": 0.1784,
+      "refTris": 2537318,
+      "refDraws": 290,
+      "optTris": 1591585,
+      "optDraws": 211,
+      "last": {
+        "occluded": 36,
+        "farHide": 1138,
+        "hlodChunks": 11,
+        "instKept": 1086,
+        "instFull": 8622,
+        "shadowsOff": 0,
+        "visTris": 1591585,
+        "visDraws": 211,
+        "farLimit": 80
+      },
+      "cam": {
+        "x": 0,
+        "y": 1.7,
+        "z": 4.55
+      },
+      "optRows": [],
+      "refRows": [],
+      "passSsim": true,
+      "passLoad": false,
+      "pass": false
+    },
+    {
+      "id": "market",
+      "note": "market stalls mid-way",
+      "ssim": 0.99433,
+      "mae": 0.19,
+      "refTris": 1725684,
+      "refDraws": 265,
+      "optTris": 1236665,
+      "optDraws": 192,
+      "last": {
+        "occluded": 43,
+        "farHide": 1156,
+        "hlodChunks": 1,
+        "instKept": 896,
+        "instFull": 8059,
+        "shadowsOff": 0,
+        "visTris": 1236665,
+        "visDraws": 192,
+        "farLimit": 80
+      },
+      "cam": {
+        "x": 0,
+        "y": 1.7,
+        "z": 36.55
+      },
+      "optRows": [],
+      "refRows": [],
+      "passSsim": true,
+      "passLoad": true,
+      "pass": true
+    },
+    {
+      "id": "walls",
+      "note": "near the processional walls (the 10 fps view)",
+      "ssim": 0.99587,
+      "mae": 0.0906,
+      "refTris": 1016248,
+      "refDraws": 202,
+      "optTris": 942111,
+      "optDraws": 191,
+      "last": {
+        "occluded": 1112,
+        "farHide": 314,
+        "hlodChunks": 0,
+        "instKept": 0,
+        "instFull": 468,
+        "shadowsOff": 0,
+        "visTris": 942111,
+        "visDraws": 191,
+        "farLimit": 80
+      },
+      "cam": {
+        "x": 6,
+        "y": 1.7,
+        "z": 106.55
+      },
+      "optRows": [],
+      "refRows": [],
+      "passSsim": true,
+      "passLoad": true,
+      "pass": true
+    },
+    {
+      "id": "approach",
+      "note": "approaching the Ishtar gate",
+      "ssim": 1,
+      "mae": 0,
+      "refTris": 915300,
+      "refDraws": 137,
+      "optTris": 848296,
+      "optDraws": 125,
+      "last": {
+        "occluded": 982,
+        "farHide": 444,
+        "hlodChunks": 0,
+        "instKept": 846,
+        "instFull": 2352,
+        "shadowsOff": 0,
+        "visTris": 848296,
+        "visDraws": 125,
+        "farLimit": 80
+      },
+      "cam": {
+        "x": 0,
+        "y": 1.8,
+        "z": 151.55
+      },
+      "optRows": [],
+      "refRows": [],
+      "passSsim": true,
+      "passLoad": true,
+      "pass": true
+    },
+    {
+      "id": "gate",
+      "note": "at the Ishtar gate",
+      "ssim": 1,
+      "mae": 0,
+      "refTris": 847712,
+      "refDraws": 109,
+      "optTris": 780128,
+      "optDraws": 92,
+      "last": {
+        "occluded": 409,
+        "farHide": 907,
+        "hlodChunks": 0,
+        "instKept": 362,
+        "instFull": 6196,
+        "shadowsOff": 0,
+        "visTris": 780128,
+        "visDraws": 92,
+        "farLimit": 80
+      },
+      "cam": {
+        "x": 1,
+        "y": 2,
+        "z": 174.55
+      },
+      "optRows": [],
+      "refRows": [],
+      "passSsim": true,
+      "passLoad": true,
+      "pass": true
+    }
+  ],
+  "ended": "2026-11-12T18:44:06.663Z"
+}

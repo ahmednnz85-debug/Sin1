@@ -15,7 +15,7 @@ test('palace GLBs settle strictly one at a time and free buffers', () => {
   // CPU pixels are dropped only after every texture sharing the source is on the GPU.
   assert.doesNotMatch(palace, /armTextureCpuRelease/);
   assert.match(palace, /function textureUploaded/);
-  assert.match(palace, /if \(result\.isTexture\) return;/);
+  assert.match(palace, /if \(result\.isTexture\) \{ capCpuTexture\(result\); enqueueGpu\(result\); return; \}/);
   const loadStart = palace.indexOf('function loadPalaceAssets');
   const loadEnd = palace.indexOf('function mat(map, opts)', loadStart);
   const loadFn = palace.slice(loadStart, loadEnd);
@@ -58,4 +58,24 @@ test('K1 preload is lod25 hall; الاستقبال.glb is not in assetList', () 
   const assetList = wings.slice(wings.indexOf('function assetList'), wings.indexOf('function provideAsset'));
   assert.doesNotMatch(assetList, /الاستقبال\.glb/);
   assert.doesNotMatch(assetList, /طاولة/);
+});
+
+test('palace LOADING never initTextures a whole GLB on the parse frame; GPU work is sliced to 50 ms', () => {
+  assert.match(palace, /function pumpGpuUploads/);
+  assert.match(palace, /budgetMs != null \? budgetMs : 50/);
+  assert.match(palace, /Never initTexture here/);
+  assert.match(palace, /while \(!pumpGpuUploads\(renderer, 50\)\)/);
+  assert.match(palace, /window\.__palaceLoadProfile/);
+  assert.match(palace, /SinProcessMemory\.releaseCpuFromObject\(root, renderer, \{ upload: false \}\)/);
+  // The former path uploaded every map inside settle(); that must stay gone.
+  const settle = palace.slice(palace.indexOf('function settle('), palace.indexOf('function loadPalaceAssets'));
+  assert.doesNotMatch(settle, /initTexture/);
+});
+
+test('palace SETUP build is async and yields inside splitProps', () => {
+  assert.match(palace, /async function build\(ctx\)/);
+  assert.match(palace, /async function splitProps/);
+  assert.match(palace, /setupTask = \(async function/);
+  assert.match(palace, /await splitProps\(assets\.props\)/);
+  assert.match(palace, /yieldSlice/);
 });

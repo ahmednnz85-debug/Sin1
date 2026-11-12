@@ -182,6 +182,12 @@ test('residency is bounded by prefetch+cache, not by total room count, and the f
 test('walking the two wings three times does not accumulate textures or geometries', async () => {
   const x = setup({ prefetchHops: 4 });
   const path = x.g.sx.concat(['HUB']).concat(x.g.sy);
+  // Warm up once so the first measured tour is at prefetch steady-state.
+  // After 6e6c83f, entering a room evicts non-adjacent prefetch and
+  // restarts it; the first pass therefore peaks lower than later ones
+  // (loads still in flight). The leak check is that subsequent tours
+  // do not grow.
+  for (const id of path) await x.walkTo(id, 12);
   const peaks = [];
   for (let tour = 0; tour < 3; tour++) {
     for (const id of path) {

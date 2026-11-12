@@ -59,8 +59,14 @@
     return s.w * s.h * 4 * layers;
   }
 
-  function gpuTexBytes(tex) {
+  function gpuTexBytes(tex, renderer) {
     if (!tex) return 0;
+    // A 4K ImageBitmap is CPU, not GPU, until initTexture. Counting it as
+    // both inflated the process peak (998 MB) during palace load, before
+    // capTexture ran. When a renderer is provided, only count a live GPU copy.
+    if (renderer && !(tex.userData && tex.userData.sinGpuW) && !textureUploaded(renderer, tex)) {
+      return 0;
+    }
     let w = tex.image && (tex.image.width || tex.image.videoWidth) || 0;
     let h = tex.image && (tex.image.height || tex.image.videoHeight) || 0;
     if ((!w || !h) && tex.source && tex.source.data) {
@@ -142,26 +148,17 @@
   }
 
   function dropGeometryCpu(g) {
-    if (!g || (g.userData && g.userData.keepCpu)) return;
-    try {
-      const attrs = g.attributes || {};
-      for (const k in attrs) {
-        const a = attrs[k];
-        if (a) {
-          a.array = null;
-          if (typeof a.onUploadCallback === 'function') { /* already fired */ }
-        }
-      }
-      if (g.index) g.index.array = null;
-      if (g.morphAttributes) {
-        for (const k in g.morphAttributes) {
-          const list = g.morphAttributes[k] || [];
-          for (let i = 0; i < list.length; i++) if (list[i]) list[i].array = null;
-        }
-      }
-      if (!g.userData) g.userData = {};
-      g.userData.sinCpuReleased = true;
-    } catch (_) {}
+    // Never detach attribute arrays. Three.js r187 reads array.byteLength
+    // on every render (and InstancedMesh / LOD swaps still reference a
+    // "disposed" geo). Nulling them threw in the rAF loop past the Ishtar
+    // gate ("loop TypeError: null is not an object (evaluating
+    // 'array.byteLength')") and stopped palace entry. Geometry CPU is ~17 MB;
+    // texture ImageBitmaps are the jetsam term and are released separately.
+    if (!g) return;
+    if (!g.userData) g.userData = {};
+    // Record size for the estimator; keep the arrays intact.
+    const bytes = attribBytes(g);
+    if (bytes && !g.userData.sinGpuBytes) g.userData.sinGpuBytes = bytes;
   }
 
   function releaseCpuFromObject(root, renderer, opts) {
@@ -172,16 +169,29 @@
     root.traverse(function (o) {
       if (o.geometry) geos.add(o.geometry);
       const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      function addTex(t) {
+        if (!t || !t.isTexture || t.isCompressedTexture || t.isRenderTargetTexture || !t.source) return;
+        if (t.userData && t.userData.sinKeepCpu) return;
+        const list = bySource.get(t.source) || [];
+        if (list.indexOf(t) < 0) list.push(t);
+        bySource.set(t.source, list);
+      }
       mats.forEach(function (m) {
         if (!m) return;
-        TEX_KEYS.forEach(function (k) {
-          const t = m[k];
-          if (!t || !t.isTexture || t.isCompressedTexture || t.isRenderTargetTexture || !t.source) return;
-          if (t.userData && t.userData.sinKeepCpu) return;
-          const list = bySource.get(t.source) || [];
-          if (list.indexOf(t) < 0) list.push(t);
-          bySource.set(t.source, list);
-        });
+        TEX_KEYS.forEach(function (k) { addTex(m[k]); });
+        if (m.uniforms) {
+          Object.keys(m.uniforms).forEach(function (uk) {
+            const v = m.uniforms[uk] && m.uniforms[uk].value;
+            addTex(v);
+          });
+        }
+      });
+    });
+    const cap = (typeof window !== 'undefined' && window.SinDevice && SinDevice.capTexture) ? SinDevice.capTexture : null;
+    const maxSz = (typeof window !== 'undefined' && window.SinDevice && typeof SinDevice.detect === 'function' && SinDevice.detect().maxTextureSize) || 0;
+    bySource.forEach(function (list) {
+      list.forEach(function (t) {
+        try { if (cap && maxSz) cap(t, maxSz); } catch (_) {}
       });
     });
     if (doUpload) {
@@ -195,25 +205,42 @@
       if (!list.every(function (t) { return textureUploaded(renderer, t); })) return;
       try {
         const img = source.data;
+        const sz = imgSize(img);
         source.data = null;
-        list.forEach(function (t) { t.image = null; if (!t.userData) t.userData = {}; t.userData.sinCpuReleased = true; });
+        list.forEach(function (t) {
+          if (!t.userData) t.userData = {};
+          if (sz.w && sz.h) {
+            t.userData.sinGpuW = t.userData.sinGpuW || sz.w;
+            t.userData.sinGpuH = t.userData.sinGpuH || sz.h;
+          }
+          t.image = null;
+          t.userData.sinCpuReleased = true;
+        });
         closeImage(img);
         released++;
       } catch (_) {}
     });
-    geos.forEach(function (g) {
-      if (g.userData && (g.userData.keepCpu || g.userData.palaceShared)) return;
-      if (typeof g.onUploadCallback !== 'function' || !g.userData || !g.userData.sinArmUpload) {
-        const self = g;
-        const prev = g.onUploadCallback;
-        g.onUploadCallback = function () {
-          try { if (typeof prev === 'function') prev.call(this); } catch (_) {}
-          dropGeometryCpu(self);
-        };
-        if (!g.userData) g.userData = {};
-        g.userData.sinArmUpload = true;
-      }
-    });
+    // Do not null attribute arrays unless explicitly asked. After the
+    // outdoor instance wrap started calling this every 2 s, Three.js hit
+    // "null is not an object (evaluating 'array.byteLength')" in the rAF
+    // loop past the Ishtar gate and the framebuffer went black on
+    // landscape restore. Texture CPU (~375 MB) is the jetsam term;
+    // geometry CPU is ~17 MB and is still needed for skinning / LOD / bounds.
+    if (opts && opts.dropGeometry) {
+      geos.forEach(function (g) {
+        if (g.userData && (g.userData.keepCpu || g.userData.palaceShared)) return;
+        if (typeof g.onUploadCallback !== 'function' || !g.userData || !g.userData.sinArmUpload) {
+          const self = g;
+          const prev = g.onUploadCallback;
+          g.onUploadCallback = function () {
+            try { if (typeof prev === 'function') prev.call(this); } catch (_) {}
+            dropGeometryCpu(self);
+          };
+          if (!g.userData) g.userData = {};
+          g.userData.sinArmUpload = true;
+        }
+      });
+    }
     return { sources: bySource.size, released: released };
   }
 
@@ -275,8 +302,67 @@
     return { textures: textures, geos: geos, rts: rts, _c: calls };
   }
 
+
+  // Dispose GPU+CPU copies of textures that are no longer referenced by the
+  // live scene (leftover city maps that stayed in renderer.properties after
+  // releaseCity). Never touches textures still on a mesh, or the scene
+  // environment / background, or anything tagged palaceShared / keepDuringPalace.
+  function purgeOrphanTextures(renderer, scene, opts) {
+    opts = opts || {};
+    if (!renderer || !renderer.properties || !renderer.properties._map || !scene) return { purged: 0, skipped: 0 };
+    const live = new Set();
+    function add(t) {
+      if (!t || !t.isTexture) return;
+      live.add(t);
+      if (t.source) live.add(t.source);
+    }
+    add(scene.environment); add(scene.background);
+    scene.traverse(function (o) {
+      if (o.userData && o.userData.keepDuringPalace) {
+        // whole subtree already walked by traverse
+      }
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      mats.forEach(function (m) {
+        if (!m) return;
+        TEX_KEYS.forEach(function (k) { add(m[k]); });
+        if (m.envMap) add(m.envMap);
+        if (m.uniforms) Object.keys(m.uniforms).forEach(function (uk) {
+          const v = m.uniforms[uk] && m.uniforms[uk].value;
+          add(v);
+        });
+      });
+    });
+    let purged = 0, skipped = 0, freedMB = 0;
+    const doomed = [];
+    try {
+      renderer.properties._map.forEach(function (_val, obj) {
+        if (!obj || !obj.isTexture) return;
+        if (live.has(obj) || (obj.source && live.has(obj.source))) { skipped++; return; }
+        if (obj.userData && (obj.userData.palaceShared || obj.userData.keepDuringPalace || obj.userData.sinKeepCpu)) { skipped++; return; }
+        doomed.push(obj);
+      });
+    } catch (_) {}
+    doomed.forEach(function (t) {
+      try {
+        freedMB += gpuTexBytes(t) / 1048576;
+        dropTextureCpu(t);
+        if (t.dispose) t.dispose();
+        purged++;
+      } catch (_) {}
+    });
+    return { purged: purged, skipped: skipped, freedMB: +freedMB.toFixed(1) };
+  }
+
+  let estimateBusy = false;
   function estimate(ctx) {
     ctx = ctx || {};
+    if (estimateBusy) return lastEstimate;
+    estimateBusy = true;
+    try {
+    return estimateBody(ctx);
+    } finally { estimateBusy = false; }
+  }
+  function estimateBody(ctx) {
     const renderer = ctx.renderer || (typeof window !== 'undefined' && window.__R) || null;
     const scene = ctx.scene || (typeof window !== 'undefined' && window.__S) || null;
     const info = renderer && renderer.info ? renderer.info : null;
@@ -296,15 +382,32 @@
     let cpuImg = 0, gpuTex = 0;
     const seenSrc = new Set();
     const seenGpu = new Set();
+    const texRows = [];
     collected.textures.forEach(function (t) {
       const src = t.source || t;
       if (!seenSrc.has(src)) {
         seenSrc.add(src);
-        cpuImg += cpuImageBytes(t);
+        const c = cpuImageBytes(t);
+        const g = gpuTexBytes(t, renderer);
+        cpuImg += c;
         // One GPU copy per Source (r187 WebGLTextures keys on source.uuid).
-        gpuTex += gpuTexBytes(t);
+        gpuTex += g;
+        if (ctx.detail && (c || g)) {
+          const img = t.image || (t.source && t.source.data);
+          texRows.push({
+            name: t.name || (t.userData && t.userData.name) || '',
+            cpuMB: +(c / 1048576).toFixed(2),
+            gpuMB: +(g / 1048576).toFixed(2),
+            w: (img && (img.width || img.videoWidth)) || (t.userData && t.userData.sinGpuW) || 0,
+            h: (img && (img.height || img.videoHeight)) || (t.userData && t.userData.sinGpuH) || 0,
+            capped: !!(t.userData && t.userData.sinCapped),
+            cpuReleased: !!(t.userData && t.userData.sinCpuReleased),
+            inGraph: collected.inGraph ? collected.inGraph.has(t) : null
+          });
+        }
       }
     });
+    if (ctx.detail) texRows.sort(function (a, b) { return (b.cpuMB + b.gpuMB) - (a.cpuMB + a.gpuMB); });
 
     let cpuGeo = 0, gpuGeo = 0;
     collected.geos.forEach(function (g) {
@@ -368,13 +471,16 @@
     const webkitMB = 64;
     const processMB = Math.max(heapMB, cpuMB) + gpuMB + programsMB + webkitMB;
 
-    const palace = (typeof window !== 'undefined' && window.PalaceInterior && PalaceInterior.status)
-      ? PalaceInterior.status() : null;
+    // Do not call PalaceInterior.status() from estimate(). status() used to
+    // call PalaceWings.metrics() → zoneStreamer.report() → usage() →
+    // estimate() again, which froze the first DONE frame. Phase/room come
+    // from the caller (the overlay already has them); cityReleased is on
+    // the scene.
     const sample = {
       t: Date.now(),
-      phase: (palace && palace.phase) || ctx.phase || '—',
-      room: (palace && palace.room) || ctx.room || '—',
-      cityReleased: !!(scene && scene.userData && scene.userData.cityReleased) || !!(palace && palace.cityReleased),
+      phase: ctx.phase || '—',
+      room: ctx.room || '—',
+      cityReleased: !!(scene && scene.userData && scene.userData.cityReleased),
       geometries: mem.geometries || collected.geos.size || 0,
       textures: mem.textures || collected.textures.size || 0,
       programs: programs,
@@ -394,7 +500,9 @@
       texMB: +gpuTexMB.toFixed(1),
       geoMB: +gpuGeoMB.toFixed(1),
       processMB: +processMB.toFixed(1),
-      webkitMB: webkitMB
+      webkitMB: webkitMB,
+      topTextures: ctx.detail ? texRows.slice(0, 20) : undefined,
+      texSources: seenSrc.size
     };
 
     if (sample.processMB > peak.processMB) {
@@ -488,7 +596,8 @@
           // After the first real frame, textures are on the GPU. Release
           // CPU-side bitmaps a few times as new assets stream in, then
           // at most every 2 s so we do not walk the graph every frame.
-          if (frames <= 8 || (now - lastRelease > 2000) || (scene.userData && scene.userData.cityReleased && frames < 200)) {
+          const busy = !!(scene.userData && scene.userData.cityReleased && frames < 400);
+          if (frames <= 16 || (now - lastRelease > (busy ? 0 : 2000)) || busy) {
             lastRelease = now;
             try { releaseCpuFromObject(scene, this, { upload: false }); } catch (_) {}
           }
@@ -523,6 +632,7 @@
     peak: function () { return peak; },
     last: function () { return lastEstimate; },
     heldGltfBytes: heldGltfBytes,
+    purgeOrphanTextures: purgeOrphanTextures,
     // Used by unit tests.
     _cpuImageBytes: cpuImageBytes,
     _gpuTexBytes: gpuTexBytes,
