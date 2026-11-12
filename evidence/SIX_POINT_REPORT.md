@@ -4,7 +4,7 @@ Branch `fix/ios-black-screen-after-newgame`. All times below are **Asia/Baghdad 
 
 **Repo hygiene:** `evidence/` in this PR is this report plus compact CSV/JSON logs only (~60 KB). Screenshots and raw tees live under `/workspace/Sin1-report/now/` (not in the game repo). Lab-only harness code stays under `/workspace/harness`, outside the repo. `tools/room-budget-report.json` is not in this PR.
 
-**Final cache-bust:** `zone-streamer.js?v=20261112ios14`, `wings.js?v=20261112ios38`, `palaceInterior.js?v=hall29&fix=20261113r39`, `outdoor-perf.js?v=20261112r8`.
+**Final cache-bust:** `zone-streamer.js?v=20261112ios15`, `wings.js?v=20261112ios38`, `palaceInterior.js?v=hall29&fix=20261112r37`, `outdoor-perf.js?v=20261112r9`, `wing-architecture.js?v=20261112bake3`.
 
 ## 1. Pre-render stall and five consecutive palace entries
 
@@ -73,29 +73,19 @@ The real sprint is `evidence/sprint-10min/` (`sprint.json`, `visits.csv`). Harne
 
 First-K4 on a cold stick visit: arrived, complete+revealed in 3 ms at proc 514.2, after K2/K3 had been evicted (peak stayed 601.7, the K2 high-water). Eviction is working.
 
-The 10-minute sprint’s own outdoor attempt stopped at `minZ: 184.65` (front is 183.66) and never reached the door. A focused follow-up (below) found that **was** a game collider issue once the hero got there, plus a stick-latch issue on the way back. Both are now fixed and re-tested.
+The 10-minute sprint’s own walk toward the door stopped at `minZ: 184.65` (front is 183.66). That is **by design**, not a bug: see the sealed-wall section below. Outdoor exit and re-entry are **not bars** for this PR.
 
-### Outdoor exit and palace re-entry (focused WebKit, 00:25–00:26 Asia/Baghdad)
+### Sealed front wall — by design, no palace exit (review of 7c134d1)
 
-Log: `evidence/outdoor-exit-reentry.json`. Harness: `/workspace/harness/outdoor-exit-reentry.mjs` (lab-only). Fresh NEW GAME, qaFast approach, then real-time stick. Bars for motion: walk past `front-5`, come back to phase DONE with Palace `complete+revealed`, peak &lt; 650, no context loss, 0 console errors.
+The user confirmed: once the player has entered the palace there is **no exit back to the city**. `origin/main` (`9b3bcf8`, and earlier `0186847` “سد مسار المدينة”) builds a full-width `south-wall` mesh and a solid front collider (`z = -0.4..0.85`, entire hall width). `releaseCity` on main is one-way (“Outside is a one-way phase: after palace entry the player never returns”).
 
-**Motion PASS** (`passMotion: true`, overall `pass: false` only because the city did not rebuild):
+Commit `7c134d1` cut a portal-width doorway into that wall. That **changed the look** (forbidden) and let the player walk into a **void city** (city already released, 1 draw). That doorway is **fully reverted**. `palaceInterior.js` is byte-identical to `7c134d1^` (the sealed mesh + collider). `index.html` `palaceBlocked` is restored to the pre-doorway test. The only `7c134d1` behavior kept is the `setFacing` ctrlYaw / `ctrlStick=null` re-latch (input only; no visual change).
 
-| Bar | Result |
-| --- | --- |
-| Left past front-5 | **yes**. `minZ: 177.01`, `minLz: -6.65`, `portal.frontZ: 183.66` (front-5 = 178.66). Occupant false, ownsGround false. Exit in 6.6 s. |
-| Re-entry | **yes**. Walked back through the door to `lz: 1.22`, `occupant: true`, `ownsGround: true`, phase **DONE**, Palace **complete+revealed**. Back in 8.8 s. |
-| Memory | **peak 496.6 MB** (under 650) |
-| Context / console | **0** context losses, **0** console errors, **0** page errors, **0** crashes |
-| City rebuilt | **NO**. Outside: `cityReleased: true`, `PalaceExterior` absent, 1 non-palace mesh, 63,081 tris, 1 draw. The ground in front of the palace is a void. |
+Verification, WebKit iPhone, 00:37–00:39 Asia/Baghdad (`evidence/sealed-front-wall.json`, `evidence/final-verify.json`): after palace DONE the hero walked toward `lz = -8` for ~12 s and **stopped at `minLz: 0.859`** (`minZ: 184.52`). Occupant stayed true, cityReleased stayed true, **`intoVoid: false`**, `left: false`, `passSealed: true`. The player cannot leave into a void because the wall is sealed. The old `evidence/outdoor-exit-reentry.json` (doorway-open “motion PASS” with a void city) has been **removed**.
 
-**Game bugs found and fixed:**
+**Look / SSIM.** `palaceInterior.js` is byte-identical to `7c134d1^`; the south-wall mesh and solid front collider match `origin/main` (`southWall` full-width slab, `worldBox` z=−0.4..0.85). A WebKit shot on this head looking at the front wall (`hall-south`, 00:52) names only `south-wall` (the sealed mesh), not the 7c134d1 jambs/lintel, and shows the closed wooden entrance door — not a hole into a void.
 
-1. **Sealed front wall.** `palaceInterior.js` built a full-width south-wall mesh and a solid collider (`z = -0.4..0.85`, entire hall width). The hero stopped at `lz ≈ 0.86` and could not leave. That was the one-way design comment in `releaseCity` (“the player never returns”), but it is a trap if exit is required. The collider and the visual wall now have a portal-width doorway (jambs + lintel, width = `portal.width` ≈ 4.42 m, height above head). Probe after the fix: **0** collider hits from the hall through `lz = -12` at `lx = 0`.
-
-2. **`setFacing` did not re-latch the stick.** `index.html` `setFacing` set `heroYaw` and `yaw` but left `ctrlYaw` on the previous camera heading. After crossing the threshold the follow camera takes over; a held stick then walked backward and the hero bounced at the occupant boundary (`lz ≈ -0.19`, then `lz ≈ -2.5` after the stoop was widened). `setFacing` now also sets `ctrlYaw` and clears `ctrlStick`. The front stoop (`lz >= -2.5`) stays palace-owned so collision does not flicker at the door, and `palaceBlocked` keeps the doorway walkable after phase DONE.
-
-**Not fixed — city reload.** `releaseCity` still tears down outdoor meshes at palace entry and never restores them (`restoreCity` does not exist; `cityReleased` is never cleared). Re-implementing the city from the inline `index.html` builder is a large feature and was not done in this window. Peak stayed under 650 because the city stayed gone. A future two-way exit must reload the city **after** evicting streamed palace rooms so the 650 bar still holds — hiding instead of disposing would put city + palace in memory together and blow the budget (that is why release exists).
+A same-pose SSIM against a live `origin/main` interior was **not completed** in this window: the main worktree on :8091 stayed in phase IDLE through 95+ s and never reached palace DONE (main’s input/`__qaFast` path differs). An early courtyard `exterior-front` pair was captured (current 432k tris / 48 draws vs main 234k / 32) and scored SSIM **0.181** — that is **not** a valid look test (unequal LOD readiness; #46 outdoor opts already scored SSIM ≥ 0.994 against their own pre-opt frozen views in §2). Those PNGs stay under `/workspace/Sin1-report/now/palace-ssim/` (not in the repo). The doorway revert itself is a literal git restore of the sealed wall.
 
 ### Hall→K1 “stuck” and the probe `revealOver=1`
 
@@ -115,23 +105,76 @@ Remaining mutual-recursion / diagnostic-to-diagnostic cycles were scanned and th
 
 ---
 
-## Extensibility test (honest)
+## Unit tests (all passing)
 
-The compact **live** test — a temporary 5-room heavy wing, real assets ~2× the heaviest current room, added via `ADDING_CONTENT.md` data only, one WebKit stick/teleport pass, then remove — **was not run**. Outdoor exit/re-entry (game doorway + stick latch) took the remaining deadline window.
+The four failures in `tests/memory-budget.test.cjs` and `tests/scale-zones.test.cjs` (defer-stall admission, texture-peak growth) **were introduced by #46 commit `6e6c83f`**, not present on main (`memory-budget.test.cjs` does not exist on `origin/main`; the same cases passed at `5d4a59d` and failed from `6e6c83f`).
 
-What is already in the tree as the data-only scale proof (not a substitute for that live pass):
+- **Game-code fix (`zone-streamer.js` `canStart`, bust ios15).** `6e6c83f` admitted the current room via `roomFitsAlone`, which ignores leftover residency (the still-resident city) and exceeded the cap on the first frame. `canStart` now admits only when the incoming room fits **after** eviction. `roomFitsAlone` stays the last-resort path inside `handleDeferStall`, after `onBudgetStall` has had two chances to drop leftovers. Prefetch that is over budget now falls through and records `stats.deferred` (the door stays closed). The three memory-budget cases pass.
+- **`tests/scale-zones.test.cjs`.** After `6e6c83f`, entering a room evicts non-adjacent prefetch and restarts it, so tour 0 peaked at 24 textures and tours 1 and 2 were stable at 32. That is warmup vs steady-state, not a leak. A justified warmup tour was added; subsequent tours must not grow. Passes.
+- **Stale snapshots (not caused by this review, but the user forbids shipping known failures):** `wing-completeness` frozen `wings.js?v=20261112ios35` → `/wings\.js\?v=[0-9]+ios[0-9]+/`; `wing-gpu-residency` `visibilityPlanner.plan(state.regions, …)` → `plan(planRegions, state.links, origin, view` (hall is a first-class region); `outdoor-perf` “drainCpuNow during REVEAL warm” — that sync walk was **intentionally removed** (`6b9df9b` and later) because walking `ctx.scene` froze WebKit; the test now asserts the warm path does **not** call `drainCpuNow` on the live context, while process-memory still drains every frame.
 
-- `ADDING_CONTENT.md` documents `WING_ZONES` + `solveLayout` + runtime `PalaceWings.registerZone`.
-- `tests/memory-budget.test.cjs`: the test **“hard budget evicts then admits; a 3–5× heavy-room sprint never exceeds the cap”** still **passes**. 4 other cases in that file / `tests/scale-zones.test.cjs` currently **fail** (defer-stall admission and texture-peak growth across three synthetic tours). Those failures were **not introduced by this update** (no streamer or wings.js change in this commit) and were **not investigated** in this window.
-
-No temporary wing was left in the repo.
+New tests for city-release (see below) bring the suite to **182 pass, 0 fail**.
 
 ---
 
-## Not done at the deadline (honest)
+## City fully freed after palace DONE
 
-- **City reload on exit:** the hero can now walk out past `front-5` and walk back into a DONE, complete palace, under 650, with no context loss — but the **city is a void** (`releaseCity` is still one-way). See §5.
-- **Live 5-room heavy-wing extensibility pass:** not run. See above.
-- Official standing-idle in the 10-minute sprint is **90 s** in the hall and in K4 (both passed, no hang). A 3-minute hall idle was proven on prior attempts.
+`releaseCity` already removed outdoor scene roots, but **`outdoor-perf.js` kept the city alive in JS**: LOD/HLOD geometries (`state.geos`, `state._hlodGeos`), raw packs, grass/palm/wall/city mesh refs (on the order of **696 grass, 548 palms, 21 walls** from a classified session), instance-matrix snapshots, a baked HLOD impostor, and a **200 ms `setInterval` poll** that continued to `classify` / `applyLods` / `applyFrame` after `cityReleased`. A late LOD fetch could also refill the cache.
+
+**Fix:** `SinOutdoorPerf.releaseAfterCity()` disposes every LOD/HLOD geometry, drops mesh and matrix refs, nulls packs and promises, and clears the poll. Guards on `loadLod`, `loadHlod`, `pumpLodBuild`, `classify`, `applyLods`, `applyFrame`, `beforeRender`, and the poll refuse to refill after release (including a fetch that settles late). `__releaseExteriorStage` in `index.html` calls it (bust `outdoor-perf.js?v=20261112r9`). Intentionally kept: the three tagged outdoor lights (`userData.keepDuringPalace`) and `scene.environment` (PMREM) that light the hall — they are not city geometries/textures; dropping them previously made the palace dark.
+
+**Unit/assert:** `tests/outdoor-perf.test.cjs` — teardown hook is present; release disposes geos, zeros every retention counter, stops the poll, is idempotent, a late fetch does not refill; `cityLeakScan` flags leftover `new-grass-tufts` / `sinLod` meshes and is clean after release + a palace-only scene. All pass.
+
+**Lab (WebKit iPhone, 00:49–00:50 Asia/Baghdad, after palace DONE):** `evidence/city-freed.json`. **PASS** (`cityLeakScan.ok`, `emptied`, `sceneHits: []`, `cacheKeys: []`, poll stopped). 0 console errors, 0 context loss. Process 482.7 MB, peak 483.3 (palace hall only).
+
+| | Before `releaseAfterCity` | After |
+| --- | ---: | ---: |
+| grass / palms / walls / city entries | 696 / 548 / 16 / 287 | 0 / 0 / 0 / 0 |
+| LOD geos (keys, count, CPU bytes) | 10 keys, 159 geos, **19.20 MB** | 0, 0, 0 |
+| HLOD geos / chunks / pack | 31 keys, 6 chunks, pack **2.74 MB** | 0, 0, none |
+| mesh refs / instance-matrix slots | 1,553 / 26,060 | 0 / 0 |
+| poll / LOD promise / HLOD promise | all live | all cleared |
+| `renderer.info` at teardown | city disposed **g122 t53**; verify **Δgeo=65 Δtex=54**, `released=true` | after DONE: geo 137, tex 93 — **palace** residency, not city |
+| programs | (WebKit `info.memory.programs` reported 0; not a reliable program-cache count here) | — |
+
+A loose `/babylon/` name filter also matched four **palace** wing doors (`BabylonianWingDoor-K1-KC12` and siblings). Those are interior doors, not city leftovers; `cityLeakScan` (sinLod / outdoor name list) reported zero hits.
+
+---
+
+## Extensibility test (live, honest)
+
+A temporary 5-room heavy wing (X1–X5 off K5, ~2× K4 kits each) was added via `ADDING_CONTENT.md` data (`WING_ZONES`, `STREAM_EXPECT`, baked colliders) plus a temporary `dressTempHeavy` helper — K4-specific dress could not be reused (`state.k4Dress` conflict), so the path is **not fully data-only** for dress. One WebKit iPhone teleport tour (Palace, K1–K5, X1–X5, T1–T5, L1–L4, Palace), then the wing was **fully removed** (`git checkout HEAD` of `wings.js`, `wing-architecture.js`, `data/palace-colliders.json`). Nothing of the temp wing remains in the tree. Log: `evidence/ext-wing-pass.json`.
+
+**PASS: false.**
+
+| Bar | Result |
+| --- | --- |
+| Arrived, complete+revealed | all 21 visits |
+| truePeak | **674.6 MB — over 650** (hall ~517 + 2×K4 incremental ≈ 157, vs K2’s +110) |
+| visBefore | **7** (K2, K3, X1–X5; `sawVis` true). The 10-min stick sprint on an earlier head had visBefore 0 — this pass teleported. |
+| revealOver | **1**: **X2 10,567 ms**. Other X rooms 6.0–8.1 s. K2 8,686; K3 3,078; K4 2,887. |
+| After leaving X | proc returned to **483.6** — eviction worked |
+| Growth | 0.7 (noGrowth true) |
+| Context / console | **0** losses, **0** errors |
+
+This is a real budget gap: a ~500 MB resident hall plus a 2×K4 wing does not fit under 650. Closing the door when the room cannot fit would fail reveal instead. Assets were not shrunk to game the bar. The system was not generalized to data-only dress in this window.
+
+---
+
+## Short confirmation sprint on the final head
+
+**Teleport tour** of every existing wing, WebKit iPhone, 00:38–00:39 (`evidence/final-verify.json`), after the sealed-wall walk: 16 visits (Palace, K1–K5, T1–T5, L1–L4, Palace), all arrived complete+revealed. **truePeak 588.8 MB** (under 650). **revealOver 0** (max K2 5,582 ms; K3 2,357; K4 2,160). **visBefore 2** (K2, K3). Growth 9 MB (noGrowth, threshold 40). **0** context losses, **0** console errors, **0** crashes. Wall 19,179 ms of visits. `passSprint` is false only because of those two visBefore flags.
+
+**Stick walk** of the king wing (`evidence/sprint-5min/`, SPRINT_ONLY=K1–K5, skip idle, 00:41–00:47): palace DONE, K1 and K2 ok (K2 complete+revealed in 3 ms, proc 584.2). **Aborted at K3** because the harness treats visBefore as fatal: K3 `sawVisibleBeforeComplete: true` but `visDress: []`, complete+revealed in **1,606 ms**, proc 542.5, **truePeak 600.5**, growth 0, **0** errors, **0** context loss. Not a 5-minute all-wings stick walk; the teleport tour is the all-wings confirmation on this head. The earlier 10-minute stick sprint (`evidence/sprint-10min/`, peak **601.7**, visBefore **0**, revealOver **0**) remains the long walking evidence (taken before the `canStart` fix; `canStart` is now stricter).
+
+---
+
+## Not done (honest)
+
+- **Extensibility under 650:** live 2×K4 wing peaked at **674.6**, X2 reveal **10.5 s**, visBefore 7. Eviction after X worked (proc 483). Not fixed.
+- **visBefore on teleport (and one stick K3 sample):** 10-min stick sprint had 0; teleport tours still see K2/K3 (and the heavy X rooms). Not claimed as passing.
+- **City reload / palace exit:** **not a remaining task.** Sealed one-way by design. No void is possible because the player cannot leave.
+- **Data-only dress for a new wing:** adding 2×K4 required a temporary dress helper; it was removed, not generalized.
+- Official 10-min standing idle was 90 s (passed). A 3-minute hall idle was proven earlier.
 
 Not merged.

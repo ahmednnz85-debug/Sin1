@@ -168,6 +168,7 @@
   }
 
   function loadLod(THREE) {
+    if (state.released) return Promise.resolve(null);
     if (state.lod) return Promise.resolve(state.lod);
     if (state._lodPromise) return state._lodPromise;
     // Parse on the main thread (native r.json is much cheaper than a
@@ -178,6 +179,7 @@
       if (!r.ok) throw new Error('lod pack ' + r.status);
       return r.json();
     }).then(function (pack) {
+      if (state.released) { state._lodPromise = null; return null; }
       state._pack = pack;
       state._lodKeys = lodKeyOrder(Object.keys(pack.meshes || {}));
       state._lodBuildI = 0;
@@ -194,7 +196,7 @@
   // them immediately. Doing the whole pack in one turn is what froze Safari
   // at the approach→babylon cinematic cut.
   function pumpLodBuild(THREE, budgetMs) {
-    if (!state._pack || !THREE) return 0;
+    if (state.released || !state._pack || !THREE) return 0;
     const keys = state._lodKeys || [];
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     const budget = budgetMs || 4;
@@ -351,11 +353,13 @@
     return n;
   }
     function loadHlod(THREE) {
+    if (state.released) return Promise.resolve(null);
     if (state._hlodPromise) return state._hlodPromise;
     state._hlodPromise = fetch(HLOD_URL).then(function (r) {
       if (!r.ok) throw new Error('hlod ' + r.status);
       return r.json();
     }).then(function (pack) {
+      if (state.released) { state._hlodPromise = null; return null; }
       state._hlodPack = pack;
       return pack;
     }).catch(function (e) {
@@ -366,7 +370,7 @@
   }
 
   function classify(scene, THREE) {
-    if (!scene || state.classified) return;
+    if (state.released || !scene || state.classified) return;
     state.grass = [];
     state.palms = [];
     state.walls = [];
@@ -577,7 +581,7 @@
 
 
   function applyLods() {
-    if (!state.geos || !Object.keys(state.geos).length) return 0;
+    if (state.released || !state.geos || !Object.keys(state.geos).length) return 0;
     let n = 0;
     function swap(e, lodName) {
       if (!e || !e.mesh) return;
@@ -719,7 +723,7 @@
     }
 
     function applyFrame(scene, camera) {
-    if (!state.classified || !camera) return state.lastVis;
+    if (state.released || !state.classified || !camera) return state.lastVis;
     const plane = state.wallPlane;
     const cx = camera.position.x, cz = camera.position.z;
     const frustum = outdoorCullOn() ? cameraFrustum(camera, window.THREE) : null;
@@ -926,7 +930,8 @@
   }
 
   function beforeRender(scene, camera) {
-    if (!scene || (scene.userData && scene.userData.cityReleased)) return;
+    if (!scene) return;
+    if (scene.userData && scene.userData.cityReleased) { releaseAfterCity(); return; }
     if (!window.THREE) return;
     try { pumpLodBuild(window.THREE, 3); } catch (_) {}
     if (!state.classified) {
@@ -1001,8 +1006,267 @@
     } catch (_) {}
     return null;
   }
+
+  function geoByteSize(g) {
+    if (!g) return 0;
+    let n = 0;
+    const attrs = (g.attributes) || {};
+    Object.keys(attrs).forEach(function (k) {
+      const a = attrs[k] && attrs[k].array;
+      if (a && a.byteLength) n += a.byteLength;
+    });
+    const idx = g.index && g.index.array;
+    if (idx && idx.byteLength) n += idx.byteLength;
+    return n;
+  }
+  function disposeGeo(g) {
+    if (!g || g.__sinOutdoorReleased) return 0;
+    g.__sinOutdoorReleased = true;
+    const bytes = geoByteSize(g);
+    try { if (g.dispose) g.dispose(); } catch (_) {}
+    try {
+      const attrs = g.attributes || {};
+      Object.keys(attrs).forEach(function (k) {
+        if (attrs[k]) attrs[k].array = null;
+      });
+      if (g.index) g.index.array = null;
+    } catch (_) {}
+    return bytes;
+  }
+  function countGeos() {
+    let n = 0, bytes = 0;
+    function add(g) { if (g && !g.__counted) { g.__counted = true; n++; bytes += geoByteSize(g); } }
+    Object.keys(state.geos || {}).forEach(function (k) {
+      const lods = state.geos[k] && state.geos[k].lods;
+      if (lods) Object.keys(lods).forEach(function (ln) { add(lods[ln]); });
+    });
+    Object.keys(state._hlodGeos || {}).forEach(function (k) {
+      const row = state._hlodGeos[k];
+      if (row) { add(row.mid); add(row.far); }
+    });
+    function walk(list) {
+      (list || []).forEach(function (e) {
+        add(e.origGeo); add(e.lodMid); add(e.lodFar);
+        if (e.lods) Object.keys(e.lods).forEach(function (ln) { add(e.lods[ln]); });
+        if (e.mesh && e.mesh.geometry) add(e.mesh.geometry);
+      });
+    }
+    walk(state.grass); walk(state.palms); walk(state.walls); walk(state.city);
+    Object.keys(state.hlod || {}).forEach(function (k) {
+      const h = state.hlod[k];
+      if (h && h.mesh && h.mesh.geometry) add(h.mesh.geometry);
+    });
+    if (state.hlodImpostor && state.hlodImpostor.geometry) add(state.hlodImpostor.geometry);
+    // clear marks
+    function unmark(g) { if (g) g.__counted = false; }
+    Object.keys(state.geos || {}).forEach(function (k) {
+      const lods = state.geos[k] && state.geos[k].lods;
+      if (lods) Object.keys(lods).forEach(function (ln) { unmark(lods[ln]); });
+    });
+    Object.keys(state._hlodGeos || {}).forEach(function (k) {
+      const row = state._hlodGeos[k];
+      if (row) { unmark(row.mid); unmark(row.far); }
+    });
+    function unwalk(list) {
+      (list || []).forEach(function (e) {
+        unmark(e.origGeo); unmark(e.lodMid); unmark(e.lodFar);
+        if (e.lods) Object.keys(e.lods).forEach(function (ln) { unmark(e.lods[ln]); });
+        if (e.mesh && e.mesh.geometry) unmark(e.mesh.geometry);
+      });
+    }
+    unwalk(state.grass); unwalk(state.palms); unwalk(state.walls); unwalk(state.city);
+    return { count: n, bytes: bytes };
+  }
+  function retentionSnapshot() {
+    const geos = countGeos();
+    let meshRefs = 0, matrixSlots = 0;
+    function walk(list) {
+      (list || []).forEach(function (e) {
+        if (e.mesh) meshRefs++;
+        if (e.matrices) matrixSlots += e.matrices.length;
+      });
+    }
+    walk(state.grass); walk(state.palms); walk(state.walls); walk(state.city);
+    Object.keys(state.hlod || {}).forEach(function (k) { if (state.hlod[k] && state.hlod[k].mesh) meshRefs++; });
+    if (state.hlodImpostor) meshRefs++;
+    let packBytes = 0;
+    try {
+      if (state._pack) packBytes += JSON.stringify(state._pack).length;
+    } catch (_) { packBytes += 1; }
+    try {
+      if (state._hlodPack) packBytes += JSON.stringify(state._hlodPack).length;
+    } catch (_) { packBytes += 1; }
+    return {
+      grass: (state.grass || []).length,
+      palms: (state.palms || []).length,
+      walls: (state.walls || []).length,
+      city: (state.city || []).length,
+      hlodChunks: Object.keys(state.hlod || {}).length,
+      lodGeoKeys: Object.keys(state.geos || {}).length,
+      lodGeos: geos.count,
+      lodGeoBytes: geos.bytes,
+      hlodGeoKeys: Object.keys(state._hlodGeos || {}).length,
+      pack: !!state._pack,
+      hlodPack: !!state._hlodPack,
+      packBytes: packBytes,
+      meshRefs: meshRefs,
+      matrixSlots: matrixSlots,
+      pollAlive: !!state._pollIv,
+      lodPromise: !!state._lodPromise,
+      hlodPromise: !!state._hlodPromise,
+      released: !!state.released
+    };
+  }
+  function emptyRetention() {
+    const s = retentionSnapshot();
+    return s.grass === 0 && s.palms === 0 && s.walls === 0 && s.city === 0
+      && s.hlodChunks === 0 && s.lodGeoKeys === 0 && s.lodGeos === 0
+      && s.hlodGeoKeys === 0 && !s.pack && !s.hlodPack && s.meshRefs === 0
+      && s.matrixSlots === 0 && !s.pollAlive && !s.lodPromise && !s.hlodPromise
+      && s.packBytes === 0;
+  }
+
+  // After palace entry the city is one-way gone. Drop every outdoor-perf
+  // cache (LOD/HLOD geos, instance matrices, mesh refs, raw packs, poll)
+  // so nothing from the city stays reachable.
+  function releaseAfterCity() {
+    if (state.released) {
+      const prev = state._releaseReport || { after: retentionSnapshot(), emptied: emptyRetention() };
+      return { already: true, before: prev.before, after: prev.after, emptied: prev.emptied };
+    }
+    const before = retentionSnapshot();
+    state.released = true;
+    try { if (state._pollIv != null) clearInterval(state._pollIv); } catch (_) {}
+    state._pollIv = null;
+    state._lodPromise = null;
+    state._hlodPromise = null;
+
+    function dropMesh(mesh) {
+      if (!mesh) return;
+      try { if (mesh.parent && mesh.parent.remove) mesh.parent.remove(mesh); } catch (_) {}
+      try { if (mesh.geometry) disposeGeo(mesh.geometry); } catch (_) {}
+      try {
+        const mats = mesh.material ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
+        mats.forEach(function (m) {
+          if (!m) return;
+          // Only dispose materials tagged as outdoor-lod/hlod, never palaceShared.
+          if (m.userData && (m.userData.sinLod || m.userData.sinHlod) && m.dispose) m.dispose();
+        });
+      } catch (_) {}
+    }
+    function walkDrop(list) {
+      (list || []).forEach(function (e) {
+        disposeGeo(e.origGeo);
+        disposeGeo(e.lodMid);
+        disposeGeo(e.lodFar);
+        if (e.lods) Object.keys(e.lods).forEach(function (ln) { disposeGeo(e.lods[ln]); });
+        // Mesh itself was (or will be) removed by releaseCity; drop our refs
+        // and any LOD geo that lived only in this cache.
+        if (e.mesh && e.mesh.geometry && e.mesh.geometry.userData && e.mesh.geometry.userData.sinLod)
+          disposeGeo(e.mesh.geometry);
+        e.matrices = null;
+        e.mesh = null;
+        e.origGeo = null;
+        e.lodMid = null;
+        e.lodFar = null;
+        e.lods = null;
+        e.geoCenter = null;
+      });
+    }
+    walkDrop(state.grass);
+    walkDrop(state.palms);
+    walkDrop(state.walls);
+    walkDrop(state.city);
+    Object.keys(state.geos || {}).forEach(function (k) {
+      const lods = state.geos[k] && state.geos[k].lods;
+      if (lods) Object.keys(lods).forEach(function (ln) { disposeGeo(lods[ln]); });
+    });
+    Object.keys(state._hlodGeos || {}).forEach(function (k) {
+      const row = state._hlodGeos[k];
+      if (row) { disposeGeo(row.mid); disposeGeo(row.far); }
+    });
+    Object.keys(state.hlod || {}).forEach(function (k) {
+      const h = state.hlod[k];
+      if (h) dropMesh(h.mesh);
+    });
+    dropMesh(state.hlodImpostor);
+
+    state.geos = {};
+    state._hlodGeos = {};
+    state._hlodPack = null;
+    state._pack = null;
+    state._lodKeys = null;
+    state.lod = null;
+    state.grass = [];
+    state.palms = [];
+    state.walls = [];
+    state.city = [];
+    state.hlod = {};
+    state.hlodImpostor = null;
+    state.classified = false;
+    state.ready = true;
+    state._hlodAttached = false;
+    state._lodStarted = true; // do not refetch
+    state._lodBuildI = 0;
+    state.wallPlane = null;
+    state.before = null;
+    state.lastVis = { tris: 0, draws: 0, culled: 0, occluded: 0 };
+    const after = retentionSnapshot();
+    const report = { before: before, after: after, emptied: emptyRetention() };
+    state._releaseReport = report;
+    try { console.info('[outdoor-perf] released-after-city', JSON.stringify(report)); } catch (_) {}
+    return report;
+  }
+
+  var CITY_LEAK_RE = /PalaceExterior|Ishtar|new-grass-tufts|grass_tuft|babylonian_wall|skyline|sky_babylon|market-stall|processional|outdoor-hlod|sinHlod|vegChunk|palm_tree|date_palm|city-hlod|__sinOutdoor/i;
+  function cityLeakScan(scene, renderer) {
+    const outdoor = retentionSnapshot();
+    const sceneHits = [];
+    if (scene && scene.traverse) {
+      scene.traverse(function (o) {
+        if (o.userData && o.userData.keepDuringPalace) return;
+        const n = (o.name || '') + ' ' + ((o.userData && (o.userData.kind || o.userData.src || '')) || '');
+        const lod = !!(o.userData && o.userData.sinLod) || !!(o.geometry && o.geometry.userData && o.geometry.userData.sinLod);
+        const hlod = !!(o.userData && o.userData.sinHlod);
+        if (lod || hlod || CITY_LEAK_RE.test(n)) {
+          sceneHits.push({
+            name: o.name || o.type,
+            type: o.type,
+            sinLod: lod,
+            sinHlod: hlod,
+            geoBytes: geoByteSize(o.geometry)
+          });
+        }
+      });
+    }
+    let cacheKeys = [];
+    try {
+      const THREE = (typeof window !== 'undefined' && window.THREE) || (typeof globalThis !== 'undefined' && globalThis.THREE);
+      if (THREE && THREE.Cache && THREE.Cache.files) cacheKeys = Object.keys(THREE.Cache.files);
+    } catch (_) {}
+    const mem = renderer && renderer.info && renderer.info.memory;
+    const programs = mem && mem.programs;
+    const info = mem ? {
+      geometries: mem.geometries || 0,
+      textures: mem.textures || 0,
+      programs: Array.isArray(programs) ? programs.length : (programs || 0)
+    } : null;
+    const report = state._releaseReport || null;
+    const ok = emptyRetention() && sceneHits.length === 0 && cacheKeys.length === 0;
+    return {
+      ok: ok,
+      outdoor: outdoor,
+      release: report,
+      sceneHits: sceneHits,
+      cacheKeys: cacheKeys,
+      rendererInfo: info,
+      emptied: emptyRetention()
+    };
+  }
+
   function start() {
     const boot = function () {
+      if (state.released) return false;
       const THREE = (typeof window !== 'undefined') && window.THREE;
       if (!THREE) return false;
       hookRenderer(THREE);
@@ -1017,11 +1281,16 @@
     if (typeof setInterval === 'function') {
       let n = 0;
       const iv = setInterval(function () {
+        if (state.released) { try { clearInterval(iv); } catch (_) {} return; }
         n++;
         boot();
         try {
           const scene = findScene();
           const cam = findCamera();
+          if (scene && scene.userData && scene.userData.cityReleased) {
+            releaseAfterCity();
+            return;
+          }
           if (scene && window.THREE) {
             pumpLodBuild(window.THREE, 4);
             if (!state.classified) classify(scene, window.THREE);
@@ -1032,8 +1301,9 @@
         } catch (e) {
           try { console.warn('outdoor-perf poll', e); } catch (_) {}
         }
-        if (n > 3600) clearInterval(iv); // stop after ~3 min of polling at 50 ms? use 200ms
+        if (n > 3600) { try { clearInterval(iv); } catch (_) {} state._pollIv = null; }
       }, 200);
+      state._pollIv = iv;
       try { if (iv && typeof iv.unref === 'function') iv.unref(); } catch (_) {}
     }
   }
@@ -1064,7 +1334,11 @@
     counts: function () {
       const lodded = (state.grass.filter(function (e) { return e.mesh && e.mesh.userData && e.mesh.userData.sinLodApplied; }).length);
       return { grass: state.grass.length, palms: state.palms.length, walls: state.walls.length, lodded: lodded, lodReady: !!state.lod };
-    }
+    },
+    releaseAfterCity: releaseAfterCity,
+    retentionSnapshot: retentionSnapshot,
+    cityLeakScan: cityLeakScan,
+    emptyRetention: emptyRetention
   };
   root.SinOutdoorPerf = api;
 })(typeof window !== 'undefined' ? window : globalThis);

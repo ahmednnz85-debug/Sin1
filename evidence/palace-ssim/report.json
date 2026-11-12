@@ -1,0 +1,43 @@
+{
+  "when": "2026-11-13 00:51\u201300:53 Asia/Baghdad (UTC+3)",
+  "note": "palaceInterior.js is byte-identical to 7c134d1^ (sealed south-wall). Current hall-south shot lists wallNames=[\"south-wall\"] and shows the closed entrance door, not a cut opening. Live SSIM vs origin/main interior was not completed (main on :8091 stayed IDLE). Exterior SSIM 0.181 is not a valid A/B: unequal LOD readiness and #46 outdoor opts (those opts already SSIM>=0.994 vs their pre-opt refs).",
+  "codeIdentity": {
+    "palaceInterior_vs_7c134d1_parent": "identical",
+    "southWall": "full-width sealed, matches origin/main construction"
+  },
+  "currentShots": {
+    "exterior-front": {
+      "tris": 432778,
+      "calls": 48,
+      "wallNames": [
+        "PalaceExterior"
+      ]
+    },
+    "hall-south": {
+      "tris": 1506114,
+      "calls": 117,
+      "wallNames": [
+        "south-wall"
+      ]
+    },
+    "hall-mid": {
+      "tris": 2757946,
+      "calls": 228,
+      "wallNames": [
+        "south-wall"
+      ]
+    }
+  },
+  "mainShots": {
+    "exterior-front": {
+      "tris": 234092,
+      "calls": 32,
+      "wallNames": [
+        "PalaceExterior"
+      ]
+    },
+    "interior": "not captured \u2014 main stayed IDLE"
+  },
+  "exteriorSsimEarlyUnequalLod": 0.18114,
+  "exteriorSsimValid": false
+}

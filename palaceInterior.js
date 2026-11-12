@@ -2605,29 +2605,11 @@
       roughness: 0.58, metalness: 0.22
     });
     if (palaceEnv) { southMat.envMap = palaceEnv; southMat.envMapIntensity = 0.42; }
-    // Doorway in the south wall so the player can leave and re-enter. The
-    // previous full-width slab, together with the solid front collider,
-    // sealed the hall after entry (a one-way trap). Opening width matches
-    // the outdoor portal; lintel sits above head height.
-    const entryDoorW = Math.max(1.2, (portal && portal.width) || 4.42);
-    const entryDoorHalf = entryDoorW * 0.5;
-    const entryDoorH = Math.max(3.2, Math.min(CH * 0.78, (portal && portal.height) || 8.18));
-    const southT = 0.28, southH = CH + 0.45, southY = southH * 0.5 - 0.08, southZ = 0.02;
-    const southFullW = W + wallThick * 2;
-    function addSouth(name, w, h, x, y, z) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, southT), southMat);
-      m.position.set(x, y, z);
-      m.name = name;
-      m.receiveShadow = true;
-      group.add(m);
-      return m;
-    }
-    const leftW = Math.max(0.2, southFullW * 0.5 - entryDoorHalf);
-    const rightW = leftW;
-    addSouth('south-wall-left', leftW, southH, -entryDoorHalf - leftW * 0.5, southY, southZ);
-    addSouth('south-wall-right', rightW, southH, entryDoorHalf + rightW * 0.5, southY, southZ);
-    const lintelH = Math.max(0.3, southH - entryDoorH);
-    addSouth('south-wall-lintel', entryDoorW, lintelH, 0, entryDoorH + lintelH * 0.5 - 0.08, southZ);
+    const southWall = new THREE.Mesh(new THREE.BoxGeometry(W + wallThick * 2, CH + 0.45, 0.28), southMat);
+    southWall.position.set(0, (CH + 0.45) * 0.5 - 0.08, 0.02);
+    southWall.name = 'south-wall';
+    southWall.receiveShadow = true;
+    group.add(southWall);
     if (assets.door && assets.door.scene) {
       const model = assets.door.scene.clone(true);
       model.traverse(function (o) {
@@ -3621,18 +3603,7 @@
       if (cursor < L) worldBox(new THREE.Vector3(side * (W / 2) - 0.45, 0, cursor), new THREE.Vector3(side * (W / 2) + 0.45, CH, L));
     });
     worldBox(new THREE.Vector3(-W / 2, 0, L - 0.45), new THREE.Vector3(W / 2, CH, L + 0.45));
-    // Front wall collider with a portal-width doorway. The old solid box
-    // (full width, z=-0.4..0.85) stopped the hero at lz≈0.86 and made the
-    // palace a one-way space. Jambs + a lintel above head height leave a
-    // walkable opening at x=0, matching the outdoor portal.
-    (function () {
-      const doorW = Math.max(1.2, (portal && portal.width) || 4.42);
-      const doorHalf = doorW * 0.48;
-      const doorH = Math.max(3.2, Math.min(CH * 0.78, (portal && portal.height) || 8.18));
-      worldBox(new THREE.Vector3(-W / 2 - 0.3, 0, -0.4), new THREE.Vector3(-doorHalf, CH, 0.85));
-      worldBox(new THREE.Vector3(doorHalf, 0, -0.4), new THREE.Vector3(W / 2 + 0.3, CH, 0.85));
-      worldBox(new THREE.Vector3(-doorHalf, doorH, -0.4), new THREE.Vector3(doorHalf, CH, 0.85));
-    })();
+    worldBox(new THREE.Vector3(-W / 2 - 0.3, 0, -0.4), new THREE.Vector3(W / 2 + 0.3, CH, 0.85));
     const hx = stairW / 2;
     worldBox(new THREE.Vector3(-hx - 0.3 * H, 0, platformFrontZ), new THREE.Vector3(-hx + 0.04 * H, topY + H, L));
     worldBox(new THREE.Vector3(hx - 0.04 * H, 0, platformFrontZ), new THREE.Vector3(hx + 0.3 * H, topY + H, L));
@@ -4625,10 +4596,7 @@
       }
       const lx = ctx.hero.position.x - portalX;
       const lz = ctx.hero.position.z - portalFront;
-      // Include the front stoop (~2.5 m outside the threshold) so leaving and
-      // re-entering does not flicker occupant at the door and switch between
-      // palace and outdoor colliders mid-step (that bounced the hero at lz≈0).
-      const inHall = lz >= -2.5 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;
+      const inHall = lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;
       const inWings = !!(wingRuntime && window.PalaceWings && PalaceWings.contains(lx, lz));
       occupant = inHall || inWings;
       // Keep the palace hall drawn from nearby wing rooms so the arch behind the player is not a void.

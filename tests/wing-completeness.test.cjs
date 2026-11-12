@@ -93,7 +93,10 @@ test('teleport stands at the entrance, not on the table at bbox centre', () => {
 });
 
 test('index.html cache-busts the completeness wings build', () => {
-  assert.match(index, /wings\.js\?v=20261112ios35/);
+  // The version token is bumped whenever wings.js changes; the test
+  // only requires that a cache-bust query is present (a frozen token
+  // like ios35 went stale on later busts and is not a game bug).
+  assert.match(index, /wings\.js\?v=[0-9]+ios[0-9]+/);
 });
 
 test('entry corridor plant and torches parse during LOADING, not mid-SETUP', () => {

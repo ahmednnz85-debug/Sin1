@@ -362,7 +362,13 @@
       const extra = incoming(rec);
       if (rec.isCurrent) {
         evictForCurrent(extra);
-        if (!wouldExceed(extra) || evictToFit(extra) || roomFitsAlone(rec)) {
+        // Admit only when the incoming room fits AFTER eviction. Do not
+        // use roomFitsAlone here: that ignores leftover residency (the
+        // still-resident city) and would exceed the cap on the first
+        // frame. roomFitsAlone is the last-resort admit inside
+        // handleDeferStall, after onBudgetStall has had two chances to
+        // drop leftovers.
+        if (!wouldExceed(extra) || evictToFit(extra)) {
           rec.deferred = false; rec.deferredAt = 0; return true;
         }
       } else {
@@ -370,15 +376,18 @@
         // or anything visible. Never override the budget. Never compete
         // with a current-room load that is still in flight.
         evictNonAdjacent('non-adjacent-before-prefetch');
-        if (wouldExceed(extra)) return false;
-        if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
-          let currentBusy = false;
-          zones.forEach(function (r) {
-            if (r.isCurrent && r.state !== 'ready' && r.state !== 'cold') currentBusy = true;
-          });
-          if (currentBusy) return false;
+        if (!wouldExceed(extra)) {
+          if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
+            let currentBusy = false;
+            zones.forEach(function (r) {
+              if (r.isCurrent && r.state !== 'ready' && r.state !== 'cold') currentBusy = true;
+            });
+            if (currentBusy) return false;
+          }
+          rec.deferred = false; rec.deferredAt = 0; return true;
         }
-        rec.deferred = false; rec.deferredAt = 0; return true;
+        // Over budget: fall through and record a defer so the door stays
+        // closed and stats.lastDefer is visible to tests and the overlay.
       }
       if (!rec.deferred) {
         rec.deferred = true;
