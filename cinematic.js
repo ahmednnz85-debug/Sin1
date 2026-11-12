@@ -530,6 +530,26 @@
     potRange() { return E.pots; },
     potShadowRange() { return E.potShadow; },
     dustCount() { return E.dust; },
+    // Generate the interior PMREM and apply hall look behind the entry
+    // blackout. fromEquirectangular is a multi-pass GPU convolution; doing
+    // it on the first DONE rAF stalled WebKit software GL for ~90 s before
+    // the first present (and is the same spike on a real iPhone). The look
+    // is unchanged: same texture, same applyInteriorLook, just earlier.
+    prepareInteriorLook() {
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      try { console.info('[palace load] interior-look-begin'); } catch (_) {}
+      try {
+        if (!wasInterior) {
+          outdoorEnv = scene.environment !== interiorEnv ? scene.environment : outdoorEnv;
+          lookScanAt = 0;
+        }
+        applyInteriorLook((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+        wasInterior = true;
+      } catch (e) {
+        try { console.info('[palace load] interior-look-err', e && e.message); } catch (_) {}
+      }
+      try { console.info('[palace load] interior-look-end', Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0) + 'ms'); } catch (_) {}
+    },
     // called once per rAF, before simulation
     frame(ts, busy) {
       govern(ts, busy); hud(ts);

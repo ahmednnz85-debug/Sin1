@@ -115,3 +115,21 @@ test('a room only brought into the frustum (beyond prepareHops) is drawn but not
   assert.ok(out.visible.has('R'));
   assert.equal(out.prepared.has('R'), false);
 });
+
+test('a large side-wing room is not drawn just because its AABB clips a long sight line', () => {
+  // Hall H is 14 m × 80 m. A huge further room W (3 hops, around a corner)
+  // has an AABB that spans the same Z as the hall and would intersect a
+  // 400 m forward wedge, but its doorway is at x=-40, off-camera.
+  const hall = [
+    { id: 'H', bbox: box(-7, 0, 7, 80) },
+    { id: 'C', bbox: box(-15, 20, -7, 26) },
+    { id: 'S', bbox: box(-40, 18, -15, 28) },
+    { id: 'W', bbox: box(-80, 0, -40, 80) }
+  ];
+  const lks = [['H', 'C'], ['C', 'S'], ['S', 'W']];
+  const cam = { x: 0, z: 2, dirX: 0, dirZ: 1, halfFov: 0.6 };
+  const p = createPlanner();
+  const loose = p.plan(hall, lks, 'H', cam, 0);
+  assert.equal(loose.visible.has('W'), false, 'visible=' + Array.from(loose.visible));
+  assert.equal(loose.prepared.has('W'), false);
+});

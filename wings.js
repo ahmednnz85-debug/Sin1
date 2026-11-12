@@ -2817,7 +2817,13 @@
       // Camera-driven: what the camera can see (through open portals) is drawn,
       // what it could see after a turn stays prepared.
       const tPlan = performance.now();
-      const planned = visibilityPlanner.plan(state.regions, state.links, origin, view, performance.now() / 1000);
+      const hall = state.hall || {};
+      const hw = hall.width || 14, hl = hall.length || 30;
+      const hallReg = { id: 'Palace', bbox: { x0: -hw / 2, x1: hw / 2, z0: 0, z1: hl, cx: 0, cz: hl / 2 } };
+      const planRegions = (state.regions || []).some(function (r) { return r.id === 'Palace'; })
+        ? state.regions
+        : (state.regions || []).concat([hallReg]);
+      const planned = visibilityPlanner.plan(planRegions, state.links, origin, view, performance.now() / 1000);
       try { console.info('[palace load] cull-plan', Math.round(performance.now()-tPlan)+'ms', 'vis', planned.visible.size); } catch (_) {}
       if (isArch) planned.visible.add(id);
       meta = planned.meta;

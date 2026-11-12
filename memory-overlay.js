@@ -22,6 +22,7 @@
 
   let lastSample = null;
   let lastWriteAt = 0;
+  let lastEstimateAt = 0;
   let fpsEma = 0;
   const fpsRing = [];
   let fpsLow1 = null;
@@ -231,7 +232,14 @@
     if (Array.isArray(info && info.programs)) lastSample.programs = info.programs.length;
     else if (Array.isArray(mem.programs)) lastSample.programs = mem.programs.length;
     try {
-      if (root.SinProcessMemory && typeof SinProcessMemory.estimate === 'function') {
+      // estimate() traverses the scene. Doing that on the first DONE frame
+      // (and every rAF after) raced the first hall present and burned tens
+      // of seconds in WebKit software GL. Wait until the first present has
+      // returned, then sample at the same 500 ms cadence as the black box.
+      const firstPresent = (typeof window !== 'undefined' && window.__sinFirstPresentLogged);
+      const estNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (firstPresent && root.SinProcessMemory && typeof SinProcessMemory.estimate === 'function' && (estNow - lastEstimateAt >= TICK_MS)) {
+        lastEstimateAt = estNow;
         const pe = SinProcessMemory.estimate({ renderer: renderer, scene: ctx.scene, phase: lastSample.phase, room: lastSample.room });
         if (pe) {
           lastSample.texMB = pe.gpuTexMB;

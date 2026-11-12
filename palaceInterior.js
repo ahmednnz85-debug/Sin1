@@ -3676,6 +3676,214 @@
   let lastDt = 0.016;
 
 
+
+  // Walk only palace roots (never leftover outdoor) and report what the
+  // first DONE frame would submit: visible meshes / tris / draws, shadow
+  // casters and passes, region vis, leftover city. Logs before the
+  // blackout lifts so a later llvmpipe stall cannot swallow the numbers.
+  function prepareHallFrustumCull(root) {
+    if (!root || !root.traverse) return 0;
+    try { root.updateMatrixWorld(true); } catch (_) {}
+    let n = 0;
+    root.traverse(function (o) {
+      if (!o.isMesh || o.isInstancedMesh || o.isSprite || o.isPoints) return;
+      if (o.frustumCulled !== false) return;
+      try {
+        if (o.geometry) {
+          if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+          if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        }
+        o.frustumCulled = true;
+        n++;
+      } catch (_) {}
+    });
+    return n;
+  }
+
+  function censusPendingFrame(ctx, tag) {
+    const t0 = performance.now();
+    const out = {
+      tag: tag,
+      cityReleased: false,
+      leftoverVisible: [],
+      roots: [],
+      lights: 0,
+      shadowLights: 0,
+      pointShadowPasses: 0,
+      dirSpotShadowPasses: 0,
+      shadowMapEnabled: false,
+      meshes: 0,
+      visMeshes: 0,
+      visDraws: 0,
+      visTris: 0,
+      visCasters: 0,
+      unculledVis: 0,
+      unculledVisTris: 0,
+      inFrustum: 0,
+      inFrustumTris: 0,
+      hallVis: 0,
+      hallTris: 0,
+      wingVis: 0,
+      wingTris: 0,
+      heroVis: 0,
+      heroTris: 0,
+      otherVis: 0,
+      otherTris: 0,
+      regions: null,
+      regionCount: 0,
+      ms: 0
+    };
+    try {
+      const scene = ctx && ctx.scene, cam = ctx && ctx.camera, renderer = ctx && ctx.renderer;
+      if (!scene) { out.ms = performance.now() - t0; console.info('[palace load] frame-census', JSON.stringify(out)); return out; }
+      out.cityReleased = !!(scene.userData && scene.userData.cityReleased);
+      out.shadowMapEnabled = !!(renderer && renderer.shadowMap && renderer.shadowMap.enabled);
+      const keep = { PalaceInterior: 1, PalaceWings: 1 };
+      (scene.children || []).forEach(function (ch) {
+        const name = ch.name || ch.type || '?';
+        out.roots.push(name + ':vis=' + !!ch.visible + (ch.isLight ? ':light' : ''));
+        if (ch === (ctx && ctx.hero) || (ctx && ctx.hero && ch === ctx.hero.parent)) return;
+        if (keep[name] || (ch.userData && ch.userData.keepDuringPalace) || ch.isLight || ch.isCamera) return;
+        if (ch.visible) out.leftoverVisible.push(name);
+      });
+      let frustum = null;
+      try {
+        if (cam && THREE.Frustum && THREE.Matrix4) {
+          cam.updateMatrixWorld();
+          frustum = new THREE.Frustum();
+          const m = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+          frustum.setFromProjectionMatrix(m);
+        }
+      } catch (_) {}
+      function trisOf(o) {
+        const g = o.geometry;
+        if (!g) return 0;
+        const t = g.index ? g.index.count / 3 : (g.attributes && g.attributes.position ? g.attributes.position.count / 3 : 0);
+        return t * (o.isInstancedMesh && o.count ? o.count : 1);
+      }
+      function worldVisible(o) {
+        let p = o;
+        while (p) { if (p.visible === false) return false; p = p.parent; }
+        return true;
+      }
+      function kindOf(o) {
+        let p = o;
+        while (p) {
+          if (p.name === 'PalaceInterior') return 'hall';
+          if (p.name === 'PalaceWings') return 'wing';
+          if (ctx && ctx.hero && (p === ctx.hero || p.name === 'hero' || p.name === 'Hero')) return 'hero';
+          p = p.parent;
+        }
+        return 'other';
+      }
+      function walk(root) {
+        if (!root || !root.traverse) return;
+        root.traverse(function (o) {
+          if (o.isLight) {
+            out.lights++;
+            const on = o.intensity == null || o.intensity > 0;
+            if (o.castShadow && on) {
+              out.shadowLights++;
+              if (o.isPointLight) out.pointShadowPasses += 6;
+              else out.dirSpotShadowPasses += 1;
+            }
+            return;
+          }
+          if (!o.isMesh && !o.isSprite && !o.isPoints && !o.isInstancedMesh) return;
+          out.meshes++;
+          if (!worldVisible(o)) return;
+          const tris = trisOf(o);
+          const draws = 1;
+          out.visMeshes++;
+          out.visDraws += draws;
+          out.visTris += tris;
+          if (o.castShadow) out.visCasters++;
+          if (o.frustumCulled === false) { out.unculledVis++; out.unculledVisTris += tris; }
+          let inF = false;
+          if (frustum) {
+            try {
+              if (o.isSprite || o.isPoints) inF = true;
+              else if (typeof frustum.intersectsObject === 'function') inF = frustum.intersectsObject(o);
+              else inF = true;
+            } catch (_) { inF = true; }
+          }
+          if (inF) { out.inFrustum++; out.inFrustumTris += tris; }
+          const k = kindOf(o);
+          if (k === 'hall') { out.hallVis++; out.hallTris += tris; }
+          else if (k === 'wing') { out.wingVis++; out.wingTris += tris; }
+          else if (k === 'hero') { out.heroVis++; out.heroTris += tris; }
+          else { out.otherVis++; out.otherTris += tris; }
+          if (!out.top) out.top = [];
+          out.top.push({ n: o.name || o.type || '?', k: k, tris: Math.round(tris), cull: o.frustumCulled !== false, f: inF, sh: !!o.castShadow, inst: !!o.isInstancedMesh });
+        });
+      }
+      walk(group);
+      if (wingRuntime && wingRuntime.root) walk(wingRuntime.root);
+      if (ctx && ctx.hero) walk(ctx.hero);
+      // Lights that live on the scene (kept outdoor hemi/sun) — shallow.
+      (scene.children || []).forEach(function (ch) {
+        if (ch.isLight) {
+          out.lights++;
+          const on = ch.intensity == null || ch.intensity > 0;
+          if (ch.castShadow && on) {
+            out.shadowLights++;
+            if (ch.isPointLight) out.pointShadowPasses += 6;
+            else out.dirSpotShadowPasses += 1;
+          }
+        }
+      });
+      try {
+        const vis = window.PalaceWings && PalaceWings.state && PalaceWings.state.visibility;
+        const v = vis && vis.visible;
+        out.regions = v ? (Array.isArray(v) ? v.slice() : Array.from(v)) : null;
+        out.regionCount = out.regions ? out.regions.length : 0;
+        const st = window.PalaceWings && PalaceWings.state;
+        if (st && st.regionGroups && st.regionGroups.forEach) {
+          const shown = [];
+          st.regionGroups.forEach(function (g, id) { if (g && g.visible) shown.push(id); });
+          out.regionGroupsVisible = shown;
+          out.regionGroupsVisibleCount = shown.length;
+        }
+      } catch (_) {}
+      out.visTris = Math.round(out.visTris);
+      out.hallTris = Math.round(out.hallTris);
+      out.wingTris = Math.round(out.wingTris);
+      out.unculledVisTris = Math.round(out.unculledVisTris);
+      out.inFrustumTris = Math.round(out.inFrustumTris);
+    } catch (e) {
+      out.err = String(e && e.message || e).slice(0, 160);
+    }
+    out.ms = Math.round(performance.now() - t0);
+    try {
+      console.info('[palace load] frame-census', out.tag,
+        'cityReleased', out.cityReleased,
+        'leftover', (out.leftoverVisible || []).join(',') || 'none',
+        'shadowMap', out.shadowMapEnabled,
+        'lights', out.lights, 'shadowLights', out.shadowLights,
+        'pointPasses', out.pointShadowPasses, 'dirPasses', out.dirSpotShadowPasses,
+        'casters', out.visCasters);
+      console.info('[palace load] frame-census-draw',
+        'visMeshes', out.visMeshes, 'visDraws', out.visDraws, 'visTris', out.visTris,
+        'unculled', out.unculledVis, 'unculledTris', out.unculledVisTris,
+        'inFrustum', out.inFrustum, 'inFrustumTris', out.inFrustumTris);
+      console.info('[palace load] frame-census-roots',
+        'hall', out.hallVis, out.hallTris,
+        'wing', out.wingVis, out.wingTris,
+        'hero', out.heroVis, out.heroTris,
+        'other', out.otherVis, out.otherTris,
+        'regions', out.regionGroupsVisibleCount, (out.regionGroupsVisible || []).join(','),
+        'ms', out.ms);
+      console.info('[palace load] frame-census-scene', (out.roots || []).join(' | '));
+      if (out.top && out.top.length) {
+        out.top.sort(function (a, b) { return b.tris - a.tris; });
+        out.top.slice(0, 12).forEach(function (m, i) {
+          console.info('[palace load] frame-census-mesh', i + 1, m.n, m.k, 'tris', m.tris, 'frustumCulled', m.cull, 'inF', m.f, 'castShadow', m.sh, 'inst', m.inst);
+        });
+      }
+    } catch (_) {}
+    return out;
+  }
+
   // When KHR_parallel_shader_compile is missing, isReady() is immediately
   // true and the next GL call can stall 30–90 s on a still-linking program.
   // A WebGL2 fence after compile lets us poll GPU completion without a
@@ -4172,6 +4380,16 @@
         loadEl.style.opacity = '0';
         loadEl.style.pointerEvents = 'none';
         // Finish the load fade directly into gameplay; skip the scripted entrance walk/camera shot.
+        // Force a cull with the current camera so the census (and the
+        // first present) see the same region vis as a steady hall frame.
+        try { if (wingRuntime && window.PalaceWings && PalaceWings.tick) PalaceWings.tick(0, ctx); } catch (_) {}
+        // PMREM + interior look while still blacked out (see SinGfx.prepareInteriorLook).
+        try { if (window.SinGfx && SinGfx.prepareInteriorLook) SinGfx.prepareInteriorLook(); } catch (_) {}
+        try {
+          const n = prepareHallFrustumCull(group);
+          console.info('[palace load] hall-frustum-cull', n);
+        } catch (_) {}
+        try { censusPendingFrame(ctx, 'pre-DONE'); } catch (ce) { try { console.info('[palace load] frame-census-fail', String(ce).slice(0, 160)); } catch (_) {} }
         state = 'DONE';
         fadeT = 0;
         entranceLeft = 0;
