@@ -1,0 +1,159 @@
+Skipping host requirements validation logic because `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS` env variable is set.
+19:11:00 GOTO menu
+19:11:02 wait-menu 0
+19:11:04 CON [outdoor-perf] instance-cull 1138/8853 occluded 36 farHide 1173 hlod 21 tris 1392638 draws 166
+19:11:06 NEW GAME
+19:11:07 palace 0 {"ph":"IDLE","proc":null,"peak":0,"lost":false,"maxSlice":0,"maxSliceName":null,"first":false}
+19:11:14 palace 5 {"ph":"IDLE","proc":null,"peak":0,"lost":false,"maxSlice":0,"maxSliceName":null,"first":false}
+19:11:20 palace 10 {"ph":"IDLE","proc":null,"peak":0,"lost":false,"maxSlice":0,"maxSliceName":null,"first":false}
+19:11:25 palace 15 {"ph":"IDLE","proc":null,"peak":0,"lost":false,"maxSlice":0,"maxSliceName":null,"first":false}
+19:11:31 palace 20 {"ph":"IDLE","proc":null,"peak":0,"lost":false,"maxSlice":0,"maxSliceName":null,"first":false}
+19:11:36 palace 25 {"ph":"IDLE","proc":null,"peak":0,"lost":false,"maxSlice":0,"maxSliceName":null,"first":false}
+19:11:42 palace 30 {"ph":"IDLE","proc":null,"peak":0,"lost":false,"maxSlice":0,"maxSliceName":null,"first":false}
+19:11:47 palace 35 {"ph":"LOADING","proc":103.4,"peak":103.4,"lost":false,"maxSlice":0,"maxSliceName":null,"first":false}
+19:11:51 CON [palace load] instance-cull lod-near 8->0+8 | lod-near 4->0+4 | lod-near 12->2+10 | wall-module 6->6 | back-wall-fill 6->6
+19:11:52 palace skip-ev compiling [palace load] warm-begin 41 / 65 MeshStandardMaterial wings-floor-Kings
+19:11:57 palace 45 {"ph":"DONE","proc":483.3,"peak":483.3,"lost":false,"maxSlice":761,"maxSliceName":"باب الاجنحة.glb","first":true}
+19:11:57 PALACE true {"ph":"DONE","proc":483.3,"peak":483.3,"lost":false,"maxSlice":761,"maxSliceName":"باب الاجنحة.glb","first":true}
+19:11:59 shot webkit-palace
+19:11:59 VISIT Palace proc 482.7 peak 483.3 complete true revealed true ok true ms 13
+19:12:00 VISIT K1 proc 482.7 peak 483.3 complete true revealed true ok true ms 721
+19:12:00 VISIT Palace proc 482.7 peak 483.3 complete true revealed true ok true ms 701
+19:12:02 VISIT KC12 proc 472.2 peak 483.3 complete true revealed true ok true ms 1536
+19:12:03 VISIT Palace proc 493.9 peak 493.9 complete true revealed true ok true ms 1486
+19:12:05 CON [palace load] wing-parse-start عمود-المجلس.glb 2208284
+19:12:05 CON [palace load] wing-parse عمود-المجلس.glb 396ms
+19:12:05 CON [palace load] wing-parse-start سقف-المجلس.glb 3232416
+19:12:06 CON [palace load] wing-parse سقف-المجلس.glb 539ms
+19:12:06 CON [palace load] wing-parse-start lion_winged.glb 2432440
+19:12:06 CON [palace load] wing-parse lion_winged.glb 520ms
+19:12:07 CON [palace load] wing-parse-start اجتماعات .glb 7059256
+19:12:07 CON [palace load] wing-parse اجتماعات .glb 529ms
+19:12:07 CON [palace load] wing-parse-start ثريا-المجلس.glb 2997548
+19:12:08 CON [palace load] wing-parse ثريا-المجلس.glb 513ms
+19:12:09 VISIT K2 proc 593.2 peak 593.2 complete true revealed true ok true ms 5279
+19:12:09 VISIT Palace proc 593.2 peak 593.2 complete true revealed true ok true ms 8
+19:12:09 VISIT KC2 proc 593.2 peak 593.2 complete true revealed true ok true ms 10
+19:12:09 VISIT Palace proc 593.2 peak 593.2 complete true revealed true ok true ms 393
+19:12:11 VISIT K3 proc 545.7 peak 593.2 complete true revealed true ok true ms 2017
+19:12:11 VISIT Palace proc 545.7 peak 593.2 complete true revealed true ok true ms 7
+19:12:11 VISIT KC3 proc 545.7 peak 593.2 complete true revealed true ok true ms 187
+19:12:11 VISIT Palace proc 545.7 peak 593.2 complete true revealed true ok true ms 162
+19:12:12 CON [palace load] wing-parse-start k4_front_mural.glb 601504
+19:12:12 CON [palace load] wing-parse k4_front_mural.glb 130ms
+19:12:12 CON [palace load] wing-parse-start k4_kit_c.glb 2284608
+19:12:13 CON [palace load] wing-parse k4_kit_c.glb 942ms
+19:12:13 CON [palace load] wing-parse-start k4_kit_a.glb 1647556
+19:12:13 CON [palace load] wing-parse k4_kit_a.glb 298ms
+19:12:13 CON [palace load] wing-parse-start k4_kit_b.glb 1988396
+19:12:13 CON [palace load] wing-parse k4_kit_b.glb 280ms
+19:12:14 VISIT K4 proc 513.6 peak 593.2 complete true revealed true ok true ms 2551
+19:12:14 VISIT Palace proc 513.6 peak 593.2 complete true revealed true ok true ms 13
+19:12:15 VISIT KC4 proc 513.6 peak 593.2 complete true revealed true ok true ms 613
+19:12:15 VISIT Palace proc 492.9 peak 593.2 complete true revealed true ok true ms 749
+19:12:15 CON [palace load] wing-parse-start k4_front_mural.glb 601504
+19:12:15 VISIT K5 proc 492.9 peak 593.2 complete true revealed true ok true ms 7
+19:12:15 CON [palace load] wing-parse k4_front_mural.glb 26ms
+19:12:16 VISIT Palace proc 500 peak 593.2 complete true revealed true ok true ms 170
+19:12:16 CON [palace load] wing-parse-start k4_kit_c.glb 2284608
+19:12:17 VISIT KC5R proc 490.7 peak 593.2 complete true revealed true ok true ms 1178
+19:12:17 VISIT Palace proc 490.7 peak 593.2 complete true revealed true ok true ms 675
+19:12:18 VISIT KC1 proc 500.8 peak 593.2 complete true revealed true ok true ms 699
+19:12:19 VISIT Palace proc 500.3 peak 593.2 complete true revealed true ok true ms 675
+19:12:19 VISIT Palace proc 500.3 peak 593.2 complete true revealed true ok true ms 666
+19:12:20 VISIT L1 proc 500.3 peak 593.2 complete true revealed true ok true ms 766
+19:12:21 VISIT Palace proc 500.2 peak 593.2 complete true revealed true ok true ms 713
+19:12:21 VISIT LC2 proc 500.2 peak 593.2 complete true revealed true ok true ms 25
+19:12:21 VISIT Palace proc 490.2 peak 593.2 complete true revealed true ok true ms 448
+19:12:22 VISIT L2 proc 490.2 peak 593.2 complete true revealed true ok true ms 682
+19:12:22 VISIT Palace proc 490.2 peak 593.2 complete true revealed true ok true ms 406
+19:12:22 CON [palace load] wing-parse k4_kit_c.glb 6955ms
+19:12:23 VISIT LC3 proc 490.2 peak 593.2 complete true revealed true ok true ms 332
+19:12:23 CON [palace load] wing-parse-start k4_kit_a.glb 1647556
+19:12:24 VISIT Palace proc 499.6 peak 593.2 complete true revealed true ok true ms 711
+19:12:24 VISIT L3 proc 489.6 peak 593.2 complete true revealed true ok true ms 104
+19:12:24 VISIT Palace proc 489.6 peak 593.2 complete true revealed true ok true ms 105
+19:12:24 VISIT LC4 proc 489.6 peak 593.2 complete true revealed true ok true ms 464
+19:12:24 CON [palace load] wing-parse k4_kit_a.glb 1407ms
+19:12:25 CON [palace load] wing-parse-start k4_kit_b.glb 1988396
+19:12:25 VISIT Palace proc 489.5 peak 593.2 complete true revealed true ok true ms 645
+19:12:26 VISIT L4 proc 501.5 peak 593.2 complete true revealed true ok true ms 686
+19:12:26 VISIT Palace proc 490.9 peak 593.2 complete true revealed true ok true ms 301
+19:12:27 VISIT Palace proc 500.9 peak 593.2 complete true revealed true ok true ms 1518
+19:12:27 CON [palace load] wing-parse k4_kit_b.glb 2562ms
+19:12:27 VISIT T1 proc 500.9 peak 593.2 complete true revealed true ok true ms 147
+19:12:28 VISIT Palace proc 528.5 peak 593.2 complete true revealed true ok true ms 691
+19:12:29 VISIT TR1 proc 526.6 peak 593.2 complete true revealed true ok true ms 709
+19:12:29 VISIT Palace proc 526.6 peak 593.2 complete true revealed true ok true ms 7
+19:12:30 VISIT T2 proc 492.5 peak 593.2 complete true revealed true ok true ms 647
+19:12:30 VISIT Palace proc 482 peak 593.2 complete true revealed true ok true ms 649
+19:12:30 VISIT TC12 proc 482 peak 593.2 complete true revealed true ok true ms 5
+19:12:31 VISIT Palace proc 492.1 peak 593.2 complete true revealed true ok true ms 673
+19:12:32 VISIT T3 proc 492.1 peak 593.2 complete true revealed true ok true ms 735
+19:12:32 VISIT Palace proc 481.9 peak 593.2 complete true revealed true ok true ms 155
+19:12:32 VISIT TC23 proc 481.9 peak 593.2 complete true revealed true ok true ms 693
+19:12:32 VISIT Palace proc 481.9 peak 593.2 complete true revealed true ok true ms 10
+19:12:33 VISIT T4 proc 491.9 peak 593.2 complete true revealed true ok true ms 670
+19:12:33 VISIT Palace proc 481.9 peak 593.2 complete true revealed true ok true ms 64
+19:12:33 VISIT TC34 proc 481.9 peak 593.2 complete true revealed true ok true ms 6
+19:12:33 VISIT Palace proc 481.9 peak 593.2 complete true revealed true ok true ms 96
+19:12:34 VISIT T5 proc 481.9 peak 593.2 complete true revealed true ok true ms 705
+19:12:34 VISIT Palace proc 481.9 peak 593.2 complete true revealed true ok true ms 70
+19:12:34 VISIT TC5 proc 481.9 peak 593.2 complete true revealed true ok true ms 105
+19:12:34 VISIT Palace proc 481.9 peak 593.2 complete true revealed true ok true ms 8
+19:12:35 VISIT Palace proc 481.9 peak 593.2 complete true revealed true ok true ms 591
+19:12:35 VISIT REAR proc 481.9 peak 593.2 complete true revealed true ok true ms 9
+19:12:35 VISIT Palace proc 491.9 peak 593.2 complete true revealed true ok true ms 649
+19:12:35 VISIT MP1 proc 491.9 peak 593.2 complete true revealed true ok true ms 9
+19:12:36 VISIT Palace proc 481.9 peak 593.2 complete true revealed true ok true ms 152
+19:12:36 VISIT MP2 proc 481.9 peak 593.2 complete true revealed true ok true ms 174
+19:12:36 VISIT Palace proc 481.9 peak 593.2 complete true revealed true ok true ms 7
+19:12:36 VISIT Palace proc 481.9 peak 593.2 complete true revealed true ok true ms 661
+19:12:36 loop done 1 ms 37536 faults 0
+19:12:37 VISIT Palace proc 491.9 peak 593.2 complete true revealed true ok true ms 660
+19:12:37 VISIT K1 proc 491.9 peak 593.2 complete true revealed true ok true ms 9
+19:12:38 VISIT Palace proc 491.9 peak 593.2 complete true revealed true ok true ms 644
+19:12:39 VISIT KC12 proc 481.9 peak 593.2 complete true revealed true ok true ms 826
+19:12:39 CON [palace load] wing-parse-start عمود-المجلس.glb 2208284
+19:12:39 VISIT Palace proc 506 peak 593.2 complete true revealed true ok true ms 623
+19:12:40 CON [palace load] wing-parse عمود-المجلس.glb 937ms
+19:12:40 CON [palace load] wing-parse-start سقف-المجلس.glb 3232416
+19:12:40 CON [palace load] wing-parse سقف-المجلس.glb 725ms
+19:12:41 CON [palace load] wing-parse-start lion_winged.glb 2432440
+19:12:41 CON [palace load] wing-parse lion_winged.glb 544ms
+19:12:41 CON [palace load] wing-parse-start اجتماعات .glb 7059256
+19:12:42 CON [palace load] wing-parse اجتماعات .glb 549ms
+19:12:42 CON [palace load] wing-parse-start ثريا-المجلس.glb 2997548
+19:12:43 CON [palace load] wing-parse ثريا-المجلس.glb 625ms
+19:12:44 VISIT K2 proc 593.8 peak 593.8 complete true revealed true ok true ms 4461
+19:12:44 VISIT Palace proc 593.8 peak 593.8 complete true revealed true ok true ms 9
+19:12:44 VISIT KC2 proc 593.8 peak 593.8 complete true revealed true ok true ms 537
+19:12:45 VISIT Palace proc 603.9 peak 603.9 complete true revealed true ok true ms 646
+19:12:47 VISIT K3 proc 536.9 peak 603.9 complete true revealed true ok true ms 1863
+19:12:48 VISIT Palace proc 559.6 peak 603.9 complete true revealed true ok true ms 855
+19:12:48 VISIT KC3 proc 559.6 peak 603.9 complete true revealed true ok true ms 9
+19:12:48 VISIT Palace proc 560.2 peak 603.9 complete true revealed true ok true ms 199
+19:12:48 CON [palace load] wing-parse-start k4_front_mural.glb 601504
+19:12:48 CON [palace load] wing-parse k4_front_mural.glb 19ms
+19:12:48 CON [palace load] wing-parse-start k4_kit_c.glb 2284608
+19:12:49 CON [palace load] wing-parse k4_kit_c.glb 957ms
+19:12:49 CON [palace load] wing-parse-start k4_kit_a.glb 1647556
+19:12:49 CON [palace load] wing-parse k4_kit_a.glb 306ms
+19:12:49 CON [palace load] wing-parse-start k4_kit_b.glb 1988396
+19:12:50 CON [palace load] wing-parse k4_kit_b.glb 378ms
+19:12:50 VISIT K4 proc 514.3 peak 603.9 complete true revealed true ok true ms 2471
+19:12:50 VISIT Palace proc 514.3 peak 603.9 complete true revealed true ok true ms 8
+19:12:51 VISIT KC4 proc 514.3 peak 603.9 complete true revealed true ok true ms 769
+19:12:51 CON [palace load] wing-parse-start k4_front_mural.glb 601504
+19:12:51 VISIT Palace proc 482.9 peak 603.9 complete true revealed true ok true ms 328
+19:12:52 CON [palace load] wing-parse k4_front_mural.glb 849ms
+19:12:52 VISIT K5 proc 489 peak 603.9 complete true revealed true ok true ms 956
+19:12:52 CON [palace load] wing-parse-start k4_kit_c.glb 2284608
+19:12:53 VISIT Palace proc 489 peak 603.9 complete true revealed true ok true ms 720
+19:12:54 VISIT KC5R proc 500.8 peak 603.9 complete true revealed true ok true ms 651
+19:12:54 VISIT Palace proc 490.7 peak 603.9 complete true revealed true ok true ms 507
+19:12:55 VISIT KC1 proc 500.8 peak 603.9 complete true revealed true ok true ms 710
+19:12:55 VISIT Palace proc 490.3 peak 603.9 complete true revealed true ok true ms 145
+19:12:56 VISIT Palace proc 490.3 peak 603.9 complete true revealed true ok true ms 702
+19:12:56 loop done 2 ms 56853 faults 0
+19:12:56 SPRINT {"entered":true,"allComplete":true,"kingComplete":true,"anyLost":false,"faults":0,"loops":2,"visits":91,"truePeak":603.9,"growth":7.600000000000023,"maxSlice":761,"maxSliceName":"باب الاجنحة.glb"}

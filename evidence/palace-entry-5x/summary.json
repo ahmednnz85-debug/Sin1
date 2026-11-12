@@ -1,0 +1,117 @@
+[
+  {
+    "run": 1,
+    "ok": true,
+    "phase": "DONE",
+    "built": true,
+    "maxSlice": 780,
+    "proc": 491.5,
+    "reason": "DONE",
+    "ssim": {
+      "ssim": 1,
+      "mae": 0,
+      "raw": "{\"a\": \"/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-on-run1.png\", \"b\": \"/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-off-run1.png\", \"ssim\": 1.0, \"mae\": 0.0, \"size\": [734, 338]}\n",
+      "onBytes": 357278,
+      "offBytes": 357278,
+      "a": "/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-on-run1.png",
+      "b": "/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-off-run1.png",
+      "size": [
+        734,
+        338
+      ],
+      "ok": true
+    }
+  },
+  {
+    "run": 2,
+    "ok": true,
+    "phase": "DONE",
+    "built": true,
+    "maxSlice": 727,
+    "proc": 491.1,
+    "reason": "DONE",
+    "ssim": {
+      "ssim": 1,
+      "mae": 0,
+      "raw": "{\"a\": \"/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-on-run2.png\", \"b\": \"/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-off-run2.png\", \"ssim\": 1.0, \"mae\": 0.0, \"size\": [649, 299]}\n",
+      "onBytes": 324578,
+      "offBytes": 324578,
+      "a": "/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-on-run2.png",
+      "b": "/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-off-run2.png",
+      "size": [
+        649,
+        299
+      ],
+      "ok": true
+    }
+  },
+  {
+    "run": 3,
+    "ok": true,
+    "phase": "DONE",
+    "built": true,
+    "maxSlice": 715,
+    "proc": 483.3,
+    "reason": "DONE",
+    "ssim": {
+      "ssim": 1,
+      "mae": 0,
+      "raw": "{\"a\": \"/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-on-run3.png\", \"b\": \"/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-off-run3.png\", \"ssim\": 1.0, \"mae\": 0.0, \"size\": [734, 338]}\n",
+      "onBytes": 370974,
+      "offBytes": 370974,
+      "a": "/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-on-run3.png",
+      "b": "/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-off-run3.png",
+      "size": [
+        734,
+        338
+      ],
+      "ok": true
+    }
+  },
+  {
+    "run": 4,
+    "ok": true,
+    "phase": "DONE",
+    "built": true,
+    "maxSlice": 718,
+    "proc": 484.9,
+    "reason": "DONE",
+    "ssim": {
+      "ssim": 1,
+      "mae": 0,
+      "raw": "{\"a\": \"/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-on-run4.png\", \"b\": \"/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-off-run4.png\", \"ssim\": 1.0, \"mae\": 0.0, \"size\": [649, 299]}\n",
+      "onBytes": 283066,
+      "offBytes": 283066,
+      "a": "/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-on-run4.png",
+      "b": "/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-off-run4.png",
+      "size": [
+        649,
+        299
+      ],
+      "ok": true
+    }
+  },
+  {
+    "run": 5,
+    "ok": true,
+    "phase": "DONE",
+    "built": true,
+    "maxSlice": 774,
+    "proc": 491.5,
+    "reason": "DONE",
+    "ssim": {
+      "ssim": 1,
+      "mae": 0,
+      "raw": "{\"a\": \"/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-on-run5.png\", \"b\": \"/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-off-run5.png\", \"ssim\": 1.0, \"mae\": 0.0, \"size\": [734, 338]}\n",
+      "onBytes": 407926,
+      "offBytes": 407926,
+      "a": "/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-on-run5.png",
+      "b": "/workspace/Sin1-report/now/palace-entry-5x/ssim-cull-off-run5.png",
+      "size": [
+        734,
+        338
+      ],
+      "ok": true
+    }
+  }
+]
