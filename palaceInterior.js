@@ -3843,6 +3843,7 @@
       if (!warmFrame) {
         holdCull(ctx.scene, ctx.hero);
         if (!warmMeshes) {
+          try { console.info('[palace load] REVEAL-warm-collect'); } catch (_) {}
           const seen = new Set();
           warmMeshes = [];
           const consider = function (root, visibleOnly) {
@@ -3912,7 +3913,12 @@
           warmIndex = 0;
           warmSlow = 0;
           mark('warm materials ' + warmMeshes.length);
-          try { drainCpuNow(ctx, 'warm-start'); } catch (_) {}
+          try { console.info('[palace load] REVEAL-warm-n', warmMeshes.length); } catch (_) {}
+          // Do not walk ctx.scene here. releaseCpuFromObject on the whole
+          // scene froze WebKit for minutes at ~3 GB RSS (same class of hang
+          // as reportHeaviest on the SETUP turn). Hall and wings are enough.
+          try { drainCpuNow({ renderer: ctx.renderer, hero: ctx.hero }, 'warm-start'); } catch (_) {}
+          try { console.info('[palace load] REVEAL-warm-drained'); } catch (_) {}
         }
         const e = warmMeshes[warmIndex];
         const o = e && e.obj;
@@ -3929,6 +3935,7 @@
           o.visible = o.userData._warmVis !== false;
           if (e.mat) o.material = o.material;
         }
+        try { console.info('[palace load] warm-begin', warmIndex, '/', warmMeshes.length); } catch (_) {}
         const tWarm = performance.now();
         try { ctx.renderer.render(ctx.scene, ctx.camera); }
         catch (renderErr) { mark('render ' + (renderErr && renderErr.message)); }
