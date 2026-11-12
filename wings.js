@@ -2791,14 +2791,17 @@
       // streams here compiles shaders and walks dress on the main thread and
       // can freeze WebKit for minutes. PalaceWings.tick runs this after REVEAL.
       const palacePhase = window.PalaceInterior && PalaceInterior.state && PalaceInterior.state();
-      if (palacePhase !== 'SETUP') {
+      // SETUP and REVEAL stay on the blackout. streamZones compiles shaders
+      // and starts dress loads; doing that on those turns froze WebKit for
+      // minutes. Streaming begins at FADING_IN, before the player can walk.
+      if (palacePhase === 'SETUP' || palacePhase === 'REVEAL') {
+        try { console.info('[palace load] cull-stream-deferred', palacePhase); } catch (_) {}
+        return;
+      }
+      {
         const tS = performance.now();
         streamZones(origin, visibleIds, preparedIds);
         try { console.info('[palace load] cull-stream', Math.round(performance.now()-tS)+'ms'); } catch (_) {}
-      } else {
-        try { console.info('[palace load] cull-stream-deferred-until-reveal'); } catch (_) {}
-        try { console.info('[palace load] cull-setup-return'); } catch (_) {}
-        return;
       }
       const zr = zoneStreamer ? zoneStreamer.report() : null;
       state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: zr ? zr.warmPending : 0, memory: zr ? zr.memory : null, dressFailures: dressFailures.slice(-8), zones: zr };
