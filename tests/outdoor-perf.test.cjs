@@ -24,7 +24,7 @@ function load() {
 }
 
 test('outdoor-perf is on the page and original outdoor GLBs are not replaced', () => {
-  assert.match(index, /data-src="outdoor-perf\.js\?v=20261112r6"/);
+  assert.match(index, /data-src="outdoor-perf\.js\?v=20261112r7"/);
   // Originals still referenced by the game (index loadX paths).
   assert.match(index, /babylonian_wall/);
   assert.match(index, /grass_tuft_a/);
@@ -130,4 +130,18 @@ test('findCamera uses SinGfx.getCamera so the real-device poll has a camera', ()
   assert.match(src, /SinGfx && typeof SinGfx\.getCamera === 'function'/);
   // Must not treat SinGfx.camera as a function — that is the CAM settings object.
   assert.doesNotMatch(src, /typeof SinGfx\.camera === 'function'/);
+});
+
+test('outdoor grass and palm packs snapshot instances and compact to the frustum', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'outdoor-perf.js'), 'utf8');
+  assert.match(src, /function snapshotInstances/);
+  assert.match(src, /function compactOutdoor/);
+  assert.match(src, /function cameraFrustum/);
+  assert.match(src, /snapshotInstances\(state\.grass/);
+  assert.match(src, /snapshotInstances\(state\.palms/);
+  assert.match(src, /instKept \+= compactOutdoor/);
+  assert.match(src, /first-culled-present/);
+  assert.match(src, /beforeRender\(scene, camera\)/);
+  assert.match(src, /window\.__sinNoInstanceCull/);
+  assert.match(src, /mesh\.frustumCulled = false/);
 });

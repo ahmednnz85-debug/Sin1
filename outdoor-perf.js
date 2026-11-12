@@ -228,6 +228,68 @@
     return state.geos[a] ? a : (state.geos[b] ? b : null);
   }
 
+  function outdoorCullOn() {
+    try { return !(typeof window !== 'undefined' && window.__sinNoInstanceCull); } catch (_) { return true; }
+  }
+  function cameraFrustum(cam, THREE) {
+    if (!cam || !cam.projectionMatrix || !cam.matrixWorldInverse) return null;
+    try { cam.updateMatrixWorld(); } catch (_) {}
+    const fr = cameraFrustum._fr || (cameraFrustum._fr = new THREE.Frustum());
+    const m = cameraFrustum._m || (cameraFrustum._m = new THREE.Matrix4());
+    m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    fr.setFromProjectionMatrix(m);
+    return fr;
+  }
+  function snapshotInstances(e, THREE) {
+    const mesh = e && e.mesh;
+    if (!mesh || !mesh.isInstancedMesh || e.matrices) return;
+    const n = mesh.count || 0;
+    const mats = new Array(n);
+    const tmp = new THREE.Matrix4();
+    for (let i = 0; i < n; i++) {
+      mesh.getMatrixAt(i, tmp);
+      mats[i] = tmp.clone();
+    }
+    e.matrices = mats;
+    e.fullCount = n;
+    const geo = mesh.geometry;
+    try { if (geo && !geo.boundingSphere && geo.computeBoundingSphere) geo.computeBoundingSphere(); } catch (_) {}
+    e.geoCenter = (geo && geo.boundingSphere && geo.boundingSphere.center.clone && geo.boundingSphere.center.clone()) || new THREE.Vector3();
+    e.geoRadius = (geo && geo.boundingSphere && geo.boundingSphere.radius) || 2;
+    mesh.frustumCulled = false;
+  }
+  function compactOutdoor(e, frustum, THREE) {
+    const mesh = e && e.mesh;
+    if (!mesh || !mesh.isInstancedMesh || !e.matrices) return e.fullCount || 0;
+    if (!frustum || !outdoorCullOn()) {
+      if (mesh.count !== e.fullCount) {
+        for (let i = 0; i < e.fullCount; i++) mesh.setMatrixAt(i, e.matrices[i]);
+        mesh.count = e.fullCount;
+        mesh.instanceMatrix.needsUpdate = true;
+      }
+      return e.fullCount;
+    }
+    const sphere = compactOutdoor._s || (compactOutdoor._s = new THREE.Sphere());
+    const c = compactOutdoor._c || (compactOutdoor._c = new THREE.Vector3());
+    const tmp = compactOutdoor._t || (compactOutdoor._t = new THREE.Matrix4());
+    const mw = mesh.matrixWorld;
+    let n = 0;
+    for (let i = 0; i < e.matrices.length; i++) {
+      tmp.multiplyMatrices(mw, e.matrices[i]);
+      c.copy(e.geoCenter).applyMatrix4(tmp);
+      const el = tmp.elements;
+      const sx = Math.sqrt(el[0] * el[0] + el[1] * el[1] + el[2] * el[2]);
+      const sy = Math.sqrt(el[4] * el[4] + el[5] * el[5] + el[6] * el[6]);
+      const sz = Math.sqrt(el[8] * el[8] + el[9] * el[9] + el[10] * el[10]);
+      sphere.center.copy(c);
+      sphere.radius = (e.geoRadius || 2) * Math.max(sx, sy, sz, 1e-6) + 0.75;
+      if (frustum.intersectsSphere(sphere)) mesh.setMatrixAt(n++, e.matrices[i]);
+    }
+    mesh.count = n;
+    if (n) mesh.instanceMatrix.needsUpdate = true;
+    return n;
+  }
+
   function classify(scene, THREE) {
     if (!scene || state.classified) return;
     state.grass = [];
@@ -283,6 +345,7 @@
           o.userData.sinLodApplied = key;
         }
         attachLodLadder(state.grass[state.grass.length - 1]);
+        snapshotInstances(state.grass[state.grass.length - 1], THREE);
       } else if (name === 'new-palm-grove' || (o.isInstancedMesh && /palm|grove/i.test(name))) {
         const world = new THREE.Vector3();
         let cx = 0, cz = 0, r = 36;
@@ -310,6 +373,7 @@
           if (!o.userData) o.userData = {};
           o.userData.sinLodApplied = palmKey;
         }
+        snapshotInstances(state.palms[state.palms.length - 1], THREE);
       } else if (t >= 40000 && t <= 60000) {
         // Babylonian wall sections (50,680 tris), not instanced.
         const wp = new THREE.Vector3();
@@ -463,7 +527,9 @@
     if (!state.classified || !camera) return state.lastVis;
     const plane = state.wallPlane;
     const cx = camera.position.x, cz = camera.position.z;
+    const frustum = outdoorCullOn() ? cameraFrustum(camera, window.THREE) : null;
     let occluded = 0, farHide = 0;
+    let instKept = 0, instFull = 0;
     const fog = scene && scene.fog;
     // Hide only when almost fully fogged (~12 % remaining): sqrt(-ln(0.12))/d.
     let farLimit = 400;
@@ -505,6 +571,10 @@
           const g = pickVegLod(e, dn);
           if (g && mesh.geometry !== g) mesh.geometry = g;
         }
+        if (mesh.isInstancedMesh) {
+          instFull += e.fullCount || 0;
+          instKept += compactOutdoor(e, frustum, window.THREE);
+        }
       }
     }
     handleVeg(state.grass, true);
@@ -524,7 +594,11 @@
       if (w.mesh.castShadow && d > 28) w.mesh.castShadow = false;
     }
 
-    state.lastVis = { occluded: occluded, farHide: farHide };
+    state.lastVis = { occluded: occluded, farHide: farHide, instKept: instKept, instFull: instFull };
+    if (frustum && !applyFrame._loggedCull) {
+      applyFrame._loggedCull = true;
+      try { console.info('[outdoor-perf] instance-cull', instKept + '/' + instFull, 'occluded', occluded, 'farHide', farHide); } catch (_) {}
+    }
     return state.lastVis;
   }
 
@@ -550,7 +624,22 @@
       if (!this.getRenderTarget() && camera && camera.isPerspectiveCamera) {
         beforeRender(scene, camera);
       }
+      // Time the first classified outdoor present (cull already applied
+      // in beforeRender) so the first-hitch claim is a measured number.
+      const mark = (!hookRenderer._firstOutdoor && state.classified
+        && !this.getRenderTarget() && camera && camera.isPerspectiveCamera);
+      const t0 = mark ? performance.now() : 0;
       const r = orig.apply(this, arguments);
+      if (mark) {
+        hookRenderer._firstOutdoor = true;
+        const dt = Math.round(performance.now() - t0);
+        state.firstPresentMs = dt;
+        try {
+          console.info('[outdoor-perf] first-culled-present', dt + 'ms',
+            state.lastVis && (state.lastVis.instKept + '/' + state.lastVis.instFull),
+            'occluded', state.lastVis && state.lastVis.occluded);
+        } catch (_) {}
+      }
       return r;
     };
     THREE.WebGLRenderer.prototype.__sinOutdoorPerf = true;
@@ -637,6 +726,8 @@
     applyFrame: applyFrame,
     ready: function () { return state.ready && state.classified; },
     last: function () { return state.lastVis; },
+    compactOutdoor: compactOutdoor,
+    snapshotInstances: snapshotInstances,
     wallPlane: function () { return state.wallPlane; },
     applyLods: applyLods,
     pumpLodBuild: pumpLodBuild,
