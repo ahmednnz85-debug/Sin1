@@ -125,10 +125,24 @@
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
   function assetList() {
-    const entryAssets = new Set([WING_FILES.k1]);
-    return Object.keys(WING_FILES).filter(k => entryAssets.has(WING_FILES[k]))
-      .map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }))
-      .filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
+    // Entry-visible corridor models must parse during LOADING (already
+    // yielded and logged between files). If they stay off this list,
+    // dressCorridors starts a fetch+GLTFLoader.parse mid-SETUP; at high
+    // WebKit RSS that parse raced the post-corridors yield and blocked
+    // the main thread for minutes.
+    const entryAssets = new Set([
+      WING_FILES.k1,
+      WING_FILES.plant,
+      WING_FILES.torchBlack,
+      WING_FILES.torchWood,
+      WING_DOOR_FILE
+    ]);
+    const list = Object.keys(WING_FILES).filter(k => entryAssets.has(WING_FILES[k]))
+      .map(k => ({ url: WING_FILES[k], kind: /\.glb$/i.test(WING_FILES[k]) ? 'glb' : 'tex' }));
+    if (entryAssets.has(WING_DOOR_FILE) && !list.some(function (a) { return a.url === WING_DOOR_FILE; })) {
+      list.push({ url: WING_DOOR_FILE, kind: 'glb' });
+    }
+    return list.filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
   }
   function provideAsset(url, value) { if (url && value) preloaded.set(url, value); }
   function preloadReport() {
@@ -139,6 +153,8 @@
     return t && t.isTexture ? t : null;
   }
   async function flushDeferredLoads() {
+    // building must be false before any queued wingGLB runs, otherwise
+    // the uncached path would re-queue itself forever.
     state.building = false;
     let i = 0;
     const n = deferredLoads.length;
@@ -146,12 +162,21 @@
     while (deferredLoads.length) {
       const run = deferredLoads.shift();
       const t0 = performance.now();
-      try { run(); } catch (e) { console.error('Wing model setup failed', e); }
+      try { await Promise.resolve(run()); } catch (e) { console.error('Wing model setup failed', e); }
       try { console.info('[palace load] deferred', i, Math.round(performance.now() - t0) + 'ms', 'left', deferredLoads.length); } catch (_) {}
       i++;
       await yieldWing();
     }
-    try { console.info('[palace load] deferred-end', n); } catch (_) {}
+    const tChain = performance.now();
+    try {
+      await Promise.race([
+        wingLoadChain,
+        new Promise(function (_, rej) { setTimeout(function () { rej(new Error('wingLoadChain timeout')); }, 8000); })
+      ]);
+    } catch (e) {
+      try { console.warn('[palace load] deferred-chain', e && e.message, Math.round(performance.now() - tChain) + 'ms'); } catch (_) {}
+    }
+    try { console.info('[palace load] deferred-end', n, 'chain', Math.round(performance.now() - tChain) + 'ms'); } catch (_) {}
   }
   function withMeshopt(go) {
     const D = window.MeshoptDecoder;
@@ -226,13 +251,27 @@
     const fail = onError || (e => console.warn('Wing model failed', url, e));
     if (!THREE.GLTFLoader) { fail(new Error('GLTFLoader not available')); return; }
     const deliver = gltf => {
-      onLoad(gltf);
-      if (state.built && !state.building) updateCulling(true);
+      const t0 = performance.now();
+      let p;
+      try { p = Promise.resolve(onLoad(gltf)); } catch (e) { p = Promise.reject(e); }
+      return p.then(function () {
+        try { console.info('[palace load] wing-deliver', (url || '').split('/').pop(), Math.round(performance.now() - t0) + 'ms'); } catch (_) {}
+        if (state.built && !state.building) updateCulling(true);
+      }, fail);
     };
     const cached = preloaded.get(url);
     if (cached && cached.scene) {
       const run = () => deliver({ scene: cached.scene.clone(true), animations: cached.animations || [] });
       if (state.building) deferredLoads.push(run); else run();
+      return;
+    }
+    // Uncached fetch+parse used to start here even during SETUP. The parse
+    // callback then raced the post-corridors yield and ran GLTFLoader.parse
+    // of the plant and both torch GLBs on the main thread — the multi-minute
+    // WebKit block after visuals-corridors. Queue the whole load until
+    // flushDeferredLoads (building is false then).
+    if (state.building) {
+      deferredLoads.push(function () { wingGLB(url, onLoad, onError); });
       return;
     }
     enqueueWingLoad(function () {
@@ -245,11 +284,13 @@
             return new Promise(function (resOk, resFail) {
               const loader = new THREE.GLTFLoader();
               if (dec) loader.setMeshoptDecoder(dec);
+              const tParse = performance.now();
+              try { console.info('[palace load] wing-parse-start', (url || '').split('/').pop(), buf && buf.byteLength); } catch (_) {}
               loader.parse(buf, '', function (gltf) {
+                try { console.info('[palace load] wing-parse', (url || '').split('/').pop(), Math.round(performance.now() - tParse) + 'ms'); } catch (_) {}
                 try { releaseGltfCpu(gltf); } catch (_) {}
                 // buf dropped when this closure ends — no long-lived ArrayBuffer.
-                deliver(gltf);
-                resOk();
+                Promise.resolve(deliver(gltf)).then(resOk, resFail);
               }, resFail);
             });
           }).catch(function (e) {
@@ -1028,16 +1069,24 @@
     await dressCorridors();
     vis('corridors');
     wingMark('wings corridors');
+    try { console.info('[palace load] visuals-post-corridors fires', state.fires.length); } catch (_) {}
     await yieldWing();
+    try { console.info('[palace load] visuals-post-corridors-yield'); } catch (_) {}
     wingMark('wings k2');
     wingMark('wings k3');
     wingMark('wings k4');
-    const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
-    const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
-    const dummy = new THREE.Object3D();
-    state.fires.forEach((f, i) => { dummy.position.set(f.x, f.y, f.z); dummy.updateMatrix(); torches.setMatrixAt(i, dummy.matrix); });
-    torches.instanceMatrix.needsUpdate = true; state.root.add(torches);
+    const tTorch = performance.now();
+    if (state.fires.length) {
+      const bracket = new THREE.CylinderGeometry(0.09, 0.13, 0.8, 8); bracket.translate(0, -0.35, 0);
+      const torches = new THREE.InstancedMesh(bracket, state.sealMat, state.fires.length); torches.name = 'wings-wall-torches';
+      const dummy = new THREE.Object3D();
+      state.fires.forEach((f, i) => { dummy.position.set(f.x, f.y, f.z); dummy.updateMatrix(); torches.setMatrixAt(i, dummy.matrix); });
+      torches.instanceMatrix.needsUpdate = true; state.root.add(torches);
+    }
+    try { console.info('[palace load] visuals-torches', Math.round(performance.now() - tTorch) + 'ms'); } catch (_) {}
+    const tMx = performance.now();
     state.root.updateMatrixWorld(true);
+    try { console.info('[palace load] visuals-matrix', Math.round(performance.now() - tMx) + 'ms'); } catch (_) {}
   }
   /* ---------------------------------------------------------------------------
      Corridor dressing: every corridor/gallery region of the Kings, Library and
@@ -2270,12 +2319,22 @@
     wingDoorLoadStarted = true;
     const roomDoors = state.doors.filter(isRoomDoor);
     roomDoors.forEach(d => { d._roomDoor = true; d.state = 'Closed'; d.progress = 0; d.target = 0; });
-    wingGLB(WING_DOOR_FILE, template => {
+    wingGLB(WING_DOOR_FILE, function (template) {
       if (!state.root) return;
-      roomDoors.forEach(d => {
+      try { console.info('[palace load] doors-fit-start', roomDoors.length, roomDoors.map(function (d) { return d.id; }).join(',')); } catch (_) {}
+      for (let i = 0; i < roomDoors.length; i++) {
+        const d = roomDoors[i];
         const room = ROOM_DOOR_ROOMS.has(d.to) ? d.to : d.from;
-        fitWingDoor({ scene: template.scene.clone(true), animations: template.animations || [] }, d, state.regionGroups.get(room) || state.root);
-      });
+        try { console.info('[palace load] doors-fit-begin', i, d.id); } catch (_) {}
+        const t0 = performance.now();
+        try {
+          fitWingDoor({ scene: template.scene.clone(true), animations: template.animations || [] }, d, state.regionGroups.get(room) || state.root);
+        } catch (e) {
+          try { console.error('[palace load] doors-fit-err', d.id, e && (e.stack || e.message) || e); } catch (_) {}
+        }
+        try { console.info('[palace load] doors-fit', d.id, Math.round(performance.now() - t0) + 'ms'); } catch (_) {}
+      }
+      try { console.info('[palace load] doors-fit-done', roomDoors.length); } catch (_) {}
     }, err => { console.warn('تعذّر تحميل باب الأجنحة', err); wingDoorLoadStarted = false; });
   }
   function doorCoordinates(d, p) {
@@ -2463,7 +2522,16 @@
     // setTimeout only. Sharing requestAnimationFrame with the game loop
     // let a single expensive frame (software GL, scene walk) delay SETUP
     // for minutes and freeze the tab.
-    return new Promise(function (r) { setTimeout(r, 0); });
+    return new Promise(function (r) {
+      const t0 = performance.now();
+      setTimeout(function () {
+        const dt = performance.now() - t0;
+        if (dt > 50) {
+          try { console.info('[palace load] yield-slow', Math.round(dt) + 'ms'); } catch (_) {}
+        }
+        r();
+      }, 0);
+    });
   }
   async function build(ctx, hall) {
     assertDeps(); dispose();
@@ -2791,10 +2859,12 @@
       // streams here compiles shaders and walks dress on the main thread and
       // can freeze WebKit for minutes. PalaceWings.tick runs this after REVEAL.
       const palacePhase = window.PalaceInterior && PalaceInterior.state && PalaceInterior.state();
-      // SETUP and REVEAL stay on the blackout. streamZones compiles shaders
-      // and starts dress loads; doing that on those turns froze WebKit for
-      // minutes. Streaming begins at FADING_IN, before the player can walk.
-      if (palacePhase === 'SETUP' || palacePhase === 'REVEAL') {
+      // SETUP, REVEAL and FADING_IN stay on the blackout. streamZones
+      // compiles room shaders and starts dress loads; doing that at
+      // FADING_IN froze WebKit for 90s after palace entry reached the fade.
+      // Streaming begins at DONE, after the load screen is gone. Rooms
+      // still use hideUntilReady, so nothing pops in front of the player.
+      if (palacePhase === 'SETUP' || palacePhase === 'REVEAL' || palacePhase === 'FADING_IN') {
         try { console.info('[palace load] cull-stream-deferred', palacePhase); } catch (_) {}
         return;
       }

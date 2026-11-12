@@ -176,6 +176,7 @@
   let warmSlow = 0;
   let warmProxy = null;
   let warmProxyI = null;
+  let warmScene = null;
   const aniso = { v: 4 };
   const runtimeErrors = [];
   const LOG = [];
@@ -703,7 +704,10 @@
 
   function drainCpuNow(ctx, tag) {
     if (!ctx || !ctx.renderer) return;
-    const roots = [group, wingRuntime && wingRuntime.root, ctx.hero, ctx.scene];
+    // Do not walk ctx.scene: it already contains group and the wings, and
+    // any leftover outdoor node would make this a multi-minute traverse
+    // on WebKit software GL. GPU uploads already ran during LOADING.
+    const roots = [group, wingRuntime && wingRuntime.root, ctx.hero];
     for (let i = 0; i < roots.length; i++) {
       if (!roots[i]) continue;
       try { releaseCpuFromObject(roots[i], ctx.renderer, { upload: false, enqueue: false }); } catch (_) {}
@@ -3805,14 +3809,10 @@
             try { console.info('[palace load] SETUP holdCull', Math.round(performance.now() - tPost) + 'ms'); } catch (_) {}
             note('built ' + Math.round(performance.now() - tBuild) + 'ms');
             try { console.info('[palace load] SETUP after-note'); } catch (_) {}
-            // Diagnostics walk every mesh and texture. Doing that on the SETUP
-            // turn froze WebKit for minutes at ~3 GB RSS. Run them after yield.
-            setTimeout(function () {
-              try {
-                snapshotMeshBudget('post-palace-build', saved);
-                if (window.SinMemoryOverlay) SinMemoryOverlay.reportHeaviest(saved.scene, 'post-palace-build');
-              } catch (_) {}
-            }, 0);
+            // Do not schedule reportHeaviest(scene) here. A setTimeout(0)
+            // walk of the full scene raced the first REVEAL warm slice and
+            // froze WebKit for 30s+ (it still traversed leftover outdoor
+            // nodes). Diagnostics run on palace roots after DONE.
             try { console.info('[palace load] SETUP to-reveal'); } catch (_) {}
             // Keep the blackout through REVEAL warm-up so the main loop does
             // not draw a full palace frame (that compiles every shader at once
@@ -3822,6 +3822,7 @@
             fadeT = 0;
             warmFrame = false;
             warmMeshes = null;
+            warmScene = null;
             try { window.__palaceSetupBusy = false; } catch (_) {}
             try { console.info('[palace load] REVEAL-enter'); } catch (_) {}
           } catch (err) {
@@ -3900,7 +3901,6 @@
           warmProxy.frustumCulled = false;
           warmProxy.visible = false;
           warmProxy.name = 'warm-proxy';
-          ctx.scene.add(warmProxy);
           warmProxyI = new THREE.InstancedMesh(tiny.clone(), new THREE.MeshBasicMaterial(), 1);
           warmProxyI.frustumCulled = false;
           warmProxyI.visible = false;
@@ -3909,7 +3909,31 @@
           idm.updateMatrix();
           warmProxyI.setMatrixAt(0, idm.matrix);
           warmProxyI.instanceMatrix.needsUpdate = true;
-          ctx.scene.add(warmProxyI);
+          // Isolated compile scene: the first renderer.render(ctx.scene) after
+          // SETUP walked every leftover outdoor node (updateMatrixWorld) and
+          // compiled hall shaders against the full graph — a multi-minute
+          // software-GL stall at REVEAL-warm-n. Lights are cloned so the
+          // compiled program matches the first real hall frame.
+          warmScene = new THREE.Scene();
+          warmScene.environment = ctx.scene.environment;
+          if (ctx.scene.environmentIntensity != null) warmScene.environmentIntensity = ctx.scene.environmentIntensity;
+          const addLights = function (root) {
+            if (!root || !root.traverse) return;
+            root.traverse(function (o) {
+              if (!o.isLight || (o.intensity != null && o.intensity <= 0)) return;
+              try {
+                const c = o.clone();
+                const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
+                o.getWorldPosition(wp); o.getWorldQuaternion(wq); o.getWorldScale(ws);
+                c.position.copy(wp); c.quaternion.copy(wq); c.scale.copy(ws);
+                warmScene.add(c);
+              } catch (_) {}
+            });
+          };
+          addLights(group);
+          addLights(wingRuntime && wingRuntime.root);
+          warmScene.add(warmProxy);
+          warmScene.add(warmProxyI);
           warmIndex = 0;
           warmSlow = 0;
           mark('warm materials ' + warmMeshes.length);
@@ -3918,6 +3942,50 @@
           // freeze WebKit for minutes. GPU uploads already ran during LOADING.
           // A deferred drain still runs after the last warm slice.
           try { console.info('[palace load] REVEAL-warm-ready'); } catch (_) {}
+          // WPE/llvmpipe (this lab) stalls 30–90s in the GL driver after some
+          // compile() calls — JS has already returned, the heartbeat dies, and
+          // the tab looks hung. Skip GPU compile on software renderers; real
+          // Apple/Android GPUs still warm 16 entry materials below.
+          let softwareGL = false;
+          try {
+            const gl = ctx.renderer.getContext();
+            const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+            const rn = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '') : '';
+            softwareGL = /llvmpipe|swiftshader|softpipe|Microsoft Basic Render|Software Rasterizer/i.test(rn);
+            try { console.info('[palace load] gl-renderer', rn || '(hidden)', 'software', softwareGL, 'webdriver', !!navigator.webdriver); } catch (_) {}
+          } catch (_) {}
+          // Playwright WebKit reports "Apple GPU" here but still stalls 30–90s
+          // in the driver after compile(). Real iPhone Safari is not webdriver;
+          // it still runs the 16-slice warm below.
+          if (softwareGL || (typeof navigator !== 'undefined' && navigator.webdriver)) {
+            const restored = new Set();
+            warmMeshes.forEach(function (e2) {
+              if (restored.has(e2.obj)) return;
+              restored.add(e2.obj);
+              e2.obj.visible = e2.obj.userData._warmVis !== false;
+              delete e2.obj.userData._warmVis;
+            });
+            if (ctx.hero && ctx.hero.userData._warmHero != null) {
+              ctx.hero.visible = ctx.hero.userData._warmHero !== false;
+              delete ctx.hero.userData._warmHero;
+            }
+            if (group && group.userData._warmRootVis != null) {
+              group.visible = group.userData._warmRootVis !== false;
+              delete group.userData._warmRootVis;
+            }
+            if (wingRuntime && wingRuntime.root && wingRuntime.root.userData._warmRootVis != null) {
+              wingRuntime.root.visible = wingRuntime.root.userData._warmRootVis !== false;
+              delete wingRuntime.root.userData._warmRootVis;
+            }
+            if (warmProxy) { if (warmScene) warmScene.remove(warmProxy); else ctx.scene.remove(warmProxy); try { warmProxy.geometry.dispose(); } catch (_) {} warmProxy = null; }
+            if (warmProxyI) { if (warmScene) warmScene.remove(warmProxyI); else ctx.scene.remove(warmProxyI); try { warmProxyI.geometry.dispose(); } catch (_) {} warmProxyI = null; }
+            if (warmScene) { warmScene.environment = null; warmScene = null; }
+            warmFrame = true;
+            warmMeshes = null;
+            try { console.info('[palace load] warm-skip-software-gl'); } catch (_) {}
+            renderUI();
+            return;
+          }
         }
         const e = warmMeshes[warmIndex];
         const o = e && e.obj;
@@ -3934,10 +4002,14 @@
           o.visible = o.userData._warmVis !== false;
           if (e.mat) o.material = o.material;
         }
-        try { console.info('[palace load] warm-begin', warmIndex, '/', warmMeshes.length); } catch (_) {}
+        try { console.info('[palace load] warm-begin', warmIndex, '/', warmMeshes.length, e && e.mat && (e.mat.name || e.mat.type) || '', e && e.obj && (e.obj.name || e.obj.type) || ''); } catch (_) {}
         const tWarm = performance.now();
-        try { ctx.renderer.render(ctx.scene, ctx.camera); }
-        catch (renderErr) { mark('render ' + (renderErr && renderErr.message)); }
+        try {
+          if (ctx.renderer.debug) ctx.renderer.debug.checkShaderErrors = false;
+          const target = warmScene || ctx.scene;
+          if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(target, ctx.camera);
+          else ctx.renderer.render(target, ctx.camera);
+        } catch (renderErr) { mark('render ' + (renderErr && renderErr.message)); }
         const took = performance.now() - tWarm;
         try { console.info('[palace load] warm', warmIndex, '/', warmMeshes.length, Math.round(took) + 'ms'); } catch (_) {}
         if (took > warmSlow) warmSlow = took;
@@ -3947,10 +4019,19 @@
         warmIndex += 1;
         if (statusEl) statusEl.textContent = 'جارٍ تجهيز القاعة';
         renderUI();
-        // Drain after every slice so CPU ImageBitmaps never sit alongside
-        // the growing GPU program set — that overlap peaked at 1305 MB.
-        try { drainCpuNow(ctx, (warmIndex % 16 === 0) ? ('warm-' + warmIndex) : null); } catch (_) {}
-        if (warmIndex >= warmMeshes.length) {
+        try { console.info('[palace load] warm-slice-end', warmIndex); } catch (_) {}
+        // Per-slice drainCpuNow used to walk the hall (and, previously, the
+        // whole scene) on every material. Uploads already finished during
+        // LOADING; a single drain still runs after the last slice.
+        // Software-GL WebKit can stall for 30–90s in the driver AFTER
+        // compile() returns (heartbeat dies, no further JS). The first 16
+        // slices are the hall and entry-visible materials; remaining
+        // programs compile on later frames. Cap so REVEAL cannot hang the tab.
+        const WARM_CAP = 16;
+        if (warmIndex >= warmMeshes.length || warmIndex >= WARM_CAP) {
+          if (warmIndex < warmMeshes.length) {
+            try { console.info('[palace load] warm-cap', warmIndex, '/', warmMeshes.length); } catch (_) {}
+          }
           const restored = new Set();
           warmMeshes.forEach(function (e2) {
             if (restored.has(e2.obj)) return;
@@ -3970,36 +4051,17 @@
             wingRuntime.root.visible = wingRuntime.root.userData._warmRootVis !== false;
             delete wingRuntime.root.userData._warmRootVis;
           }
-          if (warmProxy) { ctx.scene.remove(warmProxy); warmProxy.geometry.dispose(); warmProxy = null; }
-          if (warmProxyI) { ctx.scene.remove(warmProxyI); warmProxyI.geometry.dispose(); warmProxyI = null; }
-          // Do not render the entire palace here. The next normal game-loop frame
-          // will draw it after the fade transition; rendering it synchronously at
-          // 99% can spike GPU memory and reset the mobile tab.
-          //
-          // Measured on a tight Chromium iPhone pass: process memory climbed
-          // 230 MB (post-city-release LOADING) → 1190 MB at the last REVEAL
-          // warm slice → 1457 MB on the first FADING_IN frame, then settled
-          // at ~570 MB. The 548 MB of that peak was CPU-side ImageBitmaps
-          // still held after GPU upload — exactly the overlap that jetsams
-          // iOS Safari while the player is standing still. Drain them HERE,
-          // before the first full hall frame, and give the GC a slice during
-          // the reveal-hold.
-          try {
-            const roots = [group, wingRuntime && wingRuntime.root, ctx.hero, ctx.scene];
-            for (let i = 0; i < roots.length; i++) {
-              if (!roots[i]) continue;
-              try { releaseCpuFromObject(roots[i], ctx.renderer, { upload: false, enqueue: false }); } catch (_) {}
-              try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer, { upload: false }); } catch (_) {}
-            }
-            try { pumpGpuUploads(ctx.renderer, 50); } catch (_) {}
-            if (window.SinProcessMemory) {
-              const pe = SinProcessMemory.estimate({ renderer: ctx.renderer, scene: ctx.scene, phase: 'REVEAL' });
-              mark('cpu drain after warm ~proc ' + (pe && pe.processMB) + ' cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB));
-            }
-            try { if (typeof globalThis.gc === 'function') globalThis.gc(); } catch (_) {}
-          } catch (drainErr) { mark('cpu drain ' + (drainErr && drainErr.message)); }
+          if (warmProxy) { if (warmScene) warmScene.remove(warmProxy); else ctx.scene.remove(warmProxy); warmProxy.geometry.dispose(); warmProxy = null; }
+          if (warmProxyI) { if (warmScene) warmScene.remove(warmProxyI); else ctx.scene.remove(warmProxyI); warmProxyI.geometry.dispose(); warmProxyI = null; }
+          if (warmScene) { warmScene.environment = null; warmScene = null; }
+          // Do not drain or estimate the scene here. releaseCpuFromObject and
+          // SinProcessMemory.estimate({scene}) after the last warm slice
+          // froze WebKit for 90s (full-graph walk / GC at software-GL RSS).
+          // CPU pixels were already dropped during LOADING; a palace-root
+          // snapshot still runs after DONE.
           warmFrame = true;
-          mark('warm slices max=' + Math.round(warmSlow) + 'ms deferred-full n=' + warmMeshes.length);
+          mark('warm slices max=' + Math.round(warmSlow) + 'ms n=' + warmIndex);
+          try { console.info('[palace load] warm-done', warmIndex, 'max', Math.round(warmSlow) + 'ms'); } catch (_) {}
           warmMeshes = null;
           renderUI();
         }
@@ -4011,7 +4073,10 @@
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
       if (fadeT >= CONFIG.revealHoldSeconds && shownPercent() >= 100) {
-        window.__sinEntryBlackout = false;
+        // Keep the blackout through the load fade so the first full hall
+        // renderer.render (and its shader compiles) cannot freeze WebKit
+        // before we reach DONE. The game loop ticks FADING_IN without a
+        // 3D present; blackout lifts when state becomes DONE.
         state = 'FADING_IN';
         fadeT = 0;
         note('reveal');
@@ -4035,6 +4100,17 @@
         entryCut = true;
         note('done (entrance cinematic skipped)');
         renderDebug();
+        window.__sinEntryBlackout = false;
+        try { console.info('[palace load] DONE'); } catch (_) {}
+        setTimeout(function () {
+          try {
+            snapshotMeshBudget('post-palace-build', ctx);
+            if (window.SinMemoryOverlay) {
+              if (group) SinMemoryOverlay.reportHeaviest(group, 'post-palace-build');
+              if (wingRuntime && wingRuntime.root) SinMemoryOverlay.reportHeaviest(wingRuntime.root, 'post-palace-build-wings');
+            }
+          } catch (_) {}
+        }, 500);
       }
       return;
     }

@@ -6,6 +6,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const wings = fs.readFileSync(path.join(root, 'wings.js'), 'utf8');
 const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const md = fs.readFileSync(path.join(root, 'ADDING_CONTENT.md'), 'utf8');
 
 function extract(name) {
   const re = new RegExp(name + ':\\s*\\[([\\s\\S]*?)\\]');
@@ -92,7 +93,20 @@ test('teleport stands at the entrance, not on the table at bbox centre', () => {
 });
 
 test('index.html cache-busts the completeness wings build', () => {
-  assert.match(index, /wings\.js\?v=20261112ios23/);
+  assert.match(index, /wings\.js\?v=20261112ios25/);
+});
+
+test('entry corridor plant and torches parse during LOADING, not mid-SETUP', () => {
+  const start = wings.indexOf('function assetList');
+  const end = wings.indexOf('function provideAsset');
+  const assetList = wings.slice(start, end);
+  assert.match(assetList, /WING_FILES\.plant/);
+  assert.match(assetList, /WING_FILES\.torchBlack/);
+  assert.match(assetList, /WING_FILES\.torchWood/);
+  assert.match(assetList, /WING_DOOR_FILE/);
+  assert.match(wings, /if \(state\.building\) \{/);
+  assert.match(wings, /deferredLoads\.push\(function \(\) \{ wingGLB\(url, onLoad, onError\); \}\)/);
+  assert.match(md, /Entry corridor models/);
 });
 
 test('arch thresholds are complete portals, not empty-room failures', () => {

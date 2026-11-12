@@ -13,7 +13,9 @@ test('teardown gate reaches load only after verify phase 4', () => {
   assert.match(palace, /teardownPhase = 5/);
   assert.match(palace, /reportHeaviest\(ctx\.scene, 'pre-teardown'\)/);
   assert.match(palace, /reportHeaviest\(ctx\.scene, 'post-teardown'\)/);
-  assert.match(palace, /reportHeaviest\((?:ctx|saved)\.scene, 'post-palace-build'\)/);
+  assert.match(palace, /reportHeaviest\(group, 'post-palace-build'\)/);
+  assert.match(palace, /state = 'DONE'/);
+  // Full-scene reportHeaviest at SETUP/REVEAL froze WebKit; it now runs after DONE on palace roots only.
 });
 
 test('door camera keeps a minimum distance behind the hero', () => {
