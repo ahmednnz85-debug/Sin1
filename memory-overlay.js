@@ -10,10 +10,21 @@
   const TICK_MS = 500;
   const log = [];
   let el = null;
-  let on = /(?:[?&](?:mem|perf)\b)/.test(location.search) || false;
+  const params = (typeof location !== 'undefined' && location.search) ? location.search : '';
+  let on = /(?:[?&](?:mem|perf)\b)/.test(params) || false;
+  const diagOn = /(?:[?&]diag=1\b)/.test(params) || /(?:[?&]diag\b)/.test(params);
+  if (diagOn) on = true;
+  const DIAG_KEY = 'sinDiagTimeline';
+  const DIAG_PREV = 'sinDiagPrev';
+  const DIAG_MAX = 30;
+  let diagEl = null;
+  let lastDiagWrite = 0;
+
   let lastSample = null;
   let lastWriteAt = 0;
   let fpsEma = 0;
+  const fpsRing = [];
+  let fpsLow1 = null;
   let lastFrameTs = 0;
   let heaviestByPhase = {};
   let crashBannerShown = false;
@@ -30,11 +41,26 @@
   }
 
   function estimateTextureBytes(renderer) {
+    // Prefer the real process-memory estimator. The historical
+    // `textures * 2.5` (71 × 2.5 = 177.5) is kept only as a last-ditch
+    // fallback when the estimator has not booted.
+    try {
+      if (root.SinProcessMemory && SinProcessMemory.last && SinProcessMemory.last()) {
+        const s = SinProcessMemory.last();
+        if (s && s.gpuTexMB != null) return s.gpuTexMB;
+      }
+    } catch (_) {}
     const n = renderer && renderer.info && renderer.info.memory ? renderer.info.memory.textures : 0;
     return n * 2.5;
   }
 
   function estimateGeometryBytes(renderer) {
+    try {
+      if (root.SinProcessMemory && SinProcessMemory.last && SinProcessMemory.last()) {
+        const s = SinProcessMemory.last();
+        if (s && s.gpuGeoMB != null) return s.gpuGeoMB;
+      }
+    } catch (_) {}
     const n = renderer && renderer.info && renderer.info.memory ? renderer.info.memory.geometries : 0;
     return n * 0.15;
   }
@@ -159,14 +185,26 @@
     const gfx = window.SinGfx && SinGfx.status ? SinGfx.status() : null;
     const now = performance.now();
     if (lastFrameTs) {
-      const instFps = 1000 / Math.max(1, now - lastFrameTs);
+      const instDt = Math.max(1, now - lastFrameTs);
+      const instFps = 1000 / instDt;
       fpsEma = fpsEma ? (fpsEma * 0.85 + instFps * 0.15) : instFps;
+      // Real on-device 1% low over the last ~2 s (120 frames at 60).
+      if (instDt < 2000) {
+        fpsRing.push(instDt);
+        if (fpsRing.length > 120) fpsRing.shift();
+        if (fpsRing.length >= 20) {
+          const sorted = fpsRing.slice().sort(function (a, b) { return b - a; });
+          const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * 0.01)));
+          fpsLow1 = +(1000 / sorted[idx]).toFixed(0);
+        }
+      }
     }
     lastFrameTs = now;
-    const fps = gfx && gfx.avgMs ? +(1000 / Math.max(1, gfx.avgMs)).toFixed(0) : (fpsEma ? +fpsEma.toFixed(0) : null);
+    // Prefer the rAF EMA (real device fps) so the user can confirm 55–60.
+    const fps = fpsEma ? +fpsEma.toFixed(0) : (gfx && gfx.avgMs ? +(1000 / Math.max(1, gfx.avgMs)).toFixed(0) : null);
     lastSample = {
       t: Date.now(),
-      phase: (palace && palace.phase) || (ctx.phase) || (document.body.dataset.sinPhase) || '—',
+      phase: (palace && palace.phase) || (ctx.phase) || ((document.body && document.body.dataset && document.body.dataset.sinPhase)) || '—',
       room: (wings && wings.current) || (palace && palace.room) || '—',
       cityReleased: !!(ctx.scene && ctx.scene.userData && ctx.scene.userData.cityReleased) || !!(palace && palace.cityReleased),
       teardown: palace && palace.teardownPhase != null ? palace.teardownPhase : null,
@@ -179,7 +217,8 @@
       geoMB: +estimateGeometryBytes(renderer).toFixed(1),
       heap,
       fps: fps,
-      frameMs: gfx ? gfx.avgMs : null,
+      fpsLow1: fpsLow1,
+      frameMs: fpsEma ? +(1000 / fpsEma).toFixed(1) : (gfx ? gfx.avgMs : null),
       visible: wings && wings.visibility ? wings.visibility.visible : null,
       prepared: wings && wings.visibility ? wings.visibility.prepared : null,
       gpu: wings && wings.gpuResidency ? wings.gpuResidency : null,
@@ -191,12 +230,59 @@
     // programs live on renderer.info.programs (an array) in three r187, not on info.memory.
     if (Array.isArray(info && info.programs)) lastSample.programs = info.programs.length;
     else if (Array.isArray(mem.programs)) lastSample.programs = mem.programs.length;
+    try {
+      if (root.SinProcessMemory && typeof SinProcessMemory.estimate === 'function') {
+        const pe = SinProcessMemory.estimate({ renderer: renderer, scene: ctx.scene, phase: lastSample.phase, room: lastSample.room });
+        if (pe) {
+          lastSample.texMB = pe.gpuTexMB;
+          lastSample.geoMB = pe.gpuGeoMB;
+          lastSample.cpuMB = pe.cpuMB;
+          lastSample.cpuImgMB = pe.cpuImgMB;
+          lastSample.cpuGeoMB = pe.cpuGeoMB;
+          lastSample.gpuMB = pe.gpuMB;
+          lastSample.gpuRTMB = pe.gpuRTMB;
+          lastSample.processMB = pe.processMB;
+          lastSample.peakMB = (SinProcessMemory.peak() && SinProcessMemory.peak().processMB) || pe.processMB;
+        }
+      }
+    } catch (_) {}
     return lastSample;
   }
 
   function persist(sampleObj) {
     try {
       sessionStorage.setItem(STORE_KEY, JSON.stringify(sampleObj));
+    } catch (_) {}
+    // Compact on-device timeline: last ~30 one-second samples, so a tab
+    // kill can show the 10 frames before death. localStorage survives
+    // iOS Safari WebContent jetsam in the same way sessionStorage did
+    // for the single-sample black box (confirmed on the user's phone).
+    try {
+      const now = Date.now();
+      if (now - lastDiagWrite < 1000) return;
+      lastDiagWrite = now;
+      const snap = {
+        t: now,
+        phase: sampleObj.phase,
+        room: sampleObj.room,
+        fps: sampleObj.fps,
+        tris: sampleObj.triangles,
+        draws: sampleObj.calls,
+        cpuMB: sampleObj.cpuMB,
+        gpuMB: sampleObj.gpuMB,
+        processMB: sampleObj.processMB,
+        programs: sampleObj.programs,
+        cityReleased: sampleObj.cityReleased,
+        texMB: sampleObj.texMB,
+        geo: sampleObj.geometries,
+        tex: sampleObj.textures
+      };
+      let arr = [];
+      try { arr = JSON.parse(localStorage.getItem(DIAG_KEY) || '[]'); } catch (_) { arr = []; }
+      if (!Array.isArray(arr)) arr = [];
+      arr.push(snap);
+      if (arr.length > DIAG_MAX) arr = arr.slice(arr.length - DIAG_MAX);
+      localStorage.setItem(DIAG_KEY, JSON.stringify(arr));
     } catch (_) {}
   }
 
@@ -208,6 +294,22 @@
         // Keep STORE_KEY until a fresh write replaces it; PREV holds the crash snapshot.
       }
     } catch (_) {}
+    try {
+      const tl = localStorage.getItem(DIAG_KEY);
+      if (tl) {
+        localStorage.setItem(DIAG_PREV, tl);
+        // Fresh session starts a new timeline; PREV keeps the crash window.
+        localStorage.removeItem(DIAG_KEY);
+      }
+    } catch (_) {}
+  }
+
+  function readDiagPrev() {
+    try {
+      const raw = localStorage.getItem(DIAG_PREV) || localStorage.getItem(DIAG_KEY);
+      const arr = raw ? JSON.parse(raw) : null;
+      return Array.isArray(arr) ? arr : null;
+    } catch (_) { return null; }
   }
 
   function readPrev() {
@@ -220,13 +322,28 @@
   function render(ctx) {
     if (!on) { if (el) { el.remove(); el = null; } return; }
     ensure();
+    if (diagOn && el) {
+      el.style.maxWidth = 'min(280px,86vw)';
+      el.style.maxHeight = '40vh';
+      el.style.font = '10px/1.3 ui-monospace,Menlo,monospace';
+      el.style.padding = '5px 7px';
+      el.style.background = 'rgba(6,10,8,.58)';
+    }
     const s = sample(ctx);
-    const lines = [
+    const proc = (s.processMB != null) ? (s.processMB + 'MB' + (s.peakMB != null ? (' peak ' + s.peakMB) : '')) : '';
+    const cpu = (s.cpuMB != null) ? ('cpu ' + s.cpuMB + ' gpu ' + (s.gpuMB != null ? s.gpuMB : '—')) : null;
+    const lines = diagOn ? [
+      'DIAG ' + (s.phase || '—') + '  ' + (s.room || '—'),
+      'fps ' + (s.fps != null ? s.fps : '—') + (s.fpsLow1 != null ? ('  1% ' + s.fpsLow1) : '') + '  ' + (s.frameMs != null ? (s.frameMs + 'ms') : '') + '  tris ' + ((s.triangles || 0) / 1000).toFixed(0) + 'k  draw ' + s.calls,
+      'proc ' + (proc || '—') + (cpu ? ('  ' + cpu) : ''),
+      'geo ' + s.geometries + '  tex ' + s.textures + '  prog ' + s.programs,
+      'city ' + (s.cityReleased ? 'released' : 'out')
+    ] : [
       'MEM ' + (s.phase || '—') + '  room ' + (s.room || '—'),
       'cityReleased ' + (s.cityReleased ? 'YES' : 'no') + (s.teardown != null ? '  tear ' + s.teardown : ''),
       'geo ' + s.geometries + '  tex ' + s.textures + '  prog ' + s.programs,
       'draw ' + s.calls + '  tris ' + (s.triangles / 1000).toFixed(0) + 'k',
-      '~tex ' + s.texMB + 'MB  ~geo ' + s.geoMB + 'MB  fps ' + (s.fps != null ? s.fps : '—'),
+      '~tex ' + s.texMB + 'MB  ~geo ' + s.geoMB + 'MB  ~proc ' + (s.processMB != null ? s.processMB + 'MB' : '—') + '  fps ' + (s.fps != null ? s.fps : '—'),
       heapLine(s.heap),
       'vis ' + fmtList(s.visible),
       'prep ' + fmtList(s.prepared),
@@ -285,14 +402,28 @@
     const ev = (prev.events || []).slice(0, 8).map(function (e) {
       return '  ' + (e.kind || '?') + ': ' + (e.msg || '');
     }).join('\n');
+    const diag = readDiagPrev();
+    const lastN = (diag && diag.length) ? diag.slice(-10) : [];
+    const diagLines = lastN.map(function (s, i) {
+      const mb = (s.processMB != null) ? (s.processMB + 'MB') : ((s.cpuMB != null || s.gpuMB != null) ? (('c' + (s.cpuMB || 0) + '+g' + (s.gpuMB || 0)) + 'MB') : '');
+      return '  ' + (i + 1) + ' ' + (s.phase || '—') + ' ' + (s.room || '') +
+        ' fps ' + (s.fps != null ? s.fps : '—') +
+        ' tris ' + ((s.tris || 0) / 1000).toFixed(0) + 'k' +
+        ' draw ' + (s.draws != null ? s.draws : '—') +
+        ' ' + mb +
+        ' p' + (s.programs != null ? s.programs : '—');
+    });
     box.textContent = [
       'LAST SESSION (black box)',
       'phase ' + prev.phase + '  room ' + (prev.room || '—') + '  cityReleased ' + (prev.cityReleased ? 'YES' : 'no'),
       'geo ' + prev.geometries + '  tex ' + prev.textures + '  prog ' + prev.programs,
-      'draw ' + prev.calls + '  tris ' + ((prev.triangles || 0) / 1000).toFixed(0) + 'k  ~tex ' + prev.texMB + 'MB',
+      'draw ' + prev.calls + '  tris ' + ((prev.triangles || 0) / 1000).toFixed(0) + 'k  ~tex ' + prev.texMB + 'MB' +
+        (prev.processMB != null ? ('  ~proc ' + prev.processMB + 'MB') : '') +
+        (prev.cpuMB != null ? ('  cpu ' + prev.cpuMB + 'MB') : ''),
       'fps ' + (prev.fps != null ? prev.fps : '—') + (prev.teardown != null ? '  teardownPhase ' + prev.teardown : ''),
       interesting ? '⚠ prior session looked like a crash mid-entry' : 'prior session snapshot',
-      ev ? ('events:\n' + ev) : ''
+      ev ? ('events:\n' + ev) : '',
+      lastN.length ? ('last ' + lastN.length + ' samples before death:\n' + diagLines.join('\n')) : ''
     ].filter(Boolean).join('\n');
   }
 
@@ -311,8 +442,10 @@
     heaviest() { return heaviestByPhase; },
     showCrashReportOnStart,
     readPrev,
+    readDiagPrev,
     log() { return log.slice(); },
-    last() { return lastSample; }
+    last() { return lastSample; },
+    diagOn() { return diagOn; }
   };
   root.SinMemoryOverlay = api;
 

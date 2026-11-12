@@ -574,7 +574,9 @@
   function textureUploaded(renderer, t) {
     try {
       const p = renderer.properties && renderer.properties.get(t);
-      return !!(p && p.__webglTexture && p.__version === t.version);
+      // Match process-memory: any live GL name means the GPU has a copy.
+      // Requiring the property version to equal the texture version skipped almost every texture.
+      return !!(p && (p.__webglTexture || p.__webglInit));
     } catch (_) { return false; }
   }
   function releaseCpuFromObject(root, renderer) {
@@ -608,12 +610,33 @@
     });
   }
 
+  function drainCpuNow(ctx, tag) {
+    if (!ctx || !ctx.renderer) return;
+    const roots = [group, wingRuntime && wingRuntime.root, ctx.hero, ctx.scene];
+    for (let i = 0; i < roots.length; i++) {
+      if (!roots[i]) continue;
+      try { releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
+      try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
+    }
+    if (tag && window.SinProcessMemory) {
+      try {
+        const pe = SinProcessMemory.estimate({ renderer: ctx.renderer, scene: ctx.scene, phase: 'REVEAL' });
+        mark('cpu drain ' + tag + ' ~proc ' + (pe && pe.processMB) + ' cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB));
+      } catch (_) {}
+    }
+  }
+
   function releaseCpuFromResult(result, renderer) {
     if (!result) return;
     // Loose textures (tex/wtex) are cloned per surface at build time and
     // handed to the wings; they must keep their pixels.
     if (result.isTexture) return;
     if (result.scene) releaseCpuFromObject(result.scene, renderer);
+    try {
+      if (window.SinProcessMemory && result.scene) {
+        SinProcessMemory.releaseCpuFromObject(result.scene, renderer);
+      }
+    } catch (_) {}
   }
 
   function snapshotMeshBudget(tag, ctx) {
@@ -1194,6 +1217,12 @@
     try { if (window.__releaseExteriorStage) window.__releaseExteriorStage(); } catch (e) { note('exterior refs ' + (e && e.message || e)); }
     note('city released ' + drop.length + ' roots, ' + geometries.size + ' geometries, ' + materials.size + ' materials, ' + textures.size + ' textures');
     try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('teardown', 'city released g' + geometries.size + ' t' + textures.size); } catch (_) {}
+    try {
+      if (window.SinProcessMemory) {
+        const pe = SinProcessMemory.estimate({ scene: scene, phase: 'teardown' });
+        note('process after city release ~' + (pe && pe.processMB) + 'MB cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB));
+      }
+    } catch (_) {}
   }
 
   function snapshotRendererInfo(ctx) {
@@ -3629,6 +3658,7 @@
           warmIndex = 0;
           warmSlow = 0;
           mark('warm materials ' + warmMeshes.length);
+          try { drainCpuNow(ctx, 'warm-start'); } catch (_) {}
         }
         const e = warmMeshes[warmIndex];
         const o = e && e.obj;
@@ -3656,6 +3686,9 @@
         warmIndex += 1;
         if (statusEl) statusEl.textContent = 'جارٍ تجهيز القاعة';
         renderUI();
+        // Drain after every slice so CPU ImageBitmaps never sit alongside
+        // the growing GPU program set — that overlap peaked at 1305 MB.
+        try { drainCpuNow(ctx, (warmIndex % 16 === 0) ? ('warm-' + warmIndex) : null); } catch (_) {}
         if (warmIndex >= warmMeshes.length) {
           const restored = new Set();
           warmMeshes.forEach(function (e2) {
@@ -3681,6 +3714,28 @@
           // Do not render the entire palace here. The next normal game-loop frame
           // will draw it after the fade transition; rendering it synchronously at
           // 99% can spike GPU memory and reset the mobile tab.
+          //
+          // Measured on a tight Chromium iPhone pass: process memory climbed
+          // 230 MB (post-city-release LOADING) → 1190 MB at the last REVEAL
+          // warm slice → 1457 MB on the first FADING_IN frame, then settled
+          // at ~570 MB. The 548 MB of that peak was CPU-side ImageBitmaps
+          // still held after GPU upload — exactly the overlap that jetsams
+          // iOS Safari while the player is standing still. Drain them HERE,
+          // before the first full hall frame, and give the GC a slice during
+          // the reveal-hold.
+          try {
+            const roots = [group, wingRuntime && wingRuntime.root, ctx.hero, ctx.scene];
+            for (let i = 0; i < roots.length; i++) {
+              if (!roots[i]) continue;
+              try { releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
+              try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
+            }
+            if (window.SinProcessMemory) {
+              const pe = SinProcessMemory.estimate({ renderer: ctx.renderer, scene: ctx.scene, phase: 'REVEAL' });
+              mark('cpu drain after warm ~proc ' + (pe && pe.processMB) + ' cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB));
+            }
+            try { if (typeof globalThis.gc === 'function') globalThis.gc(); } catch (_) {}
+          } catch (drainErr) { mark('cpu drain ' + (drainErr && drainErr.message)); }
           warmFrame = true;
           mark('warm slices max=' + Math.round(warmSlow) + 'ms deferred-full n=' + warmMeshes.length);
           warmMeshes = null;

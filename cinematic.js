@@ -57,7 +57,8 @@
   try { if (!store.get('tier') && localStorage.getItem('sin.quality') === 'low') mode = 'low'; } catch (_) {}
   let base = mode === 'auto' ? detectTier() : mode;
   let pressure = 0;                                  // 0..3 adaptive (resolution) degradation, not a locked tier
-  const dynamicResolution = window.SinDynamicResolution ? window.SinDynamicResolution.create({ min: 0.58, max: 1.00, initial: 1.00, downStep: 0.08, upStep: 0.01, lowerFps: 52, upperFps: 58, recoveryMs: 3000 }) : null;
+  // Target 60 fps (16.7 ms). Drop scale below 55, recover above 59.
+  const dynamicResolution = window.SinDynamicResolution ? window.SinDynamicResolution.create({ min: 0.58, max: 1.00, initial: 1.00, downStep: 0.08, upStep: 0.01, lowerFps: 55, upperFps: 59, recoveryMs: 2500 }) : null;
   // After a memory-kill, start a little under native and ramp back up if
   // the frame time allows — temporary, not a permanent look change.
   try {
@@ -358,15 +359,19 @@
   }
   function wrapRender() {
     const orig = R.render.bind(R);
+    try { if (typeof window !== 'undefined') window.__R = R; } catch (_) {}
     gl = R.getContext();
     if (R.capabilities.isWebGL2) tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');
     R.render = function (s, c) {
-      const main = perf.on && !R.getRenderTarget() && c && c.isPerspectiveCamera;
+      try { if (typeof window !== 'undefined') window.__R = R; } catch (_) {}
+      const isMain = !R.getRenderTarget() && c && c.isPerspectiveCamera;
+      const main = perf.on && isMain;
       let q = null;
       if (main && tq && !pendingQ) { q = gl.createQuery(); gl.beginQuery(tq.TIME_ELAPSED_EXT, q); }
       orig(s, c);
       if (q) { gl.endQuery(tq.TIME_ELAPSED_EXT); pendingQ = q; }
-      if (main) { perf.calls = R.info.render.calls; perf.tris = R.info.render.triangles; }
+      // Record tris/draws even when the on-screen HUD is off (diag / estimator).
+      if (isMain) { perf.calls = R.info.render.calls; perf.tris = R.info.render.triangles; }
     };
   }
   function pollGpu() {
@@ -419,6 +424,7 @@
     TIERS,
     install(o) {
       R = o.renderer; scene = o.scene; camera = o.camera; sun = o.sun; hemi = o.hemi; fill = o.fill || null;
+      try { if (typeof window !== 'undefined') window.__R = R; } catch (_) {}
       SUNV = o.sunDir.clone().normalize();
       ctx.interior = o.isInterior || ctx.interior; ctx.resize = o.resize || null; ctx.onTier = o.onTier || null; if (o.interiorFov) ctx.interiorFov = o.interiorFov;
       installFog(SUNV); lightBasis(); wrapRender();
@@ -479,7 +485,9 @@
     look: LOOK,
     interiorEnvironment: interiorEnvironment,
     update(dt, info) { updateAtmo(dt, info); cameraFrame(dt, ctx.interior(), info && info.running); },
-    status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, shadowPolicy: !!E.shadow, shadowMapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg }; }
+    renderer() { return R; },
+    scene() { return scene; },
+    status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, shadowPolicy: !!E.shadow, shadowMapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg, calls: perf.calls, tris: perf.tris }; }
   };
   window.SinGfx = API;
 })();
