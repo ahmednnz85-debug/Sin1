@@ -2253,7 +2253,7 @@
       });
     }
     const wallsMesh = new THREE.InstancedMesh(wallSrc.geo, wallMat, wallMats.length);
-    wallsMesh.name = 'wall-module';
+    wallsMesh.name = 'wall-module'; wallsMesh.userData.hallShell = true; wallsMesh.userData.sinKeepVisible = true;
     wallsMesh.frustumCulled = false;
     wallsMesh.castShadow = false;
     wallMats.forEach(function (m, i) { wallsMesh.setMatrixAt(i, m); });
@@ -2390,6 +2390,8 @@
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(0, -0.015, L / 2);
     floor.name = 'floor';
+    floor.userData.hallShell = true;
+    floor.userData.sinKeepVisible = true;
     floor.receiveShadow = true;
     floor.frustumCulled = false;
     if (floor.geometry && floor.geometry.computeBoundingSphere) floor.geometry.computeBoundingSphere();
@@ -2443,7 +2445,7 @@
       m.material.polygonOffset = true;
       m.material.polygonOffsetFactor = -4;
       m.material.polygonOffsetUnits = -4;
-      m.name = 'carpet';
+      m.name = 'carpet'; m.userData.hallShell = true; m.userData.sinKeepVisible = true;
       return m;
     }
     const carpetEnd = stairFootZ + 0.04 * H;
@@ -2662,6 +2664,8 @@
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = CH - 0.22;
     ceiling.name = 'ceiling';
+    ceiling.userData.hallShell = true;
+    ceiling.userData.sinKeepVisible = true;
     ceiling.material.color = new THREE.Color(0xffffff);
     ceiling.material.roughness = 0.62;
     ceiling.material.metalness = 0.16;
@@ -4599,9 +4603,17 @@
       const inHall = lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;
       const inWings = !!(wingRuntime && window.PalaceWings && PalaceWings.contains(lx, lz));
       occupant = inHall || inWings;
-      // Keep the palace hall drawn from nearby wing rooms so the arch behind the player is not a void.
+      // The hall shell (floor, ceiling, murals) must NEVER be hidden while
+      // the player is in the palace. The previous `wingRuntime ? (inHall ||
+      // palaceSeen) : occupant` set group.visible = false the moment the
+      // player stepped into a corridor (inHall false) if palaceVisible() /
+      // inWedge failed — on a real iPhone that dropped draws 149→31 and
+      // left the clear-color void where the hall should be. palaceSeen is
+      // kept for LOD / setDeepWing only. Frustum-cull off-screen meshes;
+      // do not hide the hall group.
       const palaceSeen = inWings && (typeof PalaceWings.palaceVisible !== 'function' || PalaceWings.palaceVisible());
-      if (group) group.visible = wingRuntime ? (inHall || palaceSeen) : occupant;
+      void palaceSeen;
+      if (group) group.visible = !!occupant;
       setExteriorVisible(ctx.scene, !occupant);
       if (ctx.renderer && ctx.renderer.info && ctx.renderer.info.render) {
         const inf = ctx.renderer.info.render;

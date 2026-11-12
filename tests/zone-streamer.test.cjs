@@ -487,3 +487,78 @@ test('untagged meshes and leftover shells stay hidden until the atomic reveal (n
   s.update({ current: 'Palace', distances: new Map([['K3', 3]]) });
   assert.strictEqual(shell.visible, false, 'leftover shell stays hidden while the zone is cold');
 });
+
+test('doors stay visible while the incomplete room is hidden', async () => {
+  const scene = obj('scene');
+  const g = obj('K2');
+  const shell = mesh('K2-majlis-walls', tex());
+  shell.visible = true;
+  const door = mesh('BabylonianWingDoor-K2', tex());
+  door.visible = true;
+  door.userData.isDoor = true;
+  door.userData.sinKeepVisible = true;
+  g.add(shell);
+  g.add(door);
+  scene.add(g);
+  const R = renderer();
+  const s = Z.create({ uploadsPerFrame: 8, uploadMsPerFrame: 100 });
+  let complete = false;
+  s.register({
+    id: 'K2',
+    isComplete() { return complete; },
+    load(api) {
+      const dress = mesh('K2-council-table', tex());
+      dress.visible = true;
+      dress.userData.streamDress = true;
+      g.add(dress);
+    },
+    ownsObject(ch) { return !!(ch.userData && ch.userData.streamDress); }
+  });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: () => g });
+  const view = { current: 'K2', distances: new Map([['K2', 0]]), visible: new Set(['K2']) };
+  s.update(view);
+  await tick();
+  s.update(view);
+  assert.strictEqual(door.visible, true, 'door stays visible (closed) while the room is incomplete');
+  assert.strictEqual(shell.visible, false, 'room shell stays hidden until ready');
+  complete = true;
+  let frames = 0;
+  while (s.status('K2') !== 'ready' && frames < 25) {
+    s.update(view);
+    await tick();
+    frames++;
+  }
+  assert.strictEqual(s.status('K2'), 'ready');
+  assert.strictEqual(door.visible, true, 'door still visible after reveal');
+  assert.strictEqual(shell.visible, true, 'shell revealed atomically');
+});
+
+test('approach rooms are wanted for prefetch even when hops exceed prefetchHops', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
+  assert.match(src, /view\.approach/);
+  assert.match(src, /approaching/);
+  const scene = obj('scene');
+  const g = obj('K2');
+  scene.add(g);
+  const s = Z.create({ uploadsPerFrame: 8, uploadMsPerFrame: 100, processBudgetMB: 650 });
+  let loaded = 0;
+  s.register({
+    id: 'K2',
+    prefetchHops: 1,
+    isComplete() { return true; },
+    load(api) { loaded++; api.add(mesh('K2-m', tex())); api.done(); }
+  });
+  s.attach({ renderer: renderer(), scene, camera: {}, groupOf: () => g });
+  // Player is in the hall (3 hops from K2) but heading toward K2's door.
+  const view = {
+    current: 'Palace',
+    distances: new Map([['Palace', 0], ['K2', 3]]),
+    visible: new Set(['Palace']),
+    approach: new Set(['K2'])
+  };
+  s.update(view);
+  assert.ok(loaded >= 1 || s.status('K2') === 'loading' || s.status('K2') === 'uploading' || s.status('K2') === 'compiling' || s.status('K2') === 'ready',
+    'approach K2 should start despite hops 3 > prefetchHops 1, status=' + s.status('K2'));
+});

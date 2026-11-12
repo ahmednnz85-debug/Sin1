@@ -202,6 +202,14 @@
     let released = 0;
     bySource.forEach(function (list, source) {
       if (!source.data) return;
+      // capTexture (and wrap/colorSpace changes) set needsUpdate. The
+      // render hook calls us with upload:false, so a live __webglTexture
+      // may be the PRE-cap GPU copy. Dropping CPU then left needsUpdate
+      // pointing at a null image and the next upload was the 1×1 black
+      // default (black blood-sky after the Ishtar gate, 1920-wide red
+      // map). Never drop until the CURRENT image is uploaded and
+      // needsUpdate is clear.
+      if (list.some(function (t) { return !!t.needsUpdate; })) return;
       if (!list.every(function (t) { return textureUploaded(renderer, t); })) return;
       try {
         const img = source.data;

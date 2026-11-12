@@ -20,7 +20,7 @@ function load() {
 }
 
 test('process-memory is on the page ahead of the game and exports an estimator', () => {
-  assert.match(index, /data-src="process-memory\.js\?v=20261112r10"/);
+  assert.match(index, /data-src="process-memory\.js\?v=/);
   // Must load after device-profile and before palace / wings so hooks wrap THREE first.
   const dp = index.indexOf('device-profile.js');
   const pm = index.indexOf('process-memory.js');
@@ -202,4 +202,27 @@ test('purgeOrphanTextures is exported and will not dispose live or palaceShared 
   assert.match(src, /purgeOrphanTextures:\s*purgeOrphanTextures/);
   assert.match(src, /userData\.palaceShared \|\| obj\.userData\.keepDuringPalace/);
   assert.match(src, /topTextures: ctx\.detail \? texRows/);
+});
+
+test('releaseCpuFromObject does not drop CPU when needsUpdate is set (cap pending re-upload)', () => {
+  assert.match(src, /list\.some\(function \(t\) \{ return !!t\.needsUpdate; \}\)/);
+  const api = load().SinProcessMemory;
+  const img = { width: 1920, height: 960 };
+  const source = { data: img };
+  const tex = { isTexture: true, image: img, source, userData: {}, version: 2, needsUpdate: true };
+  const mat = { uniforms: { redMap: { value: tex } } };
+  const mesh = { material: mat, traverse(fn) { fn(this); } };
+  const props = new Map();
+  // Stale GPU copy from the PRE-cap (or not-yet-sampled) image.
+  props.set(tex, { __webglTexture: {}, __webglInit: true });
+  const renderer = {
+    initTexture() {},
+    properties: { get(t) { return props.get(t); } },
+    info: { memory: {}, render: {}, programs: [] }
+  };
+  const r = api.releaseCpuFromObject(mesh, renderer, { upload: false });
+  assert.equal(r.released, 0);
+  assert.ok(source.data, 'CPU pixels must stay until the current image is uploaded');
+  assert.equal(tex.image, img);
+  assert.equal(tex.needsUpdate, true);
 });

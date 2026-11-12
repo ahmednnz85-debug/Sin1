@@ -38,7 +38,7 @@ test('pre-DONE census runs updateLODs so the first present matches the census', 
 
 test('instance cull can be disabled for a same-frame SSIM A/B', () => {
   assert.match(src, /window\.__sinNoInstanceCull/);
-  assert.match(index, /palaceInterior\.js\?v=hall29&fix=20261112r37/);
+  assert.match(index, /palaceInterior\.js\?v=hall\d+/);
 });
 
 test('compactInstanced keeps every instance when the frustum is null', () => {

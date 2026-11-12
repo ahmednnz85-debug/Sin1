@@ -76,10 +76,26 @@
       return !!(p && p.__webglTexture && p.__version === t.version);
     } catch (_) { return false; }
   }
+  const DOOR_RE = /door|WingDoor|WingDoorPivot|BabylonianWingDoor/i;
+  function isPersistentVisible(o) {
+    if (!o) return false;
+    let p = o;
+    while (p) {
+      if (p.userData && (p.userData.sinKeepVisible || p.userData.isDoor || p.userData._roomDoor || p.userData.hallShell)) return true;
+      if (p.name && DOOR_RE.test(p.name)) return true;
+      p = p.parent;
+    }
+    return false;
+  }
   function hideObject(obj) {
     if (!obj || !obj.traverse) return;
     obj.traverse(function (o) {
       if (!o.isMesh && !o.isInstancedMesh && !o.isPoints && !o.isSprite && !o.isLine) return;
+      // Doors are part of the hall/corridor and must stay visible (closed)
+      // while the room behind them is still loading. The hide-until-ready
+      // gate used to hide them with the incomplete room, so the doorway
+      // looked empty until the player arrived and the door popped in.
+      if (isPersistentVisible(o)) return;
       o.visible = false;
       o.userData[HIDE_FLAG] = true;
     });
@@ -654,7 +670,12 @@
         // restart a farther room. prepared.has in `want` is what kept
         // K2 resident (and restarted it after evict) when the player
         // reached K3.
-        const prefetch = hops <= rec.spec.prefetchHops || (!tight && prepared.has(id));
+        const approaching = !!(view.approach && (view.approach.has ? view.approach.has(id) : (view.approach.indexOf && view.approach.indexOf(id) >= 0)));
+        // Proximity/heading prefetch (wings.js approach set): start the room
+        // the player is walking toward early enough that, at run speed, the
+        // door can open onto a complete room. Far rooms are evicted first
+        // (canStart); over-budget approach still defers rather than exceed 650.
+        const prefetch = hops <= rec.spec.prefetchHops || approaching || (!tight && prepared.has(id));
         const want = isCurrent || prefetch;
         // hops <= 1 protects on desktop; on a 650 MB phone those neighbours
         // yield once evictForCurrent decides the current room needs space.
