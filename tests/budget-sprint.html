@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>SIN ENGINE — synthetic heavy-room budget sprint (test only)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}
+</script>
+<style>
+  html,body{margin:0;background:#111;color:#eee;font:14px/1.4 sans-serif}
+  canvas{display:block;width:100vw;height:100vh}
+  #hud{position:fixed;top:8px;left:8px;background:rgba(0,0,0,.7);padding:8px 12px;white-space:pre;max-width:90vw;z-index:2}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<pre id="hud">loading…</pre>
+<script type="module">
+import '/three-compat.js?v=budget1';
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = res;
+    s.onerror = () => rej(new Error('failed ' + src));
+    document.head.appendChild(s);
+  });
+}
+await loadScript('/device-profile.js?v=20261112ios3');
+await loadScript('/process-memory.js?v=20261112r7');
+await loadScript('/zone-streamer.js?v=20261112ios4');
+
+const THREE = window.THREE;
+const K2_GPU_MB = 104.89;          // current K2, after iPhone 1024 cap (estimator)
+const K2_GEO_MB = 12.27;
+const SCALE = 3;
+const TARGET_TEX_MB = K2_GPU_MB * SCALE;   // ≈ 315
+const TARGET_GEO_MB = K2_GEO_MB * SCALE;   // ≈ 37
+const TEX_SIZE = 1024;
+const TEX_GPU_MB = (TEX_SIZE * TEX_SIZE * 4 * 4 / 3) / (1024 * 1024); // 5.333
+const N_TEX = Math.round(TARGET_TEX_MB / TEX_GPU_MB);
+const N_ROOMS = 6;
+const PROCESS_BUDGET = 650;
+const GPU_BUDGET = 480;
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'low-power' });
+renderer.setPixelRatio(1);
+renderer.setSize(852, 393, false);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, 852 / 393, 0.1, 200);
+camera.position.set(0, 2, 8);
+scene.add(new THREE.AmbientLight(0xffffff, 1));
+window.__R = renderer;
+window.__S = scene;
+
+const groups = new Map();
+const popIn = [];
+let contextLost = false;
+canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); contextLost = true; });
+
+function makeCanvas(seed) {
+  const c = document.createElement('canvas');
+  c.width = TEX_SIZE;
+  c.height = TEX_SIZE;
+  const ctx = c.getContext('2d', { willReadFrequently: false });
+  ctx.fillStyle = `rgb(${(seed * 41) % 255},${(seed * 17) % 255},${(seed * 73) % 255})`;
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect((seed * 13) % 1000, (seed * 29) % 1000, 24, 24);
+  return c;
+}
+
+function makeGeo() {
+  const bytes = Math.max(12, Math.round(TARGET_GEO_MB * 1024 * 1024));
+  const nVerts = Math.floor(bytes / 12);
+  const floats = new Float32Array(nVerts * 3);
+  for (let i = 0; i < nVerts; i++) {
+    floats[i * 3] = (i % 32) * 0.05;
+    floats[i * 3 + 1] = ((i * 3) % 32) * 0.05;
+    floats[i * 3 + 2] = ((i * 7) % 32) * 0.05;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(floats, 3));
+  // Drawable without a 12M-triangle hitch: three vertices only.
+  g.setDrawRange(0, 3);
+  g.computeBoundingSphere();
+  g.userData.sinHeavy = true;
+  return g;
+}
+
+function makeMesh(id, i, geo) {
+  const img = makeCanvas(id.charCodeAt(id.length - 1) * 50 + i);
+  const tex = new THREE.CanvasTexture(img);
+  tex.name = id + '-tex' + i;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.needsUpdate = true;
+  const mat = new THREE.MeshBasicMaterial({ map: tex });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = id + '-m' + i;
+  mesh.position.set((i % 10) - 5, 0, -Math.floor(i / 10));
+  mesh.userData.streamDress = true;
+  return mesh;
+}
+
+const streamer = window.SinZoneStreamer.create({
+  uploadsPerFrame: 8,
+  uploadMsPerFrame: 32,
+  graceMs: 0,
+  cacheZones: { normal: 0, watch: 0, critical: 0 },
+  maxConcurrentLoads: 1,
+  maxTextureSize: 1024,
+  processBudgetMB: PROCESS_BUDGET,
+  gpuBudgetMB: GPU_BUDGET,
+  cpuBudgetMB: 80,
+  defaultZoneProcessMB: TARGET_TEX_MB + TARGET_GEO_MB * 2,
+  defaultZoneGpuMB: TARGET_TEX_MB + TARGET_GEO_MB,
+  defaultZoneCpuMB: 20,
+  deferStallMs: 3000,
+  onBudgetStall(rec) {
+    try {
+      if (window.SinProcessMemory && window.SinProcessMemory.purgeOrphanTextures) {
+        window.SinProcessMemory.purgeOrphanTextures(renderer, scene);
+      }
+      if (window.SinProcessMemory && window.SinProcessMemory.releaseCpuFromObject) {
+        window.SinProcessMemory.releaseCpuFromObject(scene, renderer, { upload: false });
+      }
+    } catch (e) { console.warn(e); }
+  }
+});
+
+for (let r = 0; r < N_ROOMS; r++) {
+  const id = 'SYN' + r;
+  const g = new THREE.Group();
+  g.name = id;
+  g.visible = true;
+  scene.add(g);
+  groups.set(id, g);
+  streamer.register({
+    id,
+    prefetchHops: 0,
+    priority: r,
+    estGpuMB: TARGET_TEX_MB + TARGET_GEO_MB,
+    estCpuMB: 20,
+    estProcessMB: TARGET_TEX_MB + TARGET_GEO_MB * 2,
+    load(api) {
+      let i = 0;
+      const geo = makeGeo();
+      function cpuPending() {
+        let n = 0;
+        g.traverse(function (o) {
+          const t = o.material && o.material.map;
+          if (t && (t.image || (t.source && t.source.data))) n++;
+        });
+        return n;
+      }
+      function pump() {
+        // Drain first: never let CPU canvases and GPU copies overlap
+        // enough to push process peak over 650 (59×4 MB CPU + 315 GPU).
+        try {
+          if (window.SinProcessMemory && window.SinProcessMemory.releaseCpuFromObject) {
+            window.SinProcessMemory.releaseCpuFromObject(g, renderer, { upload: true });
+          }
+        } catch (_) {}
+        streamer.pumpUploads();
+        if (cpuPending() > 3 && i < N_TEX) { requestAnimationFrame(pump); return; }
+        const batch = 2;
+        for (let k = 0; k < batch && i < N_TEX; k++, i++) {
+          const m = makeMesh(id, i, geo);
+          api.add(m);
+          streamer.markReleasable(m);
+        }
+        if (i >= N_TEX && cpuPending() <= 3) api.done();
+        else requestAnimationFrame(pump);
+      }
+      pump();
+    },
+    isComplete() { return g.children.length >= N_TEX; },
+    unload() { /* streamer already disposes owned meshes */ }
+  });
+}
+streamer.attach({
+  renderer, scene, camera,
+  groupOf: (id) => groups.get(id) || null
+});
+
+function viewFor(id) {
+  const distances = new Map();
+  groups.forEach((_, other) => distances.set(other, other === id ? 0 : 2));
+  return { current: id, distances, visible: new Set([id]), prepared: new Set([id]) };
+}
+
+function completeness(id) {
+  const g = groups.get(id);
+  const n = g ? g.children.length : 0;
+  const vis = g ? g.children.filter((c) => c.visible).length : 0;
+  const ready = streamer.isReady(id);
+  const complete = n >= N_TEX;
+  const revealed = complete && vis === n && n > 0;
+  // Pop-in: anything visible before the set is complete, or a partial reveal.
+  const pop = (vis > 0 && !complete) || (complete && vis > 0 && vis < n);
+  return { id, n, vis, expect: N_TEX, complete, revealed, ready, pop, state: streamer.status(id) };
+}
+
+function estimate() {
+  const PM = window.SinProcessMemory;
+  return PM.estimate({ renderer, scene, detail: true });
+}
+
+const peaks = { processMB: 0, gpuMB: 0, cpuMB: 0, samples: [] };
+function snap(tag) {
+  const est = estimate();
+  peaks.processMB = Math.max(peaks.processMB, est.processMB || 0);
+  peaks.gpuMB = Math.max(peaks.gpuMB, est.gpuMB || 0);
+  peaks.cpuMB = Math.max(peaks.cpuMB, est.cpuMB || 0);
+  const row = { tag, processMB: est.processMB, gpuMB: est.gpuMB, cpuMB: est.cpuMB, peak: peaks.processMB };
+  peaks.samples.push(row);
+  return { est, peaks: { ...peaks, samples: undefined }, report: streamer.report() };
+}
+
+function hud(s) { document.getElementById('hud').textContent = s; }
+
+let current = 'SYN0';
+function tick() {
+  streamer.update(viewFor(current));
+  streamer.pumpUploads();
+  // Watch for pop-in on every room every frame.
+  groups.forEach((_, id) => {
+    const c = completeness(id);
+    if (c.pop) popIn.push({ t: performance.now(), ...c });
+  });
+  renderer.render(scene, camera);
+  const est = estimate();
+  peaks.processMB = Math.max(peaks.processMB, est.processMB || 0);
+  hud('room ' + current + '  process ' + (est.processMB && est.processMB.toFixed(1)) +
+      '  peak ' + peaks.processMB.toFixed(1) +
+      '  gpu ' + (est.gpuMB && est.gpuMB.toFixed(1)) +
+      '  state ' + streamer.status(current) +
+      '  lost ' + contextLost +
+      '  popIn ' + popIn.length);
+  requestAnimationFrame(tick);
+}
+tick();
+
+window.__budgetSprint = {
+  N_TEX, N_ROOMS, TARGET_TEX_MB, TARGET_GEO_MB, PROCESS_BUDGET, SCALE, K2_GPU_MB,
+  visit(id) { current = id; streamer.update(viewFor(id)); return completeness(id); },
+  completeness,
+  estimate,
+  snap,
+  peaks: () => ({ processMB: peaks.processMB, gpuMB: peaks.gpuMB, cpuMB: peaks.cpuMB, samples: peaks.samples.slice() }),
+  report: () => streamer.report(),
+  popIn: () => popIn.slice(),
+  contextLost: () => contextLost,
+  ids: () => Array.from(groups.keys()),
+  ready: true
+};
+hud('ready');
+</script>
+</body>
+</html>

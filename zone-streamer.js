@@ -110,13 +110,15 @@
       defaultZoneGpuMB: 40,
       defaultZoneCpuMB: 10,
       estimate: null,            // optional () => { processMB, gpuMB, cpuMB }
+      deferStallMs: 3000,        // after this, evict harder rather than wait forever
+      onBudgetStall: null,       // (rec, report) => void  — release city / purge
       log: null                  // function(kind, msg) for the memory overlay
     }, options || {});
 
     const zones = new Map();               // id -> record
     const order = [];                      // registration order (stable priority)
     const releasable = new Map();          // source -> Set(textures) waiting for GPU copy
-    const stats = { uploads: 0, uploadMs: 0, maxFrameUploadMs: 0, compiles: 0, reveals: 0, evictions: 0, texturesDisposed: 0, cpuReleased: 0, deferred: 0, budgetEvictions: 0, lastDefer: null };
+    const stats = { uploads: 0, uploadMs: 0, maxFrameUploadMs: 0, compiles: 0, reveals: 0, evictions: 0, texturesDisposed: 0, cpuReleased: 0, deferred: 0, budgetEvictions: 0, deferStalls: 0, lastDefer: null, lastStall: null };
     let ctx = null;                        // { renderer, scene, camera, groupOf(id) }
     let uploadQueue = [];                  // { tex, zone, rank }
 
@@ -302,13 +304,53 @@
       }
       return !wouldExceed(extra);
     }
+    function roomFitsAlone(rec) {
+      const extra = incoming(rec);
+      return (o.processBudgetMB <= 0 || extra.processMB <= o.processBudgetMB)
+        && (o.gpuBudgetMB <= 0 || extra.gpuMB <= o.gpuBudgetMB)
+        && (o.cpuBudgetMB <= 0 || extra.cpuMB <= o.cpuBudgetMB);
+    }
     function canStart(rec) {
       const extra = incoming(rec);
-      if (evictToFit(extra)) { rec.deferred = false; return true; }
-      rec.deferred = true;
-      stats.deferred++;
-      stats.lastDefer = { id: rec.id, at: now(), usage: usage(), incoming: extra };
-      note('load', rec.id + ' deferred — over budget (' + JSON.stringify(stats.lastDefer) + ')');
+      if (evictToFit(extra)) { rec.deferred = false; rec.deferredAt = 0; return true; }
+      if (!rec.deferred) {
+        rec.deferred = true;
+        rec.deferredAt = now();
+        rec.stallAttempts = 0;
+        stats.deferred++;
+        stats.lastDefer = { id: rec.id, at: rec.deferredAt, usage: usage(), incoming: extra };
+        note('load', rec.id + ' deferred — over budget (' + JSON.stringify(stats.lastDefer) + ')');
+      }
+      return false;
+    }
+    // A door must never wait forever. After deferStallMs, evict every
+    // non-visible, non-current zone (adjacent included) and ask the host
+    // to drop the city / orphans. If the room itself fits the device
+    // budget (the CI content check guarantees this for shipped rooms),
+    // admit it on the second stall so leftover estimate noise cannot
+    // deadlock the door.
+    function handleDeferStall(rec, t) {
+      const wait = o.deferStallMs != null ? o.deferStallMs : 3000;
+      if (!rec.deferred || rec.state !== 'cold') return false;
+      if (!rec.deferredAt || t - rec.deferredAt < wait) return false;
+      stats.deferStalls++;
+      rec.stallAttempts = (rec.stallAttempts || 0) + 1;
+      stats.lastStall = { id: rec.id, at: t, attempt: rec.stallAttempts, usage: usage() };
+      zones.forEach(function (r) {
+        if (r.state !== 'cold' && !r.isCurrent && !r.visible) {
+          evict(r, 'defer-stall');
+          stats.budgetEvictions++;
+        }
+      });
+      try { if (typeof o.onBudgetStall === 'function') o.onBudgetStall(rec, report()); } catch (e) { console.warn('onBudgetStall', e); }
+      rec.deferredAt = t;
+      if (canStart(rec)) return true;
+      if (roomFitsAlone(rec) && rec.stallAttempts >= 2) {
+        note('load', rec.id + ' admitted after defer-stall (room fits the device budget alone)');
+        rec.deferred = false;
+        rec.deferredAt = 0;
+        return true;
+      }
       return false;
     }
 
@@ -499,7 +541,7 @@
           // Hard cap: evict idle rooms first; if the new room still would
           // not fit, defer. The door gate waits on zoneIsReady, so nothing
           // is revealed incomplete in front of the player.
-          if (canStart(rec)) { start(rec, t); loading++; }
+          if (canStart(rec) || handleDeferStall(rec, t)) { start(rec, t); loading++; }
         }
         if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, t, i);
       });

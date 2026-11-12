@@ -63,7 +63,7 @@ test('instance wrapRender drains CPU images (prototype hook is shadowed)', () =>
 
 test('index.html exposes window.__sinInp for QA movement and cache-busts process-memory r6', () => {
   assert.match(index, /window\.__sinInp\s*=\s*inp/);
-  assert.match(index, /process-memory\.js\?v=20261112r7/);
+  assert.match(index, /process-memory\.js\?v=20261112r9/);
 });
 
 test('CPU drain runs every frame while the palace or a wing is streaming', () => {

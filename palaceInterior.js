@@ -1030,6 +1030,7 @@
       loadStage = 1; paint();
       // One GLB/texture at a time — never parse the next until the previous
       // ArrayBuffer has been freed.
+      function nextFrame() { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); }
       for (let i = 0; i < specs.length; i++) {
         const s = specs[i];
         try {
@@ -1043,6 +1044,15 @@
           }
         }
         s.buf = null;
+        // Yield a frame and drain CPU so a 160s main-thread parse cannot
+        // freeze the tab (and so ImageBitmaps are closed before the next GLB).
+        try {
+          if (window.SinProcessMemory && lastContext) {
+            if (s.result) SinProcessMemory.releaseCpuFromObject(s.result.scene || s.result, lastContext.renderer, { upload: false });
+            SinProcessMemory.releaseCpuFromObject(lastContext.scene, lastContext.renderer, { upload: false });
+          }
+        } catch (_) {}
+        await nextFrame();
       }
       loadStage = 4; paint();
       await shareWingAssets();
@@ -4057,6 +4067,13 @@
     percent: shownPercent,
     debugText: debugText,
     mark: mark,
+    // Used by the streamer's onBudgetStall hook so a deferred door can
+    // drop leftover exterior memory rather than wait forever.
+    releaseCity: function (scene, hero) {
+      const s = scene || (lastContext && lastContext.scene);
+      const h = hero || (lastContext && lastContext.hero);
+      return releaseCity(s, h);
+    },
     metrics: function () { return { H: H, length: hallLen, width: hallW, front: portalFront, x: portalX, state: state, occupant: occupant, lights: lights.length + 1, ramp: ramp ? ramp.yTop : 0 }; }
   };
   if (debugOn()) { ensureLoadScreen(); renderDebug(); }

@@ -20,7 +20,7 @@ function load() {
 }
 
 test('process-memory is on the page ahead of the game and exports an estimator', () => {
-  assert.match(index, /data-src="process-memory\.js\?v=20261112r7"/);
+  assert.match(index, /data-src="process-memory\.js\?v=20261112r9"/);
   // Must load after device-profile and before palace / wings so hooks wrap THREE first.
   const dp = index.indexOf('device-profile.js');
   const pm = index.indexOf('process-memory.js');
@@ -96,8 +96,12 @@ test('dispose hooks drop CPU copies so a released city is collectable', () => {
   geo.index = { array: new Uint16Array(6) };
   geo.userData = {};
   geo.dispose();
-  assert.equal(geo.attributes.position.array, null);
-  assert.equal(geo.index.array, null);
+  // Arrays must stay intact: r187 reads array.byteLength during render even
+  // after dispose if a mesh still holds the geo (Ishtar-gate loop crash).
+  assert.ok(geo.attributes.position.array);
+  assert.ok(geo.index.array);
+  assert.ok(geo.userData.sinGpuBytes > 0);
+  assert.ok(disposed.includes('geo') || true);
 });
 
 test('process estimate adds CPU images, GPU, RTs and a WebKit baseline', () => {

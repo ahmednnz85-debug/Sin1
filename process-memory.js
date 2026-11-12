@@ -59,8 +59,14 @@
     return s.w * s.h * 4 * layers;
   }
 
-  function gpuTexBytes(tex) {
+  function gpuTexBytes(tex, renderer) {
     if (!tex) return 0;
+    // A 4K ImageBitmap is CPU, not GPU, until initTexture. Counting it as
+    // both inflated the process peak (998 MB) during palace load, before
+    // capTexture ran. When a renderer is provided, only count a live GPU copy.
+    if (renderer && !(tex.userData && tex.userData.sinGpuW) && !textureUploaded(renderer, tex)) {
+      return 0;
+    }
     let w = tex.image && (tex.image.width || tex.image.videoWidth) || 0;
     let h = tex.image && (tex.image.height || tex.image.videoHeight) || 0;
     if ((!w || !h) && tex.source && tex.source.data) {
@@ -142,26 +148,17 @@
   }
 
   function dropGeometryCpu(g) {
-    if (!g || (g.userData && g.userData.keepCpu)) return;
-    try {
-      const attrs = g.attributes || {};
-      for (const k in attrs) {
-        const a = attrs[k];
-        if (a) {
-          a.array = null;
-          if (typeof a.onUploadCallback === 'function') { /* already fired */ }
-        }
-      }
-      if (g.index) g.index.array = null;
-      if (g.morphAttributes) {
-        for (const k in g.morphAttributes) {
-          const list = g.morphAttributes[k] || [];
-          for (let i = 0; i < list.length; i++) if (list[i]) list[i].array = null;
-        }
-      }
-      if (!g.userData) g.userData = {};
-      g.userData.sinCpuReleased = true;
-    } catch (_) {}
+    // Never detach attribute arrays. Three.js r187 reads array.byteLength
+    // on every render (and InstancedMesh / LOD swaps still reference a
+    // "disposed" geo). Nulling them threw in the rAF loop past the Ishtar
+    // gate ("loop TypeError: null is not an object (evaluating
+    // 'array.byteLength')") and stopped palace entry. Geometry CPU is ~17 MB;
+    // texture ImageBitmaps are the jetsam term and are released separately.
+    if (!g) return;
+    if (!g.userData) g.userData = {};
+    // Record size for the estimator; keep the arrays intact.
+    const bytes = attribBytes(g);
+    if (bytes && !g.userData.sinGpuBytes) g.userData.sinGpuBytes = bytes;
   }
 
   function releaseCpuFromObject(root, renderer, opts) {
@@ -383,7 +380,7 @@
       if (!seenSrc.has(src)) {
         seenSrc.add(src);
         const c = cpuImageBytes(t);
-        const g = gpuTexBytes(t);
+        const g = gpuTexBytes(t, renderer);
         cpuImg += c;
         // One GPU copy per Source (r187 WebGLTextures keys on source.uuid).
         gpuTex += g;

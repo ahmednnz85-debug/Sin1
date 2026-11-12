@@ -200,3 +200,80 @@ test('adjacent non-visible rooms yield so the room in front of the player can fi
   assert.equal(s.status('H0'), 'cold', 'non-visible adjacent evicted for budget');
   underBudget(estimate());
 });
+
+
+test('defer stall drops leftover memory via onBudgetStall and then admits the room', async () => {
+  let leftover = 350; // "city" still resident — would deadlock without the stall
+  const resident = Object.create(null);
+  const estimate = () => {
+    let p = 50 + leftover, g = 50 + leftover, c = 10;
+    for (const id of Object.keys(resident)) {
+      p += resident[id].processMB; g += resident[id].gpuMB; c += resident[id].cpuMB;
+    }
+    return { processMB: p, gpuMB: g, cpuMB: c };
+  };
+  let stalls = 0;
+  const scene = obj('scene');
+  const g = obj('K2'); scene.add(g);
+  const s = Z.create({
+    processBudgetMB: 500, gpuBudgetMB: 400, cpuBudgetMB: 80,
+    deferStallMs: 20,
+    graceMs: 0,
+    estimate,
+    onBudgetStall() { stalls++; leftover = 0; }
+  });
+  s.register({
+    id: 'K2', prefetchHops: 0,
+    estGpuMB: 150, estCpuMB: 20, estProcessMB: 180,
+    load(api) { resident.K2 = { gpuMB: 150, cpuMB: 20, processMB: 180 }; api.add(mesh('k2', tex())); api.done(); },
+    isComplete() { return !!resident.K2; }
+  });
+  s.attach({ renderer: renderer(), scene, camera: {}, groupOf: () => g });
+  const view = { current: 'K2', distances: new Map([['K2', 0]]), visible: new Set(['K2']) };
+  await settle(s, view, 4);
+  assert.equal(s.status('K2'), 'cold', 'first frames defer — leftover city is over budget');
+  assert.equal(s.isReady('K2'), false);
+  await new Promise(r => setTimeout(r, 30));
+  await settle(s, view, 6);
+  assert.ok(stalls >= 1, 'onBudgetStall must run (release city)');
+  assert.equal(s.status('K2'), 'ready', 'door opens after leftover is released');
+  assert.ok(estimate().gpuMB <= 400);
+});
+
+test('after two stall attempts a room that fits the budget alone is admitted (no forever wait)', async () => {
+  // Leftover never drops (stuck estimate). The room itself fits. Second stall admits.
+  const leftover = 350;
+  const resident = Object.create(null);
+  const estimate = () => {
+    let p = 50 + leftover, g = 50 + leftover, c = 10;
+    for (const id of Object.keys(resident)) {
+      p += resident[id].processMB; g += resident[id].gpuMB; c += resident[id].cpuMB;
+    }
+    return { processMB: p, gpuMB: g, cpuMB: c };
+  };
+  const scene = obj('scene');
+  const g = obj('K2'); scene.add(g);
+  const s = Z.create({
+    processBudgetMB: 500, gpuBudgetMB: 400, cpuBudgetMB: 80,
+    deferStallMs: 15,
+    estimate,
+    onBudgetStall() { /* leftover stays — simulates a stale estimate */ }
+  });
+  s.register({
+    id: 'K2', prefetchHops: 0,
+    estGpuMB: 150, estCpuMB: 20, estProcessMB: 180, // fits alone (150 < 400)
+    load(api) { resident.K2 = { gpuMB: 150, cpuMB: 20, processMB: 180 }; api.add(mesh('k2', tex())); api.done(); },
+    isComplete() { return !!resident.K2; }
+  });
+  s.attach({ renderer: renderer(), scene, camera: {}, groupOf: () => g });
+  const view = { current: 'K2', distances: new Map([['K2', 0]]), visible: new Set(['K2']) };
+  await settle(s, view, 3);
+  assert.equal(s.status('K2'), 'cold');
+  await new Promise(r => setTimeout(r, 20));
+  await settle(s, view, 3);
+  // first stall: onBudgetStall, still over, roomFitsAlone but attempts==1, no admit
+  await new Promise(r => setTimeout(r, 20));
+  await settle(s, view, 6);
+  assert.equal(s.status('K2'), 'ready', 'second stall admits a room that fits alone');
+  assert.ok(s.report().stats.deferStalls >= 2);
+});

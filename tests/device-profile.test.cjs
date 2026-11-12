@@ -65,3 +65,23 @@ test('capTexture does not flag sinCapped before the image has dimensions', () =>
   assert.equal(r, false);
   assert.ok(!tex.userData.sinCapped || (tex.image && Math.max(tex.image.width, tex.image.height) <= 1024));
 });
+
+test('installDecodeCap resizes an oversized ImageBitmap and closes the original', async () => {
+  const api = require('../device-profile.js');
+  const closed = [];
+  function FakeBmp(w, h) { this.width = w; this.height = h; this.close = () => closed.push(w); }
+  const calls = [];
+  const orig = async function (img, opts) {
+    calls.push({ w: img && img.width, opts });
+    if (opts && opts.resizeWidth) return new FakeBmp(opts.resizeWidth, opts.resizeHeight);
+    return new FakeBmp(img.width || 4096, img.height || 4096);
+  };
+  global.createImageBitmap = orig;
+  // detect() on this node UA is desktop (4096). Force the iPhone cap.
+  api.installDecodeCap({ maxTextureSize: 1024 });
+  const out = await global.createImageBitmap({ width: 4096, height: 4096 });
+  assert.equal(out.width, 1024);
+  assert.equal(out.height, 1024);
+  assert.ok(closed.includes(4096), 'original 4K bitmap must be closed');
+  delete global.createImageBitmap;
+});

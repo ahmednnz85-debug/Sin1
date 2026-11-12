@@ -139,11 +139,70 @@
     } catch (_) { return null; }
   }
 
+  // Decode ImageBitmaps already at maxTextureSize so a 4K GLB never
+  // produces a 67 MB bitmap (and a phantom 85 MB GPU estimate) that
+  // spikes process peak over 650 before capTexture can run.
+  function installDecodeCap(opts) {
+    const root = (typeof window !== 'undefined') ? window
+      : (typeof globalThis !== 'undefined' ? globalThis : null);
+    if (!root || typeof root.createImageBitmap !== 'function') return false;
+    if (root.createImageBitmap.__sinCapped) return true;
+    const orig = root.createImageBitmap.bind(root);
+    const maxFrom = function () {
+      try {
+        if (opts && opts.maxTextureSize) return opts.maxTextureSize;
+        return detect().maxTextureSize || 0;
+      } catch (_) { return 0; }
+    };
+    let inflight = 0;
+    const waiters = [];
+    function acquire() {
+      if (inflight >= 1) return new Promise(function (r) { waiters.push(r); });
+      inflight++;
+      return Promise.resolve();
+    }
+    function release() {
+      inflight--;
+      if (waiters.length) { inflight++; waiters.shift()(); }
+    }
+    function wrapped(img, a, b, c, d, e) {
+      let p;
+      try {
+        if (arguments.length <= 1) p = orig(img);
+        else if (arguments.length === 2) p = orig(img, a);
+        else if (arguments.length === 5) p = orig(img, a, b, c, d);
+        else p = orig(img, a, b, c, d, e);
+      } catch (err) { return Promise.reject(err); }
+      if (!p || typeof p.then !== 'function') return p;
+      const max = maxFrom();
+      if (!max) return p;
+      return p.then(function (bmp) {
+        if (!bmp || !bmp.width || Math.max(bmp.width, bmp.height) <= max) return bmp;
+        const scale = max / Math.max(bmp.width, bmp.height);
+        const rw = Math.max(1, Math.round(bmp.width * scale));
+        const rh = Math.max(1, Math.round(bmp.height * scale));
+        return acquire().then(function () {
+          return orig(bmp, { resizeWidth: rw, resizeHeight: rh, resizeQuality: 'high' }).then(function (small) {
+            try { if (typeof bmp.close === 'function') bmp.close(); } catch (_) {}
+            release();
+            return small;
+          }, function (err) { release(); return bmp; });
+        });
+      });
+    }
+    wrapped.__sinCapped = true;
+    wrapped.__sinOrig = orig;
+    root.createImageBitmap = wrapped;
+    return true;
+  }
+  try { installDecodeCap(); } catch (_) {}
+
   return {
     detect: detect,
     isIOS: isIOS,
     isMobile: isMobile,
     capTexture: capTexture,
+    installDecodeCap: installDecodeCap,
     rememberCrash: rememberCrash,
     consumeCrashDowngrade: consumeCrashDowngrade,
     pendingCrashDowngrade: pendingCrashDowngrade,

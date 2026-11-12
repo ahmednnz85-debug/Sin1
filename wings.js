@@ -49,6 +49,17 @@
     processBudgetMB: deviceProfile.processBudgetMB,
     gpuBudgetMB: deviceProfile.gpuBudgetMB,
     cpuBudgetMB: deviceProfile.cpuBudgetMB,
+    deferStallMs: 3000,
+    onBudgetStall: function (rec) {
+      try {
+        if (window.PalaceInterior && typeof PalaceInterior.releaseCity === 'function') PalaceInterior.releaseCity();
+        if (window.__releaseExteriorStage) window.__releaseExteriorStage();
+        const PM = window.SinProcessMemory;
+        const R = window.__R, S = window.__S;
+        if (PM && PM.purgeOrphanTextures && R) PM.purgeOrphanTextures(R, S);
+        if (PM && PM.releaseCpuFromObject && S) PM.releaseCpuFromObject(S, R, { upload: false });
+      } catch (e) { try { console.warn('onBudgetStall', rec && rec.id, e); } catch (_) {} }
+    },
     log: function (kind, msg) { try { if (window.SinMemoryOverlay) SinMemoryOverlay.note(kind, msg); } catch (_) {} }
   }) : null;
 

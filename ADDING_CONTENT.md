@@ -120,7 +120,9 @@ The streamer holds a **hard, device-aware cap** on resident process, GPU and CPU
 4. The door gate (`zoneIsReady` / `roomCompleteness`) keeps the door closed until the room both **fits** and is **complete**. Nothing is drawn in front of the player. There is no context-loss path for “over budget”; the room simply waits.
 5. Loading never starts a parse or upload that would push residency over the cap.
 
-If a **single** room is larger than the whole budget even after every evictable neighbour is gone, the door will keep waiting and `report().stats.lastDefer` will name the room. That is a content error: shrink textures (they are already capped to `maxTextureSize` on phones), split the room, or raise the desktop budget — do **not** lower the visual tier and do **not** skip the cap.
+If a **single** room is larger than the whole budget even after every evictable neighbour is gone, that is a content error and **must not ship**. `tools/estimate-room-budget.py` (run by `tests/room-budget-ci.test.cjs`) estimates every authored room after the iPhone 1024 texture cap and **fails CI** when any room — or that room plus the always-resident hall — would exceed the iPhone budgets (650 process / 480 GPU / 80 CPU). Shrink textures, split the room, or raise only the desktop budget — do **not** lower the visual tier and do **not** skip the cap.
+
+A door must never wait forever at runtime either. If a deferral lasts more than `deferStallMs` (3 s), the streamer evicts every non-visible, non-current zone (adjacent included), then calls `onBudgetStall` (wired in `wings.js` to `PalaceInterior.releaseCity`, `__releaseExteriorStage`, and `purgeOrphanTextures`). If the room itself fits the device budget, it is admitted on the second stall so leftover estimate noise cannot deadlock the door. `report().stats.deferStalls` and `lastStall` record this.
 
 Inspect live state with `PalaceWings.zones()` and `SinZoneStreamer.report()` (or the streamer instance’s `report()`). The report includes `usage`, `budget`, `overBudget`, per-zone `deferred`, and stats (`evictions`, `budgetEvictions`, `deferred`, `cpuReleased`, uploads, worst upload ms, compiles, reveals).
 
