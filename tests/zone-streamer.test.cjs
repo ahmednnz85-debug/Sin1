@@ -279,7 +279,8 @@ test('non-adjacent zones evict immediately under a 650 MB budget', async () => {
   }
   await pump('A', new Map([['A', 0], ['B', 1], ['C', 3]]), new Set(['A']));
   await pump('B', new Map([['A', 1], ['B', 0], ['C', 2]]), new Set(['B']));
-  assert.strictEqual(s.status('A'), 'ready', 'adjacent A stays');
+  // Under 650, starting B as current evicts A (no-stack). Adjacent
+  // residency was the K2+K3 658 peak. A may already be cold here.
   assert.strictEqual(s.status('B'), 'ready');
   // Walk to C: C is 2 hops from B, A is 3 hops. Both A and B must drop
   // immediately (grace 8 s is ignored under the 650 bar) so C does not stack.
@@ -563,4 +564,46 @@ test('approach rooms are wanted for prefetch even when hops exceed prefetchHops'
   s.update(view);
   assert.ok(loaded >= 1 || s.status('K2') === 'loading' || s.status('K2') === 'uploading' || s.status('K2') === 'compiling' || s.status('K2') === 'ready',
     'approach K2 should start despite hops 3 > prefetchHops 1, status=' + s.status('K2'));
+});
+
+test('prefetch will not stack a second dress room under a 650 MB budget', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
+  assert.match(src, /no-stack/);
+  assert.match(src, /rec\.isCurrent/);
+  const scene = obj('scene');
+  const g2 = obj('K2');
+  const g3 = obj('K3');
+  scene.add(g2); scene.add(g3);
+  const s = Z.create({ uploadsPerFrame: 8, uploadMsPerFrame: 100, processBudgetMB: 650, defaultZoneProcessMB: 50 });
+  let loaded = { K2: 0, K3: 0 };
+  function reg(id) {
+    s.register({
+      id: id,
+      prefetchHops: 1,
+      estProcessMB: 50,
+      isComplete() { return true; },
+      load(api) { loaded[id]++; api.add(mesh(id + '-m', tex())); api.done(); }
+    });
+  }
+  reg('K2'); reg('K3');
+  s.attach({ renderer: renderer(), scene, camera: {}, groupOf: (id) => id === 'K2' ? g2 : g3 });
+  // Load K2 as the current room.
+  s.update({ current: 'K2', distances: new Map([['K2', 0], ['K3', 2]]), visible: new Set(['K2']) });
+  assert.ok(loaded.K2 >= 1 || s.status('K2') === 'ready' || s.status('K2') === 'loading' || s.status('K2') === 'uploading' || s.status('K2') === 'compiling',
+    'K2 current should start, status=' + s.status('K2'));
+  // Force K2 to ready so it counts as resident.
+  let frames = 0;
+  while (s.status('K2') !== 'ready' && frames < 30) { s.update({ current: 'K2', distances: new Map([['K2', 0], ['K3', 2]]), visible: new Set(['K2']) }); frames++; }
+  const k3Before = loaded.K3;
+  // Approach K3 while still in K2 — must NOT start (would stack to 658).
+  s.update({
+    current: 'K2',
+    distances: new Map([['K2', 0], ['K3', 3]]),
+    visible: new Set(['K2']),
+    approach: new Set(['K3'])
+  });
+  assert.ok(loaded.K3 === k3Before && s.status('K3') === 'cold',
+    'K3 must stay cold while K2 is resident, status=' + s.status('K3') + ' loaded=' + loaded.K3);
 });

@@ -402,6 +402,29 @@
             stats.budgetEvictions++;
           });
         }
+        // Never stack two dress rooms on the 650 phone. usage() can be
+        // stale (483 vs a real 592), so the 40 MB headroom still admitted
+        // K3 on top of current K2 (lab peak 658.8 on 79aee3b). If any
+        // other zone is still resident — the current room cannot be
+        // evicted — defer this prefetch until that room can be swapped.
+        if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
+          let stacked = false;
+          zones.forEach(function (r) {
+            if (r.state === 'cold' || r.id === rec.id) return;
+            stacked = true;
+          });
+          if (stacked) {
+            if (!rec.deferred) {
+              rec.deferred = true;
+              rec.deferredAt = now();
+              rec.stallAttempts = 0;
+              stats.deferred++;
+              stats.lastDefer = { id: rec.id, at: rec.deferredAt, usage: usage(), incoming: extra, reason: 'no-stack' };
+              note('load', rec.id + ' deferred — no-stack (another zone still resident)');
+            }
+            return false;
+          }
+        }
         // 40 MB prefetch headroom: K2 at 592 + est 50 passed the raw 650
         // check but K3's real cost (~66) stacked to 658. Defer until the
         // room just left can be evicted (swap), then admit.
@@ -459,7 +482,10 @@
         try { if (typeof o.onBudgetStall === 'function') o.onBudgetStall(rec, report()); } catch (e) { console.warn('onBudgetStall', e); }
         rec.deferredAt = t;
         if (canStart(rec)) return true;
-        if (roomFitsAlone(rec) && rec.stallAttempts >= 2) {
+        // Only the CURRENT room may be force-admitted after a stall.
+        // Force-admitting a prefetch via roomFitsAlone stacked K2+K3 to 658
+        // because the leftover current room was ignored.
+        if (roomFitsAlone(rec) && rec.stallAttempts >= 2 && rec.isCurrent) {
           note('load', rec.id + ' admitted after defer-stall (room fits the device budget alone)');
           rec.deferred = false;
           rec.deferredAt = 0;
