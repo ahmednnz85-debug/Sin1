@@ -177,6 +177,7 @@
   let warmProxy = null;
   let warmProxyI = null;
   let warmScene = null;
+  let warmPending = false;
   const aniso = { v: 4 };
   const runtimeErrors = [];
   const LOG = [];
@@ -3670,6 +3671,153 @@
   }
 
   let lastDt = 0.016;
+
+
+  // When KHR_parallel_shader_compile is missing, isReady() is immediately
+  // true and the next GL call can stall 30–90 s on a still-linking program.
+  // A WebGL2 fence after compile lets us poll GPU completion without a
+  // blocking gl.finish(), so the JS heartbeat keeps running on the iPhone
+  // and in the lab alike.
+  function waitForGlIdle(gl) {
+    return new Promise(function (resolve) {
+      if (!gl || typeof gl.fenceSync !== 'function') { resolve(); return; }
+      let sync;
+      try { sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); } catch (_) { resolve(); return; }
+      if (!sync) { resolve(); return; }
+      try { gl.flush(); } catch (_) {}
+      function poll() {
+        let r;
+        try { r = gl.clientWaitSync(sync, 0, 0); } catch (_) { r = gl.WAIT_FAILED; }
+        if (r === gl.ALREADY_SIGNALED || r === gl.CONDITION_SATISFIED || r === gl.WAIT_FAILED) {
+          try { gl.deleteSync(sync); } catch (_) {}
+          resolve();
+          return;
+        }
+        setTimeout(poll, 10);
+      }
+      poll();
+    });
+  }
+
+  // Restore hall / wing / hero visibility and drop the stand-in compile scene.
+  function restoreWarmRoots(ctx) {
+    const restored = new Set();
+    if (warmMeshes) {
+      warmMeshes.forEach(function (e2) {
+        if (restored.has(e2.obj)) return;
+        restored.add(e2.obj);
+        e2.obj.visible = e2.obj.userData._warmVis !== false;
+        delete e2.obj.userData._warmVis;
+      });
+    }
+    if (ctx && ctx.hero && ctx.hero.userData._warmHero != null) {
+      ctx.hero.visible = ctx.hero.userData._warmHero !== false;
+      delete ctx.hero.userData._warmHero;
+    }
+    if (group && group.userData._warmRootVis != null) {
+      group.visible = group.userData._warmRootVis !== false;
+      delete group.userData._warmRootVis;
+    }
+    if (wingRuntime && wingRuntime.root && wingRuntime.root.userData._warmRootVis != null) {
+      wingRuntime.root.visible = wingRuntime.root.userData._warmRootVis !== false;
+      delete wingRuntime.root.userData._warmRootVis;
+    }
+    if (warmProxy) {
+      if (warmScene) warmScene.remove(warmProxy);
+      else if (ctx && ctx.scene) ctx.scene.remove(warmProxy);
+      try { warmProxy.geometry.dispose(); } catch (_) {}
+      warmProxy = null;
+    }
+    if (warmProxyI) {
+      if (warmScene) warmScene.remove(warmProxyI);
+      else if (ctx && ctx.scene) ctx.scene.remove(warmProxyI);
+      try { warmProxyI.geometry.dispose(); } catch (_) {}
+      warmProxyI = null;
+    }
+    if (warmScene) { warmScene.environment = null; warmScene = null; }
+  }
+
+  function finishWarm(ctx) {
+    restoreWarmRoots(ctx);
+    warmPending = false;
+    warmFrame = true;
+    mark('warm slices max=' + Math.round(warmSlow) + 'ms n=' + warmIndex);
+    try { console.info('[palace load] warm-done', warmIndex, 'max', Math.round(warmSlow) + 'ms'); } catch (_) {}
+    warmMeshes = null;
+    renderUI();
+  }
+
+  // Fresh shader compiles can stall the GL driver 30–90 s AFTER compile()
+  // returns, on the next GL call. r187 compileAsync runs compile() then
+  // polls program.isReady() through KHR_parallel_shader_compile (non-blocking)
+  // every 10 ms. The next material starts only when that program is ready.
+  // Cached programs resolve in a few ms; we start the next one in this turn
+  // up to WARM_BUDGET_MS so 65 entry materials finish in a couple of frames.
+  // This is the same path on the iPhone and in the lab — no webdriver gate.
+  const WARM_BUDGET_MS = 12;
+
+  function beginWarmSlice(ctx) {
+    if (warmPending || warmFrame || !warmMeshes) return;
+    if (warmIndex >= warmMeshes.length) { finishWarm(ctx); return; }
+    const e = warmMeshes[warmIndex];
+    const o = e && e.obj;
+    const heavy = o && (o.isSprite || o.isPoints || o.isSkinnedMesh);
+    const proxy = !o ? null : heavy ? o : (o.isInstancedMesh ? warmProxyI : warmProxy);
+    if (proxy && proxy !== o) {
+      proxy.material = e.mat;
+      const dir = new THREE.Vector3();
+      ctx.camera.getWorldDirection(dir);
+      proxy.position.copy(ctx.camera.position).addScaledVector(dir, 0.45);
+      proxy.quaternion.copy(ctx.camera.quaternion);
+      proxy.visible = true;
+    } else if (o) {
+      o.visible = o.userData._warmVis !== false;
+      if (e.mat) o.material = o.material;
+    }
+    try { console.info('[palace load] warm-begin', warmIndex, '/', warmMeshes.length, e && e.mat && (e.mat.name || e.mat.type) || '', e && e.obj && (e.obj.name || e.obj.type) || ''); } catch (_) {}
+    const tWarm = performance.now();
+    const target = warmScene || ctx.scene;
+    try { if (ctx.renderer.debug) ctx.renderer.debug.checkShaderErrors = false; } catch (_) {}
+
+    function afterCompile() {
+      const gl = ctx.renderer.getContext && ctx.renderer.getContext();
+      return waitForGlIdle(gl).then(finishSlice);
+    }
+
+    function finishSlice() {
+      const took = performance.now() - tWarm;
+      try { console.info('[palace load] warm', warmIndex, '/', warmMeshes.length, Math.round(took) + 'ms'); } catch (_) {}
+      if (took > warmSlow) warmSlow = took;
+      if (took > 120) mark('warm ' + Math.round(took) + 'ms ' + ((e && e.mat && (e.mat.name || e.mat.type)) || (o && (o.name || o.type)) || '?'));
+      if (proxy && proxy !== o) proxy.visible = false;
+      else if (o) o.visible = false;
+      warmIndex += 1;
+      if (statusEl) statusEl.textContent = 'جارٍ تجهيز القاعة';
+      renderUI();
+      try { console.info('[palace load] warm-slice-end', warmIndex); } catch (_) {}
+      warmPending = false;
+      if (!warmMeshes || warmIndex >= warmMeshes.length) { finishWarm(ctx); return; }
+      if (took < WARM_BUDGET_MS) beginWarmSlice(ctx);
+    }
+
+    warmPending = true;
+    try {
+      if (typeof ctx.renderer.compileAsync === 'function') {
+        Promise.resolve(ctx.renderer.compileAsync(target, ctx.camera)).then(afterCompile, function (err) {
+          mark('render ' + (err && err.message));
+          afterCompile();
+        });
+      } else {
+        if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(target, ctx.camera);
+        else ctx.renderer.render(target, ctx.camera);
+        afterCompile();
+      }
+    } catch (renderErr) {
+      mark('render ' + (renderErr && renderErr.message));
+      afterCompile();
+    }
+  }
+
   function tick(dt, ctx) {
     rig.idle++; // frames since the camera rig last ran (a re-entry snaps instead of swinging)
     try { tickInner(dt, ctx); }
@@ -3823,6 +3971,7 @@
             warmFrame = false;
             warmMeshes = null;
             warmScene = null;
+            warmPending = false;
             try { window.__palaceSetupBusy = false; } catch (_) {}
             try { console.info('[palace load] REVEAL-enter'); } catch (_) {}
           } catch (err) {
@@ -3842,7 +3991,7 @@
       // the opening screen while the bar is stuck at 99%. Compile one material
       // per frame on a tiny stand-in, then draw the real hall once.
       if (!warmFrame) {
-        holdCull(ctx.scene, ctx.hero);
+        if (!warmPending) holdCull(ctx.scene, ctx.hero);
         if (!warmMeshes) {
           try { console.info('[palace load] REVEAL-warm-collect'); } catch (_) {}
           const seen = new Set();
@@ -3942,129 +4091,15 @@
           // freeze WebKit for minutes. GPU uploads already ran during LOADING.
           // A deferred drain still runs after the last warm slice.
           try { console.info('[palace load] REVEAL-warm-ready'); } catch (_) {}
-          // WPE/llvmpipe (this lab) stalls 30–90s in the GL driver after some
-          // compile() calls — JS has already returned, the heartbeat dies, and
-          // the tab looks hung. Skip GPU compile on software renderers; real
-          // Apple/Android GPUs still warm 16 entry materials below.
-          let softwareGL = false;
           try {
             const gl = ctx.renderer.getContext();
-            const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
-            const rn = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '') : '';
-            softwareGL = /llvmpipe|swiftshader|softpipe|Microsoft Basic Render|Software Rasterizer/i.test(rn);
-            try { console.info('[palace load] gl-renderer', rn || '(hidden)', 'software', softwareGL, 'webdriver', !!navigator.webdriver); } catch (_) {}
+            const extInfo = gl && gl.getExtension('WEBGL_debug_renderer_info');
+            const rn = extInfo ? String(gl.getParameter(extInfo.UNMASKED_RENDERER_WEBGL) || '') : '';
+            const khr = !!(gl && gl.getExtension('KHR_parallel_shader_compile'));
+            console.info('[palace load] gl-renderer', rn || '(hidden)', 'khr-parallel', khr, 'compileAsync', typeof ctx.renderer.compileAsync === 'function');
           } catch (_) {}
-          // Playwright WebKit reports "Apple GPU" here but still stalls 30–90s
-          // in the driver after compile(). Real iPhone Safari is not webdriver;
-          // it still runs the 16-slice warm below.
-          if (softwareGL || (typeof navigator !== 'undefined' && navigator.webdriver)) {
-            const restored = new Set();
-            warmMeshes.forEach(function (e2) {
-              if (restored.has(e2.obj)) return;
-              restored.add(e2.obj);
-              e2.obj.visible = e2.obj.userData._warmVis !== false;
-              delete e2.obj.userData._warmVis;
-            });
-            if (ctx.hero && ctx.hero.userData._warmHero != null) {
-              ctx.hero.visible = ctx.hero.userData._warmHero !== false;
-              delete ctx.hero.userData._warmHero;
-            }
-            if (group && group.userData._warmRootVis != null) {
-              group.visible = group.userData._warmRootVis !== false;
-              delete group.userData._warmRootVis;
-            }
-            if (wingRuntime && wingRuntime.root && wingRuntime.root.userData._warmRootVis != null) {
-              wingRuntime.root.visible = wingRuntime.root.userData._warmRootVis !== false;
-              delete wingRuntime.root.userData._warmRootVis;
-            }
-            if (warmProxy) { if (warmScene) warmScene.remove(warmProxy); else ctx.scene.remove(warmProxy); try { warmProxy.geometry.dispose(); } catch (_) {} warmProxy = null; }
-            if (warmProxyI) { if (warmScene) warmScene.remove(warmProxyI); else ctx.scene.remove(warmProxyI); try { warmProxyI.geometry.dispose(); } catch (_) {} warmProxyI = null; }
-            if (warmScene) { warmScene.environment = null; warmScene = null; }
-            warmFrame = true;
-            warmMeshes = null;
-            try { console.info('[palace load] warm-skip-software-gl'); } catch (_) {}
-            renderUI();
-            return;
-          }
         }
-        const e = warmMeshes[warmIndex];
-        const o = e && e.obj;
-        const heavy = o && (o.isSprite || o.isPoints || o.isSkinnedMesh);
-        const proxy = !o ? null : heavy ? o : (o.isInstancedMesh ? warmProxyI : warmProxy);
-        if (proxy && proxy !== o) {
-          proxy.material = e.mat;
-          const dir = new THREE.Vector3();
-          ctx.camera.getWorldDirection(dir);
-          proxy.position.copy(ctx.camera.position).addScaledVector(dir, 0.45);
-          proxy.quaternion.copy(ctx.camera.quaternion);
-          proxy.visible = true;
-        } else if (o) {
-          o.visible = o.userData._warmVis !== false;
-          if (e.mat) o.material = o.material;
-        }
-        try { console.info('[palace load] warm-begin', warmIndex, '/', warmMeshes.length, e && e.mat && (e.mat.name || e.mat.type) || '', e && e.obj && (e.obj.name || e.obj.type) || ''); } catch (_) {}
-        const tWarm = performance.now();
-        try {
-          if (ctx.renderer.debug) ctx.renderer.debug.checkShaderErrors = false;
-          const target = warmScene || ctx.scene;
-          if (typeof ctx.renderer.compile === 'function') ctx.renderer.compile(target, ctx.camera);
-          else ctx.renderer.render(target, ctx.camera);
-        } catch (renderErr) { mark('render ' + (renderErr && renderErr.message)); }
-        const took = performance.now() - tWarm;
-        try { console.info('[palace load] warm', warmIndex, '/', warmMeshes.length, Math.round(took) + 'ms'); } catch (_) {}
-        if (took > warmSlow) warmSlow = took;
-        if (took > 120) mark('warm ' + Math.round(took) + 'ms ' + ((e && e.mat && (e.mat.name || e.mat.type)) || (o && (o.name || o.type)) || '?'));
-        if (proxy && proxy !== o) proxy.visible = false;
-        else if (o) o.visible = false;
-        warmIndex += 1;
-        if (statusEl) statusEl.textContent = 'جارٍ تجهيز القاعة';
-        renderUI();
-        try { console.info('[palace load] warm-slice-end', warmIndex); } catch (_) {}
-        // Per-slice drainCpuNow used to walk the hall (and, previously, the
-        // whole scene) on every material. Uploads already finished during
-        // LOADING; a single drain still runs after the last slice.
-        // Software-GL WebKit can stall for 30–90s in the driver AFTER
-        // compile() returns (heartbeat dies, no further JS). The first 16
-        // slices are the hall and entry-visible materials; remaining
-        // programs compile on later frames. Cap so REVEAL cannot hang the tab.
-        const WARM_CAP = 16;
-        if (warmIndex >= warmMeshes.length || warmIndex >= WARM_CAP) {
-          if (warmIndex < warmMeshes.length) {
-            try { console.info('[palace load] warm-cap', warmIndex, '/', warmMeshes.length); } catch (_) {}
-          }
-          const restored = new Set();
-          warmMeshes.forEach(function (e2) {
-            if (restored.has(e2.obj)) return;
-            restored.add(e2.obj);
-            e2.obj.visible = e2.obj.userData._warmVis !== false;
-            delete e2.obj.userData._warmVis;
-          });
-          if (ctx.hero && ctx.hero.userData._warmHero != null) {
-            ctx.hero.visible = ctx.hero.userData._warmHero !== false;
-            delete ctx.hero.userData._warmHero;
-          }
-          if (group && group.userData._warmRootVis != null) {
-            group.visible = group.userData._warmRootVis !== false;
-            delete group.userData._warmRootVis;
-          }
-          if (wingRuntime && wingRuntime.root && wingRuntime.root.userData._warmRootVis != null) {
-            wingRuntime.root.visible = wingRuntime.root.userData._warmRootVis !== false;
-            delete wingRuntime.root.userData._warmRootVis;
-          }
-          if (warmProxy) { if (warmScene) warmScene.remove(warmProxy); else ctx.scene.remove(warmProxy); warmProxy.geometry.dispose(); warmProxy = null; }
-          if (warmProxyI) { if (warmScene) warmScene.remove(warmProxyI); else ctx.scene.remove(warmProxyI); warmProxyI.geometry.dispose(); warmProxyI = null; }
-          if (warmScene) { warmScene.environment = null; warmScene = null; }
-          // Do not drain or estimate the scene here. releaseCpuFromObject and
-          // SinProcessMemory.estimate({scene}) after the last warm slice
-          // froze WebKit for 90s (full-graph walk / GC at software-GL RSS).
-          // CPU pixels were already dropped during LOADING; a palace-root
-          // snapshot still runs after DONE.
-          warmFrame = true;
-          mark('warm slices max=' + Math.round(warmSlow) + 'ms n=' + warmIndex);
-          try { console.info('[palace load] warm-done', warmIndex, 'max', Math.round(warmSlow) + 'ms'); } catch (_) {}
-          warmMeshes = null;
-          renderUI();
-        }
+        if (!warmPending) beginWarmSlice(ctx);
         return;
       }
       fadeT += dt;

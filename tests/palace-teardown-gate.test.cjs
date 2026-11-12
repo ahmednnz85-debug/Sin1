@@ -32,3 +32,15 @@ test('black box persists samples and surfaces prior session on start', () => {
   assert.match(overlay, /reportHeaviest/);
   assert.match(cinematic, /SinMemoryOverlay\.tick/);
 });
+
+test('shader warmup uses compileAsync and has no webdriver or software-GL skip', () => {
+  assert.doesNotMatch(palace, /navigator\.webdriver/);
+  assert.doesNotMatch(palace, /warm-skip-software-gl/);
+  assert.doesNotMatch(palace, /WARM_CAP/);
+  assert.match(palace, /compileAsync/);
+  assert.match(palace, /KHR_parallel_shader_compile/);
+  assert.match(palace, /beginWarmSlice/);
+  assert.match(palace, /WARM_BUDGET_MS/);
+  assert.match(palace, /waitForGlIdle/);
+  assert.match(palace, /fenceSync/);
+});
