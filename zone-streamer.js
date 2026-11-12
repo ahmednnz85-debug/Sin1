@@ -606,6 +606,14 @@
         rec.deferredAt = 0;
         start(rec, now());
       }
+      // start() alone leaves the zone in 'loading'. If update() does not
+      // list it as wanted (missing hops) and lastWanted was never set,
+      // step() never runs — dress can be complete while hideUntilReady
+      // stays on (playthrough-3 first K4: complete true, revealed false,
+      // 60 s). Mark it wanted and pump upload/compile/reveal now.
+      rec.lastWanted = now();
+      rec.isCurrent = true;
+      if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, now(), 0);
       return rec.state;
     }
     function reset() {

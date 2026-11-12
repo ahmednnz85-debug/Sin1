@@ -239,3 +239,12 @@ test('forceLoad starts a cold current zone even with no hop entry', async () => 
   }
   assert.strictEqual(s.status('K4'), 'ready');
 });
+
+test('forceLoad pumps step so a complete zone is not left unrevealed', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
+  const body = src.slice(src.indexOf('function forceLoad(id)'), src.indexOf('function reset('));
+  assert.match(body, /rec\.lastWanted = now\(\)/);
+  assert.match(body, /step\(rec, now\(\), 0\)/);
+});

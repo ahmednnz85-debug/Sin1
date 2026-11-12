@@ -2855,7 +2855,14 @@
     if (!origin) return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
-    if (c && c.complete) return;
+    if (c && c.complete) {
+      // Assets are resident but may still be hidden if the streamer never
+      // stepped to reveal. Pump forceLoad so upload/compile/reveal run.
+      if (!c.revealed && zoneStreamer && typeof zoneStreamer.forceLoad === 'function') {
+        try { zoneStreamer.forceLoad(origin); } catch (_) {}
+      }
+      return;
+    }
     // Once per room per dress attempt — every-tick logs froze the WebKit console.
     if (state._ensureLog !== origin + (state.k4Dress ? ':d' : ':n')) {
       state._ensureLog = origin + (state.k4Dress ? ':d' : ':n');
