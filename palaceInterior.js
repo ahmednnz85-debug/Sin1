@@ -2090,6 +2090,39 @@
     }
   }
 
+  // When the hero is in a wing room (hops from the hall > 1), drop the
+  // hall's high-poly near-LOD InstancedMeshes from the scene and release
+  // their GPU geometry. The far-LOD packs stay as a cheap stand-in if the
+  // hall is glimpsed through a doorway. Returning to the hall restores
+  // the near packs (BufferGeometry.dispose releases GPU only; attributes
+  // remain and re-upload on the next draw).
+  let hallDeep = false;
+  function setDeepWing(deep) {
+    deep = !!deep;
+    if (hallDeep === deep) return hallDeep;
+    hallDeep = deep;
+    for (let p = 0; p < lodPacks.length; p++) {
+      const pack = lodPacks[p];
+      if (!pack || !pack.near) continue;
+      if (deep) {
+        pack.near.visible = false;
+        pack.near.count = 0;
+        if (pack.near.parent && !pack._nearParent) {
+          pack._nearParent = pack.near.parent;
+          pack.near.parent.remove(pack.near);
+        }
+        try { if (pack.near.geometry && pack.near.geometry.dispose) pack.near.geometry.dispose(); } catch (_) {}
+      } else {
+        if (pack._nearParent && pack.near.parent !== pack._nearParent) {
+          pack._nearParent.add(pack.near);
+        }
+        pack._nearParent = null;
+        if (pack.near.geometry) pack.near.geometry.needsUpdate = true;
+      }
+    }
+    return hallDeep;
+  }
+
   function animateHall(dt, ctx) {
     if (!group) return;
     const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
@@ -4831,6 +4864,7 @@
     },
     loadProfile: function () { return loadProfile.slice(); },
     gpuUploadPending: function () { return gpuUploadQ.length; },
+    setDeepWing: setDeepWing,
     metrics: function () { return { H: H, length: hallLen, width: hallW, front: portalFront, x: portalX, state: state, occupant: occupant, lights: lights.length + 1, ramp: ramp ? ramp.yTop : 0 }; }
   };
   if (debugOn()) { ensureLoadScreen(); renderDebug(); }

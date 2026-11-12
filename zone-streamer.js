@@ -318,6 +318,7 @@
     }
     function canStart(rec) {
       const extra = incoming(rec);
+      evictNonAdjacent('non-adjacent-before-load');
       if (evictToFit(extra)) { rec.deferred = false; rec.deferredAt = 0; return true; }
       if (!rec.deferred) {
         rec.deferred = true;
@@ -567,16 +568,30 @@
       // Zones still preparing but no longer wanted keep preparing (cheap) so
       // a quick turn-back does not restart them.
       zones.forEach(function (rec) { if (!rec.lastWanted || rec.lastWanted === t) return; if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, t, 99); });
+      // Current room: if dress is complete, never sit in 'loading' — a 60 s
+      // door wait is a failure. Pump step every update so reveal is a few
+      // hundred ms after isComplete(), not an abandon timeout.
+      zones.forEach(function (rec) {
+        if (!rec.isCurrent) return;
+        if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, t, 0);
+      });
       // Eviction: never protected zones; LRU beyond cache size after the grace
       // period, at once under critical memory pressure.
       const idle = [];
       zones.forEach(r => { if (r.state !== 'cold' && !r.protected && r.leftAt) idle.push(r); });
       idle.sort((a, b) => a.lastWanted - b.lastWanted); // oldest first
       const cache = o.cacheZones[level] != null ? o.cacheZones[level] : 0;
+      // Phone (processBudgetMB <= 650): evict every unprotected zone at once
+      // so a new K3/K4 load cannot stack on K2. graceMs/cache do not delay it.
+      const tight = o.processBudgetMB > 0 && o.processBudgetMB <= 650;
       let evicted = 0;
       idle.forEach(function (rec, i) {
         const overCache = idle.length - i > cache;
-        if (level === 'critical' || (overCache && t - rec.leftAt >= o.graceMs)) { evict(rec, level === 'critical' ? 'critical memory' : 'lru'); evicted++; }
+        const far = rec.hops == null || rec.hops > 1;
+        if (level === 'critical' || (tight && far) || (overCache && t - rec.leftAt >= o.graceMs)) {
+          evict(rec, level === 'critical' ? 'critical memory' : (tight && far ? 'non-adjacent' : 'lru'));
+          evicted++;
+        }
       });
       pumpUploads();
       sweepReleasable();
@@ -597,9 +612,23 @@
     function forceEvict(id) { const r = zones.get(id); return r && r.state !== 'cold' ? evict(r, 'forced') : 0; }
     // Player is standing in (or was teleported into) this room. Start it
     // even if the hop map or budget defer would have left it cold.
+    function evictNonAdjacent(why) {
+      let n = 0;
+      zones.forEach(function (r) {
+        if (r.state === 'cold') return;
+        if (r.isCurrent || r.visible) return;
+        if (r.hops != null && r.hops <= 1) return;
+        evict(r, why || 'non-adjacent');
+        // These evicts free the budget for the incoming room, same as evictToFit.
+        stats.budgetEvictions++;
+        n++;
+      });
+      return n;
+    }
     function forceLoad(id) {
       const rec = zones.get(id);
       if (!rec) return 'unregistered';
+      evictNonAdjacent('non-adjacent-before-load');
       if (rec.state === 'cold') {
         evictToFit(incoming(rec));
         rec.deferred = false;

@@ -2894,6 +2894,14 @@
     }
     const isArch = !!(r && r.kind === 'threshold');
     state.palaceNear = id === 'Palace' || isArch;
+    // Free hall near-LOD GPU packs once the player is more than one hop
+    // into a wing — they cannot be seen and were part of the 700 MB peak.
+    try {
+      if (window.PalaceInterior && typeof PalaceInterior.setDeepWing === 'function') {
+        const hopsToHall = (id === 'Palace' || isArch) ? 0 : (zoneDist && zoneDist.has('Palace') ? zoneDist.get('Palace') : (id === origin ? 2 : 1));
+        PalaceInterior.setDeepWing(!state.palaceNear && hopsToHall > 1);
+      }
+    } catch (_) {}
     const origin = isArch && r.linkRoom ? r.linkRoom : id;
     try { console.info('[palace load] cull-enter'); } catch (_) {}
     const view = cameraView(state.root.position.x, state.root.position.z);

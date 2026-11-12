@@ -15,14 +15,15 @@ test('desktop profile keeps a generous residency budget and does not lower the l
   assert.ok(p.maxTextureSize >= 2048);
 });
 
-test('iPhone is constrained for residency (not a locked low look): K2 prefetches from the hall, K3/K4 wait', () => {
+test('iPhone is constrained for residency (not a locked low look): only 1-hop prefetch, no idle cache', () => {
   const p = D.detect({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', hardwareConcurrency: 6, maxTouchPoints: 5 });
   assert.equal(p.isIOS, true);
   assert.equal(p.isMobile, true);
   assert.equal(p.constrained, true);
-  assert.equal(p.prefetchHops, 4); // K2 is 3 hops from Palace
-  assert.equal(p.cacheZones.normal, 1);
+  assert.equal(p.prefetchHops, 1); // current + adjacent only; K3/K4 must not stack on K2
+  assert.equal(p.cacheZones.normal, 0);
   assert.equal(p.cacheZones.critical, 0);
+  assert.equal(p.graceMs, 0);
   assert.equal(p.maxTextureSize, 1024);
   // Capable iPhone (6 cores, unknown memory treated as 8) starts at medium, not locked low.
   assert.equal(p.gfxTier, 'medium');
@@ -32,7 +33,7 @@ test('iPadOS desktop-UA with touch is still treated as iOS for residency', () =>
   const p = D.detect({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', maxTouchPoints: 5, hardwareConcurrency: 8 });
   assert.equal(p.isIOS, true);
   assert.equal(p.constrained, true);
-  assert.equal(p.prefetchHops, 4);
+  assert.equal(p.prefetchHops, 1);
 });
 
 test('crash downgrade is session-only and does not rewrite a quality preference', () => {

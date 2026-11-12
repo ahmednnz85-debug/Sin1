@@ -37,7 +37,9 @@
     // and K3/K4 start when the player is a couple of rooms closer. Prefetching
     // all three from the hall (hops 8 + cache 3) kept 118 textures / ~295 MB
     // resident and iOS Safari killed the tab in K2.
-    const prefetchHops = constrained ? 4 : 7;
+    // Phone: only the current room and 1-hop neighbours. Prefetch 4 stacked
+    // K2+K3+K4 (K4 is 4 hops from K2) and the peak reached 704 MB.
+    const prefetchHops = constrained ? 1 : 7;
     // Visual AUTO tier matches the pre-existing detect: it is a starting
     // point only. The frame-time governor scales resolution up and down
     // with hysteresis; we never lock a phone onto a lower look.
@@ -53,7 +55,7 @@
       deviceMemory: mem,
       cores: cores,
       prefetchHops: prefetchHops,
-      cacheZones: constrained ? { normal: 1, watch: 0, critical: 0 } : { normal: 3, watch: 2, critical: 0 },
+      cacheZones: constrained ? { normal: 0, watch: 0, critical: 0 } : { normal: 3, watch: 2, critical: 0 },
       textureBudget: constrained ? 72 : 180,
       geometryBudget: constrained ? 180 : 420,
       // Hard caps (MB). The streamer evicts, then defers, rather than exceed.
@@ -67,7 +69,8 @@
       k4TextureSize: constrained ? 512 : 1024,
       uploadsPerFrame: constrained ? 2 : 3,
       uploadMsPerFrame: constrained ? 3 : 4,
-      graceMs: constrained ? 8000 : 20000,
+      // Immediate evict of non-adjacent rooms on a phone so K3/K4 never stack on K2.
+      graceMs: constrained ? 0 : 20000,
       maxConcurrentLoads: 1,
       gfxTier: gfxTier
     };

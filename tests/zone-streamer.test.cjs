@@ -248,3 +248,53 @@ test('forceLoad pumps step so a complete zone is not left unrevealed', () => {
   assert.match(body, /rec\.lastWanted = now\(\)/);
   assert.match(body, /step\(rec, now\(\), 0\)/);
 });
+
+test('non-adjacent zones evict immediately under a 650 MB budget', async () => {
+  const scene = obj('scene');
+  const gA = obj('A'); const gB = obj('B'); const gC = obj('C');
+  scene.add(gA); scene.add(gB); scene.add(gC);
+  const R = renderer();
+  const s = Z.create({
+    graceMs: 8000, cacheZones: { normal: 2, watch: 0, critical: 0 },
+    processBudgetMB: 650, gpuBudgetMB: 0, cpuBudgetMB: 0,
+    uploadsPerFrame: 8, uploadMsPerFrame: 100, maxConcurrentLoads: 3
+  });
+  let unloaded = [];
+  function reg(id) {
+    s.register({
+      id, prefetchHops: 1,
+      load(api) { api.add(mesh(id + '-m', tex())); api.done(); },
+      isComplete() { return true; },
+      unload() { unloaded.push(id); }
+    });
+  }
+  reg('A'); reg('B'); reg('C');
+  s.attach({ renderer: R, scene, camera: {}, groupOf: id => ({ A: gA, B: gB, C: gC }[id]) });
+  // Load A then B (adjacent).
+  async function pump(cur, dist, vis) {
+    for (let i = 0; i < 12; i++) {
+      s.update({ current: cur, distances: dist, visible: vis || new Set(), prepared: new Set() });
+      await tick();
+    }
+  }
+  await pump('A', new Map([['A', 0], ['B', 1], ['C', 3]]), new Set(['A']));
+  await pump('B', new Map([['A', 1], ['B', 0], ['C', 2]]), new Set(['B']));
+  assert.strictEqual(s.status('A'), 'ready', 'adjacent A stays');
+  assert.strictEqual(s.status('B'), 'ready');
+  // Walk to C: C is 2 hops from B, A is 3 hops. Both A and B must drop
+  // immediately (grace 8 s is ignored under the 650 bar) so C does not stack.
+  await pump('C', new Map([['A', 3], ['B', 2], ['C', 0]]), new Set(['C']));
+  assert.strictEqual(s.status('A'), 'cold', 'non-adjacent A evicted, got ' + s.status('A'));
+  assert.strictEqual(s.status('B'), 'cold', 'non-adjacent B evicted, got ' + s.status('B'));
+  assert.ok(unloaded.indexOf('A') >= 0 && unloaded.indexOf('B') >= 0);
+  assert.ok(s.status('C') === 'ready' || s.status('C') === 'loading' || s.status('C') === 'uploading' || s.status('C') === 'compiling');
+});
+
+test('forceLoad and current-room update pump step so a complete zone reveals quickly', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
+  assert.match(src, /function evictNonAdjacent/);
+  assert.match(src, /rec\.isCurrent[\s\S]*step\(rec, t, 0\)/);
+  assert.match(src, /tight && far/);
+});
