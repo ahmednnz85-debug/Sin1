@@ -672,8 +672,8 @@
       idle.forEach(function (rec, i) {
         const overCache = idle.length - i > cache;
         const far = rec.hops == null || rec.hops > 1;
-        if (level === 'critical' || (tight && far) || (overCache && t - rec.leftAt >= o.graceMs)) {
-          evict(rec, level === 'critical' ? 'critical memory' : (tight && far ? 'non-adjacent' : 'lru'));
+        if (level === 'critical' || tight || (overCache && t - rec.leftAt >= o.graceMs)) {
+          evict(rec, level === 'critical' ? 'critical memory' : (tight ? (far ? 'non-adjacent' : 'prepared-before-current') : 'lru'));
           evicted++;
         }
       });
@@ -696,12 +696,36 @@
     function forceEvict(id) { const r = zones.get(id); return r && r.state !== 'cold' ? evict(r, 'forced') : 0; }
     // Player is standing in (or was teleported into) this room. Start it
     // even if the hop map or budget defer would have left it cold.
+    // The previous current room keeps isCurrent=true until update() runs.
+    // forceLoad of the new room must clear that flag first, otherwise
+    // evict() and evictNonAdjacent skip it (playthrough-5: K2 stayed
+    // resident through K3 and K4 and peaked at 693 MB).
+    function markCurrent(id) {
+      const t = now();
+      zones.forEach(function (r) {
+        const cur = r.id === id;
+        r.isCurrent = cur;
+        if (cur) { r.lastWanted = t; r._currentUntil = t + 2000; r.leftAt = 0; }
+        else {
+          // `visible` was last computed in the previous room. It must not
+          // protect that room from eviction when the player has already
+          // moved (playthrough-5: K2 stayed visible=true through K3/K4).
+          // update() will re-flag anything actually in the new frustum.
+          r.visible = false;
+        }
+      });
+    }
     function evictNonAdjacent(why) {
+      const tight = o.processBudgetMB > 0 && o.processBudgetMB <= 650;
       let n = 0;
       zones.forEach(function (r) {
         if (r.state === 'cold') return;
         if (r.isCurrent || r.visible) return;
-        if (r.hops != null && r.hops <= 1) return;
+        // Under the 650 bar, hop counts may be stale (still 0 from the
+        // previous current room) and must not keep a neighbour resident
+        // while the new current room starts. Evict every non-visible,
+        // non-current zone.
+        if (!tight && r.hops != null && r.hops <= 1) return;
         evict(r, why || 'non-adjacent');
         // These evicts free the budget for the incoming room, same as evictToFit.
         stats.budgetEvictions++;
@@ -712,12 +736,10 @@
     function forceLoad(id) {
       const rec = zones.get(id);
       if (!rec) return 'unregistered';
-      // Mark current first so evictForCurrent cannot unload the room the
-      // player just entered (playthrough-4 first K4 was evicted mid-parse
-      // and re-dressed five times over 60 s).
-      rec.isCurrent = true;
-      rec.lastWanted = now();
-      rec._currentUntil = now() + 2000;
+      // Mark current first — and clear isCurrent on every other zone —
+      // so evictForCurrent cannot unload the room the player just entered
+      // and cannot skip the room they just left (playthrough-5 peak 693).
+      markCurrent(id);
       evictForCurrent(incoming(rec));
       if (rec.state === 'cold') {
         evictToFit(incoming(rec));

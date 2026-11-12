@@ -296,7 +296,8 @@ test('forceLoad and current-room update pump step so a complete zone reveals qui
   const src = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
   assert.match(src, /function evictNonAdjacent/);
   assert.match(src, /rec\.isCurrent[\s\S]*step\(rec, t, 0\)/);
-  assert.match(src, /tight && far/);
+  assert.match(src, /function markCurrent/);
+  assert.match(src, /tight \? \(far \? 'non-adjacent'/);
 });
 
 
@@ -396,11 +397,22 @@ test('K1 to K2 to K3 to K4 cold first visit: reveal under 10s and peak under 650
   assert.strictEqual(s.status('K2'), 'ready');
   assert.ok(peak <= 650, 'peak at K2 is ' + peak);
 
+  // Playthrough teleport calls forceLoad(K3) BEFORE update() runs, so K2
+  // is still flagged isCurrent. That must not keep K2 resident (PT5 peak 693).
+  s.forceLoad('K3');
+  assert.strictEqual(s.status('K2'), 'cold', 'forceLoad K3 must evict K2 even while K2 isCurrent is stale, got ' + s.status('K2'));
+  assert.ok(peak <= 650, 'peak after forceLoad K3 is ' + peak + ' (K2 still stacked)');
+
   const t3 = await visit('K3');
   assert.ok(t3 <= 10000, 'K3 first visit ' + t3 + ' ms');
   assert.strictEqual(s.status('K3'), 'ready', 'K3 status ' + s.status('K3'));
   assert.strictEqual(s.status('K2'), 'cold', 'K2 must be evicted at K3, got ' + s.status('K2'));
   assert.ok(peak <= 650, 'peak at K3 is ' + peak + ' (K2+K3 stacked)');
+
+  s.forceLoad('K4');
+  assert.strictEqual(s.status('K3'), 'cold', 'forceLoad K4 must evict K3 even while K3 isCurrent is stale, got ' + s.status('K3'));
+  assert.strictEqual(s.status('K2'), 'cold', 'K2 must stay evicted at forceLoad K4');
+  assert.ok(peak <= 650, 'peak after forceLoad K4 is ' + peak);
 
   // Mid-load flicker: one update with current=Palace, then back to K4.
   // Must not evict K4 and restart the  parse (the 60 s non-reveal).
