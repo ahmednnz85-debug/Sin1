@@ -164,6 +164,7 @@
   let palaceEnv = null;
   let fireMats = [];
   let lodPacks = [];
+  let instanceWallPacks = [];
   let propCullList = [];
   let fireList = [];
   let wingRuntime = null;
@@ -1673,7 +1674,7 @@
     ramp = null;
     flames = [];
     fireMats = [];
-    lodPacks = [];
+    lodPacks = []; instanceWallPacks = [];
     fireList = [];
     lightAssignAt = 0;
   }
@@ -1841,7 +1842,17 @@
     near.name = 'lod-near';
     far.name = 'lod-far';
     group.add(near, far);
-    lodPacks.push({ near: near, far: far, matrices: matrices, local: locals, limitH: limitH });
+    if (geo0 && !geo0.boundingSphere && geo0.computeBoundingSphere) geo0.computeBoundingSphere();
+    if (geo1 && !geo1.boundingSphere && geo1.computeBoundingSphere) geo1.computeBoundingSphere();
+    const ns = geo0 && geo0.boundingSphere;
+    const fs = geo1 && geo1.boundingSphere;
+    lodPacks.push({
+      near: near, far: far, matrices: matrices, local: locals, limitH: limitH,
+      nearCenter: ns ? ns.center.clone() : new THREE.Vector3(),
+      nearRadius: ns ? ns.radius : 1,
+      farCenter: fs ? fs.center.clone() : new THREE.Vector3(),
+      farRadius: fs ? fs.radius : 1
+    });
   }
 
   function makePalaceEnv(renderer) {
@@ -1950,16 +1961,70 @@
     material.customProgramCacheKey = function () { return 'palaceMarble7'; };
   }
 
+  function instanceCullOn() {
+    try { return !(typeof window !== 'undefined' && window.__sinNoInstanceCull); } catch (_) { return true; }
+  }
+  function cameraFrustum(cam) {
+    if (!cam || !cam.projectionMatrix || !cam.matrixWorldInverse) return null;
+    try { cam.updateMatrixWorld(); } catch (_) {}
+    const fr = cameraFrustum._fr || (cameraFrustum._fr = new THREE.Frustum());
+    const m = cameraFrustum._m || (cameraFrustum._m = new THREE.Matrix4());
+    m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    fr.setFromProjectionMatrix(m);
+    return fr;
+  }
+  function instanceInFrustum(frustum, worldMat, instMat, geoCenter, geoRadius) {
+    const tmp = instanceInFrustum._tmp || (instanceInFrustum._tmp = new THREE.Matrix4());
+    const sphere = instanceInFrustum._s || (instanceInFrustum._s = new THREE.Sphere());
+    const c = instanceInFrustum._c || (instanceInFrustum._c = new THREE.Vector3());
+    tmp.multiplyMatrices(worldMat, instMat);
+    c.copy(geoCenter || instanceInFrustum._z || (instanceInFrustum._z = new THREE.Vector3()));
+    c.applyMatrix4(tmp);
+    const e = tmp.elements;
+    const sx = Math.sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]);
+    const sy = Math.sqrt(e[4] * e[4] + e[5] * e[5] + e[6] * e[6]);
+    const sz = Math.sqrt(e[8] * e[8] + e[9] * e[9] + e[10] * e[10]);
+    const scale = Math.max(sx, sy, sz, 1e-6);
+    sphere.center.copy(c);
+    // Conservative: geo sphere * max axis scale, plus a 0.5 m pad so a
+    // grazing edge never pops (look must be unchanged).
+    sphere.radius = (geoRadius || 1) * scale + 0.5;
+    return frustum.intersectsSphere(sphere);
+  }
+  function compactInstanced(mesh, matrices, worldMat, frustum, geoCenter, geoRadius) {
+    if (!mesh || !matrices) return 0;
+    let n = 0;
+    if (!frustum) {
+      n = matrices.length;
+      for (let i = 0; i < n; i++) mesh.setMatrixAt(i, matrices[i]);
+    } else {
+      for (let i = 0; i < matrices.length; i++) {
+        if (instanceInFrustum(frustum, worldMat, matrices[i], geoCenter, geoRadius)) {
+          mesh.setMatrixAt(n++, matrices[i]);
+        }
+      }
+    }
+    mesh.count = n;
+    mesh.visible = n > 0;
+    if (n) mesh.instanceMatrix.needsUpdate = true;
+    return n;
+  }
   function updateLODs(cam) {
-    if (!cam || !group || !lodPacks.length) return;
+    if (!cam || !group) return;
     group.updateMatrixWorld(true);
     const wp = updateLODs._wp || (updateLODs._wp = new THREE.Vector3());
+    const frustum = instanceCullOn() ? cameraFrustum(cam) : null;
+    const worldMat = group.matrixWorld;
     for (let p = 0; p < lodPacks.length; p++) {
       const pack = lodPacks[p];
       const lim = (pack.limitH || CONFIG.lodDistanceH) * H;
       const cull = (pack.cullH != null ? pack.cullH : CONFIG.cullDistanceH) * H;
       let ni = 0;
       let fi = 0;
+      const nCenter = pack.nearCenter;
+      const nRad = pack.nearRadius;
+      const fCenter = pack.farCenter;
+      const fRad = pack.farRadius;
       for (let i = 0; i < pack.local.length; i++) {
         wp.copy(pack.local[i]);
         group.localToWorld(wp);
@@ -1967,6 +2032,14 @@
         if (dist > cull) {
           if (pack.nearState) pack.nearState[i] = false;
           continue; // distance cull: draw neither near nor far LOD
+        }
+        if (frustum) {
+          const rad = Math.max(nRad || 0, fRad || 0);
+          const ctr = nCenter || fCenter;
+          if (!instanceInFrustum(frustum, worldMat, pack.matrices[i], ctr, rad)) {
+            if (pack.nearState) pack.nearState[i] = false;
+            continue;
+          }
         }
         if (!pack.nearState) pack.nearState = new Array(pack.local.length).fill(false);
         const wasNear = pack.nearState[i];
@@ -1981,6 +2054,24 @@
       pack.far.visible = fi > 0;
       if (ni) pack.near.instanceMatrix.needsUpdate = true;
       if (fi) pack.far.instanceMatrix.needsUpdate = true;
+    }
+    // Per-instance frustum for wall / back-wall packs (same look, fewer tris).
+    if (instanceWallPacks && instanceWallPacks.length) {
+      for (let w = 0; w < instanceWallPacks.length; w++) {
+        const pack = instanceWallPacks[w];
+        compactInstanced(pack.mesh, pack.matrices, worldMat, frustum, pack.center, pack.radius);
+      }
+    }
+    if (frustum && !updateLODs._loggedCull) {
+      updateLODs._loggedCull = true;
+      try {
+        const bits = lodPacks.map(function (pk) {
+          return (pk.near && pk.near.name || 'lod') + ' ' + (pk.matrices ? pk.matrices.length : 0) + '->' + ((pk.near && pk.near.count) || 0) + '+' + ((pk.far && pk.far.count) || 0);
+        }).concat(instanceWallPacks.map(function (pk) {
+          return (pk.mesh && pk.mesh.name || 'wall') + ' ' + (pk.matrices ? pk.matrices.length : 0) + '->' + ((pk.mesh && pk.mesh.count) || 0);
+        }));
+        console.info('[palace load] instance-cull', bits.join(' | '));
+      } catch (_) {}
     }
     // Distance-cull non-instanced prop roots (look unchanged at play distances).
     if (propCullList && propCullList.length) {
@@ -2054,7 +2145,7 @@
     slotModes = [];
     overlapNotes = [];
     ramp = null;
-    lodPacks = [];
+    lodPacks = []; instanceWallPacks = [];
     propCullList = [];
     fireList = [];
     fireMats = [];
@@ -2130,6 +2221,13 @@
     wallMats.forEach(function (m, i) { wallsMesh.setMatrixAt(i, m); });
     wallsMesh.instanceMatrix.needsUpdate = true;
     group.add(wallsMesh);
+    if (wallSrc.geo && !wallSrc.geo.boundingSphere && wallSrc.geo.computeBoundingSphere) wallSrc.geo.computeBoundingSphere();
+    const wallBs = wallSrc.geo && wallSrc.geo.boundingSphere;
+    instanceWallPacks.push({
+      mesh: wallsMesh, matrices: wallMats,
+      center: wallBs ? wallBs.center.clone() : new THREE.Vector3(),
+      radius: wallBs ? wallBs.radius : 4
+    });
     slotModes.push({ id: 'wall', count: wallMats.length, mode: 'real' });
     mark('phase walls n=' + wallMats.length);
 
@@ -2443,6 +2541,13 @@
       mats.forEach(function (m, i) { fill.setMatrixAt(i, m); });
       fill.instanceMatrix.needsUpdate = true;
       group.add(fill);
+      if (wallSrc.geo && !wallSrc.geo.boundingSphere && wallSrc.geo.computeBoundingSphere) wallSrc.geo.computeBoundingSphere();
+      const fillBs = wallSrc.geo && wallSrc.geo.boundingSphere;
+      instanceWallPacks.push({
+        mesh: fill, matrices: mats.slice(),
+        center: fillBs ? fillBs.center.clone() : new THREE.Vector3(),
+        radius: fillBs ? fillBs.radius : 4
+      });
       slotModes.push({ id: 'backFill', count: mats.length, mode: 'real' });
       const seamMat = new THREE.MeshStandardMaterial({ color: 0x4a3824, roughness: 0.72, metalness: 0.18 });
       if (palaceEnv) { seamMat.envMap = palaceEnv; seamMat.envMapIntensity = 0.2; }
@@ -4396,6 +4501,7 @@
           const n = prepareHallFrustumCull(group);
           console.info('[palace load] hall-frustum-cull', n);
         } catch (_) {}
+        try { if (ctx && ctx.camera) updateLODs(ctx.camera); } catch (_) {}
         try { censusPendingFrame(ctx, 'pre-DONE'); } catch (ce) { try { console.info('[palace load] frame-census-fail', String(ce).slice(0, 160)); } catch (_) {} }
         state = 'DONE';
         fadeT = 0;
