@@ -4,7 +4,7 @@ Branch `fix/ios-black-screen-after-newgame`. All times below are **Asia/Baghdad 
 
 **Repo hygiene:** `evidence/` in this PR is this report plus compact CSV/JSON logs only (~60 KB). Screenshots and raw tees live under `/workspace/Sin1-report/now/` (not in the game repo). Lab-only harness code stays under `/workspace/harness`, outside the repo. `tools/room-budget-report.json` is not in this PR.
 
-**Final cache-bust:** `zone-streamer.js?v=20261112ios15`, `wings.js?v=20261112ios38`, `palaceInterior.js?v=hall29&fix=20261112r37`, `outdoor-perf.js?v=20261112r9`, `wing-architecture.js?v=20261112bake3`.
+**Final cache-bust:** `zone-streamer.js?v=20261112ios16`, `wings.js?v=20261112ios38`, `palaceInterior.js?v=hall29&fix=20261112r37`, `outdoor-perf.js?v=20261112r9`, `wing-architecture.js?v=20261112bake3`.
 
 ## 1. Pre-render stall and five consecutive palace entries
 
@@ -169,10 +169,20 @@ This is a real budget gap: a ~500 MB resident hall plus a 2×K4 wing does not fi
 
 ---
 
+## visBefore / pop-in gate (fixed)
+
+`sawVisibleBeforeComplete` with empty `visDress` on the final visit row is expected: `visDress` is only collected while `!complete`, and the row is snapped after complete+revealed. The flag itself was set mid-wait, so it was a real gate leak — named `K2-*` / `K3-*` meshes (leftover shells after evict, or dress added without `hideUntilReady`) were world-visible while `STREAM_EXPECT` was still incomplete. The 10-min stick sprint at `bf275c3` had visBefore 0 because `roomFitsAlone` admitted immediately and the incomplete window was often already closed; the stricter `canStart` (needed for the 650 cap) made that window long enough to observe the leak. `setFacing` is unrelated.
+
+**Fix (`zone-streamer.js`, bust ios16):** while a zone is not `ready`, `hideObject` is applied every `step`/`update`, and leftover shells are re-hidden on evict. The door still waits on `state === 'ready'`. A room is never world-visible before the atomic reveal, regardless of budget. New unit test covers untagged meshes + leftover shells. Suite **183 pass, 0 fail** (canStart tests unchanged).
+
+**Teleport all-wings** (00:57–00:59 Asia/Baghdad, `evidence/visbefore-fix/teleport.json`): **visBefore 0**, revealOver 0, truePeak **592 MB**, 16/16 complete+revealed, 0 errors, 0 context loss. K2 6,175 ms; K3 2,410; K4 2,215. Sealed wall still holds (`minLz: 0.859`). `pass: true`. Previously on `1c693da` this same tour had visBefore 2 (K2, K3).
+
+**Stick walk** (King’s wing → all wings, 01:01–01:12 Asia/Baghdad, `evidence/visbefore-fix/stick.json`): SPRINT_SKIP_IDLE=1, SPRINT_SKIP_OUTDOOR=1 (sealed wall, by design), SPRINT_QA_APPROACH=1. Loop 1 covered all 32 tour stops (Palace, King’s wing K1–K5 and corridors, REAR, Temple T1–T5, mid-palace, Living L1–L4, return Palace) in **578 s**. **Every visit ok, complete, and revealed.** **visBefore 0** — the harness would FAULT and abort mid-wait (as it did on the pre-gate K3 walk); no FAULT fired. **truePeak 600.5 MB**. K2 **4,060 ms** at proc 590.4; K3 **1,449 ms** at proc 545.2 (the previous regression rooms); K4 4 ms. revealOver 0 (max 4,060 ms). **0** console-error lines and **0** context-loss flags in the harness log. The harness started loop 2 only because walkElapsed (578 s) was just under the 600 s `LOOP_MS`; loop 1 already is the all-wings stick verification. Official end-of-sprint JSON is written when the process exits.
+
 ## Not done (honest)
 
-- **Extensibility under 650:** live 2×K4 wing peaked at **674.6**, X2 reveal **10.5 s**, visBefore 7. Eviction after X worked (proc 483). Not fixed.
-- **visBefore on teleport (and one stick K3 sample):** 10-min stick sprint had 0; teleport tours still see K2/K3 (and the heavy X rooms). Not claimed as passing.
+- **Extensibility under 650:** live 2×K4 wing (pre-gate) peaked at **674.6**, X2 reveal **10.5 s**, visBefore 7. Eviction after X worked (proc 483). Not re-run after the hide-until-ready gate in this window (deadline). The new gate would keep an incomplete room hidden (door waits) regardless of budget, but peak would still exceed 650 without shrinking assets or evicting the hall — a real budget gap, not a gate leak. Not fixed.
+- ~~visBefore on teleport~~ **Fixed** on this head: see “visBefore / pop-in gate” below. Extensibility visBefore on a 2×K4 wing was measured before this gate and is not re-run.
 - **City reload / palace exit:** **not a remaining task.** Sealed one-way by design. No void is possible because the player cannot leave.
 - **Data-only dress for a new wing:** adding 2×K4 required a temporary dress helper; it was removed, not generalized.
 - Official 10-min standing idle was 90 s (passed). A 3-minute hall idle was proven earlier.

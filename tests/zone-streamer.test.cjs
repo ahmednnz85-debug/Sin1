@@ -439,3 +439,51 @@ test('K1 to K2 to K3 to K4 cold first visit: reveal under 10s and peak under 650
   assert.strictEqual(loads.K4, 1, 'K4 must load once, not evict-and-retry (loads=' + loads.K4 + ')');
   assert.ok(peak <= 650, 'peak at K4 is ' + peak);
 });
+
+test('untagged meshes and leftover shells stay hidden until the atomic reveal (no visBefore)', async () => {
+  const scene = obj('scene');
+  const g = obj('K3');
+  // Leftover shell from a previous visit: visible, named K3-*, no hide flag.
+  const shell = mesh('K3-map-wall-far', tex());
+  shell.visible = true;
+  g.add(shell);
+  scene.add(g);
+  const R = renderer();
+  const s = Z.create({ uploadsPerFrame: 8, uploadMsPerFrame: 100 });
+  let complete = false;
+  s.register({
+    id: 'K3',
+    isComplete() { return complete; },
+    load(api) {
+      const leak = mesh('K3-table', tex());
+      leak.visible = true;
+      leak.userData.streamDress = true;
+      // Bypass api.add so the mesh is not auto-hidden — the gate must still catch it.
+      g.add(leak);
+    },
+    ownsObject(ch) { return !!(ch.userData && ch.userData.streamDress); }
+  });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: () => g });
+  const view = { current: 'K3', distances: new Map([['K3', 0]]), visible: new Set(['K3']) };
+  s.update(view);
+  await tick();
+  s.update(view);
+  assert.ok(s.status('K3') === 'loading' || s.status('K3') === 'uploading' || s.status('K3') === 'compiling');
+  assert.ok(g.children.every(m => m.visible === false), 'shell + untagged dress hidden while incomplete');
+  complete = true;
+  let frames = 0;
+  while (s.status('K3') !== 'ready' && frames < 25) {
+    s.update(view);
+    await tick();
+    frames++;
+  }
+  assert.strictEqual(s.status('K3'), 'ready');
+  assert.ok(g.children.every(m => m.visible === true), 'atomic reveal shows the full set');
+
+  s.forceEvict('K3');
+  assert.strictEqual(s.status('K3'), 'cold');
+  assert.strictEqual(shell.visible, false, 'leftover shell is hidden after evict');
+  // Dress is gone; shell remains and must stay hidden while cold.
+  s.update({ current: 'Palace', distances: new Map([['K3', 3]]) });
+  assert.strictEqual(shell.visible, false, 'leftover shell stays hidden while the zone is cold');
+});

@@ -487,6 +487,10 @@
         if (p && typeof p.then === 'function') p.then(fin, fin); else fin();
       }
       if (rec.state === 'compiling' && rec.compileDone) reveal(rec);
+      // Gate: a room is never world-visible before the atomic reveal, even
+      // if a mesh was added without hideUntilReady or a leftover shell
+      // stayed visible after eviction. The door waits on state === 'ready'.
+      if (rec.state !== 'ready' && g) hideObject(g);
     }
     function reveal(rec) {
       const g = group(rec);
@@ -548,7 +552,13 @@
       uploadQueue = uploadQueue.filter(j => j.zone !== rec);
       rec.pending.clear();
       try { if (rec.spec.unload) rec.spec.unload(apiFor(rec)); } catch (e) { console.warn('zone unload', rec.id, e); }
-      if (g) g.userData.dressReady = false;
+      if (g) {
+        g.userData.dressReady = false;
+        // Shells are not in `doomed` (ownsObject is streamDress only).
+        // They were revealed on the previous visit; hide them so the
+        // next load cannot show an incomplete room.
+        hideObject(g);
+      }
       rec.state = 'cold'; rec.leftAt = 0; rec.done = false;
       stats.evictions++;
       note('unload', rec.id + ' evicted (' + why + ', ' + doomed.length + ' objects)');
@@ -676,6 +686,14 @@
       zones.forEach(function (rec) {
         if (!rec.isCurrent) return;
         if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, t, 0);
+      });
+      // Cold or deferred rooms can still have leftover visible shells
+      // (evicted dress, resident architecture). Keep them hidden until
+      // the next atomic reveal — visBefore must stay 0 regardless of budget.
+      zones.forEach(function (rec) {
+        if (rec.state === 'ready') return;
+        const gg = group(rec);
+        if (gg && !gg.userData.dressReady) hideObject(gg);
       });
       // Eviction: never protected zones; LRU beyond cache size after the grace
       // period, at once under critical memory pressure.
