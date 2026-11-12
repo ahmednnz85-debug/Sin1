@@ -138,12 +138,20 @@
     const t = preloaded.get(url);
     return t && t.isTexture ? t : null;
   }
-  function flushDeferredLoads() {
+  async function flushDeferredLoads() {
     state.building = false;
+    let i = 0;
+    const n = deferredLoads.length;
+    try { console.info('[palace load] deferred-start', n); } catch (_) {}
     while (deferredLoads.length) {
       const run = deferredLoads.shift();
+      const t0 = performance.now();
       try { run(); } catch (e) { console.error('Wing model setup failed', e); }
+      try { console.info('[palace load] deferred', i, Math.round(performance.now() - t0) + 'ms', 'left', deferredLoads.length); } catch (_) {}
+      i++;
+      await yieldWing();
     }
+    try { console.info('[palace load] deferred-end', n); } catch (_) {}
   }
   function withMeshopt(go) {
     const D = window.MeshoptDecoder;
@@ -914,22 +922,45 @@
     state.k1ModelColliderCount = added;
     rebuildSpatial();
   }
-  function buildVisuals(layout) {
+  async function buildVisuals(layout) {
+    const tV = performance.now();
+    function vis(name) {
+      try { console.info('[palace load] visuals-' + name, Math.round(performance.now() - tV) + 'ms'); } catch (_) {}
+    }
+    vis('start');
+    await yieldWing();
+    vis('after-first-yield');
     state.floorSupport = [];
     state.wallMat = gridMaterial(0x8d7a63, 0.9, 0x1c1510);
     state.darkMat = new THREE.MeshStandardMaterial({ color: 0x070706, roughness: 1, emissive: 0x010101, emissiveIntensity: 0.1 });
     state.sealMat = new THREE.MeshStandardMaterial({ color: 0xa58a61, roughness: 0.72, metalness: 0.18 });
     state.materials.push(state.darkMat, state.sealMat);
-    const capGeos = state.caps.map(c => extrudeSolids(c.solids, c.door.height, MAX_H));
+    vis('materials');
+    const tCaps = performance.now();
+    const capGeos = (state.caps || []).map(function (c, i) {
+      const t1 = performance.now();
+      const g = extrudeSolids(c.solids, c.door.height, MAX_H);
+      const dt = performance.now() - t1;
+      if (dt > 16) {
+        try { console.info('[palace load] visuals-slow-cap', i, c.door && c.door.id, Math.round(dt) + 'ms'); } catch (_) {}
+      }
+      return g;
+    });
+    vis('caps ' + Math.round(performance.now() - tCaps) + 'ms n=' + capGeos.length);
+    await yieldWing();
     // The palace's own decorated wall modules already fill the band |x| <= hall half-width + wall thickness.
     // Drawing the wing threshold walls inside that band makes their flat plaster faces poke through the
     // relief around the open arches. Colliders still use the full baseWall, so walking limits are unchanged.
     const hwv = state.hall.width * 0.5, wtv = state.hall.wallThickness || 0;
     const palaceBand = solid(polyRect(-hwv - wtv - 0.02, -0.5, (hwv + wtv + 0.02) * 2, state.hall.length + 1));
     const visualWall = difference(state.baseWall, palaceBand);
+    vis('wall-diff');
+    await yieldWing();
     state.wallGeometry = mergeGeometries([extrudeSolids(visualWall, 0, MAX_H)].concat(capGeos));
     wingMark('wings wall mesh');
     state.wallMesh = mesh(state.wallGeometry, state.wallMat, 'wings-unified-watertight-walls');
+    vis('wall-mesh');
+    await yieldWing();
     const floorMats = {
       Kings: gridMaterial(0x80705a, 0.94, 0x1d1710), Temple: gridMaterial(0x65756e, 0.94, 0x121c18),
       Library: gridMaterial(0x756b7e, 0.94, 0x19151d), Shared: gridMaterial(0x746653, 0.94, 0x19150f)
@@ -962,8 +993,10 @@
       const g = extrudeSolids(skirt, -0.25, wi * 0.002);
       state.floorMeshes.push(mesh(g, floorMats[wing], 'wings-floor-' + wing));
     });
+    vis('floors');
+    await yieldWing();
     state.ceilings = [];
-    state.regions.forEach(r => {
+    for (const r of state.regions) {
       const g = new THREE.Group(); g.name = 'wing-region-' + r.id; state.root.add(g); state.regionGroups.set(r.id, g);
       if (r.ceiling !== false) {
         let poly = solid(r.poly);
@@ -986,10 +1019,16 @@
         if (r.id !== 'K4') addFutureZones(r, g);
         if (r.id !== 'K2' && r.id !== 'K3' && r.id !== 'K4') addTorches(r);
       }
-    });
+    }
+    vis('regions');
+    await yieldWing();
     addSpecials();
-    dressCorridors();
+    vis('specials');
+    await yieldWing();
+    await dressCorridors();
+    vis('corridors');
     wingMark('wings corridors');
+    await yieldWing();
     wingMark('wings k2');
     wingMark('wings k3');
     wingMark('wings k4');
@@ -1138,7 +1177,12 @@
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.computeBoundingBox(); g.computeBoundingSphere(); return g;
   }
-  function dressCorridors() {
+  async function dressCorridors() {
+    const tDress = performance.now();
+    function dressLog(name) {
+      try { console.info('[palace load] dress-' + name, Math.round(performance.now() - tDress) + 'ms'); } catch (_) {}
+    }
+    dressLog('start');
     const corridors = state.connectors.filter(r => r.kind === 'corridor' || r.kind === 'gallery');
     const mats = {
       floor: corridorMaterial(CORRIDOR_ASSETS.floor, 0.86),
@@ -1153,11 +1197,12 @@
     state.corridorCeilings = [];
     let claimed = [], claimedDoors = [];
     const plantSlots = [], report = [], torchSlots = [];
-    corridors.forEach(r => {
-      const g = state.regionGroups.get(r.id); if (!g) return;
+    for (const r of corridors) {
+      const g = state.regionGroups.get(r.id); if (!g) continue;
+      const tC = performance.now();
       const piece = difference(difference(solid(r.poly), roomsSolid), claimed);
       claimed = union(claimed, piece);
-      if (!piece.length) return;
+      if (!piece.length) continue;
       // door strips through the 1 m walls that open from this corridor
       let doorStrip = [];
       state.doors.filter(d => d.kind !== 'arch' && d.floorPoly && (d.from === r.id || d.to === r.id)).forEach(d => { doorStrip = union(doorStrip, solid(d.floorPoly)); });
@@ -1172,6 +1217,7 @@
       // door walls may stand inside the corridor footprint, so keep every wall
       // solid touching the corridor and sample only its free (walkable) side
       const wallsHere = intersection(state.baseWall, offset(area, 1.6));
+      const wallsPad = offset(wallsHere, 0.4);
       const freeArea = difference(area, state.baseWall);
       const runs = corridorWallRuns(wallsHere, freeArea);
       const lintelRuns = [], soffits = [];
@@ -1221,7 +1267,7 @@
           for (const shift of [0, 1.0, -1.0]) {
             const ss = s + shift; if (ss < run.s0 + 0.6 || ss > run.s1 - 0.6) continue;
             x = run.a[0] + run.tx * ss - run.nx * off; z = run.a[1] + run.tz * ss - run.nz * off;
-            if (!pointInSolids(x, z, freeArea) || pointInSolids(x, z, offset(wallsHere, 0.4))) continue;
+            if (!pointInSolids(x, z, freeArea) || pointInSolids(x, z, wallsPad)) continue;
             if (state.fires.some(f => Math.hypot(f.x - x, f.z - z) < 0.7)) continue;
             if (torchSlots.some(t => Math.hypot(t.x - x, t.z - z) < 1.1)) continue;
             if (plantSlots.some(p => Math.hypot(p.x - x, p.z - z) < spacing * 0.6)) continue;
@@ -1233,7 +1279,10 @@
         }
       });
       report.push({ id: r.id, wing: r.wing, bbox: r.bbox, width, plants: count, wallRuns: runs.length, lintels: lintels.length });
-    });
+      try { console.info('[palace load] dress-corridor', r.id, Math.round(performance.now() - tC) + 'ms', 'plants', count); } catch (_) {}
+      if (performance.now() - tDress > 45) await yieldWing();
+    }
+    dressLog('corridors-done n=' + corridors.length);
     state.corridorReport = report;
     state.corridorPlants = plantSlots;
     // footprint colliders so the hero walks around the pots
@@ -2437,33 +2486,66 @@
     state.unifiedAmbient = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.78);
     state.unifiedAmbient.name = 'PalaceWingsUnifiedAmbient';
     state.root.add(state.unifiedAmbient);
-    const layout = solveLayout(hall);
+    const Arch = window.PalaceWingArchitecture;
+    const layout = (Arch && Arch.solveLayout) ? Arch.solveLayout(hall) : solveLayout(hall);
     wingMark('wings layout'); phase('layout'); await yieldWing();
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
     state.regions = state.rooms.concat(state.connectors); state.links = layout.links; state.sealed = layout.sealed; state.back = layout.back;
-    prepareArchitecture(layout);
-    wingMark('wings architecture'); phase('architecture'); await yieldWing();
-    // Remove procedural walls inside K1 so the GLB model is the only interior
-    const k1 = state.rooms.find(r => r.id === 'K1');
-    if (k1) {
-      try { console.info('[palace load] k1-diff-start'); } catch (_) {}
-      const tDiff = performance.now();
-      state.baseWall = difference(state.baseWall, solid(k1.poly));
-      state.wallSolid = difference(state.wallSolid, solid(k1.poly));
-      try { console.info('[palace load] k1-diff-end', Math.round(performance.now()-tDiff)+'ms'); } catch (_) {}
+    // Prefer the build-time bake (data/palace-colliders.json): Clipper K1-diff and
+    // the 0.5 m collider grid are identical to a live compute (see palace-collider-bake test)
+    // and cost a JSON parse instead of minutes on the main thread.
+    const baked = state.bake || window.__palaceColliderBake;
+    const useBake = !!(Arch && baked && Arch.hallMatches(baked.hall, hall));
+    if (useBake) {
+      Arch.applyColliderBake(state, baked);
+      try { console.info('[palace load] wings-baked-colliders', (baked.colliders || []).length, 'boxes'); } catch (_) {}
+      wingMark('wings baked-colliders'); phase('baked-colliders'); await yieldWing();
+    } else if (Arch && Arch.computeBake) {
+      try {
+        const why = (!baked) ? 'no-json' : (window.PalaceWingArchitecture && PalaceWingArchitecture.hallMismatchReason
+          ? PalaceWingArchitecture.hallMismatchReason(baked.hall, hall)
+          : 'hall-mismatch');
+        console.info('[palace load] wings-bake-miss', why, JSON.stringify({
+          live: { w: hall.width, l: hall.length, wt: hall.wallThickness, ad: hall.alcoveDepth, H: hall.H, nPass: (hall.passages || []).length },
+          baked: baked && baked.hall && { w: baked.hall.width, l: baked.hall.length, wt: baked.hall.wallThickness, ad: baked.hall.alcoveDepth, H: baked.hall.H, nPass: (baked.hall.passages || []).length }
+        }));
+      } catch (_) {}
+      const tC = performance.now();
+      const live = Arch.computeBake(hall);
+      Arch.applyColliderBake(state, live);
+      try { console.info('[palace load] wings-computed-colliders', Math.round(performance.now() - tC) + 'ms', (live.colliders || []).length); } catch (_) {}
+      wingMark('wings computed-colliders'); phase('computed-colliders'); await yieldWing();
+    } else {
+      prepareArchitecture(layout);
+      wingMark('wings architecture'); phase('architecture'); await yieldWing();
+      const k1 = state.rooms.find(r => r.id === 'K1');
+      if (k1) {
+        try { console.info('[palace load] k1-diff-start'); } catch (_) {}
+        const tDiff = performance.now();
+        state.baseWall = difference(state.baseWall, solid(k1.poly));
+        state.wallSolid = difference(state.wallSolid, solid(k1.poly));
+        try { console.info('[palace load] k1-diff-end', Math.round(performance.now() - tDiff) + 'ms'); } catch (_) {}
+      }
+      await yieldWing();
+      await makeColliders(state.baseWall, state.caps);
+      wingMark('wings colliders'); phase('colliders'); await yieldWing();
     }
-    await yieldWing();
-    await makeColliders(state.baseWall, state.caps);
-    wingMark('wings colliders'); phase('colliders'); await yieldWing();
-    buildVisuals(layout); wingMark('wings visuals'); phase('visuals'); await yieldWing();
+    await buildVisuals(layout); wingMark('wings visuals'); phase('visuals'); await yieldWing();
     rebuildSpatial(); loadRoomDoors(); phase('doors'); await yieldWing();
+    try { console.info('[palace load] wings-after-doors'); } catch (_) {}
     state.built = true;
     if (state.debug) createDebugUI();
+    const tCull = performance.now();
     updateCulling(true);
+    try { console.info('[palace load] wings-cull-1', Math.round(performance.now() - tCull) + 'ms'); } catch (_) {}
+    await yieldWing();
     // Models already downloaded behind the palace loading screen are attached
     // now, in the same order the network callbacks used to run after build.
-    flushDeferredLoads(); phase('deferred');
+    await flushDeferredLoads(); phase('deferred');
+    await yieldWing();
+    const tCull2 = performance.now();
     updateCulling(true); phase('cull-2');
+    try { console.info('[palace load] wings-cull-2', Math.round(performance.now() - tCull2) + 'ms'); } catch (_) {}
     return {
       root: state.root,
       fires: state.fires,
@@ -2661,12 +2743,15 @@
     const isArch = !!(r && r.kind === 'threshold');
     state.palaceNear = id === 'Palace' || isArch;
     const origin = isArch && r.linkRoom ? r.linkRoom : id;
+    try { console.info('[palace load] cull-enter'); } catch (_) {}
     const view = cameraView(state.root.position.x, state.root.position.z);
     let visibleIds, preparedIds, meta = null;
     if (visibilityPlanner && view) {
       // Camera-driven: what the camera can see (through open portals) is drawn,
       // what it could see after a turn stays prepared.
+      const tPlan = performance.now();
       const planned = visibilityPlanner.plan(state.regions, state.links, origin, view, performance.now() / 1000);
+      try { console.info('[palace load] cull-plan', Math.round(performance.now()-tPlan)+'ms', 'vis', planned.visible.size); } catch (_) {}
       if (isArch) planned.visible.add(id);
       meta = planned.meta;
       const candidates = [];
@@ -2703,7 +2788,19 @@
       // (never visible / adjacent / in-frustum zones). Memory pressure is
       // sampled inside the streamer.
       state._streamSets = { origin, visible: visibleIds, prepared: preparedIds };
-      streamZones(origin, visibleIds, preparedIds);
+      // During SETUP the game is still behind the blackout. Starting zone
+      // streams here compiles shaders and walks dress on the main thread and
+      // can freeze WebKit for minutes. PalaceWings.tick runs this after REVEAL.
+      const palacePhase = window.PalaceInterior && PalaceInterior.state && PalaceInterior.state();
+      if (palacePhase !== 'SETUP') {
+        const tS = performance.now();
+        streamZones(origin, visibleIds, preparedIds);
+        try { console.info('[palace load] cull-stream', Math.round(performance.now()-tS)+'ms'); } catch (_) {}
+      } else {
+        try { console.info('[palace load] cull-stream-deferred-until-reveal'); } catch (_) {}
+        try { console.info('[palace load] cull-setup-return'); } catch (_) {}
+        return;
+      }
       const zr = zoneStreamer ? zoneStreamer.report() : null;
       state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: zr ? zr.warmPending : 0, memory: zr ? zr.memory : null, dressFailures: dressFailures.slice(-8), zones: zr };
     } else if (state._streamSets) {
@@ -4075,6 +4172,8 @@
     teleport, overview, runTests, formatReport, cameraTour, metrics, corridorReport: () => state.corridorReport,
     shortestPath,
     assetList, provideAsset, preloadReport,
+    provideBake: function (data) { state.bake = data; if (typeof window !== 'undefined') window.__palaceColliderBake = data; },
+
     get report() { return state.report; },
     get state() { return state; }
   };

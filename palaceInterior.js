@@ -1117,6 +1117,28 @@
     await Promise.all(jobs);
   }
 
+
+  let colliderBakePromise = null;
+  function loadColliderBake() {
+    if (colliderBakePromise) return colliderBakePromise;
+    colliderBakePromise = fetch('data/palace-colliders.json?v=20261112bake3', { cache: 'no-cache' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (j) {
+        try { window.__palaceColliderBake = j; } catch (_) {}
+        if (window.PalaceWings && typeof PalaceWings.provideBake === 'function') PalaceWings.provideBake(j);
+        try { console.info('[palace load] collider-bake-loaded', (j.colliders || []).length, 'boxes'); } catch (_) {}
+        return j;
+      })
+      .catch(function (e) {
+        try { console.warn('[palace load] collider-bake-missing', e && e.message); } catch (_) {}
+        return null;
+      });
+    return colliderBakePromise;
+  }
+
   function loadPalaceAssets() {
     // Refuse to parse/create palace assets until outdoor teardown verified.
     if (teardownPhase < 4) {
@@ -1131,6 +1153,7 @@
     loadPromise = (async function () {
       if (teardownPhase < 4) throw new Error('palace load blocked mid-flight tear=' + teardownPhase);
       loadStage = 0; paint();
+      loadColliderBake();
       await attachExistingPropSpecs();
       attachWingSpecs();
       loadStage = 1; paint();
@@ -3366,9 +3389,11 @@
       const tWings = performance.now();
       mark('phase wings start');
       try { console.info('[palace load] wings-start'); } catch (_) {}
+      const baked = await loadColliderBake();
+      if (baked && typeof PalaceWings.provideBake === 'function') PalaceWings.provideBake(baked);
       wingRuntime = await PalaceWings.build(ctx, {
         width: W, length: L, wallThickness: wallThick, alcoveDepth: 1.15 * H,
-        floorY: gy, passages: CONFIG.PASSAGES
+        floorY: gy, passages: CONFIG.PASSAGES, H: H
       });
       try { console.info('[palace load] wings-end', Math.round(performance.now() - tWings) + 'ms'); } catch (_) {}
       note('wings ' + Math.round(performance.now() - tWings) + 'ms');

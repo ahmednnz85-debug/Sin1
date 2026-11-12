@@ -28,7 +28,7 @@ Memory is bounded by **what is near the player**, not by how many rooms or wings
 Do these in order. After step 4 the new room streams, gates, and evicts like K2–K4. No other file needs a code change.
 
 1. **Give it an id and a place.** Pick a unique region id (for example `K6`) and decide which existing region it connects to (a corridor or another room).
-2. **Add it to the portal graph** in `solveLayout()` in `wings.js`, the same way K1–K5, T1–T5 and L1–L4 are defined:
+2. **Add it to the portal graph** in `solveLayout()` in `wing-architecture.js` (the shared source; `wings.js` calls the same function at runtime), the same way K1–K5, T1–T5 and L1–L4 are defined. After any layout change, rebake the collider file — see “Bake the collider grid” below:
 
 ```js
 const K6 = addRoom(rectRegion('K6', 'Kings', 'My new room',
@@ -77,7 +77,7 @@ At runtime (a mod or a test) the same spec can be registered with `PalaceWings.r
 A wing is a chain of rooms and corridors attached at one point. There is no wing-level streaming API. Repeat section 1 for each room; the engine scales automatically.
 
 1. **Pick a wing name and an attach point.** Example: wing `Queens`, attached to the rear gallery (`REAR`) or to a new hall passage. Five rooms is a typical size (Temple is T1–T5).
-2. **Lay out every region in `solveLayout()`.** For each room: `addRoom(rectRegion(...))`. For each corridor: `addCon(rectRegion(..., 'corridor'))`. Connect them with `door(...)` or `links.push([a, b, id])`. Connect the first corridor to the attach point so the hop graph reaches the hall. Look at the Temple (`T1`…`T5`) or Library (`L1`…`L4`) block in `solveLayout()` and copy that pattern.
+2. **Lay out every region in `solveLayout()` in `wing-architecture.js`.** For each room: `addRoom(rectRegion(...))`. For each corridor: `addCon(rectRegion(..., 'corridor'))`. Connect them with `door(...)` or `links.push([a, b, id])`. Connect the first corridor to the attach point so the hop graph reaches the hall. Look at the Temple (`T1`…`T5`) or Library (`L1`…`L4`) block in `solveLayout()` and copy that pattern.
 3. **Shells are automatic.** `buildVisuals()` builds floors, walls and ceilings for every region in the layout. A new wing of 5 or 15 rooms does not need new shell code.
 4. **Register a streamed zone only for rooms with heavy props.** Light rooms (shell only) need no `WING_ZONES` entry. Heavy rooms each get one entry as in section 1, step 4, with that room's id. Use `priority` so nearer rooms upload first (0, 1, 2, …).
 5. **Doors.** Room doors on a streamed zone stay closed until that zone is `ready`. If two dress rooms are joined by a short open corridor, `streamedTargets()` already treats “one hop past a short corridor” the same way (K1-KC12 holds for K2). You do not add a special case for the new wing.
@@ -86,6 +86,28 @@ A wing is a chain of rooms and corridors attached at one point. There is no wing
 **Quick check that it scaled.** After adding the wing, `PalaceWings.zones()` while you stand in the hall should not list the far rooms of the new wing as `ready` (unless they are within `prefetchHops`). Walk the wing: only the current room, its neighbours, and the prefetch window are resident. Memory after a full walk should look like a single-wing visit, not like “every new room stacked on top.”
 
 ---
+
+
+## 2.1 Bake the collider grid and wall CSG
+
+The palace Clipper difference (cutting K1 out of the procedural walls) and the 0.5 m collider grid are **precomputed at build time**. Runtime palace SETUP loads `data/palace-colliders.json` and skips that work, so entry never blocks the main thread for minutes. Future rooms and wings use the same path.
+
+1. Edit the layout in `solveLayout()` in `wing-architecture.js` (or change hall defaults, the wall module `ارضيات وسقوف/optimized/الجدارية.glb`, or the K1 footprint). That file is the single source: the bake script and the game call the same `computeBake()`.
+2. From the repo root, regenerate the asset:
+
+```
+node tools/bake-palace-colliders.js
+```
+
+   This writes `data/palace-colliders.json` (hall header, wall solids after the K1 difference, floors, door caps, and the merged collider boxes). The bake itself takes a fraction of a second in Node.
+
+3. Commit **both** the source change and the JSON. Do not edit the JSON by hand.
+
+4. CI (`tests/palace-collider-bake.test.cjs`) does two things:
+   - Runs `node tools/bake-palace-colliders.js --check`, which regenerates the bake and **fails if the committed JSON is stale**.
+   - Asserts the committed JSON is **identical** to a live `computeBake()` of the canonical hall (same colliders, solids, grid, and hall header).
+
+At runtime, `PalaceInterior` fetches the JSON during palace asset load and `PalaceWings` applies it when the live hall header matches (width, length, wall thickness, alcove depth, passage positions). If the header does not match — for example a hero-scaled hall that is not the canonical 1.8 m bake — the same `computeBake()` runs once as a fallback so the result stays identical to the bake of that hall. After you add a room or a wing, rebake; otherwise CI will fail and the new walls will not be in the collider file.
 
 ## 3. Add assets to an existing room
 
