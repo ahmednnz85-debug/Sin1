@@ -4,7 +4,7 @@ Branch `fix/ios-black-screen-after-newgame`. All times below are **Asia/Baghdad 
 
 **Repo hygiene:** `evidence/` in this PR is this report plus compact CSV/JSON logs only (~60 KB). Screenshots and raw tees live under `/workspace/Sin1-report/now/` (not in the game repo). Lab-only harness code stays under `/workspace/harness`, outside the repo. `tools/room-budget-report.json` is not in this PR.
 
-**Final cache-bust:** `zone-streamer.js?v=20261112ios14`, `wings.js?v=20261112ios38`, `outdoor-perf.js?v=20261112r8`.
+**Final cache-bust:** `zone-streamer.js?v=20261112ios14`, `wings.js?v=20261112ios38`, `palaceInterior.js?v=hall29&fix=20261113r39`, `outdoor-perf.js?v=20261112r8`.
 
 ## 1. Pre-render stall and five consecutive palace entries
 
@@ -73,7 +73,29 @@ The real sprint is `evidence/sprint-10min/` (`sprint.json`, `visits.csv`). Harne
 
 First-K4 on a cold stick visit: arrived, complete+revealed in 3 ms at proc 514.2, after K2/K3 had been evicted (peak stayed 601.7, the K2 high-water). Eviction is working.
 
-**Harness PASS? is false** solely because **outdoor exit did not clear the portal.** `left: false`, `minZ: 184.65` vs `portal.frontZ: 183.66` (need z &lt; 183.16). The city had already been `releaseCity`’d (`cityReleased: true`). No crash, no context loss, peak still 601.7; the hero remained an occupant and the “back” sample is still inside the hall. The harness walked −Z for 26 s and only closed ~6.8 m — not a game collider failure at the front (they never reached it). This is an outstanding harness/exit gap, not a memory or completeness failure. The user asked for at least one exit to outdoor and back; that bar is **not** met.
+The 10-minute sprint’s own outdoor attempt stopped at `minZ: 184.65` (front is 183.66) and never reached the door. A focused follow-up (below) found that **was** a game collider issue once the hero got there, plus a stick-latch issue on the way back. Both are now fixed and re-tested.
+
+### Outdoor exit and palace re-entry (focused WebKit, 00:25–00:26 Asia/Baghdad)
+
+Log: `evidence/outdoor-exit-reentry.json`. Harness: `/workspace/harness/outdoor-exit-reentry.mjs` (lab-only). Fresh NEW GAME, qaFast approach, then real-time stick. Bars for motion: walk past `front-5`, come back to phase DONE with Palace `complete+revealed`, peak &lt; 650, no context loss, 0 console errors.
+
+**Motion PASS** (`passMotion: true`, overall `pass: false` only because the city did not rebuild):
+
+| Bar | Result |
+| --- | --- |
+| Left past front-5 | **yes**. `minZ: 177.01`, `minLz: -6.65`, `portal.frontZ: 183.66` (front-5 = 178.66). Occupant false, ownsGround false. Exit in 6.6 s. |
+| Re-entry | **yes**. Walked back through the door to `lz: 1.22`, `occupant: true`, `ownsGround: true`, phase **DONE**, Palace **complete+revealed**. Back in 8.8 s. |
+| Memory | **peak 496.6 MB** (under 650) |
+| Context / console | **0** context losses, **0** console errors, **0** page errors, **0** crashes |
+| City rebuilt | **NO**. Outside: `cityReleased: true`, `PalaceExterior` absent, 1 non-palace mesh, 63,081 tris, 1 draw. The ground in front of the palace is a void. |
+
+**Game bugs found and fixed:**
+
+1. **Sealed front wall.** `palaceInterior.js` built a full-width south-wall mesh and a solid collider (`z = -0.4..0.85`, entire hall width). The hero stopped at `lz ≈ 0.86` and could not leave. That was the one-way design comment in `releaseCity` (“the player never returns”), but it is a trap if exit is required. The collider and the visual wall now have a portal-width doorway (jambs + lintel, width = `portal.width` ≈ 4.42 m, height above head). Probe after the fix: **0** collider hits from the hall through `lz = -12` at `lx = 0`.
+
+2. **`setFacing` did not re-latch the stick.** `index.html` `setFacing` set `heroYaw` and `yaw` but left `ctrlYaw` on the previous camera heading. After crossing the threshold the follow camera takes over; a held stick then walked backward and the hero bounced at the occupant boundary (`lz ≈ -0.19`, then `lz ≈ -2.5` after the stoop was widened). `setFacing` now also sets `ctrlYaw` and clears `ctrlStick`. The front stoop (`lz >= -2.5`) stays palace-owned so collision does not flicker at the door, and `palaceBlocked` keeps the doorway walkable after phase DONE.
+
+**Not fixed — city reload.** `releaseCity` still tears down outdoor meshes at palace entry and never restores them (`restoreCity` does not exist; `cityReleased` is never cleared). Re-implementing the city from the inline `index.html` builder is a large feature and was not done in this window. Peak stayed under 650 because the city stayed gone. A future two-way exit must reload the city **after** evicting streamed palace rooms so the 650 bar still holds — hiding instead of disposing would put city + palace in memory together and blow the budget (that is why release exists).
 
 ### Hall→K1 “stuck” and the probe `revealOver=1`
 
@@ -93,10 +115,23 @@ Remaining mutual-recursion / diagnostic-to-diagnostic cycles were scanned and th
 
 ---
 
+## Extensibility test (honest)
+
+The compact **live** test — a temporary 5-room heavy wing, real assets ~2× the heaviest current room, added via `ADDING_CONTENT.md` data only, one WebKit stick/teleport pass, then remove — **was not run**. Outdoor exit/re-entry (game doorway + stick latch) took the remaining deadline window.
+
+What is already in the tree as the data-only scale proof (not a substitute for that live pass):
+
+- `ADDING_CONTENT.md` documents `WING_ZONES` + `solveLayout` + runtime `PalaceWings.registerZone`.
+- `tests/memory-budget.test.cjs`: the test **“hard budget evicts then admits; a 3–5× heavy-room sprint never exceeds the cap”** still **passes**. 4 other cases in that file / `tests/scale-zones.test.cjs` currently **fail** (defer-stall admission and texture-peak growth across three synthetic tours). Those failures were **not introduced by this update** (no streamer or wings.js change in this commit) and were **not investigated** in this window.
+
+No temporary wing was left in the repo.
+
+---
+
 ## Not done at the deadline (honest)
 
-- **Outdoor exit-and-return** on the 10-minute sprint: not achieved (see §5). No crash when standing at the front with the city released.
-- **Extensibility stress test** (temporary 5-room heavy wing, data-only per `ADDING_CONTENT.md`, one pass, then remove): **not run**. Interior sprint + evidence hygiene + this PR update took the remaining window.
-- Official standing-idle in this sprint is **90 s** in the hall and in K4 (both passed, no hang). A 3-minute hall idle was proven on prior attempts.
+- **City reload on exit:** the hero can now walk out past `front-5` and walk back into a DONE, complete palace, under 650, with no context loss — but the **city is a void** (`releaseCity` is still one-way). See §5.
+- **Live 5-room heavy-wing extensibility pass:** not run. See above.
+- Official standing-idle in the 10-minute sprint is **90 s** in the hall and in K4 (both passed, no hang). A 3-minute hall idle was proven on prior attempts.
 
 Not merged.
