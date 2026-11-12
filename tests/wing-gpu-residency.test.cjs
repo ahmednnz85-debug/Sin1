@@ -81,7 +81,7 @@ test('wing culling calls GPU residency synchronization and is camera-driven, dra
   assert.match(culling, /visibilityPlanner\.plan\(planRegions, state\.links, origin, view/);
   assert.doesNotMatch(culling, /distM < 18/);
   assert.doesNotMatch(culling, /renderBudget\.choose\(/);
-  assert.match(culling, /state\.palaceNear = id === 'Palace' \|\| isArch/);
+  assert.match(culling, /state\.palaceNear = id === 'Palace' \|\| isArch \|\| hopsToHall <= 1/);
   // Prepared/visible rooms are streamed through the zone streamer.
   assert.match(culling, /streamZones\(origin, visibleIds, preparedIds\)/);
   // Palace GPU residency is owned by the zone streamer; this module remains for the outdoor city only.
@@ -100,4 +100,21 @@ test('prepared hidden regions are not disposed', () => {
   assert.equal(geo.disposed, 0);
   manager.sync(scene, wingRoot, new Map([['P', room]]), new Set());
   assert.equal(geo.disposed, 1);
+});
+
+test('palace hall group stays visible while the player is an occupant (never corridor-hide)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const pi = fs.readFileSync(path.join(__dirname, '..', 'palaceInterior.js'), 'utf8');
+  assert.match(pi, /if \(group\) group\.visible = !!occupant;/);
+  assert.doesNotMatch(pi, /group\.visible = wingRuntime \? \(inHall \|\| palaceSeen\)/);
+  const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
+  assert.match(wings, /, d, state\.root\)/);
+  assert.match(wings, /approachRoomIds/);
+  assert.match(wings, /APPROACH_DIST/);
+  assert.match(wings, /bestId/);
+  assert.match(wings, /st !== 'DONE' && !occ/);
+  const zs = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
+  assert.match(zs, /isPersistentVisible/);
+  assert.match(zs, /approaching/);
 });

@@ -165,6 +165,8 @@
   let fireMats = [];
   let lodPacks = [];
   let instanceWallPacks = [];
+  let hallShellMeshes = [];
+  let hallDecorMeshes = [];
   let propCullList = [];
   let fireList = [];
   let wingRuntime = null;
@@ -2014,6 +2016,114 @@
     if (n) mesh.instanceMatrix.needsUpdate = true;
     return n;
   }
+
+  // Split a hall PlaneGeometry into tiles with tight bounding spheres so
+  // frustumCulled can be true without a hall-sized sphere keeping the whole
+  // floor/ceiling/mural in the corridor frustum. UVs map to the original
+  // 0–1 range so the look is unchanged. A 4 cm overlap hides seams.
+  function chunkHallPlane(mesh, segsX, segsY) {
+    if (!mesh || !mesh.geometry || !mesh.parent) return mesh;
+    try { if (typeof window !== 'undefined' && window.__sinNoShellChunk) return mesh; } catch (_) {}
+    const params = mesh.geometry.parameters;
+    if (!params || !(params.width > 0) || !(params.height > 0)) {
+      try {
+        if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      } catch (_) {}
+      mesh.frustumCulled = true;
+      hallShellMeshes.push(mesh);
+      return mesh;
+    }
+    const W = params.width, Ht = params.height;
+    const sx = Math.max(2, segsX || 4), sy = Math.max(2, segsY || 6);
+    const parent = mesh.parent;
+    const holder = new THREE.Group();
+    holder.name = (mesh.name || 'shell') + '-chunks';
+    holder.position.copy(mesh.position);
+    holder.rotation.copy(mesh.rotation);
+    holder.scale.copy(mesh.scale);
+    holder.userData.hallShell = true;
+    holder.userData.sinKeepVisible = true;
+    const overlap = 0.04;
+    const mat = mesh.material;
+    for (let i = 0; i < sx; i++) {
+      for (let j = 0; j < sy; j++) {
+        const u0 = i / sx, u1 = (i + 1) / sx;
+        const v0 = j / sy, v1 = (j + 1) / sy;
+        const cw = (u1 - u0) * W + overlap, ch = (v1 - v0) * Ht + overlap;
+        const cx = ((u0 + u1) / 2) * W - W / 2;
+        const cy = ((v0 + v1) / 2) * Ht - Ht / 2;
+        const g = new THREE.PlaneGeometry(cw, ch);
+        const uv = g.attributes.uv;
+        for (let k = 0; k < uv.count; k++) {
+          const uu = uv.getX(k), vv = uv.getY(k);
+          uv.setXY(k, u0 + uu * (u1 - u0), v0 + vv * (v1 - v0));
+        }
+        uv.needsUpdate = true;
+        try { g.computeBoundingBox(); g.computeBoundingSphere(); } catch (_) {}
+        const tile = new THREE.Mesh(g, mat);
+        tile.position.set(cx, cy, 0);
+        tile.name = mesh.name || 'shell-tile';
+        tile.userData.hallShell = true;
+        tile.userData.sinKeepVisible = true;
+        tile.receiveShadow = !!mesh.receiveShadow;
+        tile.castShadow = !!mesh.castShadow;
+        tile.frustumCulled = true;
+        if (mesh.material && mesh.material.polygonOffset) {
+          tile.material = mesh.material;
+        }
+        holder.add(tile);
+        hallShellMeshes.push(tile);
+      }
+    }
+    parent.add(holder);
+    parent.remove(mesh);
+    try { if (mesh.geometry && mesh.geometry.dispose) mesh.geometry.dispose(); } catch (_) {}
+    return holder;
+  }
+  function cameraInHall(cam) {
+    if (!cam || !cam.position) return false;
+    const lx = cam.position.x - portalX;
+    const lz = cam.position.z - portalFront;
+    return lz >= -1.2 && lz <= hallLen + 1.6 && Math.abs(lx) <= hallW / 2 + 1.6;
+  }
+  // True when the camera is in the hall, or an open hall doorway (passage
+  // into a wing) intersects the frustum — the only way to actually see the
+  // hall from a corridor. Conservative pads so a grazing look never pops
+  // or leaves a black void. Used to hide hall *content* (pillars, decor)
+  // and off-screen shell when the doorway is behind the camera; the hall
+  // group itself stays visible (occupant).
+  function hallPortalInFrustum(cam, frustum) {
+    try { if (typeof window !== 'undefined' && window.__sinNoPortalCull) return true; } catch (_) {}
+    if (cameraInHall(cam)) return true;
+    if (!frustum || !group || !CONFIG.PASSAGES || !CONFIG.PASSAGES.length) return true;
+    const wp = hallPortalInFrustum._wp || (hallPortalInFrustum._wp = new THREE.Vector3());
+    const sphere = hallPortalInFrustum._s || (hallPortalInFrustum._s = new THREE.Sphere());
+    let anyOpen = false;
+    for (let i = 0; i < CONFIG.PASSAGES.length; i++) {
+      const p = CONFIG.PASSAGES[i];
+      if (!p || p.state !== 'open') continue;
+      anyOpen = true;
+      wp.set(p.position[0], (p.height || 4) * 0.5, p.position[2]);
+      group.localToWorld(wp);
+      const halfW = (p.width || 4) * 0.5, halfH = (p.height || 6) * 0.5;
+      // Wide pad (3 m + opening) — iPhone portrait wedge must not miss a door.
+      sphere.center.copy(wp);
+      sphere.radius = Math.sqrt(halfW * halfW + halfH * halfH) + 3.2;
+      if (frustum.intersectsSphere(sphere)) return true;
+      if (cam.position.distanceTo(wp) < 14) return true;
+    }
+    // No open passage recorded: keep the hall (never a black void).
+    if (!anyOpen) return true;
+    return false;
+  }
+  function setHallShellVisible(on) {
+    for (let i = 0; i < hallShellMeshes.length; i++) {
+      const o = hallShellMeshes[i];
+      if (o) o.visible = !!on;
+    }
+  }
+
   function updateLODs(cam) {
     if (!cam || !group) return;
     group.updateMatrixWorld(true);
@@ -2087,6 +2197,36 @@
         const d = cam.position.distanceTo(entry.world);
         entry.root.visible = d <= cullProp * 1.05;
       }
+    }
+    // Portal cull: if the hall doorway is not in the camera frustum, drop
+    // hall interior (pillars, lions, props, fire) and shell tiles. The
+    // PalaceInterior group stays visible (occupant). Surfaces in view
+    // through an open doorway still render via the branch above.
+    const portalOpen = hallPortalInFrustum(cam, frustum);
+    updateLODs._portalOpen = portalOpen;
+    if (!portalOpen) {
+      for (let p = 0; p < lodPacks.length; p++) {
+        const pack = lodPacks[p];
+        if (!pack) continue;
+        if (pack.near) { pack.near.count = 0; pack.near.visible = false; }
+        if (pack.far) { pack.far.count = 0; pack.far.visible = false; }
+      }
+      for (let w = 0; w < instanceWallPacks.length; w++) {
+        const pack = instanceWallPacks[w];
+        if (pack && pack.mesh) { pack.mesh.count = 0; pack.mesh.visible = false; }
+      }
+      for (let i = 0; i < propCullList.length; i++) {
+        if (propCullList[i] && propCullList[i].root) propCullList[i].root.visible = false;
+      }
+      for (let i = 0; i < hallDecorMeshes.length; i++) {
+        if (hallDecorMeshes[i]) hallDecorMeshes[i].visible = false;
+      }
+      setHallShellVisible(false);
+    } else {
+      for (let i = 0; i < hallDecorMeshes.length; i++) {
+        if (hallDecorMeshes[i]) hallDecorMeshes[i].visible = true;
+      }
+      setHallShellVisible(true);
     }
   }
 
@@ -2184,6 +2324,7 @@
     overlapNotes = [];
     ramp = null;
     lodPacks = []; instanceWallPacks = [];
+    hallShellMeshes = []; hallDecorMeshes = [];
     propCullList = [];
     fireList = [];
     fireMats = [];
@@ -2253,7 +2394,7 @@
       });
     }
     const wallsMesh = new THREE.InstancedMesh(wallSrc.geo, wallMat, wallMats.length);
-    wallsMesh.name = 'wall-module';
+    wallsMesh.name = 'wall-module'; wallsMesh.userData.hallShell = true; wallsMesh.userData.sinKeepVisible = true;
     wallsMesh.frustumCulled = false;
     wallsMesh.castShadow = false;
     wallMats.forEach(function (m, i) { wallsMesh.setMatrixAt(i, m); });
@@ -2390,10 +2531,14 @@
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(0, -0.015, L / 2);
     floor.name = 'floor';
+    floor.userData.hallShell = true;
+    floor.userData.sinKeepVisible = true;
     floor.receiveShadow = true;
-    floor.frustumCulled = false;
+    floor.frustumCulled = true;
     if (floor.geometry && floor.geometry.computeBoundingSphere) floor.geometry.computeBoundingSphere();
+    if (floor.geometry && floor.geometry.computeBoundingBox) floor.geometry.computeBoundingBox();
     group.add(floor);
+    chunkHallPlane(floor, 4, 8);
 
     const borderMap = tex.floorBorder.clone();
     srgb(borderMap);
@@ -2415,6 +2560,11 @@
       m.material.polygonOffsetFactor = -1;
       m.material.polygonOffsetUnits = -1;
       m.name = 'floor-border';
+      m.userData.hallShell = true;
+      m.userData.sinKeepVisible = true;
+      m.frustumCulled = true;
+      try { m.geometry.computeBoundingSphere(); m.geometry.computeBoundingBox(); } catch (_) {}
+      hallShellMeshes.push(m);
       group.add(m);
     }
     borderStrip(W, bw, 0, bw / 2, true);
@@ -2443,11 +2593,13 @@
       m.material.polygonOffset = true;
       m.material.polygonOffsetFactor = -4;
       m.material.polygonOffsetUnits = -4;
-      m.name = 'carpet';
+      m.name = 'carpet'; m.userData.hallShell = true; m.userData.sinKeepVisible = true;
       return m;
     }
     const carpetEnd = stairFootZ + 0.04 * H;
-    group.add(carpetSeg(0.4 * H, carpetEnd));
+    const carpetMesh = carpetSeg(0.4 * H, carpetEnd);
+    group.add(carpetMesh);
+    chunkHallPlane(carpetMesh, 1, 8);
 
     const stoneMat = new THREE.MeshStandardMaterial({ color: 0xcbb9a4, roughness: 0.62, metalness: 0.04 });
     if (palaceEnv) { stoneMat.envMap = palaceEnv; stoneMat.envMapIntensity = 0.28; }
@@ -2662,15 +2814,19 @@
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = CH - 0.22;
     ceiling.name = 'ceiling';
+    ceiling.userData.hallShell = true;
+    ceiling.userData.sinKeepVisible = true;
     ceiling.material.color = new THREE.Color(0xffffff);
     ceiling.material.roughness = 0.62;
     ceiling.material.metalness = 0.16;
     ceiling.material.emissive = new THREE.Color(0x3a2a16);
     ceiling.material.emissiveIntensity = 0.08;
     ceiling.material.side = THREE.DoubleSide;
-    ceiling.frustumCulled = false;
+    ceiling.frustumCulled = true;
     if (ceiling.geometry && ceiling.geometry.computeBoundingSphere) ceiling.geometry.computeBoundingSphere();
+    if (ceiling.geometry && ceiling.geometry.computeBoundingBox) ceiling.geometry.computeBoundingBox();
     group.add(ceiling);
+    chunkHallPlane(ceiling, 4, 8);
     const corniceMat = new THREE.MeshStandardMaterial({ color: 0x8d6840, roughness: 0.62, metalness: 0.28 });
     if (palaceEnv) { corniceMat.envMap = palaceEnv; corniceMat.envMapIntensity = 0.3; }
     const beamH = 0.26 * H;
@@ -3132,6 +3288,7 @@
       matrices.forEach(function (m, i) { fireMesh.setMatrixAt(i, m); });
       fireMesh.instanceMatrix.needsUpdate = true;
       group.add(fireMesh);
+      hallDecorMeshes.push(fireMesh);
       fireMats.push(fireMat);
 
       const per = 8;
@@ -3163,6 +3320,7 @@
       embers.frustumCulled = false;
       embers.renderOrder = 3;
       group.add(embers);
+      hallDecorMeshes.push(embers);
       fireMats.push(emat);
 
       fireMats.forEach(function (m) {
@@ -3577,6 +3735,7 @@
     dust.name = 'haze';
     dust.frustumCulled = false;
     group.add(dust);
+    hallDecorMeshes.push(dust);
 
     group.updateMatrixWorld(true);
     const ox = portal.x, oz = portal.frontZ;
@@ -4599,9 +4758,17 @@
       const inHall = lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;
       const inWings = !!(wingRuntime && window.PalaceWings && PalaceWings.contains(lx, lz));
       occupant = inHall || inWings;
-      // Keep the palace hall drawn from nearby wing rooms so the arch behind the player is not a void.
+      // The hall shell (floor, ceiling, murals) must NEVER be hidden while
+      // the player is in the palace. The previous `wingRuntime ? (inHall ||
+      // palaceSeen) : occupant` set group.visible = false the moment the
+      // player stepped into a corridor (inHall false) if palaceVisible() /
+      // inWedge failed — on a real iPhone that dropped draws 149→31 and
+      // left the clear-color void where the hall should be. palaceSeen is
+      // kept for LOD / setDeepWing only. Frustum-cull off-screen meshes;
+      // do not hide the hall group.
       const palaceSeen = inWings && (typeof PalaceWings.palaceVisible !== 'function' || PalaceWings.palaceVisible());
-      if (group) group.visible = wingRuntime ? (inHall || palaceSeen) : occupant;
+      void palaceSeen;
+      if (group) group.visible = !!occupant;
       setExteriorVisible(ctx.scene, !occupant);
       if (ctx.renderer && ctx.renderer.info && ctx.renderer.info.render) {
         const inf = ctx.renderer.info.render;

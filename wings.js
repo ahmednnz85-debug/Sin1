@@ -57,6 +57,11 @@
         // the loader cache on the same tick as a GLB parse would block the
         // main thread and was a suspected stall -> evict -> re-admit loop.
         if (st === 'LOADING' || st === 'FADING_OUT' || st === 'SETUP') return;
+        // Do not tear down the outdoor sky or city while the player is still
+        // outside. A budget stall after the Ishtar gate (zone babylon) used
+        // to call __releaseExteriorStage and leave a clear-color black sky.
+        const occ = window.PalaceInterior && PalaceInterior.metrics && PalaceInterior.metrics().occupant;
+        if (st !== 'DONE' && !occ) return;
         if (window.PalaceInterior && typeof PalaceInterior.releaseCity === 'function') PalaceInterior.releaseCity();
         if (window.__releaseExteriorStage) window.__releaseExteriorStage();
         const PM = window.SinProcessMemory;
@@ -2349,7 +2354,13 @@
     model.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(model), c = box.getCenter(new THREE.Vector3());
     model.position.x += -c.x; model.position.z += -c.z; model.position.y += -box.min.y;
     // Pivot on the door plane: mirroring it across the plane flips the swing so the leaves always open away from the hero.
-    const pivot = new THREE.Group(); pivot.name = 'WingDoorPivot-' + d.id; pivot.position.set(d.x, 0, d.z); pivot.add(model); host.add(pivot); d.pivot = pivot;
+    const pivot = new THREE.Group(); pivot.name = 'WingDoorPivot-' + d.id; pivot.position.set(d.x, 0, d.z); pivot.add(model);
+    // Doors are hall/corridor architecture: always visible, never parented
+    // to a room zone that hideObject / g.visible can take down.
+    pivot.userData.isDoor = true; pivot.userData.sinKeepVisible = true;
+    model.userData.isDoor = true; model.userData.sinKeepVisible = true;
+    model.traverse(function (o) { if (!o.userData) o.userData = {}; o.userData.isDoor = true; o.userData.sinKeepVisible = true; });
+    host.add(pivot); d.pivot = pivot;
     d.leafHalf = Math.max(.04, (d.axis === 'x' ? box.max.x - box.min.x : box.max.z - box.min.z) * .5);
     const clips = gltf.animations || [], openClip = clips.find(c => /opendoors/i.test(c.name || '')) || clips[0], closeClip = clips.find(c => /closedoors/i.test(c.name || '')) || openClip;
     if (!openClip) return;
@@ -2378,7 +2389,7 @@
         try { console.info('[palace load] doors-fit-begin', i, d.id); } catch (_) {}
         const t0 = performance.now();
         try {
-          fitWingDoor({ scene: template.scene.clone(true), animations: template.animations || [] }, d, state.regionGroups.get(room) || state.root);
+          fitWingDoor({ scene: template.scene.clone(true), animations: template.animations || [] }, d, state.root);
         } catch (e) {
           try { console.error('[palace load] doors-fit-err', d.id, e && (e.stack || e.message) || e); } catch (_) {}
         }
@@ -2849,6 +2860,55 @@
     });
   }
   let zoneDistKey = '', zoneDist = null;
+  // Start loading a room once the player is heading toward its door and
+  // close enough that, at phone run speed (~7 m/s), the room is complete
+  // before they arrive. 36 m ≈ 5 s. Far rooms evict first (streamer budget).
+  const APPROACH_DIST = 36;
+  function approachRoomIds() {
+    const set = new Set();
+    if (!state.doors || !state.ctx || !state.ctx.hero || !state.root) return set;
+    const p = state.ctx.hero.position;
+    const px = p.x - state.root.position.x;
+    const pz = p.z - state.root.position.z;
+    const cur = state.current || '';
+    let hx = 0, hz = 1;
+    try {
+      if (state.ctx.hero.getWorldDirection) {
+        const dir = new THREE.Vector3();
+        state.ctx.hero.getWorldDirection(dir);
+        hx = dir.x; hz = dir.z;
+      }
+    } catch (_) {}
+    const roomIds = new Set();
+    (state.rooms || []).forEach(function (r) { if (r && r.id) roomIds.add(r.id); });
+    // Only the single nearest room ahead. Adding every door's from+to inside
+    // 36 m stacked K2+K3+K4 to 658 MB (over the 650 cap) on the KC1 walk.
+    let bestId = null, bestDist = Infinity;
+    for (let i = 0; i < state.doors.length; i++) {
+      const d = state.doors[i];
+      if (!d || d.kind === 'arch') continue;
+      const dx = d.x - px, dz = d.z - pz;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist > APPROACH_DIST) continue;
+      const nd = dist > 0.05 ? (dx * hx + dz * hz) / dist : 1;
+      if (nd < 0.15 && dist > 8) continue;
+      let ahead = null;
+      if (d.to && d.to !== cur && roomIds.has(d.to)) ahead = d.to;
+      if (d.from && d.from !== cur && roomIds.has(d.from)) {
+        // Standing in a corridor (cur is neither side): pick the side
+        // that sits further along the heading, i.e. the first ahead we set
+        // only if to wasn't already chosen; if both qualify, prefer `to`
+        // when that is the conventional forward id, else the nearer door wins
+        // via bestDist anyway (one door, one ahead). If `to` is behind us
+        // and `from` is ahead, take from.
+        if (!ahead) ahead = d.from;
+        else if (ahead === d.to && nd < 0) ahead = d.from;
+      }
+      if (ahead && dist < bestDist) { bestDist = dist; bestId = ahead; }
+    }
+    if (bestId) set.add(bestId);
+    return set;
+  }
   function streamZones(origin, visibleIds, preparedIds) {
     if (!zoneStreamer) return 0;
     if (zoneDistKey !== origin || !zoneDist) { zoneDistKey = origin; zoneDist = distancesFrom(origin); }
@@ -2858,7 +2918,7 @@
     const warmGroups = [];
     (preparedIds || new Set()).forEach(function (id) { const g = state.regionGroups.get(id); if (g) warmGroups.push(g); });
     (visibleIds || new Set()).forEach(function (id) { const g = state.regionGroups.get(id); if (g && warmGroups.indexOf(g) < 0) warmGroups.push(g); });
-    return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds, memoryLevel: level, warmGroups: warmGroups });
+    return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds, memoryLevel: level, warmGroups: warmGroups, approach: approachRoomIds() });
   }
   // After LRU eviction a streamed room (K4 in particular) can sit complete=false
   // with its dress refs nulled. If the player is standing in it, re-issue the
@@ -2915,12 +2975,14 @@
       if (state.label) state.label.textContent = r ? (r.kind === 'room' ? WING_NAMES[r.wing] + ': ' + r.id + ' ' + r.name : (r.id === 'REAR' ? 'Rear Gallery' : r.id.indexOf('MP') === 0 ? 'Moon Passage' : 'Corridor')) : 'Palace Hall';
     }
     const isArch = !!(r && r.kind === 'threshold');
-    state.palaceNear = id === 'Palace' || isArch;
+    const hopsToHall = (id === 'Palace' || isArch) ? 0 : (zoneDist && zoneDist.has('Palace') ? zoneDist.get('Palace') : 1);
+    // Adjacent corridors (1 hop) still look back into the hall; only a
+    // deeper wing may drop near-LOD packs. Default hops is 1 (safe), not 2.
+    state.palaceNear = id === 'Palace' || isArch || hopsToHall <= 1;
     // Free hall near-LOD GPU packs once the player is more than one hop
     // into a wing — they cannot be seen and were part of the 700 MB peak.
     try {
       if (window.PalaceInterior && typeof PalaceInterior.setDeepWing === 'function') {
-        const hopsToHall = (id === 'Palace' || isArch) ? 0 : (zoneDist && zoneDist.has('Palace') ? zoneDist.get('Palace') : (id === origin ? 2 : 1));
         PalaceInterior.setDeepWing(!state.palaceNear && hopsToHall > 1);
       }
     } catch (_) {}

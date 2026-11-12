@@ -38,7 +38,7 @@ test('pre-DONE census runs updateLODs so the first present matches the census', 
 
 test('instance cull can be disabled for a same-frame SSIM A/B', () => {
   assert.match(src, /window\.__sinNoInstanceCull/);
-  assert.match(index, /palaceInterior\.js\?v=hall29&fix=20261112r37/);
+  assert.match(index, /palaceInterior\.js\?v=hall\d+/);
 });
 
 test('compactInstanced keeps every instance when the frustum is null', () => {
@@ -53,4 +53,21 @@ test('compactInstanced keeps every instance when the frustum is null', () => {
   assert.deepEqual(compact(mats, null), mats);
   assert.deepEqual(compact(mats, {}, [true, false, true, false]), ['a', 'c']);
   assert.deepEqual(compact(mats, {}, [true, true, true, true]), mats);
+});
+
+test('hall shell is chunked into frustum-culled tiles and portal-culled when the doorway is out of view', () => {
+  assert.match(src, /function chunkHallPlane/);
+  assert.match(src, /function hallPortalInFrustum/);
+  assert.match(src, /chunkHallPlane\(floor/);
+  assert.match(src, /chunkHallPlane\(ceiling/);
+  assert.match(src, /setHallShellVisible/);
+  assert.match(src, /__sinNoPortalCull/);
+  assert.match(src, /__sinNoShellChunk/);
+  // Group visibility is still occupant-only — portal cull never hides the group.
+  assert.match(src, /if \(group\) group\.visible = !!occupant;/);
+  assert.doesNotMatch(src, /group\.visible = wingRuntime \? \(inHall \|\| palaceSeen\)/);
+  // Floor/ceiling no longer force frustumCulled = false (chunks use true).
+  const floorAt = src.indexOf("floor.name = 'floor'");
+  const floorChunk = src.indexOf('chunkHallPlane(floor', floorAt);
+  assert.ok(floorChunk > floorAt && floorChunk - floorAt < 800, 'floor is chunked after it is named');
 });

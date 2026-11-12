@@ -76,10 +76,26 @@
       return !!(p && p.__webglTexture && p.__version === t.version);
     } catch (_) { return false; }
   }
+  const DOOR_RE = /door|WingDoor|WingDoorPivot|BabylonianWingDoor/i;
+  function isPersistentVisible(o) {
+    if (!o) return false;
+    let p = o;
+    while (p) {
+      if (p.userData && (p.userData.sinKeepVisible || p.userData.isDoor || p.userData._roomDoor || p.userData.hallShell)) return true;
+      if (p.name && DOOR_RE.test(p.name)) return true;
+      p = p.parent;
+    }
+    return false;
+  }
   function hideObject(obj) {
     if (!obj || !obj.traverse) return;
     obj.traverse(function (o) {
       if (!o.isMesh && !o.isInstancedMesh && !o.isPoints && !o.isSprite && !o.isLine) return;
+      // Doors are part of the hall/corridor and must stay visible (closed)
+      // while the room behind them is still loading. The hide-until-ready
+      // gate used to hide them with the incomplete room, so the doorway
+      // looked empty until the player arrived and the door popped in.
+      if (isPersistentVisible(o)) return;
       o.visible = false;
       o.userData[HIDE_FLAG] = true;
     });
@@ -372,11 +388,50 @@
           rec.deferred = false; rec.deferredAt = 0; return true;
         }
       } else {
-        // Prefetch: start only if it fits without evicting the current room
-        // or anything visible. Never override the budget. Never compete
-        // with a current-room load that is still in flight.
+        // Prefetch: start only if it fits without evicting the current room.
+        // Never override the budget. Never compete with a current-room load
+        // that is still in flight. On the 650 phone, SWAP leftover dress
+        // (the room we just left, even if hops<=1 / still marked visible)
+        // so an approach prefetch cannot stack K2+K3 to 658 MB.
         evictNonAdjacent('non-adjacent-before-prefetch');
-        if (!wouldExceed(extra)) {
+        if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
+          evictPreparedFirst('prepared-before-prefetch', true);
+          zones.forEach(function (r) {
+            if (r.state === 'cold' || r.isCurrent || r.id === rec.id) return;
+            evict(r, 'swap-before-prefetch');
+            stats.budgetEvictions++;
+          });
+        }
+        // Never stack two dress rooms on the 650 phone. usage() can be
+        // stale (483 vs a real 592), so the 40 MB headroom still admitted
+        // K3 on top of current K2 (lab peak 658.8 on 79aee3b). If any
+        // other zone is still resident — the current room cannot be
+        // evicted — defer this prefetch until that room can be swapped.
+        if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
+          let stacked = false;
+          zones.forEach(function (r) {
+            if (r.state === 'cold' || r.id === rec.id) return;
+            stacked = true;
+          });
+          if (stacked) {
+            if (!rec.deferred) {
+              rec.deferred = true;
+              rec.deferredAt = now();
+              rec.stallAttempts = 0;
+              stats.deferred++;
+              stats.lastDefer = { id: rec.id, at: rec.deferredAt, usage: usage(), incoming: extra, reason: 'no-stack' };
+              note('load', rec.id + ' deferred — no-stack (another zone still resident)');
+            }
+            return false;
+          }
+        }
+        // 40 MB prefetch headroom: K2 at 592 + est 50 passed the raw 650
+        // check but K3's real cost (~66) stacked to 658. Defer until the
+        // room just left can be evicted (swap), then admit.
+        const prefetchExtra = (o.processBudgetMB > 0 && o.processBudgetMB <= 650)
+          ? { processMB: extra.processMB + 40, gpuMB: extra.gpuMB, cpuMB: extra.cpuMB }
+          : extra;
+        if (!wouldExceed(prefetchExtra)) {
           if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
             let currentBusy = false;
             zones.forEach(function (r) {
@@ -427,7 +482,10 @@
         try { if (typeof o.onBudgetStall === 'function') o.onBudgetStall(rec, report()); } catch (e) { console.warn('onBudgetStall', e); }
         rec.deferredAt = t;
         if (canStart(rec)) return true;
-        if (roomFitsAlone(rec) && rec.stallAttempts >= 2) {
+        // Only the CURRENT room may be force-admitted after a stall.
+        // Force-admitting a prefetch via roomFitsAlone stacked K2+K3 to 658
+        // because the leftover current room was ignored.
+        if (roomFitsAlone(rec) && rec.stallAttempts >= 2 && rec.isCurrent) {
           note('load', rec.id + ' admitted after defer-stall (room fits the device budget alone)');
           rec.deferred = false;
           rec.deferredAt = 0;
@@ -654,7 +712,12 @@
         // restart a farther room. prepared.has in `want` is what kept
         // K2 resident (and restarted it after evict) when the player
         // reached K3.
-        const prefetch = hops <= rec.spec.prefetchHops || (!tight && prepared.has(id));
+        const approaching = !!(view.approach && (view.approach.has ? view.approach.has(id) : (view.approach.indexOf && view.approach.indexOf(id) >= 0)));
+        // Proximity/heading prefetch (wings.js approach set): start the room
+        // the player is walking toward early enough that, at run speed, the
+        // door can open onto a complete room. Far rooms are evicted first
+        // (canStart); over-budget approach still defers rather than exceed 650.
+        const prefetch = hops <= rec.spec.prefetchHops || approaching || (!tight && prepared.has(id));
         const want = isCurrent || prefetch;
         // hops <= 1 protects on desktop; on a 650 MB phone those neighbours
         // yield once evictForCurrent decides the current room needs space.

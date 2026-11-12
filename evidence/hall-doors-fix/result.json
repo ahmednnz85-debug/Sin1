@@ -1,0 +1,159 @@
+{
+  "pass": true,
+  "palaceDone": true,
+  "inHall": {
+    "hallVis": true,
+    "floor": {
+      "name": "floor",
+      "vis": true,
+      "hid": [],
+      "groupVis": true,
+      "hasMap": true,
+      "needsUpdate": false,
+      "cpuReleased": true,
+      "keepVis": true
+    },
+    "ceiling": {
+      "name": "ceiling",
+      "vis": true,
+      "hid": [],
+      "groupVis": true,
+      "hasMap": true,
+      "needsUpdate": false,
+      "cpuReleased": true,
+      "keepVis": true
+    },
+    "calls": 142,
+    "tris": 1500604,
+    "peak": 479.7,
+    "gfx": {
+      "mode": "low",
+      "tier": "low",
+      "pressure": 0,
+      "scale": 0.94,
+      "targetScale": 1,
+      "shadow": 1024,
+      "shadowPolicy": true,
+      "shadowMapEnabled": false,
+      "zone": "palace",
+      "fovH": 73,
+      "vfov": 42.00988963810087,
+      "avgMs": 0,
+      "calls": 142,
+      "tris": 1500604
+    },
+    "doorHidden": []
+  },
+  "inCorridor": {
+    "hallVis": true,
+    "occupant": true,
+    "cur": "KC12",
+    "floor": {
+      "name": "floor",
+      "vis": true,
+      "hid": [],
+      "groupVis": true,
+      "hasMap": true,
+      "needsUpdate": false,
+      "cpuReleased": true,
+      "keepVis": true
+    },
+    "ceiling": {
+      "name": "ceiling",
+      "vis": true,
+      "hid": [],
+      "groupVis": true,
+      "hasMap": true,
+      "needsUpdate": false,
+      "cpuReleased": true,
+      "keepVis": true
+    },
+    "walls": {
+      "name": "wall-module",
+      "vis": false,
+      "hid": [
+        "wall-module"
+      ],
+      "groupVis": true,
+      "hasMap": true,
+      "needsUpdate": false,
+      "cpuReleased": true,
+      "keepVis": true
+    },
+    "calls": 90,
+    "tris": 454803,
+    "doorHidden": [],
+    "peak": 485.7
+  },
+  "k2mid": {
+    "hallVis": true,
+    "floor": {
+      "name": "floor",
+      "vis": true,
+      "hid": [],
+      "groupVis": true,
+      "hasMap": true,
+      "needsUpdate": false,
+      "cpuReleased": true,
+      "keepVis": true
+    },
+    "doorHidden": [],
+    "doors": [
+      {
+        "name": "WingDoorPivot-K2-KC1",
+        "vis": true,
+        "hid": [],
+        "isDoor": true,
+        "parent": "PalaceWings"
+      }
+    ]
+  },
+  "k2after": {
+    "hallVis": true,
+    "floor": {
+      "name": "floor",
+      "vis": true,
+      "hid": [],
+      "groupVis": true,
+      "hasMap": true,
+      "needsUpdate": false,
+      "cpuReleased": true,
+      "keepVis": true
+    },
+    "doorHidden": [],
+    "peak": 581.1,
+    "calls": 38,
+    "tris": 676347
+  },
+  "consoleErr": [
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]",
+    "Clipper invalid solid {\"holes\":[]} [{\"holes\":[]}]"
+  ],
+  "pageErrors": [],
+  "truePeak": 581.1,
+  "note": "Hall group and floor/ceiling must stay visible in the corridor. Doors must never be in doorHidden."
+}
