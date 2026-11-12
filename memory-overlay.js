@@ -23,6 +23,8 @@
   let lastSample = null;
   let lastWriteAt = 0;
   let lastEstimateAt = 0;
+  let lastMetricsAt = 0;
+  let lastWings = null;
   let fpsEma = 0;
   const fpsRing = [];
   let fpsLow1 = null;
@@ -183,8 +185,26 @@
     } : null;
     const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     if (_tr) _tr('overlay-sample-enter');
-    const wings = window.PalaceWings && PalaceWings.metrics ? PalaceWings.metrics() : null;
-    if (_tr) _tr('overlay-PalaceWings.metrics');
+    // metrics() is a full wings walk. Calling it every rAF from this
+    // diagnostic (and before the first hall present) was a
+    // diagnostic-to-diagnostic tax — not a recurse after the
+    // metrics↔estimate break, but still a stall on standing frames.
+    // Cheap current() is enough for the room label between TICK_MS samples;
+    // skip the walk entirely until the first present has returned.
+    const firstPresent = (typeof window !== 'undefined' && window.__sinFirstPresentLogged);
+    const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    let wings = lastWings;
+    const metricsDue = !lastMetricsAt || (nowMs - lastMetricsAt >= TICK_MS);
+    if (firstPresent && metricsDue && window.PalaceWings && PalaceWings.metrics) {
+      lastMetricsAt = nowMs;
+      wings = PalaceWings.metrics();
+      lastWings = wings;
+      if (_tr) _tr('overlay-PalaceWings.metrics');
+    } else if (window.PalaceWings && typeof PalaceWings.current === 'function') {
+      const cur = PalaceWings.current();
+      wings = lastWings ? Object.assign({}, lastWings, { current: cur || lastWings.current }) : { current: cur };
+      if (_tr) _tr('overlay-PalaceWings.current');
+    }
     const palace = window.PalaceInterior && PalaceInterior.status ? PalaceInterior.status() : null;
     if (_tr) _tr('overlay-PalaceInterior.status');
     const gfx = window.SinGfx && SinGfx.status ? SinGfx.status() : null;
