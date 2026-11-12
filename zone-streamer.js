@@ -541,7 +541,11 @@
         // never the camera direction alone: spinning in place must not start
         // or cancel a load. Anything the camera can currently see is still
         // protected from eviction (no disappearing props mid-spin).
-        const want = prepared.has(id) || hops <= rec.spec.prefetchHops;
+        // The room the player is standing in must always be wanted:
+        // otherwise a missing distances entry (hops = Infinity) leaves it
+        // cold forever — the K4 second-visit 'present: [], ready: false'
+        // after eviction.
+        const want = prepared.has(id) || hops <= rec.spec.prefetchHops || id === view.current;
         const protect = want || visible.has(id) || hops <= 1 || id === view.current;
         rec.hops = hops; rec.protected = protect; rec.visible = visible.has(id); rec.isCurrent = id === view.current;
         if (want) { rec.lastWanted = t; rec.leftAt = 0; wanted.push(rec); }

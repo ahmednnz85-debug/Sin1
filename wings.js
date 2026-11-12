@@ -1104,8 +1104,18 @@
     floor: WING_FILES.corridorFloor, carpet: WING_FILES.corridorCarpet, ceiling: WING_FILES.corridorCeiling,
     wall: WING_FILES.corridorWall, plant: WING_FILES.plant
   };
+  function textureDisposed(t) {
+    // Evict calls dispose() and may null the CPU pixels (source.data / image).
+    // A preloaded map in that state must not be reused for a second dress.
+    if (!t) return true;
+    const img = t.image || (t.source && t.source.data);
+    if (t.source && t.source.data === null && !t.image) return true;
+    if (img === null) return true;
+    return false;
+  }
   function corridorTexture(url) {
-    const cached = preloadedTexture(url);
+    let cached = preloadedTexture(url);
+    if (cached && textureDisposed(cached)) { preloaded.delete(url); cached = null; }
     const tex = cached || new THREE.TextureLoader().load(encodeURI(url), t => { t.needsUpdate = true; });
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.encoding = THREE.sRGBEncoding;
     tex.anisotropy = 8; if (cached) tex.needsUpdate = true; return tex;
@@ -2797,6 +2807,24 @@
     (visibleIds || new Set()).forEach(function (id) { const g = state.regionGroups.get(id); if (g && warmGroups.indexOf(g) < 0) warmGroups.push(g); });
     return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds, memoryLevel: level, warmGroups: warmGroups });
   }
+  // After LRU eviction a streamed room (K4 in particular) can sit complete=false
+  // with its dress refs nulled. If the player is standing in it, re-issue the
+  // dress even when the streamer has not yet called load() this visit — and
+  // let isComplete() then drive upload / compile / reveal.
+  function ensureCurrentDress(origin) {
+    if (!origin || !STREAM_EXPECT[origin]) return;
+    let c = null;
+    try { c = roomCompleteness(origin); } catch (_) { c = null; }
+    if (c && c.complete) return;
+    if (origin === 'K4') {
+      try {
+        dressK4();
+        loadK4Assets();
+      } catch (e) {
+        try { console.warn('[palace load] K4 re-dress', e && (e.message || e)); } catch (_) {}
+      }
+    }
+  }
   function updateCulling(force) {
     const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     if (_tr) _tr('updateCulling-enter force=' + !!force);
@@ -2879,12 +2907,14 @@
       {
         const tS = performance.now();
         streamZones(origin, visibleIds, preparedIds);
+        ensureCurrentDress(origin);
         try { console.info('[palace load] cull-stream', Math.round(performance.now()-tS)+'ms'); } catch (_) {}
       }
       const zr = zoneStreamer ? zoneStreamer.report() : null;
       state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: zr ? zr.warmPending : 0, memory: zr ? zr.memory : null, dressFailures: dressFailures.slice(-8), zones: zr };
     } else if (state._streamSets) {
       streamZones(state._streamSets.origin, state._streamSets.visible, state._streamSets.prepared);
+      ensureCurrentDress(state._streamSets.origin);
     }
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
@@ -3748,7 +3778,16 @@
   function dressK4() {
     const r = state.rooms.find(function (room) { return room.id === 'K4'; });
     const g = state.regionGroups.get('K4');
-    if (!r || !g) return;
+    if (!r || !g) {
+      try { console.warn('[palace load] K4 dress skipped', !r ? 'no-room' : 'no-group'); } catch (_) {}
+      return;
+    }
+    // Second visit after eviction must re-dress, but two overlapping load()
+    // calls must not stack a second floor on a still-resident first dress.
+    if (state.k4Dress && state.k4Dress.host === g) {
+      const floors = findNamed(g, 'K4-treasury-floor-artwork');
+      if (floors && floors.length) return;
+    }
     const b = r.bbox, h = r.height, w = b.x1 - b.x0, d = b.z1 - b.z0;
     const dress = state.k4Dress = {
       host: g, bbox: b, floor: false, walls: false, ceiling: false, frontWall: false,

@@ -93,7 +93,7 @@ test('teleport stands at the entrance, not on the table at bbox centre', () => {
 });
 
 test('index.html cache-busts the completeness wings build', () => {
-  assert.match(index, /wings\.js\?v=20261112ios29/);
+  assert.match(index, /wings\.js\?v=20261112ios30/);
 });
 
 test('entry corridor plant and torches parse during LOADING, not mid-SETUP', () => {
@@ -116,4 +116,22 @@ test('arch thresholds are complete portals, not empty-room failures', () => {
 test('entrance teleport walks until capsuleBlocked is clear and keeps a short follow cam', () => {
   assert.match(wings, /if \(!capsuleBlocked\(tx, tz, 0\.5\)\)/);
   assert.match(wings, /ent \? 1\.15 : 4\.2/);
+});
+
+test('K4 dress is re-issued after eviction', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
+  // Unload still nulls k4Dress (GPU eviction must drop the refs).
+  assert.match(wings, /state\.k4Dress = null/);
+  // A second visit re-issues dressK4 + loadK4Assets when the player is in K4
+  // and the floor is no longer resident. Overlapping load() must not stack.
+  assert.match(wings, /function ensureCurrentDress\(origin\)/);
+  assert.match(wings, /dressK4\(\);\s*loadK4Assets\(\);/);
+  assert.match(wings, /ensureCurrentDress\(origin\)/);
+  assert.match(wings, /K4-treasury-floor-artwork/);
+  assert.match(wings, /state\.k4Dress && state\.k4Dress\.host === g/);
+  // Disposed preloaded maps are not reused for the second dress.
+  assert.match(wings, /function textureDisposed/);
+  assert.match(wings, /preloaded\.delete\(url\)/);
 });

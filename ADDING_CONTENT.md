@@ -66,7 +66,7 @@ links.push(['KC6', 'K5', 'KC6-K5']);   // attach to the existing graph
 
 5. **Completeness.** If the room waits on more than one asset (chandelier + columns + table, like K2), write `isComplete` so the door stays shut and nothing is revealed until every piece is present. A late asset that arrives after reveal is shown immediately — that is a pop-in. Prefer one `api.done()` after the last asset, or a predicate that covers all of them.
 
-6. **Check.** Enter the palace, walk to the neighbouring room: the new zone should already be `loading` / `ready` in `PalaceWings.zones()`. The door must not open on an incomplete room. After you leave and walk far, the zone evicts and memory drops. Walk back: it is ready again before you see inside.
+6. **Check.** Enter the palace, walk to the neighbouring room: the new zone should already be `loading` / `ready` in `PalaceWings.zones()`. The door must not open on an incomplete room. After you leave and walk far, the zone evicts and memory drops. Walk back: it is ready again before you see inside. A second visit must re-dress even after LRU eviction nulls the dress refs (`k4Dress = null` on unload): the streamer always treats the player's current room as wanted (even if the hop map is missing), and `ensureCurrentDress` re-issues `dressK4` / `loadK4Assets` when the floor is no longer resident. Overlapping load() calls do not stack a second floor. Disposed preloaded textures are dropped and reloaded, not reused.
 
 At runtime (a mod or a test) the same spec can be registered with `PalaceWings.registerZone(spec)` without editing `WING_ZONES`. That is how the synthetic scale test adds dummy future wings.
 

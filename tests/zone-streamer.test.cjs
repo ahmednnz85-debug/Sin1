@@ -191,3 +191,27 @@ test('tryReleaseCpu records sinGpuW before closing the ImageBitmap', () => {
   assert.match(fn, /sinGpuW/);
   assert.ok(fn.indexOf('sinGpuW') < fn.indexOf('img.close'));
 });
+
+test('current cold zone is wanted even when hops are missing', async () => {
+  const scene = obj('scene'); const g = obj('K4'); scene.add(g);
+  const R = renderer();
+  const s = Z.create({ uploadsPerFrame: 8, uploadMsPerFrame: 100 });
+  let loads = 0;
+  s.register({
+    id: 'K4', prefetchHops: 1,
+    load(api) { loads++; api.add(mesh('K4-treasury-floor-artwork', tex())); api.done(); },
+    isComplete() { return loads > 0; }
+  });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: id => (id === 'K4' ? g : null) });
+  // Player is in K4, but the distances map has no entry (hops = Infinity).
+  // Before the fix this stayed cold forever (second visit after eviction).
+  s.update({ current: 'K4', distances: new Map(), prepared: new Set(), visible: new Set(['K4']) });
+  assert.ok(loads >= 1, 'current room must start even with missing hops, loads=' + loads);
+  let frames = 0;
+  while (s.status('K4') !== 'ready' && frames < 20) {
+    s.update({ current: 'K4', distances: new Map(), prepared: new Set(), visible: new Set(['K4']) });
+    await tick();
+    frames++;
+  }
+  assert.strictEqual(s.status('K4'), 'ready');
+});
