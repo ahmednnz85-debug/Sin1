@@ -20,7 +20,7 @@ function load() {
 }
 
 test('process-memory is on the page ahead of the game and exports an estimator', () => {
-  assert.match(index, /data-src="process-memory\.js\?v=20261112r4"/);
+  assert.match(index, /data-src="process-memory\.js\?v=20261112r5"/);
   // Must load after device-profile and before palace / wings so hooks wrap THREE first.
   const dp = index.indexOf('device-profile.js');
   const pm = index.indexOf('process-memory.js');
@@ -128,4 +128,10 @@ test('process estimate adds CPU images, GPU, RTs and a WebKit baseline', () => {
   assert.ok(s.gpuRTMB > 2 && s.gpuRTMB < 4, '800x400 color+depth ≈ 2.4 MB, got ' + s.gpuRTMB);
   assert.equal(s.phase, 'REVEAL');
   assert.ok(ctx.SinProcessMemory.peak().processMB >= s.processMB);
+});
+
+test('outdoor render-hook drain does not force-init every texture', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'process-memory.js'), 'utf8');
+  assert.match(src, /upload: false/);
+  assert.match(src, /doUpload/);
 });

@@ -33,7 +33,7 @@
 (function (root) {
   'use strict';
 
-  const LOD_URL = 'assets/lod/outdoor-lod.json?v=20261112r3';
+  const LOD_URL = 'assets/lod/outdoor-lod.json?v=20261112r5';
   const state = {
     ready: false,
     lod: null,
@@ -145,24 +145,76 @@
     return [minx, miny, minz, maxx, maxy, maxz].map(function (v) { return (+v).toFixed(3); }).join(',');
   }
 
+  // Build cheapest / most useful LODs first so they can attach before the
+  // 1.8 MB pack is fully decoded (lod0 play is the largest grass mesh).
+  function lodKeyOrder(keys) {
+    function rank(k) {
+      if (/lod2/.test(k) && /far/.test(k)) return 0;
+      if (/lod2/.test(k)) return 1;
+      if (/wall/.test(k)) return 2;
+      if (/lod1/.test(k)) return 3;
+      if (/palm/.test(k)) return 4;
+      return 5;
+    }
+    return keys.slice().sort(function (a, b) { return rank(a) - rank(b); });
+  }
+
   function loadLod(THREE) {
     if (state.lod) return Promise.resolve(state.lod);
-    return fetch(LOD_URL).then(function (r) {
+    if (state._lodPromise) return state._lodPromise;
+    // Parse on the main thread (native r.json is much cheaper than a
+    // Worker structured-clone of the 1.8 MB tree, which stalled WebKit
+    // for 2.3 s). makeGeo is then budgeted across frames — never in this
+    // then() — so the parse hitch is one short tick, not a freeze.
+    state._lodPromise = fetch(LOD_URL).then(function (r) {
       if (!r.ok) throw new Error('lod pack ' + r.status);
       return r.json();
     }).then(function (pack) {
-      state.lod = pack;
-      const geos = state.geos;
-      Object.keys(pack.meshes || {}).forEach(function (key) {
-        const row = pack.meshes[key];
-        geos[key] = { srcTris: row.srcTris, name: row.name, lods: {} };
-        Object.keys(row.lods || {}).forEach(function (ln) {
-          try { geos[key].lods[ln] = makeGeo(row.lods[ln], THREE); }
-          catch (e) { try { console.warn('outdoor-perf makeGeo', key, ln, e); } catch (_) {} }
-        });
-      });
+      state._pack = pack;
+      state._lodKeys = lodKeyOrder(Object.keys(pack.meshes || {}));
+      state._lodBuildI = 0;
       return pack;
+    }).catch(function (e) {
+      try { console.warn('outdoor-perf lod', e && e.message || e); } catch (_) {}
+      state.ready = true;
+      throw e;
     });
+    return state._lodPromise;
+  }
+
+  // Decode a few baked meshes per frame (≤ ~4 ms) and let applyLods attach
+  // them immediately. Doing the whole pack in one turn is what froze Safari
+  // at the approach→babylon cinematic cut.
+  function pumpLodBuild(THREE, budgetMs) {
+    if (!state._pack || !THREE) return 0;
+    const keys = state._lodKeys || [];
+    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+    const budget = budgetMs || 4;
+    let n = 0;
+    while (state._lodBuildI < keys.length) {
+      const key = keys[state._lodBuildI++];
+      const row = state._pack.meshes[key];
+      if (!row) continue;
+      const geos = state.geos;
+      geos[key] = { srcTris: row.srcTris, name: row.name, lods: {} };
+      const lns = Object.keys(row.lods || {});
+      for (let i = 0; i < lns.length; i++) {
+        try { geos[key].lods[lns[i]] = makeGeo(row.lods[lns[i]], THREE); }
+        catch (e) { try { console.warn('outdoor-perf makeGeo', key, lns[i], e); } catch (_) {} }
+      }
+      n++;
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : t0 + budget + 1;
+      if (now - t0 >= budget) break;
+    }
+    if (state._lodBuildI >= keys.length && !state.lod) {
+      state.lod = { version: state._pack.version, meshes: state._pack.meshes && { /* metadata only, buffers now in geos */ } };
+      // Drop the raw JSON tree so the 1.8 MB parse result can be GC'd.
+      state._pack = null;
+      state.ready = true;
+      if (state.classified) state.classified = false;
+      try { console.log('[outdoor-perf] lod pack ready', Object.keys(state.geos)); } catch (_) {}
+    }
+    return n;
   }
 
   function pickGrassKey(srcTris, sig, used) {
@@ -333,7 +385,7 @@
 
 
   function applyLods() {
-    if (!state.lod) return 0;
+    if (!state.geos || !Object.keys(state.geos).length) return 0;
     let n = 0;
     function swap(e, lodName) {
       if (!e || !e.mesh) return;
@@ -479,6 +531,7 @@
   function beforeRender(scene, camera) {
     if (!scene || (scene.userData && scene.userData.cityReleased)) return;
     if (!window.THREE) return;
+    try { pumpLodBuild(window.THREE, 3); } catch (_) {}
     if (!state.classified) {
       try { classify(scene, window.THREE); } catch (e) { try { console.warn('outdoor-perf classify', e); } catch (_) {} }
     } else if (state.lod && state.grass.length && !state.grass[0].mesh.userData.sinLodApplied) {
@@ -522,6 +575,12 @@
     if (typeof window === 'undefined') return null;
     if (window.__C && window.__C.isCamera) return window.__C;
     try {
+      if (window.SinGfx && typeof SinGfx.camera === 'function') {
+        const c = SinGfx.camera();
+        if (c && c.isCamera) return c;
+      }
+    } catch (_) {}
+    try {
       if (window.PalaceWings && PalaceWings.state && PalaceWings.state.ctx && PalaceWings.state.ctx.camera)
         return PalaceWings.state.ctx.camera;
     } catch (_) {}
@@ -534,15 +593,7 @@
       hookRenderer(THREE);
       if (!state._lodStarted) {
         state._lodStarted = true;
-        loadLod(THREE).then(function () {
-          state.ready = true;
-          // Allow a second classify so LODs attach if we already inventoried.
-          if (state.classified) state.classified = false;
-          try { console.log('[outdoor-perf] lod pack ready', Object.keys(state.geos)); } catch (_) {}
-        }).catch(function (e) {
-          try { console.warn('outdoor-perf lod', e && e.message || e); } catch (_) {}
-          state.ready = true;
-        });
+        loadLod(THREE).catch(function () { state.ready = true; });
       }
       return true;
     };
@@ -556,11 +607,10 @@
           const scene = findScene();
           const cam = findCamera();
           if (scene && window.THREE) {
+            pumpLodBuild(window.THREE, 4);
             if (!state.classified) classify(scene, window.THREE);
-            if (state.lod) {
-              const swapped = applyLods();
-              if (swapped) try { console.log('[outdoor-perf] applied lods', swapped); } catch (_) {}
-            }
+            const swapped = applyLods();
+            if (swapped) try { console.log('[outdoor-perf] applied lods', swapped); } catch (_) {}
             if (state.classified && cam) applyFrame(scene, cam);
           }
         } catch (e) {
@@ -589,6 +639,7 @@
     last: function () { return state.lastVis; },
     wallPlane: function () { return state.wallPlane; },
     applyLods: applyLods,
+    pumpLodBuild: pumpLodBuild,
     liveTrisOf: liveTrisOf,
     pickVegLod: function (e, dn) { return pickVegLod(e, dn); },
     attachLodLadder: attachLodLadder,
