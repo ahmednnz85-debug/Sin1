@@ -363,8 +363,22 @@
     gl = R.getContext();
     if (R.capabilities.isWebGL2) tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');
     R.render = function (s, c) {
-      try { if (typeof window !== 'undefined') window.__R = R; } catch (_) {}
+      try {
+        if (typeof window !== 'undefined') {
+          window.__R = R;
+          if (c && c.isCamera) window.__C = c;
+          if (s && s.isScene) window.__S = s;
+        }
+      } catch (_) {}
       const isMain = !R.getRenderTarget() && c && c.isPerspectiveCamera;
+      // Instance-level wrap shadows prototype hooks, so outdoor-perf must
+      // run here or LODs/culling never apply on a real device.
+      if (isMain) {
+        try {
+          if (window.SinOutdoorPerf && SinOutdoorPerf.beforeRender)
+            SinOutdoorPerf.beforeRender(s, c);
+        } catch (_) {}
+      }
       const main = perf.on && isMain;
       let q = null;
       if (main && tq && !pendingQ) { q = gl.createQuery(); gl.beginQuery(tq.TIME_ELAPSED_EXT, q); }
@@ -487,6 +501,7 @@
     update(dt, info) { updateAtmo(dt, info); cameraFrame(dt, ctx.interior(), info && info.running); },
     renderer() { return R; },
     scene() { return scene; },
+    camera() { return camera; },
     status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, shadowPolicy: !!E.shadow, shadowMapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg, calls: perf.calls, tris: perf.tris }; }
   };
   window.SinGfx = API;

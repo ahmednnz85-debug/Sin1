@@ -24,7 +24,7 @@ function load() {
 }
 
 test('outdoor-perf is on the page and original outdoor GLBs are not replaced', () => {
-  assert.match(index, /data-src="outdoor-perf\.js\?v=20261112r4"/);
+  assert.match(index, /data-src="outdoor-perf\.js\?v=20261112r5"/);
   // Originals still referenced by the game (index loadX paths).
   assert.match(index, /babylonian_wall/);
   assert.match(index, /grass_tuft_a/);
@@ -111,4 +111,21 @@ test('palaceInterior drains CPU during REVEAL warm, not only at the end', () => 
   assert.match(pal, /drainCpuNow\(ctx, \(warmIndex % 16 === 0\)/);
   assert.match(pal, /__webglTexture \|\| p\.__webglInit/);
   assert.doesNotMatch(pal, /__version === t\.version/);
+});
+
+test('LOD decode is budgeted across frames, not built inside the fetch callback', () => {
+  assert.match(src, /function pumpLodBuild/);
+  assert.match(src, /budgetMs \|\| 4/);
+  // Must not build the whole pack inside the fetch then() callback.
+  assert.doesNotMatch(src, /then\(function \(pack\) \{\s*state\.lod = pack;\s*const geos/);
+  // A Worker structured-clone of the 1.8 MB tree stalled WebKit for 2.3 s.
+  assert.doesNotMatch(src, /new Worker/);
+});
+
+test('applyLods can attach a partial pack (geos built so far)', () => {
+  assert.match(src, /if \(!state\.geos \|\| !Object\.keys\(state\.geos\)\.length\) return 0;/);
+});
+
+test('findCamera uses SinGfx.camera so the real-device poll has a camera', () => {
+  assert.match(src, /SinGfx && typeof SinGfx\.camera === 'function'/);
 });

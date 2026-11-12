@@ -164,8 +164,9 @@
     } catch (_) {}
   }
 
-  function releaseCpuFromObject(root, renderer) {
+  function releaseCpuFromObject(root, renderer, opts) {
     if (!root || !root.traverse || !renderer || typeof renderer.initTexture !== 'function') return { sources: 0, released: 0 };
+    const doUpload = !opts || opts.upload !== false;
     const bySource = new Map();
     const geos = new Set();
     root.traverse(function (o) {
@@ -183,9 +184,11 @@
         });
       });
     });
-    bySource.forEach(function (list) {
-      list.forEach(function (t) { try { if (t.image || (t.source && t.source.data)) renderer.initTexture(t); } catch (_) {} });
-    });
+    if (doUpload) {
+      bySource.forEach(function (list) {
+        list.forEach(function (t) { try { if (t.image || (t.source && t.source.data)) renderer.initTexture(t); } catch (_) {} });
+      });
+    }
     let released = 0;
     bySource.forEach(function (list, source) {
       if (!source.data) return;
@@ -487,7 +490,7 @@
           // at most every 2 s so we do not walk the graph every frame.
           if (frames <= 8 || (now - lastRelease > 2000) || (scene.userData && scene.userData.cityReleased && frames < 200)) {
             lastRelease = now;
-            try { releaseCpuFromObject(scene, this); } catch (_) {}
+            try { releaseCpuFromObject(scene, this, { upload: false }); } catch (_) {}
           }
         }
         return out;
