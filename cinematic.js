@@ -191,7 +191,11 @@
   const lookLights = [];
   function interiorEnvironment(renderer) {
     if (interiorEnv) return interiorEnv;
-    const r = renderer || R; if (!r || !THREE.PMREMGenerator || !THREE.DataTexture) return null;
+    try { if (typeof window !== 'undefined' && window.__sinTraceOn) console.info('[palace load] trace PMREM-begin'); } catch (_) {}
+    const r = renderer || R; if (!r || !THREE.PMREMGenerator || !THREE.DataTexture) {
+      try { if (typeof window !== 'undefined' && window.__sinTraceOn) console.info('[palace load] trace PMREM-skip'); } catch (_) {}
+      return null;
+    }
     // 128x64 float equirect: dark cool upper room, warm floor bounce, a ring of
     // HDR fire hot-spots near the horizon (strong but small -> controlled
     // highlights on metal/gold, readable stone/wood).
@@ -218,7 +222,9 @@
     tex.mapping = THREE.EquirectangularReflectionMapping;
     tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
     const pm = new THREE.PMREMGenerator(r);
+    const _tPm = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     interiorEnv = pm.fromEquirectangular(tex).texture;
+    try { if (typeof window !== 'undefined' && window.__sinTraceOn) console.info('[palace load] trace PMREM-fromEquirectangular', Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - _tPm) + 'ms'); } catch (_) {}
     pm.dispose(); tex.dispose();
     interiorEnv.name = 'SinInteriorHDR';
     interiorEnv.userData.palaceShared = true;
@@ -227,6 +233,7 @@
   }
   function setRGB(c, a) { if (c && a) c.setRGB(a[0], a[1], a[2]); }
   function scanLookLights() {
+    const _tSc = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     lookLights.length = 0;
     scene.traverse(function (o) {
       if (!o.isLight) return;
@@ -234,6 +241,7 @@
       for (let p = o.parent; p; p = p.parent) if (p.name === 'PalaceInterior' || p.name === 'PalaceWings') { inside = true; break; }
       if (inside) lookLights.push(o);
     });
+    try { if (typeof window !== 'undefined' && window.__sinTraceOn) console.info('[palace load] trace scanLookLights', Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - _tSc) + 'ms', 'n', lookLights.length); } catch (_) {}
   }
   function applyInteriorLook(t) {
     const L = Object.assign({}, LOOK.interior, LOOK.tier[base] || {});
@@ -552,8 +560,14 @@
     },
     // called once per rAF, before simulation
     frame(ts, busy) {
-      govern(ts, busy); hud(ts);
+      const _tr = typeof window !== 'undefined' && window.__sinTrace;
+      if (_tr) _tr('SinGfx.frame-enter busy=' + !!busy);
+      govern(ts, busy);
+      if (_tr) _tr('SinGfx.govern');
+      hud(ts);
+      if (_tr) _tr('SinGfx.hud');
       try { lookFrame(); } catch (_) {}
+      if (_tr) _tr('SinGfx.lookFrame');
       try {
         if (window.SinMemoryOverlay) {
           const memCtx = {
@@ -566,6 +580,7 @@
           else if (SinMemoryOverlay.on()) SinMemoryOverlay.render(memCtx);
         }
       } catch (_) {}
+      if (_tr) _tr('SinGfx.memoryOverlay');
     },
     // called once per simulation step, after the camera has been placed
     look: LOOK,

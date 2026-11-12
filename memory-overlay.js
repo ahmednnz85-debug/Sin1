@@ -181,9 +181,14 @@
       usedMB: +(performance.memory.usedJSHeapSize / 1048576).toFixed(1),
       totalMB: +(performance.memory.totalJSHeapSize / 1048576).toFixed(1)
     } : null;
+    const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
+    if (_tr) _tr('overlay-sample-enter');
     const wings = window.PalaceWings && PalaceWings.metrics ? PalaceWings.metrics() : null;
+    if (_tr) _tr('overlay-PalaceWings.metrics');
     const palace = window.PalaceInterior && PalaceInterior.status ? PalaceInterior.status() : null;
+    if (_tr) _tr('overlay-PalaceInterior.status');
     const gfx = window.SinGfx && SinGfx.status ? SinGfx.status() : null;
+    if (_tr) _tr('overlay-SinGfx.status');
     const now = performance.now();
     if (lastFrameTs) {
       const instDt = Math.max(1, now - lastFrameTs);

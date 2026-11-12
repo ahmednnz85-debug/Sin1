@@ -2798,6 +2798,8 @@
     return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds, memoryLevel: level, warmGroups: warmGroups });
   }
   function updateCulling(force) {
+    const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
+    if (_tr) _tr('updateCulling-enter force=' + !!force);
     if (!state.built || !state.ctx || !state.ctx.hero) return;
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
     const r = regionAt(x, z), id = r ? r.id : 'Palace';
@@ -2886,11 +2888,16 @@
     }
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
     state.root.visible = inHall || contains(x, z);
+    if (_tr) _tr('updateCulling-end');
   }
   function tick(dt) {
+    const _trT = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     if (!state.built) return;
+    if (_trT) _trT('PalaceWings.tick-enter');
     updateRoomDoors(Math.max(.001, Math.min(.05, Number(dt) || .016)));
+    if (_trT) _trT('PalaceWings.updateRoomDoors');
     updateCulling(false);
+    if (_trT) _trT('PalaceWings.updateCulling');
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
     if ((state.k2Lights && state.k2Lights.length) || (state.k3Lights && state.k3Lights.length)) {
       const t = performance.now() * 0.001;
@@ -3364,7 +3371,18 @@
     report.tests.forEach(t => { if (t.bad && t.bad.length) lines.push(t.name + ': ' + JSON.stringify(t.bad.slice(0, 5))); });
     return lines.join('\n');
   }
+  let metricsBusy = false;
+  let metricsLast = null;
+  function current() { return state.current || null; }
   function metrics() {
+    const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
+    const _tM = (_tr && performance.now) ? performance.now() : 0;
+    if (metricsBusy) {
+      if (_tr) _tr('PalaceWings.metrics-reenter');
+      return metricsLast || { current: state.current || null, meshes: 0, triangles: 0, visibleMeshes: 0, visibleTriangles: 0, reentrant: true };
+    }
+    metricsBusy = true;
+    try {
     let meshes = 0, triangles = 0, visibleMeshes = 0, visibleTriangles = 0;
     const topVisibleMeshes = [], regionByGroup = new Map();
     if (!state.root) return { meshes: 0, triangles: 0, visibleMeshes: 0, visibleTriangles: 0 };
@@ -3395,7 +3413,10 @@
       });
       visibleRegionTriangles[id] = Math.round(n);
     });
-    return {
+    // report() must stay cheap (cached memory, never a fresh estimate()) so
+    // a diagnostic walk cannot re-enter this function via status().
+    const zones = zoneStreamer ? zoneStreamer.report() : null;
+    const out = {
       current: state.current || null,
       meshes, triangles, visibleMeshes, visibleTriangles, visibleRegionTriangles,
       topVisibleMeshes: topVisibleMeshes.slice(0, 12),
@@ -3403,7 +3424,7 @@
       visibility: state.visibility || null,
       renderBudget: state.renderBudget || null,
       dressed: Array.from(dressedRooms),
-      zones: zoneStreamer ? zoneStreamer.report() : null,
+      zones: zones,
       dressFailures: dressFailures.slice(-8),
       colliders: state.colliders.length,
       k1ModelColliders: state.k1ModelColliderCount,
@@ -3412,6 +3433,13 @@
       rooms: state.rooms.length,
       regions: state.regions.length
     };
+    metricsLast = out;
+    if (_tr && !(typeof window !== 'undefined' && window.__sinMetricsTraced)) {
+      if (typeof window !== 'undefined') window.__sinMetricsTraced = true;
+      _tr('PalaceWings.metrics-end ' + Math.round((performance.now && performance.now() || 0) - _tM) + 'ms meshes=' + meshes);
+    }
+    return out;
+    } finally { metricsBusy = false; }
   }
 
   /* ---------------------------------------------------------------------------
@@ -4247,7 +4275,7 @@
     deviceProfile: deviceProfile,
     palaceVisible: function () { return state.palaceNear !== false; },
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
-    teleport, overview, runTests, formatReport, cameraTour, metrics, corridorReport: () => state.corridorReport,
+    teleport, overview, runTests, formatReport, cameraTour, current, metrics, corridorReport: () => state.corridorReport,
     shortestPath,
     assetList, provideAsset, preloadReport,
     provideBake: function (data) { state.bake = data; if (typeof window !== 'undefined') window.__palaceColliderBake = data; },

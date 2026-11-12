@@ -353,8 +353,16 @@
     return { purged: purged, skipped: skipped, freedMB: +freedMB.toFixed(1) };
   }
 
+  let estimateBusy = false;
   function estimate(ctx) {
     ctx = ctx || {};
+    if (estimateBusy) return lastEstimate;
+    estimateBusy = true;
+    try {
+    return estimateBody(ctx);
+    } finally { estimateBusy = false; }
+  }
+  function estimateBody(ctx) {
     const renderer = ctx.renderer || (typeof window !== 'undefined' && window.__R) || null;
     const scene = ctx.scene || (typeof window !== 'undefined' && window.__S) || null;
     const info = renderer && renderer.info ? renderer.info : null;
@@ -463,13 +471,16 @@
     const webkitMB = 64;
     const processMB = Math.max(heapMB, cpuMB) + gpuMB + programsMB + webkitMB;
 
-    const palace = (typeof window !== 'undefined' && window.PalaceInterior && PalaceInterior.status)
-      ? PalaceInterior.status() : null;
+    // Do not call PalaceInterior.status() from estimate(). status() used to
+    // call PalaceWings.metrics() → zoneStreamer.report() → usage() →
+    // estimate() again, which froze the first DONE frame. Phase/room come
+    // from the caller (the overlay already has them); cityReleased is on
+    // the scene.
     const sample = {
       t: Date.now(),
-      phase: (palace && palace.phase) || ctx.phase || '—',
-      room: (palace && palace.room) || ctx.room || '—',
-      cityReleased: !!(scene && scene.userData && scene.userData.cityReleased) || !!(palace && palace.cityReleased),
+      phase: ctx.phase || '—',
+      room: ctx.room || '—',
+      cityReleased: !!(scene && scene.userData && scene.userData.cityReleased),
       geometries: mem.geometries || collected.geos.size || 0,
       textures: mem.textures || collected.textures.size || 0,
       programs: programs,

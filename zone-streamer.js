@@ -243,13 +243,19 @@
 
     function usage() {
       try {
+        // Cached figures only. A fresh SinProcessMemory.estimate() from
+        // report()/wouldExceed() walked the whole scene and called
+        // PalaceInterior.status(), which used to call PalaceWings.metrics(),
+        // which called report() again — infinite recursion on the first
+        // hall frame. Budget decisions use the last sample (updated on a
+        // 500 ms cadence after the first present).
         if (typeof o.estimate === 'function') {
           const u = o.estimate() || {};
           return { processMB: +u.processMB || 0, gpuMB: +u.gpuMB || 0, cpuMB: +u.cpuMB || 0 };
         }
         const PM = (typeof window !== 'undefined' && window.SinProcessMemory) || (typeof globalThis !== 'undefined' && globalThis.SinProcessMemory);
-        if (PM && typeof PM.estimate === 'function') {
-          const u = PM.estimate({ renderer: ctx && ctx.renderer, scene: ctx && ctx.scene }) || {};
+        if (PM && typeof PM.last === 'function') {
+          const u = PM.last() || {};
           return { processMB: +u.processMB || 0, gpuMB: +u.gpuMB || 0, cpuMB: +u.cpuMB || 0 };
         }
       } catch (_) {}

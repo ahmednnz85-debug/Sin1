@@ -1611,6 +1611,8 @@
   }
 
   function holdCull(scene, hero) {
+    const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
+    const _tHc = (_tr && performance.now) ? performance.now() : 0;
     if (!scene || !group) return;
     // After the exterior teardown there are no outdoor meshes left to hide,
     // but the kept outdoor lights (sun / hemi / fill, keepDuringPalace) must
@@ -1632,6 +1634,7 @@
     const onLights = state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED' || (state === 'DONE' && occupant);
     if (onLights && !lightsCulled) cullOutsideLights(scene, true);
     if (!onLights && lightsCulled) cullOutsideLights(scene, false);
+    if (_tr) _tr('holdCull-end');
   }
 
   function setExteriorVisible(scene, visible) {
@@ -1993,10 +1996,14 @@
 
   function animateHall(dt, ctx) {
     if (!group) return;
+    const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     const cam = ctx.camera;
     if (cam) updateLODs(cam);
+    if (_tr) _tr('animateHall-updateLODs');
     updatePalaceLights(dt, ctx.hero);
+    if (_tr) _tr('animateHall-updatePalaceLights');
     if (wingRuntime && window.PalaceWings) PalaceWings.tick(dt, ctx);
+    if (_tr) _tr('animateHall-PalaceWings.tick');
   }
 
   function updatePalaceLights(dt, hero) {
@@ -4434,6 +4441,8 @@
       return;
     }
     if (state === 'DONE') {
+      const _trD = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
+      if (_trD) _trD('PalaceInterior.tick-DONE-enter');
       if (streamHoldFrames > 0) {
         streamHoldFrames -= 1;
         try { window.__sinStreamHold = streamHoldFrames > 0; } catch (_) {}
@@ -4674,7 +4683,15 @@
     loadPalaceAssets: loadPalaceAssets,
     state: function () { return state; },
     status: function () {
-      const wingRoom = (wingRuntime && wingRuntime.current) || (window.PalaceWings && PalaceWings.metrics && PalaceWings.metrics().current) || null;
+      // Cheap current-room only. PalaceWings.metrics() walks the whole wings
+      // graph and then asks zoneStreamer.report() → SinProcessMemory.estimate()
+      // which used to call this status() again — an infinite recurse that
+      // froze the first DONE frame whenever the hero was still in the hall
+      // (current === null, so the metrics() fallback always ran).
+      const wingRoom = (wingRuntime && wingRuntime.current)
+        || (window.PalaceWings && typeof PalaceWings.current === 'function' && PalaceWings.current())
+        || (window.PalaceWings && PalaceWings.state && PalaceWings.state.current)
+        || null;
       const room = wingRoom || (hallBuilt || state === 'DONE' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' ? 'Palace' : (state === 'LOADING' || state === 'FADING_OUT' || state === 'FAILED' ? 'entry' : 'outside'));
       return {
         phase: state,

@@ -20,7 +20,7 @@ function load() {
 }
 
 test('process-memory is on the page ahead of the game and exports an estimator', () => {
-  assert.match(index, /data-src="process-memory\.js\?v=20261112r9"/);
+  assert.match(index, /data-src="process-memory\.js\?v=20261112r10"/);
   // Must load after device-profile and before palace / wings so hooks wrap THREE first.
   const dp = index.indexOf('device-profile.js');
   const pm = index.indexOf('process-memory.js');
