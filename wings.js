@@ -2855,11 +2855,12 @@
     if (!origin) return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
-    if (c && c.complete) {
-      try { console.info('[palace load] ensure-dress', origin, 'already-complete'); } catch (_) {}
-      return;
+    if (c && c.complete) return;
+    // Once per room per dress attempt — every-tick logs froze the WebKit console.
+    if (state._ensureLog !== origin + (state.k4Dress ? ':d' : ':n')) {
+      state._ensureLog = origin + (state.k4Dress ? ':d' : ':n');
+      try { console.info('[palace load] ensure-dress', origin, 'complete', !!(c && c.complete), 'k4Dress', !!state.k4Dress, 'group', !!(state.regionGroups && state.regionGroups.get(origin))); } catch (_) {}
     }
-    try { console.info('[palace load] ensure-dress', origin, 'complete', !!(c && c.complete), 'k4Dress', !!state.k4Dress, 'group', !!(state.regionGroups && state.regionGroups.get(origin))); } catch (_) {}
     if (origin === 'K4') {
       try {
         dressK4();
