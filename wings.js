@@ -2864,8 +2864,8 @@
       // FADING_IN froze WebKit for 90s after palace entry reached the fade.
       // Streaming begins at DONE, after the load screen is gone. Rooms
       // still use hideUntilReady, so nothing pops in front of the player.
-      if (palacePhase === 'SETUP' || palacePhase === 'REVEAL' || palacePhase === 'FADING_IN') {
-        try { console.info('[palace load] cull-stream-deferred', palacePhase); } catch (_) {}
+      if (palacePhase === 'SETUP' || palacePhase === 'REVEAL' || palacePhase === 'FADING_IN' || window.__sinStreamHold) {
+        try { console.info('[palace load] cull-stream-deferred', palacePhase || 'hold', window.__sinStreamHold ? 'hold' : ''); } catch (_) {}
         return;
       }
       {

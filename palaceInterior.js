@@ -178,6 +178,9 @@
   let warmProxyI = null;
   let warmScene = null;
   let warmPending = false;
+  let liveCompilePending = false;
+  let liveCompileDone = false;
+  let streamHoldFrames = 0;
   const aniso = { v: 4 };
   const runtimeErrors = [];
   const LOG = [];
@@ -3972,6 +3975,10 @@
             warmMeshes = null;
             warmScene = null;
             warmPending = false;
+            liveCompilePending = false;
+            liveCompileDone = false;
+            streamHoldFrames = 0;
+            try { window.__sinStreamHold = false; } catch (_) {}
             try { window.__palaceSetupBusy = false; } catch (_) {}
             try { console.info('[palace load] REVEAL-enter'); } catch (_) {}
           } catch (err) {
@@ -4066,6 +4073,7 @@
           warmScene = new THREE.Scene();
           warmScene.environment = ctx.scene.environment;
           if (ctx.scene.environmentIntensity != null) warmScene.environmentIntensity = ctx.scene.environmentIntensity;
+          if (ctx.scene.fog) warmScene.fog = ctx.scene.fog;
           const addLights = function (root) {
             if (!root || !root.traverse) return;
             root.traverse(function (o) {
@@ -4125,7 +4133,42 @@
       loadEl.style.opacity = String(1 - easeOut(u));
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
-      if (u >= 1) {
+      // Entrance materials were compiled on proxies. The first live
+      // renderer.render can still compile new program variants (skinning,
+      // shadows, the real light list). Do that here, on the real scene,
+      // while the blackout is up, then lift it.
+      if (u >= 1 && !liveCompileDone) {
+        if (!liveCompilePending) {
+          liveCompilePending = true;
+          try { console.info('[palace load] live-compile-begin'); } catch (_) {}
+          const tLive = performance.now();
+          function afterLive() {
+            const took = performance.now() - tLive;
+            try { console.info('[palace load] live-compile-end', Math.round(took) + 'ms'); } catch (_) {}
+            const gl = ctx.renderer.getContext && ctx.renderer.getContext();
+            waitForGlIdle(gl).then(function () {
+              liveCompilePending = false;
+              liveCompileDone = true;
+            });
+          }
+          try {
+            if (ctx.renderer.debug) ctx.renderer.debug.checkShaderErrors = false;
+            if (typeof ctx.renderer.compileAsync === 'function') {
+              Promise.resolve(ctx.renderer.compileAsync(ctx.scene, ctx.camera)).then(afterLive, afterLive);
+            } else if (typeof ctx.renderer.compile === 'function') {
+              ctx.renderer.compile(ctx.scene, ctx.camera);
+              afterLive();
+            } else {
+              afterLive();
+            }
+          } catch (e) {
+            mark('live-compile ' + (e && e.message));
+            afterLive();
+          }
+        }
+        return;
+      }
+      if (u >= 1 && liveCompileDone) {
         loadEl.style.opacity = '0';
         loadEl.style.pointerEvents = 'none';
         // Finish the load fade directly into gameplay; skip the scripted entrance walk/camera shot.
@@ -4135,6 +4178,8 @@
         entryCut = true;
         note('done (entrance cinematic skipped)');
         renderDebug();
+        streamHoldFrames = 3;
+        try { window.__sinStreamHold = true; } catch (_) {}
         window.__sinEntryBlackout = false;
         try { console.info('[palace load] DONE'); } catch (_) {}
         setTimeout(function () {
@@ -4171,6 +4216,13 @@
       return;
     }
     if (state === 'DONE') {
+      if (streamHoldFrames > 0) {
+        streamHoldFrames -= 1;
+        try { window.__sinStreamHold = streamHoldFrames > 0; } catch (_) {}
+        if (streamHoldFrames <= 0) {
+          try { console.info('[palace load] stream-hold-lifted'); } catch (_) {}
+        }
+      }
       const lx = ctx.hero.position.x - portalX;
       const lz = ctx.hero.position.z - portalFront;
       const inHall = lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;
