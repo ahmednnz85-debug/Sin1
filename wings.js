@@ -2869,11 +2869,14 @@
       try { console.info('[palace load] ensure-dress', origin, 'complete', !!(c && c.complete), 'k4Dress', !!state.k4Dress, 'group', !!(state.regionGroups && state.regionGroups.get(origin))); } catch (_) {}
     }
     if (origin === 'K4') {
-      try {
-        dressK4();
-        loadK4Assets();
-      } catch (e) {
-        try { console.warn('[palace load] K4 re-dress', e && (e.message || e)); } catch (_) {}
+      const inflight = state.k4Dress && state.k4Dress.loadStarted && !state.k4Dress._assetsCommitted;
+      if (!inflight) {
+        try {
+          dressK4();
+          loadK4Assets();
+        } catch (e) {
+          try { console.warn('[palace load] K4 re-dress', e && (e.message || e)); } catch (_) {}
+        }
       }
     }
     if (zoneStreamer && typeof zoneStreamer.forceLoad === 'function' && STREAM_EXPECT[origin]) {
@@ -3814,24 +3817,32 @@
     const loaded = [];
     let pending = kits.length;
     const finish = function () {
-      if (pending || state.k4Dress !== dress || state.root !== rootAtRequest) return;
+      if (pending || state.root !== rootAtRequest) return;
+      // If the dress object was replaced mid-flight, still commit onto a
+      // waiting dress for the same host rather than discarding a completed parse.
+      let target = dress;
+      if (state.k4Dress !== dress) {
+        const cur = state.k4Dress;
+        if (cur && cur.host === dress.host && !cur._assetsCommitted) target = cur;
+        else return;
+      }
       loaded.forEach(function (entry) {
         entry.gltf.scene.updateMatrixWorld(true);
-        dress.assetSpecs.filter(function (spec) { return spec.url === entry.url; }).forEach(function (spec) {
+        (target.assetSpecs || dress.assetSpecs).filter(function (spec) { return spec.url === entry.url; }).forEach(function (spec) {
           const src = entry.gltf.scene.getObjectByName(spec.item);
-          if (!src) dress.errors.push(spec.name + ': missing node ' + spec.item);
-          else k4PlaceAsset(dress, spec, src, rootAtRequest);
+          if (!src) target.errors.push(spec.name + ': missing node ' + spec.item);
+          else k4PlaceAsset(target, spec, src, rootAtRequest);
         });
       });
       rebuildSpatial();
       rootAtRequest.updateMatrixWorld(true);
-      dress._assetsCommitted = true;
-      if (dress.host && dress.host.userData) dress.host.userData.k4Dressed = true;
+      target._assetsCommitted = true;
+      if (target.host && target.host.userData) target.host.userData.k4Dressed = true;
       markDressReady('K4');
     };
     kits.forEach(function (url) {
       wingGLB(url, function (gltf) {
-        if (gltf && state.root === rootAtRequest && state.k4Dress === dress) loaded.push({ url: url, gltf: gltf });
+        if (gltf && state.root === rootAtRequest) loaded.push({ url: url, gltf: gltf });
         else if (!gltf) dress.errors.push(url + ': failed to decode');
         pending -= 1;
         finish();
@@ -3850,8 +3861,13 @@
       try { console.warn('[palace load] K4 dress skipped', !r ? 'no-room' : 'no-group'); } catch (_) {}
       return;
     }
-    // Second visit after eviction must re-dress, but two overlapping load()
-    // calls must not stack a second floor on a still-resident first dress.
+    // Second visit after eviction must re-dress, but an in-flight load must
+    // never be replaced: finish() used to no-op when k4Dress changed, and
+    // ensureCurrentDress then started a new 12 s parse (playthrough-4 first
+    // K4: five re-parses, complete false, 60 s). Keep the in-flight dress.
+    if (state.k4Dress && state.k4Dress.loadStarted && !state.k4Dress._assetsCommitted) return;
+    // Two overlapping load() calls must not stack a second floor on a
+    // still-resident first dress.
     if (state.k4Dress && state.k4Dress.host === g) {
       const floors = findNamed(g, 'K4-treasury-floor-artwork');
       if (floors && floors.length) return;

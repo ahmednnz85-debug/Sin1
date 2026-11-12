@@ -21,8 +21,12 @@
      zone is shown, so a broken download cannot hide a room forever;
    - LRU eviction with hysteresis: zones that are no longer wanted linger for
      `graceMs`, and an LRU cache keeps up to `cacheZones[memoryLevel]` extra
-     zones resident; visible / adjacent / wanted zones are never evicted;
-     eviction disposes GPU geometry + textures owned by the zone;
+     zones resident; the current room and anything actually in the camera
+     frustum are never evicted. Prefetch and the planner's `prepared` set
+     must NEVER override the budget: prepared neighbours are the first
+     things evicted when the current room needs space, and the current
+     room's load always has top priority. Eviction disposes GPU geometry
+     + textures owned by the zone;
    - CPU release after upload: textures marked releasable (parsed GLBs) drop
      their decoded pixels only after the GPU copy exists.
 
@@ -316,10 +320,66 @@
         && (o.gpuBudgetMB <= 0 || extra.gpuMB <= o.gpuBudgetMB)
         && (o.cpuBudgetMB <= 0 || extra.cpuMB <= o.cpuBudgetMB);
     }
+    function evictPreparedFirst(why, includeAdjacent) {
+      const list = [];
+      zones.forEach(function (r) {
+        if (r.state === 'cold' || r.isCurrent || r.visible) return;
+        if (!includeAdjacent && r.hops != null && r.hops <= 1) return;
+        list.push(r);
+      });
+      // Prepared / far rooms first; 1-hop neighbours last (only when needed).
+      list.sort(function (a, b) {
+        const an = (a.hops != null && a.hops <= 1) ? 1 : 0;
+        const bn = (b.hops != null && b.hops <= 1) ? 1 : 0;
+        if (an !== bn) return an - bn;
+        return (b.hops || 0) - (a.hops || 0);
+      });
+      let n = 0;
+      list.forEach(function (r) {
+        if (r.state === 'cold' || r.isCurrent || r.visible) return;
+        evict(r, why || 'prepared-before-current');
+        stats.budgetEvictions++;
+        n++;
+      });
+      return n;
+    }
+    // Prefetch must never override the budget. Prepared neighbours are the
+    // first things evicted when the current room needs space. The current
+    // room's load always has top priority.
+    function evictForCurrent(extra) {
+      evictNonAdjacent('non-adjacent-before-load');
+      const tight = o.processBudgetMB > 0 && o.processBudgetMB <= 650;
+      // Under the 650 bar, always drop prepared / far rooms before a current
+      // load — even if the (possibly stale) estimate says the incoming room
+      // "fits". Playthrough-4 stacked K2+K3 to 656 MB because evictToFit
+      // trusted that estimate and skipped the evict.
+      if (tight) evictPreparedFirst('prepared-before-current', false);
+      if (!wouldExceed(extra)) return true;
+      evictPreparedFirst('budget-prepared', true);
+      return evictToFit(extra);
+    }
     function canStart(rec) {
       const extra = incoming(rec);
-      evictNonAdjacent('non-adjacent-before-load');
-      if (evictToFit(extra)) { rec.deferred = false; rec.deferredAt = 0; return true; }
+      if (rec.isCurrent) {
+        evictForCurrent(extra);
+        if (!wouldExceed(extra) || evictToFit(extra) || roomFitsAlone(rec)) {
+          rec.deferred = false; rec.deferredAt = 0; return true;
+        }
+      } else {
+        // Prefetch: start only if it fits without evicting the current room
+        // or anything visible. Never override the budget. Never compete
+        // with a current-room load that is still in flight.
+        evictNonAdjacent('non-adjacent-before-prefetch');
+        if (wouldExceed(extra)) return false;
+        if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
+          let currentBusy = false;
+          zones.forEach(function (r) {
+            if (r.isCurrent && r.state !== 'ready' && r.state !== 'cold') currentBusy = true;
+          });
+          if (currentBusy) return false;
+        }
+        rec.deferred = false; rec.deferredAt = 0; return true;
+      }
       if (!rec.deferred) {
         rec.deferred = true;
         rec.deferredAt = now();
@@ -430,6 +490,19 @@
       const w = rec.waiters.splice(0); w.forEach(fn => { try { fn(rec.id); } catch (_) {} });
     }
     function evict(rec, why) {
+      // The current room is never evicted to make room for prefetch, and a
+      // one-frame current flicker must not abort an in-flight load (playthrough-4
+      // first K4 was evicted mid-parse and re-dressed five times over 60 s).
+      if (why !== 'forced') {
+        if (rec.isCurrent) {
+          try { console.info('[palace load] evict-skipped', rec.id, why, 'current'); } catch (_) {}
+          return 0;
+        }
+        if (rec.state !== 'cold' && rec.state !== 'ready' && rec._currentUntil && now() < rec._currentUntil) {
+          try { console.info('[palace load] evict-skipped', rec.id, why, 'current-room-load'); } catch (_) {}
+          return 0;
+        }
+      }
       const g = group(rec);
       const own = rec.spec.ownsObject || function (ch) { return !!(ch.userData && ch.userData.streamDress); };
       const doomed = g ? g.children.filter(own) : [];
@@ -470,6 +543,7 @@
       rec.state = 'cold'; rec.leftAt = 0; rec.done = false;
       stats.evictions++;
       note('unload', rec.id + ' evicted (' + why + ', ' + doomed.length + ' objects)');
+      try { console.info('[palace load] evict', rec.id, why, doomed.length); } catch (_) {}
       return doomed.length;
     }
 
@@ -538,17 +612,27 @@
       order.forEach(function (id) {
         const rec = zones.get(id);
         const hops = distances.has(id) ? distances.get(id) : Infinity;
-        // Load/prefetch follows the player's region (prepared + prefetch hops),
-        // never the camera direction alone: spinning in place must not start
-        // or cancel a load. Anything the camera can currently see is still
-        // protected from eviction (no disappearing props mid-spin).
-        // The room the player is standing in must always be wanted:
-        // otherwise a missing distances entry (hops = Infinity) leaves it
-        // cold forever — the K4 second-visit 'present: [], ready: false'
-        // after eviction.
-        const want = prepared.has(id) || hops <= rec.spec.prefetchHops || id === view.current;
-        const protect = want || visible.has(id) || hops <= 1 || id === view.current;
-        rec.hops = hops; rec.protected = protect; rec.visible = visible.has(id); rec.isCurrent = id === view.current;
+        // The current room is always wanted (top priority). Prefetch and
+        // the visibility planner's `prepared` set (prepareHops, typically 2)
+        // may START a load only when the budget has room — they must never
+        // protect a neighbour from eviction when the current room needs
+        // space (playthrough-4: prepared/want kept K2 resident at K3 and
+        // peaked at 749 MB). Visible (actually in the camera frustum) and
+        // the current room itself still never disappear in front of the player.
+        const isCurrent = id === view.current;
+        const tight = o.processBudgetMB > 0 && o.processBudgetMB <= 650;
+        // On a 650 MB phone, only prefetchHops (1) starts a neighbour —
+        // the planner's prepared set (prepareHops: 2) must NOT keep or
+        // restart a farther room. prepared.has in `want` is what kept
+        // K2 resident (and restarted it after evict) when the player
+        // reached K3.
+        const prefetch = hops <= rec.spec.prefetchHops || (!tight && prepared.has(id));
+        const want = isCurrent || prefetch;
+        // hops <= 1 protects on desktop; on a 650 MB phone those neighbours
+        // yield once evictForCurrent decides the current room needs space.
+        const protect = isCurrent || visible.has(id) || (!tight && hops <= 1);
+        rec.hops = hops; rec.protected = protect; rec.visible = visible.has(id); rec.isCurrent = isCurrent;
+        if (isCurrent) rec._currentUntil = t + 2000;
         if (want) { rec.lastWanted = t; rec.leftAt = 0; wanted.push(rec); }
         else if (rec.state !== 'cold' && !rec.leftAt) rec.leftAt = t;
       });
@@ -628,7 +712,13 @@
     function forceLoad(id) {
       const rec = zones.get(id);
       if (!rec) return 'unregistered';
-      evictNonAdjacent('non-adjacent-before-load');
+      // Mark current first so evictForCurrent cannot unload the room the
+      // player just entered (playthrough-4 first K4 was evicted mid-parse
+      // and re-dressed five times over 60 s).
+      rec.isCurrent = true;
+      rec.lastWanted = now();
+      rec._currentUntil = now() + 2000;
+      evictForCurrent(incoming(rec));
       if (rec.state === 'cold') {
         evictToFit(incoming(rec));
         rec.deferred = false;
