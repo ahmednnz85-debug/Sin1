@@ -101,13 +101,22 @@
       maxTextureSize: 0,         // 0 = no cap; set from SinDevice on phones
       geometryBudget: 420,
       textureBudget: 180,
+      // Hard device-aware process / GPU / CPU caps. Loading DEFERRs rather
+      // than exceed them; eviction of unprotected idle zones runs first.
+      processBudgetMB: 1400,
+      gpuBudgetMB: 1100,
+      cpuBudgetMB: 250,
+      defaultZoneProcessMB: 50,
+      defaultZoneGpuMB: 40,
+      defaultZoneCpuMB: 10,
+      estimate: null,            // optional () => { processMB, gpuMB, cpuMB }
       log: null                  // function(kind, msg) for the memory overlay
     }, options || {});
 
     const zones = new Map();               // id -> record
     const order = [];                      // registration order (stable priority)
     const releasable = new Map();          // source -> Set(textures) waiting for GPU copy
-    const stats = { uploads: 0, uploadMs: 0, maxFrameUploadMs: 0, compiles: 0, reveals: 0, evictions: 0, texturesDisposed: 0, cpuReleased: 0 };
+    const stats = { uploads: 0, uploadMs: 0, maxFrameUploadMs: 0, compiles: 0, reveals: 0, evictions: 0, texturesDisposed: 0, cpuReleased: 0, deferred: 0, budgetEvictions: 0, lastDefer: null };
     let ctx = null;                        // { renderer, scene, camera, groupOf(id) }
     let uploadQueue = [];                  // { tex, zone, rank }
 
@@ -161,7 +170,25 @@
       const img = t.source.data;
       releasable.delete(t.source);
       if (!img) return;
-      try { t.source.data = null; if (typeof img.close === 'function') img.close(); stats.cpuReleased++; } catch (_) {}
+      // Record GPU dimensions BEFORE closing the bitmap, or the process
+      // estimator's gpuTex collapses (490 → 44, then a "fake" drop to 390).
+      const w = img.width || img.videoWidth || 0;
+      const h = img.height || img.videoHeight || 0;
+      try {
+        set.forEach(function (x) {
+          if (!x.userData) x.userData = {};
+          if (w && h) { x.userData.sinGpuW = x.userData.sinGpuW || w; x.userData.sinGpuH = x.userData.sinGpuH || h; }
+        });
+        // Null the shared source FIRST. Clones may expose image as a getter
+        // over source.data (assigning x.image throws and used to skip the
+        // source.data = null, leaving CPU pixels resident).
+        t.source.data = null;
+        set.forEach(function (x) {
+          try { if ('image' in x && x.image === img) x.image = null; } catch (_) {}
+        });
+        if (typeof img.close === 'function') img.close();
+        stats.cpuReleased++;
+      } catch (_) {}
     }
     function capOne(t) {
       const max = o.maxTextureSize || 0;
@@ -191,6 +218,7 @@
         if (n > 0 && now() - t0 > o.uploadMsPerFrame) break;
         const job = uploadQueue.shift();
         const t = job.tex;
+        try { capOne(t); } catch (_) {}
         try { if (t.image && !uploaded(renderer, t)) { renderer.initTexture(t); n++; stats.uploads++; } } catch (_) {}
         if (job.zone) job.zone.pending.delete(t);
         tryReleaseCpu(t);
@@ -210,7 +238,81 @@
     }
 
     // ---- lifecycle ----------------------------------------------------------
-    function start(rec, t) {
+
+    function usage() {
+      try {
+        if (typeof o.estimate === 'function') {
+          const u = o.estimate() || {};
+          return { processMB: +u.processMB || 0, gpuMB: +u.gpuMB || 0, cpuMB: +u.cpuMB || 0 };
+        }
+        const PM = (typeof window !== 'undefined' && window.SinProcessMemory) || (typeof globalThis !== 'undefined' && globalThis.SinProcessMemory);
+        if (PM && typeof PM.estimate === 'function') {
+          const u = PM.estimate({ renderer: ctx && ctx.renderer, scene: ctx && ctx.scene }) || {};
+          return { processMB: +u.processMB || 0, gpuMB: +u.gpuMB || 0, cpuMB: +u.cpuMB || 0 };
+        }
+      } catch (_) {}
+      return { processMB: 0, gpuMB: 0, cpuMB: 0 };
+    }
+    function incoming(rec) {
+      const s = (rec && rec.spec) || {};
+      return {
+        processMB: s.estProcessMB != null ? +s.estProcessMB : o.defaultZoneProcessMB,
+        gpuMB: s.estGpuMB != null ? +s.estGpuMB : o.defaultZoneGpuMB,
+        cpuMB: s.estCpuMB != null ? +s.estCpuMB : o.defaultZoneCpuMB
+      };
+    }
+    function wouldExceed(extra) {
+      extra = extra || { processMB: 0, gpuMB: 0, cpuMB: 0 };
+      const u = usage();
+      return (o.processBudgetMB > 0 && u.processMB + extra.processMB > o.processBudgetMB)
+        || (o.gpuBudgetMB > 0 && u.gpuMB + extra.gpuMB > o.gpuBudgetMB)
+        || (o.cpuBudgetMB > 0 && u.cpuMB + extra.cpuMB > o.cpuBudgetMB);
+    }
+    // Evict idle zones (farthest / least-recent first) until `incoming` would
+    // fit. Grace is skipped: the budget is a hard cap, and the door stays
+    // closed until the new room can be fully resident.
+    // Pass 1: only unprotected (not current / visible / adjacent).
+    // Pass 2: adjacent rooms that are NOT visible and NOT current may yield
+    // so a new current room can fit. Visible + current are never evicted
+    // (nothing disappears in front of the player).
+    function evictCandidates(allowAdjacent) {
+      const idle = [];
+      zones.forEach(function (r) {
+        if (r.state === 'cold') return;
+        if (r.isCurrent || r.visible) return;
+        if (!allowAdjacent && r.protected) return;
+        idle.push(r);
+      });
+      idle.sort(function (a, b) {
+        const dh = (b.hops || 0) - (a.hops || 0);
+        if (dh) return dh;
+        return (a.lastWanted || 0) - (b.lastWanted || 0);
+      });
+      return idle;
+    }
+    function evictToFit(extra) {
+      if (!wouldExceed(extra)) return true;
+      for (let pass = 0; pass < 2 && wouldExceed(extra); pass++) {
+        const idle = evictCandidates(pass === 1);
+        for (let i = 0; i < idle.length && wouldExceed(extra); i++) {
+          if (idle[i].state === 'cold') continue;
+          evict(idle[i], 'budget');
+          stats.budgetEvictions++;
+        }
+      }
+      return !wouldExceed(extra);
+    }
+    function canStart(rec) {
+      const extra = incoming(rec);
+      if (evictToFit(extra)) { rec.deferred = false; return true; }
+      rec.deferred = true;
+      stats.deferred++;
+      stats.lastDefer = { id: rec.id, at: now(), usage: usage(), incoming: extra };
+      note('load', rec.id + ' deferred — over budget (' + JSON.stringify(stats.lastDefer) + ')');
+      return false;
+    }
+
+        function start(rec, t) {
       rec.state = 'loading'; rec.startedAt = t; rec.done = false; rec.failed = null; rec.pending.clear();
       note('load', rec.id + ' stream start');
       try { rec.spec.load(apiFor(rec)); } catch (e) { rec.failed = e; rec.done = true; console.warn('zone load failed', rec.id, e); }
@@ -384,7 +486,7 @@
         // protected from eviction (no disappearing props mid-spin).
         const want = prepared.has(id) || hops <= rec.spec.prefetchHops;
         const protect = want || visible.has(id) || hops <= 1 || id === view.current;
-        rec.hops = hops; rec.protected = protect;
+        rec.hops = hops; rec.protected = protect; rec.visible = visible.has(id); rec.isCurrent = id === view.current;
         if (want) { rec.lastWanted = t; rec.leftAt = 0; wanted.push(rec); }
         else if (rec.state !== 'cold' && !rec.leftAt) rec.leftAt = t;
       });
@@ -393,7 +495,12 @@
       let loading = 0;
       zones.forEach(r => { if (r.state === 'loading') loading++; });
       wanted.forEach(function (rec, i) {
-        if (rec.state === 'cold' && (loading < o.maxConcurrentLoads || rec.id === view.current)) { start(rec, t); loading++; }
+        if (rec.state === 'cold' && (loading < o.maxConcurrentLoads || rec.id === view.current)) {
+          // Hard cap: evict idle rooms first; if the new room still would
+          // not fit, defer. The door gate waits on zoneIsReady, so nothing
+          // is revealed incomplete in front of the player.
+          if (canStart(rec)) { start(rec, t); loading++; }
+        }
         if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, t, i);
       });
       // Zones still preparing but no longer wanted keep preparing (cheap) so
@@ -432,8 +539,19 @@
       uploadQueue = []; releasable.clear(); warmQ.length = 0; warmBusy = false; memLevel = 'normal';
     }
     function report() {
-      const out = { zones: {}, uploadQueue: uploadQueue.length, releasable: releasable.size, warmPending: warmQ.length, memory: memoryState(), stats: Object.assign({}, stats) };
-      zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected }; });
+      const u = usage();
+      const out = {
+        zones: {},
+        uploadQueue: uploadQueue.length,
+        releasable: releasable.size,
+        warmPending: warmQ.length,
+        memory: memoryState(),
+        usage: u,
+        budget: { processMB: o.processBudgetMB, gpuMB: o.gpuBudgetMB, cpuMB: o.cpuBudgetMB },
+        overBudget: wouldExceed({ processMB: 0, gpuMB: 0, cpuMB: 0 }),
+        stats: Object.assign({}, stats)
+      };
+      zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected, deferred: !!r.deferred }; });
       return out;
     }
     return { register, unregister, attach, update, status, isReady, whenReady, markReleasable, queueTextures: (obj) => queueTextures(null, obj, 50), pumpUploads, pumpWarm, enqueueWarm, forgetWarm, sample, memoryState, forceEvict, reset, report, hide: hideObject, reveal: revealObject, zones: () => Array.from(order) };

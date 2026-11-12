@@ -180,3 +180,14 @@ test('evict disposes unshared textures even when CPU pixels remain (no accumulat
   assert.ok(disposed >= 1, 'GPU texture must be disposed on evict even if image is still set');
   assert.strictEqual(g.children.length, 0);
 });
+
+
+test('tryReleaseCpu records sinGpuW before closing the ImageBitmap', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const assert = require('node:assert/strict');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
+  const fn = src.slice(src.indexOf('function tryReleaseCpu'), src.indexOf('function capOne'));
+  assert.match(fn, /sinGpuW/);
+  assert.ok(fn.indexOf('sinGpuW') < fn.indexOf('img.close'));
+});

@@ -395,7 +395,30 @@
         try {
           if (window.SinProcessMemory && SinProcessMemory.releaseCpuFromObject) {
             const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
-            if (!R.__sinCpuRelAt || now - R.__sinCpuRelAt > 2000) {
+            // Every 2 s was too slow: during REVEAL and K2 dress, new
+            // ImageBitmaps arrive faster than the drain, so CPU (~230 MB)
+            // overlapped GPU (~690 MB) and process peaked at 1081–1137 MB
+            // (iOS jetsam). Drain every frame while the palace is busy or
+            // a wing is still streaming; otherwise keep the 2 s cadence.
+            let busy = false;
+            try {
+              const ps = window.PalaceInterior && PalaceInterior.state && PalaceInterior.state();
+              busy = ['LOADING','SETUP','FADING_OUT','FADING_IN','REVEAL','ENTRANCE','SETTLE'].indexOf(ps) >= 0;
+              const zs = window.PalaceWings && PalaceWings.zones && PalaceWings.zones();
+              if (zs && zs.zones) {
+                const rows = Array.isArray(zs.zones) ? zs.zones : Object.keys(zs.zones).map(function (k) { return zs.zones[k]; });
+                for (let i = 0; i < rows.length; i++) {
+                  const st = rows[i] && (rows[i].state || rows[i].status);
+                  if (st && st !== 'ready' && st !== 'cold' && st !== 'evicted' && st !== 'unregistered') { busy = true; break; }
+                }
+              }
+            } catch (_) {}
+            // First ~3 s of outdoor load has the same overlap (city
+            // ImageBitmaps + GPU copies → peak 998 before the palace).
+            if (R.__sinCpuRelFrames == null) R.__sinCpuRelFrames = 0;
+            R.__sinCpuRelFrames++;
+            const interval = (busy || R.__sinCpuRelFrames < 180) ? 0 : 2000;
+            if (!R.__sinCpuRelAt || now - R.__sinCpuRelAt > interval) {
               R.__sinCpuRelAt = now;
               const rel = SinProcessMemory.releaseCpuFromObject(s, R, { upload: false });
               try { window.__sinCpuRelease = rel; } catch (_) {}

@@ -101,7 +101,40 @@ Use `THREE.LOD` (instant level switch, no cross-fade or dither) or the existing 
 
 `SinZoneStreamer.create({...})` in wings.js is already filled from `SinDevice.detect()` (phone vs desktop). You normally do not touch: `uploadsPerFrame`, `uploadMsPerFrame`, `graceMs`, `cacheZones`, `maxConcurrentLoads` (1: GLB parse is the peak-RAM step on iPhone), `defaultTimeoutMs`, `maxTextureSize`.
 
-Inspect the state with `PalaceWings.zones()`. It returns the per-zone state, pending uploads, and stats (uploads, worst upload ms per frame, compiles, reveals, evictions, CPU-released textures).
+### Hard memory budget (must not be exceeded)
+
+The streamer holds a **hard, device-aware cap** on resident process, GPU and CPU memory. Numbers come from `SinDevice.detect()`:
+
+| Device | processBudgetMB | gpuBudgetMB | cpuBudgetMB | maxTextureSize |
+| ------ | --------------- | ----------- | ----------- | -------------- |
+| iPhone / constrained | 650 | 480 | 80 | 1024 |
+| Desktop | 1400 | 1100 | 250 | 4096 |
+
+650 MB process is the Safari-on-iPhone jetsam-safe target (peak ≲ 600–700). iOS kills the tab on total RSS around 1–1.5 GB, so the cap sits well below that.
+
+**How a new room is admitted:**
+
+1. Before a cold zone starts loading, the streamer estimates the incoming cost (`spec.estProcessMB` / `estGpuMB` / `estCpuMB`, or the defaults 50 / 40 / 10 MB).
+2. It evicts unprotected idle zones first (farthest / least-recent). The usual `graceMs` is skipped for this step — the budget wins. Current and visible rooms are never evicted, so nothing disappears in front of the player. Adjacent (≤1 hop) rooms that are not on screen may yield if that is the only way the incoming room can fit.
+3. If, after eviction, the new room would still exceed any of the three caps, **the load is deferred**. The zone stays `cold`, `stats.deferred` increments, and `report().zones[id].deferred` is true.
+4. The door gate (`zoneIsReady` / `roomCompleteness`) keeps the door closed until the room both **fits** and is **complete**. Nothing is drawn in front of the player. There is no context-loss path for “over budget”; the room simply waits.
+5. Loading never starts a parse or upload that would push residency over the cap.
+
+If a **single** room is larger than the whole budget even after every evictable neighbour is gone, the door will keep waiting and `report().stats.lastDefer` will name the room. That is a content error: shrink textures (they are already capped to `maxTextureSize` on phones), split the room, or raise the desktop budget — do **not** lower the visual tier and do **not** skip the cap.
+
+Inspect live state with `PalaceWings.zones()` and `SinZoneStreamer.report()` (or the streamer instance’s `report()`). The report includes `usage`, `budget`, `overBudget`, per-zone `deferred`, and stats (`evictions`, `budgetEvictions`, `deferred`, `cpuReleased`, uploads, worst upload ms, compiles, reveals).
+
+### Proving the cap scales (test-only synthetic rooms)
+
+A test-only config, never shipped as authored content, registers several synthetic heavy rooms (~3–5× current texture and geometry volume). The long sprint through those rooms must:
+
+- keep process / GPU / CPU memory under the device budget with no growth across loops;
+- keep frame time stable;
+- show zero pop-in (every door waits for `roomCompleteness.complete` and `revealed`).
+
+The unit test `tests/memory-budget.test.cjs` simulates this: six heavy rooms, a 400 MB GPU cap, a walking player. Only rooms that fit after LRU eviction load; the simulated residency never exceeds the cap.
+
+When you add a real room, set `estGpuMB` / `estCpuMB` / `estProcessMB` on its zone spec if you know the cost; otherwise the defaults apply and `maxTextureSize` still caps GPU copies.
 
 ## 6. Lighting and materials (automatic)
 

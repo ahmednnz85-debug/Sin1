@@ -190,6 +190,13 @@
         }
       });
     });
+    const cap = (typeof window !== 'undefined' && window.SinDevice && SinDevice.capTexture) ? SinDevice.capTexture : null;
+    const maxSz = (typeof window !== 'undefined' && window.SinDevice && typeof SinDevice.detect === 'function' && SinDevice.detect().maxTextureSize) || 0;
+    bySource.forEach(function (list) {
+      list.forEach(function (t) {
+        try { if (cap && maxSz) cap(t, maxSz); } catch (_) {}
+      });
+    });
     if (doUpload) {
       bySource.forEach(function (list) {
         list.forEach(function (t) { try { if (t.image || (t.source && t.source.data)) renderer.initTexture(t); } catch (_) {} });
@@ -298,6 +305,57 @@
     return { textures: textures, geos: geos, rts: rts, _c: calls };
   }
 
+
+  // Dispose GPU+CPU copies of textures that are no longer referenced by the
+  // live scene (leftover city maps that stayed in renderer.properties after
+  // releaseCity). Never touches textures still on a mesh, or the scene
+  // environment / background, or anything tagged palaceShared / keepDuringPalace.
+  function purgeOrphanTextures(renderer, scene, opts) {
+    opts = opts || {};
+    if (!renderer || !renderer.properties || !renderer.properties._map || !scene) return { purged: 0, skipped: 0 };
+    const live = new Set();
+    function add(t) {
+      if (!t || !t.isTexture) return;
+      live.add(t);
+      if (t.source) live.add(t.source);
+    }
+    add(scene.environment); add(scene.background);
+    scene.traverse(function (o) {
+      if (o.userData && o.userData.keepDuringPalace) {
+        // whole subtree already walked by traverse
+      }
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      mats.forEach(function (m) {
+        if (!m) return;
+        TEX_KEYS.forEach(function (k) { add(m[k]); });
+        if (m.envMap) add(m.envMap);
+        if (m.uniforms) Object.keys(m.uniforms).forEach(function (uk) {
+          const v = m.uniforms[uk] && m.uniforms[uk].value;
+          add(v);
+        });
+      });
+    });
+    let purged = 0, skipped = 0, freedMB = 0;
+    const doomed = [];
+    try {
+      renderer.properties._map.forEach(function (_val, obj) {
+        if (!obj || !obj.isTexture) return;
+        if (live.has(obj) || (obj.source && live.has(obj.source))) { skipped++; return; }
+        if (obj.userData && (obj.userData.palaceShared || obj.userData.keepDuringPalace || obj.userData.sinKeepCpu)) { skipped++; return; }
+        doomed.push(obj);
+      });
+    } catch (_) {}
+    doomed.forEach(function (t) {
+      try {
+        freedMB += gpuTexBytes(t) / 1048576;
+        dropTextureCpu(t);
+        if (t.dispose) t.dispose();
+        purged++;
+      } catch (_) {}
+    });
+    return { purged: purged, skipped: skipped, freedMB: +freedMB.toFixed(1) };
+  }
+
   function estimate(ctx) {
     ctx = ctx || {};
     const renderer = ctx.renderer || (typeof window !== 'undefined' && window.__R) || null;
@@ -319,15 +377,32 @@
     let cpuImg = 0, gpuTex = 0;
     const seenSrc = new Set();
     const seenGpu = new Set();
+    const texRows = [];
     collected.textures.forEach(function (t) {
       const src = t.source || t;
       if (!seenSrc.has(src)) {
         seenSrc.add(src);
-        cpuImg += cpuImageBytes(t);
+        const c = cpuImageBytes(t);
+        const g = gpuTexBytes(t);
+        cpuImg += c;
         // One GPU copy per Source (r187 WebGLTextures keys on source.uuid).
-        gpuTex += gpuTexBytes(t);
+        gpuTex += g;
+        if (ctx.detail && (c || g)) {
+          const img = t.image || (t.source && t.source.data);
+          texRows.push({
+            name: t.name || (t.userData && t.userData.name) || '',
+            cpuMB: +(c / 1048576).toFixed(2),
+            gpuMB: +(g / 1048576).toFixed(2),
+            w: (img && (img.width || img.videoWidth)) || (t.userData && t.userData.sinGpuW) || 0,
+            h: (img && (img.height || img.videoHeight)) || (t.userData && t.userData.sinGpuH) || 0,
+            capped: !!(t.userData && t.userData.sinCapped),
+            cpuReleased: !!(t.userData && t.userData.sinCpuReleased),
+            inGraph: collected.inGraph ? collected.inGraph.has(t) : null
+          });
+        }
       }
     });
+    if (ctx.detail) texRows.sort(function (a, b) { return (b.cpuMB + b.gpuMB) - (a.cpuMB + a.gpuMB); });
 
     let cpuGeo = 0, gpuGeo = 0;
     collected.geos.forEach(function (g) {
@@ -417,7 +492,9 @@
       texMB: +gpuTexMB.toFixed(1),
       geoMB: +gpuGeoMB.toFixed(1),
       processMB: +processMB.toFixed(1),
-      webkitMB: webkitMB
+      webkitMB: webkitMB,
+      topTextures: ctx.detail ? texRows.slice(0, 20) : undefined,
+      texSources: seenSrc.size
     };
 
     if (sample.processMB > peak.processMB) {
@@ -511,7 +588,8 @@
           // After the first real frame, textures are on the GPU. Release
           // CPU-side bitmaps a few times as new assets stream in, then
           // at most every 2 s so we do not walk the graph every frame.
-          if (frames <= 8 || (now - lastRelease > 2000) || (scene.userData && scene.userData.cityReleased && frames < 200)) {
+          const busy = !!(scene.userData && scene.userData.cityReleased && frames < 400);
+          if (frames <= 16 || (now - lastRelease > (busy ? 0 : 2000)) || busy) {
             lastRelease = now;
             try { releaseCpuFromObject(scene, this, { upload: false }); } catch (_) {}
           }
@@ -546,6 +624,7 @@
     peak: function () { return peak; },
     last: function () { return lastEstimate; },
     heldGltfBytes: heldGltfBytes,
+    purgeOrphanTextures: purgeOrphanTextures,
     // Used by unit tests.
     _cpuImageBytes: cpuImageBytes,
     _gpuTexBytes: gpuTexBytes,

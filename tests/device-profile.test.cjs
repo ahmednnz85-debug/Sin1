@@ -50,3 +50,18 @@ test('crash downgrade is session-only and does not rewrite a quality preference'
   assert.equal(D.pendingCrashDowngrade(), null);
   delete global.sessionStorage;
 });
+
+test('capTexture does not flag sinCapped before the image has dimensions', () => {
+  const api = require('../device-profile.js');
+  const tex = { userData: {}, source: { data: {} }, image: {} }; // no width yet
+  assert.equal(api.capTexture(tex, 1024), false);
+  assert.ok(!tex.userData.sinCapped, 'must not skip a later 4K bitmap');
+  // Now the 4K image arrives — must cap.
+  const img = { width: 4096, height: 4096 };
+  tex.image = img; tex.source.data = img;
+  // In node, document is undefined so canvas cap cannot run; it must still
+  // return false WITHOUT setting sinCapped, so the browser path can retry.
+  const r = api.capTexture(tex, 1024);
+  assert.equal(r, false);
+  assert.ok(!tex.userData.sinCapped || (tex.image && Math.max(tex.image.width, tex.image.height) <= 1024));
+});

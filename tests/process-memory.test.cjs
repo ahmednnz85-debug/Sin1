@@ -20,7 +20,7 @@ function load() {
 }
 
 test('process-memory is on the page ahead of the game and exports an estimator', () => {
-  assert.match(index, /data-src="process-memory\.js\?v=20261112r6"/);
+  assert.match(index, /data-src="process-memory\.js\?v=20261112r7"/);
   // Must load after device-profile and before palace / wings so hooks wrap THREE first.
   const dp = index.indexOf('device-profile.js');
   const pm = index.indexOf('process-memory.js');
@@ -191,4 +191,11 @@ test('releaseCpuFromObject walks shader uniforms (sky maps)', () => {
 test('dropGeometry is opt-in so outdoor drain cannot null live attribute arrays', () => {
   assert.match(src, /opts && opts\.dropGeometry/);
   assert.match(src, /array\.byteLength/);
+});
+
+test('purgeOrphanTextures is exported and will not dispose live or palaceShared maps', () => {
+  assert.match(src, /function purgeOrphanTextures/);
+  assert.match(src, /purgeOrphanTextures:\s*purgeOrphanTextures/);
+  assert.match(src, /userData\.palaceShared \|\| obj\.userData\.keepDuringPalace/);
+  assert.match(src, /topTextures: ctx\.detail \? texRows/);
 });

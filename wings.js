@@ -46,6 +46,9 @@
     maxTextureSize: deviceProfile.maxTextureSize || 0,
     geometryBudget: deviceProfile.geometryBudget,
     textureBudget: deviceProfile.textureBudget,
+    processBudgetMB: deviceProfile.processBudgetMB,
+    gpuBudgetMB: deviceProfile.gpuBudgetMB,
+    cpuBudgetMB: deviceProfile.cpuBudgetMB,
     log: function (kind, msg) { try { if (window.SinMemoryOverlay) SinMemoryOverlay.note(kind, msg); } catch (_) {} }
   }) : null;
 

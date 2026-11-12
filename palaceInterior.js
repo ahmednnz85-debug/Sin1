@@ -1219,8 +1219,16 @@
     try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('teardown', 'city released g' + geometries.size + ' t' + textures.size); } catch (_) {}
     try {
       if (window.SinProcessMemory) {
-        const pe = SinProcessMemory.estimate({ scene: scene, phase: 'teardown' });
-        note('process after city release ~' + (pe && pe.processMB) + 'MB cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB));
+        const renderer = (lastContext && lastContext.renderer) || (scene && scene.userData && scene.userData.renderer) || (typeof window !== 'undefined' && window.__R) || null;
+        if (SinProcessMemory.purgeOrphanTextures && renderer) {
+          const pur = SinProcessMemory.purgeOrphanTextures(renderer, scene);
+          note('orphan purge ' + JSON.stringify(pur));
+        }
+        if (SinProcessMemory.releaseCpuFromObject && renderer) {
+          SinProcessMemory.releaseCpuFromObject(scene, renderer, { upload: false });
+        }
+        const pe = SinProcessMemory.estimate({ scene: scene, renderer: renderer, phase: 'teardown', detail: true });
+        note('process after city release ~' + (pe && pe.processMB) + 'MB cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB) + ' orphans-top ' + (pe && pe.topTextures && pe.topTextures.slice(0, 4).map(function (r) { return r.w + 'x' + r.h + '@' + r.gpuMB; })));
       }
     } catch (_) {}
   }

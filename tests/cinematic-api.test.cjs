@@ -34,7 +34,7 @@ test('SinGfx.camera stays the CAM settings object (PR #45 black-screen regressio
 });
 
 test('cinematic.js is cache-busted after the getCamera fix', () => {
-  assert.match(index, /cinematic\.js\?v=20261112r6/);
+  assert.match(index, /cinematic\.js\?v=20261112r7/);
 });
 
 test('FPS HUD keeps last good reading across a >1 s stall (no "FPS 0")', () => {
@@ -63,5 +63,10 @@ test('instance wrapRender drains CPU images (prototype hook is shadowed)', () =>
 
 test('index.html exposes window.__sinInp for QA movement and cache-busts process-memory r6', () => {
   assert.match(index, /window\.__sinInp\s*=\s*inp/);
-  assert.match(index, /process-memory\.js\?v=20261112r6/);
+  assert.match(index, /process-memory\.js\?v=20261112r7/);
+});
+
+test('CPU drain runs every frame while the palace or a wing is streaming', () => {
+  assert.match(src, /const interval = \(busy \|\| R\.__sinCpuRelFrames < 180\) \? 0 : 2000/);
+  assert.match(src, /ImageBitmaps arrive faster than the drain/);
 });

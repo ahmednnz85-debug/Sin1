@@ -56,6 +56,11 @@
       cacheZones: constrained ? { normal: 1, watch: 0, critical: 0 } : { normal: 3, watch: 2, critical: 0 },
       textureBudget: constrained ? 72 : 180,
       geometryBudget: constrained ? 180 : 420,
+      // Hard caps (MB). The streamer evicts, then defers, rather than exceed.
+      // 650 process is the iPhone Safari jetsam-safe target (peak ≲ 600–700).
+      processBudgetMB: constrained ? 650 : 1400,
+      gpuBudgetMB: constrained ? 480 : 1100,
+      cpuBudgetMB: constrained ? 80 : 250,
       // Cap oversized GPU copies (4K maps) on phones. 1024 is still sharp
       // on a phone screen and is a residency measure, not a visual tier.
       maxTextureSize: constrained ? 1024 : 4096,
@@ -73,15 +78,20 @@
   // Safe to call more than once (userData.sinCapped).
   function capTexture(tex, maxSize) {
     if (!tex || !maxSize || tex.isCompressedTexture || tex.isRenderTargetTexture) return false;
-    if (tex.userData && tex.userData.sinCapped) return false;
     const img = tex.image || (tex.source && tex.source.data);
     if (!img) return false;
     const w = img.width || img.videoWidth || 0;
     const h = img.height || img.videoHeight || 0;
-    if (!w || !h || Math.max(w, h) <= maxSize) {
-      if (tex.userData) tex.userData.sinCapped = true;
+    // Not decoded yet — do NOT set sinCapped, or a later 4K ImageBitmap
+    // (K2 Color/Normal/ORM 4096², 85 MB each) would skip the cap and
+    // push process peak over 1 GB.
+    if (!w || !h) return false;
+    if (Math.max(w, h) <= maxSize) {
+      if (!tex.userData) tex.userData = {};
+      tex.userData.sinCapped = true;
       return false;
     }
+    // If a prior call flagged sinCapped before the image existed, still cap.
     if (typeof document === 'undefined' || !document.createElement) return false;
     const scale = maxSize / Math.max(w, h);
     const cw = Math.max(1, Math.round(w * scale));
