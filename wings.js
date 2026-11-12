@@ -2870,6 +2870,7 @@
     const p = state.ctx.hero.position;
     const px = p.x - state.root.position.x;
     const pz = p.z - state.root.position.z;
+    const cur = state.current || '';
     let hx = 0, hz = 1;
     try {
       if (state.ctx.hero.getWorldDirection) {
@@ -2880,6 +2881,9 @@
     } catch (_) {}
     const roomIds = new Set();
     (state.rooms || []).forEach(function (r) { if (r && r.id) roomIds.add(r.id); });
+    // Only the single nearest room ahead. Adding every door's from+to inside
+    // 36 m stacked K2+K3+K4 to 658 MB (over the 650 cap) on the KC1 walk.
+    let bestId = null, bestDist = Infinity;
     for (let i = 0; i < state.doors.length; i++) {
       const d = state.doors[i];
       if (!d || d.kind === 'arch') continue;
@@ -2888,9 +2892,21 @@
       if (dist > APPROACH_DIST) continue;
       const nd = dist > 0.05 ? (dx * hx + dz * hz) / dist : 1;
       if (nd < 0.15 && dist > 8) continue;
-      if (d.to && roomIds.has(d.to)) set.add(d.to);
-      if (d.from && roomIds.has(d.from)) set.add(d.from);
+      let ahead = null;
+      if (d.to && d.to !== cur && roomIds.has(d.to)) ahead = d.to;
+      if (d.from && d.from !== cur && roomIds.has(d.from)) {
+        // Standing in a corridor (cur is neither side): pick the side
+        // that sits further along the heading, i.e. the first ahead we set
+        // only if to wasn't already chosen; if both qualify, prefer `to`
+        // when that is the conventional forward id, else the nearer door wins
+        // via bestDist anyway (one door, one ahead). If `to` is behind us
+        // and `from` is ahead, take from.
+        if (!ahead) ahead = d.from;
+        else if (ahead === d.to && nd < 0) ahead = d.from;
+      }
+      if (ahead && dist < bestDist) { bestDist = dist; bestId = ahead; }
     }
+    if (bestId) set.add(bestId);
     return set;
   }
   function streamZones(origin, visibleIds, preparedIds) {

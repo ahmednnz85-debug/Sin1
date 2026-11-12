@@ -388,10 +388,20 @@
           rec.deferred = false; rec.deferredAt = 0; return true;
         }
       } else {
-        // Prefetch: start only if it fits without evicting the current room
-        // or anything visible. Never override the budget. Never compete
-        // with a current-room load that is still in flight.
+        // Prefetch: start only if it fits without evicting the current room.
+        // Never override the budget. Never compete with a current-room load
+        // that is still in flight. On the 650 phone, SWAP leftover dress
+        // (the room we just left, even if hops<=1 / still marked visible)
+        // so an approach prefetch cannot stack K2+K3 to 658 MB.
         evictNonAdjacent('non-adjacent-before-prefetch');
+        if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
+          evictPreparedFirst('prepared-before-prefetch', true);
+          zones.forEach(function (r) {
+            if (r.state === 'cold' || r.isCurrent || r.id === rec.id) return;
+            evict(r, 'swap-before-prefetch');
+            stats.budgetEvictions++;
+          });
+        }
         if (!wouldExceed(extra)) {
           if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
             let currentBusy = false;

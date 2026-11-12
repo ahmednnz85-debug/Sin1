@@ -539,6 +539,7 @@ test('approach rooms are wanted for prefetch even when hops exceed prefetchHops'
   const src = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
   assert.match(src, /view\.approach/);
   assert.match(src, /approaching/);
+  assert.match(src, /swap-before-prefetch/);
   const scene = obj('scene');
   const g = obj('K2');
   scene.add(g);

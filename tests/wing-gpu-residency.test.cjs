@@ -112,6 +112,7 @@ test('palace hall group stays visible while the player is an occupant (never cor
   assert.match(wings, /, d, state\.root\)/);
   assert.match(wings, /approachRoomIds/);
   assert.match(wings, /APPROACH_DIST/);
+  assert.match(wings, /bestId/);
   assert.match(wings, /st !== 'DONE' && !occ/);
   const zs = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
   assert.match(zs, /isPersistentVisible/);
