@@ -107,6 +107,8 @@ node tools/bake-palace-colliders.js
    - Runs `node tools/bake-palace-colliders.js --check`, which regenerates the bake and **fails if the committed JSON is stale**.
    - Asserts the committed JSON is **identical** to a live `computeBake()` of the canonical hall (same colliders, solids, grid, and hall header).
 
+**K1 GLB parse (main thread, ~400–530 ms).** Three.js r187 `GLTFLoader.parse` / `parseAsync` still run the parse on the calling thread. A Worker that loaded the same r187 loader (no version change) cannot hand a `THREE.Scene` back: the graph is not structured-cloneable, and writing a custom serializer would be a large, look-risking change. Splitting the authored hall GLB would change assets. Parsing stays on the main thread, one GLB at a time, with a yield after each file. This is the remaining slice above 100 ms during palace LOADING.
+
 At runtime, `PalaceInterior` fetches the JSON during palace asset load and `PalaceWings` applies it when the live hall header matches (width, length, wall thickness, alcove depth, passage positions). If the header does not match — for example a hero-scaled hall that is not the canonical 1.8 m bake — the same `computeBake()` runs once as a fallback so the result stays identical to the bake of that hall. After you add a room or a wing, rebake; otherwise CI will fail and the new walls will not be in the collider file.
 
 ## 3. Add assets to an existing room

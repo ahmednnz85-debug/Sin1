@@ -3794,22 +3794,34 @@
             await build(saved);
             try { console.info('[palace load] SETUP build-end', Math.round(performance.now() - tBuild) + 'ms'); } catch (_) {}
             hallBuilt = true;
+            const tPost = performance.now();
             placeHero(saved);
+            try { console.info('[palace load] SETUP placeHero', Math.round(performance.now() - tPost) + 'ms'); } catch (_) {}
             // Hide the city before any palace frame. Drawing the whole avenue
             // together with the new hall uploads enough geometry to kill the tab,
             // which reloads the game back to the opening loading screen at 99%.
             holdCull(saved.scene, saved.hero);
+            try { console.info('[palace load] SETUP holdCull', Math.round(performance.now() - tPost) + 'ms'); } catch (_) {}
             note('built ' + Math.round(performance.now() - tBuild) + 'ms');
-            try {
-              snapshotMeshBudget('post-palace-build', saved);
-              if (window.SinMemoryOverlay) SinMemoryOverlay.reportHeaviest(saved.scene, 'post-palace-build');
-            } catch (_) {}
-            window.__sinEntryBlackout = false;
+            try { console.info('[palace load] SETUP after-note'); } catch (_) {}
+            // Diagnostics walk every mesh and texture. Doing that on the SETUP
+            // turn froze WebKit for minutes at ~3 GB RSS. Run them after yield.
+            setTimeout(function () {
+              try {
+                snapshotMeshBudget('post-palace-build', saved);
+                if (window.SinMemoryOverlay) SinMemoryOverlay.reportHeaviest(saved.scene, 'post-palace-build');
+              } catch (_) {}
+            }, 0);
+            try { console.info('[palace load] SETUP to-reveal'); } catch (_) {}
+            // Keep the blackout through REVEAL warm-up so the main loop does
+            // not draw a full palace frame (that compiles every shader at once
+            // and kills the iPhone tab). Tick still runs the one-material warm.
             renderUI();
             state = 'REVEAL';
             fadeT = 0;
             warmFrame = false;
             warmMeshes = null;
+            try { console.info('[palace load] REVEAL-enter'); } catch (_) {}
           } catch (err) {
             console.error(err);
             runtimeErrors.push('SETUP: ' + (err && (err.stack || err.message) || err));
@@ -3919,6 +3931,7 @@
         try { ctx.renderer.render(ctx.scene, ctx.camera); }
         catch (renderErr) { mark('render ' + (renderErr && renderErr.message)); }
         const took = performance.now() - tWarm;
+        try { console.info('[palace load] warm', warmIndex, '/', warmMeshes.length, Math.round(took) + 'ms'); } catch (_) {}
         if (took > warmSlow) warmSlow = took;
         if (took > 120) mark('warm ' + Math.round(took) + 'ms ' + ((e && e.mat && (e.mat.name || e.mat.type)) || (o && (o.name || o.type)) || '?'));
         if (proxy && proxy !== o) proxy.visible = false;
@@ -3990,9 +4003,11 @@
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
       if (fadeT >= CONFIG.revealHoldSeconds && shownPercent() >= 100) {
+        window.__sinEntryBlackout = false;
         state = 'FADING_IN';
         fadeT = 0;
         note('reveal');
+        try { console.info('[palace load] FADING_IN'); } catch (_) {}
       }
       return;
     }
