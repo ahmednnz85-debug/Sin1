@@ -20,7 +20,7 @@ function load() {
 }
 
 test('process-memory is on the page ahead of the game and exports an estimator', () => {
-  assert.match(index, /data-src="process-memory\.js\?v=20261112r5"/);
+  assert.match(index, /data-src="process-memory\.js\?v=20261112r6"/);
   // Must load after device-profile and before palace / wings so hooks wrap THREE first.
   const dp = index.indexOf('device-profile.js');
   const pm = index.indexOf('process-memory.js');
@@ -134,4 +134,61 @@ test('outdoor render-hook drain does not force-init every texture', () => {
   const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'process-memory.js'), 'utf8');
   assert.match(src, /upload: false/);
   assert.match(src, /doUpload/);
+});
+
+test('releaseCpuFromObject records sinGpuW so gpuTex is not zeroed after CPU drop', () => {
+  assert.match(src, /t\.userData\.sinGpuW = t\.userData\.sinGpuW \|\| sz\.w/);
+  assert.match(src, /t\.userData\.sinGpuH = t\.userData\.sinGpuH \|\| sz\.h/);
+  const api = load().SinProcessMemory;
+  const img = { width: 1024, height: 512 };
+  const source = { data: img };
+  const tex = {
+    isTexture: true, image: img, source, userData: {}, version: 1,
+    generateMipmaps: true
+  };
+  const mat = { map: tex };
+  const mesh = { material: mat, traverse(fn) { fn(this); } };
+  const props = new Map();
+  props.set(tex, { __webglTexture: {}, __webglInit: true });
+  const renderer = {
+    initTexture() {},
+    properties: { get(t) { return props.get(t); } },
+    info: { memory: {}, render: {}, programs: [] }
+  };
+  const r = api.releaseCpuFromObject(mesh, renderer, { upload: false });
+  assert.equal(r.released, 1);
+  assert.equal(tex.image, null);
+  assert.equal(source.data, null);
+  assert.equal(tex.userData.sinCpuReleased, true);
+  assert.equal(tex.userData.sinGpuW, 1024);
+  assert.equal(tex.userData.sinGpuH, 512);
+  const gpu = api._gpuTexBytes(tex);
+  assert.ok(gpu > 0, 'gpu bytes must survive CPU drop, got ' + gpu);
+  // 1024*512*4*1.333 mip ≈ 2.67 MB raw calc inside gpuTexBytes
+  assert.ok(gpu >= 1024 * 512 * 4, 'gpu at least uncompressed base level');
+});
+
+test('releaseCpuFromObject walks shader uniforms (sky maps)', () => {
+  assert.match(src, /m\.uniforms/);
+  const api = load().SinProcessMemory;
+  const img = { width: 100, height: 50 };
+  const source = { data: img };
+  const tex = { isTexture: true, image: img, source, userData: {}, version: 1 };
+  const mat = { uniforms: { map: { value: tex } } };
+  const mesh = { material: mat, traverse(fn) { fn(this); } };
+  const props = new Map();
+  props.set(tex, { __webglTexture: {}, __webglInit: true });
+  const renderer = {
+    initTexture() {},
+    properties: { get(t) { return props.get(t); } },
+    info: { memory: {}, render: {}, programs: [] }
+  };
+  const r = api.releaseCpuFromObject(mesh, renderer, { upload: false });
+  assert.equal(r.released, 1);
+  assert.equal(tex.userData.sinCpuReleased, true);
+});
+
+test('dropGeometry is opt-in so outdoor drain cannot null live attribute arrays', () => {
+  assert.match(src, /opts && opts\.dropGeometry/);
+  assert.match(src, /array\.byteLength/);
 });

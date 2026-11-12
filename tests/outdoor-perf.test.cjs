@@ -24,7 +24,7 @@ function load() {
 }
 
 test('outdoor-perf is on the page and original outdoor GLBs are not replaced', () => {
-  assert.match(index, /data-src="outdoor-perf\.js\?v=20261112r5"/);
+  assert.match(index, /data-src="outdoor-perf\.js\?v=20261112r6"/);
   // Originals still referenced by the game (index loadX paths).
   assert.match(index, /babylonian_wall/);
   assert.match(index, /grass_tuft_a/);
@@ -126,6 +126,8 @@ test('applyLods can attach a partial pack (geos built so far)', () => {
   assert.match(src, /if \(!state\.geos \|\| !Object\.keys\(state\.geos\)\.length\) return 0;/);
 });
 
-test('findCamera uses SinGfx.camera so the real-device poll has a camera', () => {
-  assert.match(src, /SinGfx && typeof SinGfx\.camera === 'function'/);
+test('findCamera uses SinGfx.getCamera so the real-device poll has a camera', () => {
+  assert.match(src, /SinGfx && typeof SinGfx\.getCamera === 'function'/);
+  // Must not treat SinGfx.camera as a function — that is the CAM settings object.
+  assert.doesNotMatch(src, /typeof SinGfx\.camera === 'function'/);
 });

@@ -1786,9 +1786,14 @@
         im.instanceMatrix.needsUpdate = true;
         hideUntilReady(im);
         g.add(im);
-        state.k2Dress.columns = pairs.length;
-        state.k2Dress.columnH = targetH;
-        state.root.updateMatrixWorld(true);
+        // Eviction can null k2Dress between request and this callback
+        // (seen as "null is not an object (evaluating 'state.k2Dress.columns = …')",
+        // which aborted the council-hall dress and left K2 empty).
+        if (state.k2Dress) {
+          state.k2Dress.columns = pairs.length;
+          state.k2Dress.columnH = targetH;
+        }
+        if (state.root) state.root.updateMatrixWorld(true);
         rebuildSpatial();
       } finally {
         placeK2TableModel();
@@ -1844,9 +1849,11 @@
       });
       hideUntilReady(holder);
       g.add(holder);
-      state.k2Dress.table = true;
-      state.k2Dress.tableH = (box.max.y - box.min.y) * s;
-      state.root.updateMatrixWorld(true);
+      if (state.k2Dress) {
+        state.k2Dress.table = true;
+        state.k2Dress.tableH = (box.max.y - box.min.y) * s;
+      }
+      if (state.root) state.root.updateMatrixWorld(true);
     });
   }
   // Small, warm flame tongues seated in each chandelier cup; no PointLights are attached.
@@ -1892,7 +1899,7 @@
     const embers = new THREE.Points(eg, mats.ember);
     embers.name = 'K2-chandelier-embers'; embers.frustumCulled = false; embers.renderOrder = 5;
     g.add(embers);
-    state.k2Dress.fires = cups.length;
+    if (state.k2Dress) state.k2Dress.fires = cups.length;
   }
   // PalaceInterior owns a fixed light budget. Keeping room-specific PointLights
   // out of the scene prevents the renderer's lighting program layout changing
@@ -1916,6 +1923,7 @@
     const floorGeo = k2FloorSheet(state.k2FloorSolids || solid(r.poly), 0.014, b);
     const floorMesh = mesh(floorGeo, floorMat, 'K2-majlis-floor', g);
     floorMesh.renderOrder = 2;
+    hideUntilReady(floorMesh);
     state.k2Dress.floor = true;
     if (state.floorMeshes) state.floorMeshes.push(floorMesh);
     placeK2Columns(r, g);
@@ -1941,7 +1949,8 @@
       k2WallQuads(runs, () => [0, h], b, fitU, tileV),
       k2WallQuads(lintelRuns, l => [Math.min(l.door.height, h), h], b, fitU, tileV)
     ]);
-    mesh(wallGeo, wallMat, 'K2-majlis-walls', g);
+    const k2WallMesh = mesh(wallGeo, wallMat, 'K2-majlis-walls', g);
+    hideUntilReady(k2WallMesh);
     state.k2Dress.walls = true;
 
     // 2) Ceiling panels, then the chandelier seated on them
@@ -1980,7 +1989,7 @@
             g.add(im); ceilingMeshes.push(im);
             (state.corridorCeilings || (state.corridorCeilings = [])).push(im);
           });
-          state.k2Dress.ceiling = nx * nz;
+          if (state.k2Dress) state.k2Dress.ceiling = nx * nz;
         }
       }
       state.root.updateMatrixWorld(true);
@@ -2016,8 +2025,8 @@
         hideUntilReady(holder);
         g.add(holder);
       });
-      state.k2Dress.lions = lionSlots.length;
-      state.root.updateMatrixWorld(true);
+      if (state.k2Dress) state.k2Dress.lions = lionSlots.length;
+      if (state.root) state.root.updateMatrixWorld(true);
     });
 
     // 4) Six large potted plants, three on each side wall, evenly spaced
@@ -2050,7 +2059,7 @@
         hideUntilReady(im);
         g.add(im);
       });
-      state.k2Dress.plants = plantSlots.length;
+      if (state.k2Dress) state.k2Dress.plants = plantSlots.length;
       state.root.updateMatrixWorld(true);
     });
   }
@@ -2105,11 +2114,13 @@
       addK2ChandelierFire(g, cups);
       const fireY = cups.reduce((s0, cup) => s0 + cup.y, 0) / cups.length;
       addK2Lights(r, g, fireY);
-      state.k2Dress.chandelier = true;
-      state.k2Dress.chandelierTop = seat;
-      state.k2Dress.chandelierH = chH;
-      state.k2Dress.fireY = fireY;
-      state.root.updateMatrixWorld(true);
+      if (state.k2Dress) {
+        state.k2Dress.chandelier = true;
+        state.k2Dress.chandelierTop = seat;
+        state.k2Dress.chandelierH = chH;
+        state.k2Dress.fireY = fireY;
+      }
+      if (state.root) state.root.updateMatrixWorld(true);
       // Table may still be loading; the zone streamer reveals once columns+table+chandelier are set.
     });
   }
@@ -2501,7 +2512,7 @@
   const WING_ZONES = [
     { id: 'K2', prefetchHops: deviceProfile.prefetchHops, priority: 0,
       load: function () { dressK2(); },
-      isComplete: function () { return zoneDone.has('K2') || !!(state.k2Dress && state.k2Dress.chandelier && state.k2Dress.columns && state.k2Dress.table); },
+      isComplete: function () { return roomCompleteness('K2').complete; },
       unload: function (api) {
         state.colliders = state.colliders.filter(function (c) { return !c._k2Prop; });
         state.k2Lights = null; state.k2LightBase = null; state.k2Dress = null;
@@ -2510,12 +2521,12 @@
       ownsObject: streamedName('K2') },
     { id: 'K3', prefetchHops: deviceProfile.prefetchHops, priority: 1,
       load: function () { dressK3(); },
-      isComplete: function () { return zoneDone.has('K3') || !!(state.k3Dress && state.k3Dress.furniture); },
+      isComplete: function () { return roomCompleteness('K3').complete; },
       unload: function (api) { state.k3Lights = null; state.k3LightBase = null; if (api.group) api.group.userData.k3Dressed = false; },
       ownsObject: streamedName('K3') },
     { id: 'K4', prefetchHops: deviceProfile.prefetchHops, priority: 2,
       load: function () { dressK4(); loadK4Assets(); },
-      isComplete: function () { return zoneDone.has('K4') || !!(state.k4Dress && state.k4Dress.loadStarted && state.k4Dress._assetsCommitted); },
+      isComplete: function () { return roomCompleteness('K4').complete; },
       unload: function (api) { state.k4Dress = null; if (api.group) api.group.userData.k4Dressed = false; },
       ownsObject: streamedName('K4') }
   ];
@@ -2708,18 +2719,66 @@
   function localToWorld(x, z, y) {
     return new THREE.Vector3(state.root.position.x + x, state.root.position.y + (y || 0), state.root.position.z + z);
   }
-  function teleport(id) {
+  function entranceLocal(id) {
+    const r = state.regions.find(function (rr) { return rr.id === id; });
+    if (!r || !r.bbox) return null;
+    const doors = (state.doors || []).filter(function (dd) { return dd.from === id || dd.to === id; });
+    let door = null, best = -1;
+    doors.forEach(function (dd) {
+      const other = dd.from === id ? dd.to : dd.from;
+      const score = other && /C|REAR|MP|Palace/.test(other) ? 2 : 1;
+      if (score >= best) { best = score; door = dd; }
+    });
+    const cx = r.bbox.cx, cz = r.bbox.cz;
+    const from = door ? { x: door.x, z: door.z } : { x: cx, z: r.bbox.z0 };
+    const dx = cx - from.x, dz = cz - from.z, len = Math.hypot(dx, dz) || 1;
+    const ux = dx / len, uz = dz / len;
+    // Walk inward from the door until the capsule is clear of the door leaf,
+    // columns and props. Spawning at a fixed 2.8 m put the hero inside a T2
+    // column and left the 4.2 m follow-cam inside K2/K3/K4 door reliefs.
+    let x = from.x + ux * 2.6, z = from.z + uz * 2.6, found = false;
+    const maxD = Math.min(len * 0.55, 10);
+    for (let dist = 2.6; dist <= maxD; dist += 0.4) {
+      const tx = from.x + ux * dist, tz = from.z + uz * dist;
+      if (!capsuleBlocked(tx, tz, 0.5)) { x = tx; z = tz; found = true; break; }
+    }
+    if (!found || capsuleBlocked(x, z, 0.5)) {
+      const sides = [0.9, -0.9, 1.8, -1.8, 2.7, -2.7];
+      for (let i = 0; i < sides.length; i++) {
+        const sx = x - uz * sides[i], sz = z + ux * sides[i];
+        if (!capsuleBlocked(sx, sz, 0.5)) { x = sx; z = sz; found = true; break; }
+      }
+    }
+    return { x: x, z: z, yaw: Math.atan2(ux, uz), lookX: cx, lookZ: cz };
+  }
+  function teleport(id, opts) {
     if (!state.built || !state.ctx) return false;
+    opts = opts || {};
     const r = state.regions.find(rr => rr.id === id);
     const d = state.doors.find(dd => dd.id === id);
-    let x, z;
-    if (r) { x = r.bbox.cx; z = r.bbox.cz; }
+    let x, z, yaw = 0, lookX = null, lookZ = null;
+    // Default: stand just inside the entrance looking at the room centre, so
+    // we are not on top of the K2/K3 table / K4 altar (bbox centre).
+    const ent = (!opts.center && r) ? entranceLocal(id) : null;
+    if (ent) { x = ent.x; z = ent.z; yaw = ent.yaw || 0; lookX = ent.lookX; lookZ = ent.lookZ; }
+    else if (r) { x = r.bbox.cx; z = r.bbox.cz; }
     else if (d) { x = d.x; z = d.z; }
     else if (id === 'Palace') { x = 0; z = Math.min(8, state.hall.length * 0.2); }
     else return false;
     const y = floorAt(x, z) || 0, p = localToWorld(x, z, y);
-    state.ctx.hero.position.copy(p); state.ctx.setFacing(0);
-    state.ctx.camera.position.set(p.x, p.y + 1.8, p.z - 4.2); state.ctx.camera.lookAt(p.x, p.y + 1.3, p.z + 4);
+    state.ctx.hero.position.copy(p); state.ctx.setFacing(yaw);
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    // At a doorway, a 4.2 m follow pulls the lens back through the door leaf
+    // (K2/K3/K4 frames were gold-stud close-ups with the room out of view).
+    // Keep the original 4.2 m hall shot when we are not at an entrance.
+    const back = (opts.camBack != null) ? opts.camBack : (ent ? 1.15 : 4.2);
+    state.ctx.camera.position.set(p.x - fx * back, p.y + 1.7, p.z - fz * back);
+    let lx = p.x + fx * 8, lz = p.z + fz * 8;
+    if (lookX != null && lookZ != null) {
+      const look = localToWorld(lookX, lookZ, y + 1.15);
+      lx = look.x; lz = look.z;
+    }
+    state.ctx.camera.lookAt(lx, p.y + 1.25, lz);
     if (window.PalaceInterior) PalaceInterior.constrainCamera(state.ctx.camera, state.ctx.hero);
     resolveCamera(state.ctx.camera); updateCulling(true); drawMinimap();
     return true;
@@ -3463,6 +3522,7 @@
     floor.receiveShadow = true;
     floor.renderOrder = 2;
     g.add(floor);
+    hideUntilReady(floor);
     if (state.floorMeshes) state.floorMeshes.push(floor);
     dress.floor = true;
 
@@ -3482,7 +3542,7 @@
     });
     const wallGeo = k3WallQuads(runs.concat(lintels), b, h);
     if (wallGeo.attributes.position.count) {
-      mesh(wallGeo, k3WallMaterial(WING_FILES.k4SideWall), 'K4-treasury-decorated-walls', g);
+      hideUntilReady(mesh(wallGeo, k3WallMaterial(WING_FILES.k4SideWall), 'K4-treasury-decorated-walls', g));
     } else wallGeo.dispose();
     dress.walls = true;
 
@@ -3500,6 +3560,7 @@
     ceiling.userData.ceiling = true;
     ceiling.visible = !state.cutaway;
     g.add(ceiling);
+    hideUntilReady(ceiling);
     state.ceilings.push(ceiling);
     dress.ceiling = true;
 
@@ -3657,6 +3718,7 @@
     meshObj.castShadow = false;
     meshObj.receiveShadow = true;
     holder.add(meshObj);
+    hideUntilReady(holder);
     host.add(holder);
     const hx = seated.size.x * 0.5, hz = seated.size.z * 0.5;
     const c = Math.abs(Math.cos(rot)), sn = Math.abs(Math.sin(rot));
@@ -3710,6 +3772,7 @@
     state.materials.push(floorMat);
     const floorMesh = mesh(k3FloorSheet(state.k3FloorSolids || solid(r.poly), 0.014, b), floorMat, 'K3-map-floor', g);
     floorMesh.renderOrder = 2;
+    hideUntilReady(floorMesh);
     state.k3Dress.floor = true;
     if (state.floorMeshes) state.floorMeshes.push(floorMesh);
 
@@ -3726,9 +3789,9 @@
     // Outward normal -X is the far (west) wall, opposite the door.
     runs.concat(lintelRuns).forEach(seg => { (seg.nx < -0.5 ? far : side).push(seg); });
     const farGeo = k3WallQuads(far, b, h), sideGeo = k3WallQuads(side, b, h);
-    if (farGeo.attributes.position.count) mesh(farGeo, k3WallMaterial(WING_FILES.k3WallFar), 'K3-map-wall-far', g);
+    if (farGeo.attributes.position.count) hideUntilReady(mesh(farGeo, k3WallMaterial(WING_FILES.k3WallFar), 'K3-map-wall-far', g));
     else farGeo.dispose();
-    if (sideGeo.attributes.position.count) mesh(sideGeo, k3WallMaterial(WING_FILES.k3Wall), 'K3-map-wall-side', g);
+    if (sideGeo.attributes.position.count) hideUntilReady(mesh(sideGeo, k3WallMaterial(WING_FILES.k3Wall), 'K3-map-wall-side', g));
     else sideGeo.dispose();
     state.k3Dress.walls = true;
     // Tile the supplied Babylonian ceiling artwork across the actual room footprint.
@@ -3745,6 +3808,7 @@
     ceiling.userData.ceiling = true;
     ceiling.visible = !state.cutaway;
     g.add(ceiling);
+    hideUntilReady(ceiling);
     state.ceilings.push(ceiling);
     state.k3Dress.ceiling = true;
 
@@ -3804,13 +3868,149 @@
           dress2.pieceReport = pieces.map(p => ({ kind: k3Kind(p), size: [p.size.x, p.size.y, p.size.z].map(n => +n.toFixed(3)) }));
         }
         k3PlaceFurniture();
-        if (g.userData) g.userData.k3Dressed = true;
-        markDressReady('K3');
+        // Do NOT mark ready if the table or a furniture kind is missing —
+        // that was revealing an empty (walls-only) K3 and opening the door
+        // onto a pop-in. The door gate waits on zoneIsReady / isComplete.
+        if (state.k3Dress && state.k3Dress.furniture && state.k3Dress.table) {
+          if (g.userData) g.userData.k3Dressed = true;
+          markDressReady('K3');
+        }
       });
     });
   }
 
-  window.PalaceWings = {
+
+  // Named assets that MUST be resident before a streamed room is revealed or
+  // its door opens. Walls-only is not complete (the K3/K4 pop-in). Visibility
+  // is checked separately (`revealed`) after the atomic dress reveal.
+  const STREAM_EXPECT = {
+    K2: [
+      'K2-majlis-floor', 'K2-majlis-walls', 'K2-majlis-ceiling',
+      'K2-council-table', 'K2-majlis-columns',
+      'K2-winged-lion-1', 'K2-winged-lion-2',
+      'K2-majlis-chandelier', 'K2-majlis-plants'
+    ],
+    K3: [
+      'K3-map-floor', 'K3-map-wall-far', 'K3-map-wall-side', 'K3-map-ceiling',
+      'K3-map-table',
+      'K3-shelf-a', 'K3-shelf-b', 'K3-arch', 'K3-scrolls',
+      'K3-brazier-s', 'K3-brazier-n', 'K3-easel',
+      'K3-chair-head', 'K3-chair-n1', 'K3-chair-n2', 'K3-chair-s1', 'K3-chair-s2'
+    ],
+    K4: [
+      'K4-treasury-floor-artwork', 'K4-treasury-decorated-walls', 'K4-treasury-ceiling-artwork',
+      'K4-frontMural', 'K4-altarTable', 'K4-kingStatue',
+      'K4-column', 'K4-banner', 'K4-palmPot', 'K4-chandelier',
+      'K4-brazier', 'K4-goldChest', 'K4-vase', 'K4-shelfCabinet',
+      'K4-candelabra', 'K4-lionSphinx'
+    ]
+  };
+  const STREAM_EXPECT_MIN = { K4: { 'K4-column': 2, 'K4-banner': 2, 'K4-palmPot': 3, 'K4-brazier': 2, 'K4-goldChest': 4, 'K4-vase': 4, 'K4-shelfCabinet': 2 } };
+
+  function expectedNames(id) {
+    if (id === 'K4' && state.k4Dress && Array.isArray(state.k4Dress.assetSpecs) && state.k4Dress.assetSpecs.length) {
+      return STREAM_EXPECT.K4.filter(function (n) { return n.indexOf('K4-treasury-') === 0; })
+        .concat(state.k4Dress.assetSpecs.map(function (s) { return s.name; }));
+    }
+    return (STREAM_EXPECT[id] || []).slice();
+  }
+
+  function findNamed(root, name) {
+    if (!root || !root.traverse) return [];
+    const out = [];
+    root.traverse(function (o) {
+      if (!o.name) return;
+      if (o.name === name || o.name.indexOf(name + '-') === 0 || o.name.indexOf(name) === 0) out.push(o);
+    });
+    return out;
+  }
+  function isWorldVisible(o) {
+    let n = o, v = true;
+    while (n) { if (n.visible === false) v = false; n = n.parent; }
+    return v;
+  }
+  function groupFor(id) {
+    if (id === 'Palace') {
+      return (state.ctx && state.ctx.scene && (state.ctx.scene.getObjectByName('PalaceInterior') || state.ctx.scene.getObjectByName('PalaceWings'))) || state.root;
+    }
+    return (state.regionGroups && state.regionGroups.get(id)) || null;
+  }
+
+  function roomCompleteness(id) {
+    const region = (state.regions || []).find(function (rr) { return rr.id === id; });
+    // Arch thresholds are portal volumes with no independent mesh group —
+    // their geometry lives on the hall / passage. Treating 0 meshes as a
+    // failure was a false negative (ARCH_L3/R1/R3).
+    if (region && region.kind === 'threshold') {
+      return {
+        id: id, expect: [], present: [], missing: [], hidden: [],
+        meshes: 0, visMeshes: 0, complete: true, revealed: true,
+        ready: true, streamed: false, hasGroup: false, threshold: true
+      };
+    }
+    const g = groupFor(id);
+    const expect = expectedNames(id);
+    const mins = STREAM_EXPECT_MIN[id] || {};
+    const present = [], missing = [], hidden = [], visNames = [];
+    let meshes = 0, visMeshes = 0;
+    if (g && g.traverse) {
+      g.traverse(function (o) {
+        if (!o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh) return;
+        meshes++;
+        if (isWorldVisible(o)) { visMeshes++; if (o.name) visNames.push(o.name); }
+      });
+    }
+    function covered(name) {
+      // Exact, or any node whose name starts with the expect token.
+      const nodes = g ? findNamed(g, name) : [];
+      if (!nodes.length) return { ok: false, vis: 0, n: 0 };
+      let vis = 0;
+      nodes.forEach(function (n) {
+        const hasMesh = n.isMesh || n.isInstancedMesh || n.isSkinnedMesh;
+        let any = hasMesh && isWorldVisible(n);
+        if (!hasMesh && n.traverse) n.traverse(function (c) {
+          if ((c.isMesh || c.isInstancedMesh) && isWorldVisible(c)) any = true;
+        });
+        if (any) vis++;
+      });
+      return { ok: vis > 0, vis: vis, n: nodes.length };
+    }
+    expect.forEach(function (name) {
+      const c = covered(name);
+      const need = mins[name] || 1;
+      if (!c.n || c.n < need) missing.push(name);
+      else {
+        present.push(name);
+        if (c.vis < need) hidden.push(name);
+      }
+    });
+    // "complete" = every expected asset is RESIDENT in the graph. Visibility
+    // is separate: hideUntilReady keeps props and shells hidden until the
+    // streamer reveals them atomically, and isComplete() is what the streamer
+    // waits on — requiring world-visible here would deadlock and never open
+    // the door. After reveal, `revealed` is true when nothing is still hidden.
+    const streamed = !!STREAM_EXPECT[id];
+    const complete = streamed
+      ? (missing.length === 0 && expect.length > 0)
+      : !!(g && meshes > 0 && (id !== 'Palace' || meshes >= 20));
+    const revealed = complete && hidden.length === 0 && (streamed ? visMeshes > 0 : true);
+    return {
+      id: id,
+      expect: expect,
+      present: present,
+      missing: missing,
+      hidden: hidden,
+      meshes: meshes,
+      visMeshes: visMeshes,
+      complete: complete,
+      revealed: revealed,
+      ready: zoneIsReady(id),
+      streamed: streamed,
+      hasGroup: !!g
+    };
+  }
+
+    window.PalaceWings = {
     // Data-driven streaming: register a new streamed zone (see ADDING_CONTENT.md).
     registerZone: registerZone,
     zones: function () { return zoneStreamer ? zoneStreamer.report() : null; },
@@ -3819,6 +4019,9 @@
     streamedTargets: streamedTargets,
     zoneGateOpen: zoneGateOpen,
     zoneIsReady: zoneIsReady,
+    roomCompleteness: roomCompleteness,
+    expectedNames: expectedNames,
+    STREAM_EXPECT: STREAM_EXPECT,
     deviceProfile: deviceProfile,
     palaceVisible: function () { return state.palaceNear !== false; },
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,

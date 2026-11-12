@@ -172,16 +172,22 @@
     root.traverse(function (o) {
       if (o.geometry) geos.add(o.geometry);
       const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      function addTex(t) {
+        if (!t || !t.isTexture || t.isCompressedTexture || t.isRenderTargetTexture || !t.source) return;
+        if (t.userData && t.userData.sinKeepCpu) return;
+        const list = bySource.get(t.source) || [];
+        if (list.indexOf(t) < 0) list.push(t);
+        bySource.set(t.source, list);
+      }
       mats.forEach(function (m) {
         if (!m) return;
-        TEX_KEYS.forEach(function (k) {
-          const t = m[k];
-          if (!t || !t.isTexture || t.isCompressedTexture || t.isRenderTargetTexture || !t.source) return;
-          if (t.userData && t.userData.sinKeepCpu) return;
-          const list = bySource.get(t.source) || [];
-          if (list.indexOf(t) < 0) list.push(t);
-          bySource.set(t.source, list);
-        });
+        TEX_KEYS.forEach(function (k) { addTex(m[k]); });
+        if (m.uniforms) {
+          Object.keys(m.uniforms).forEach(function (uk) {
+            const v = m.uniforms[uk] && m.uniforms[uk].value;
+            addTex(v);
+          });
+        }
       });
     });
     if (doUpload) {
@@ -195,25 +201,42 @@
       if (!list.every(function (t) { return textureUploaded(renderer, t); })) return;
       try {
         const img = source.data;
+        const sz = imgSize(img);
         source.data = null;
-        list.forEach(function (t) { t.image = null; if (!t.userData) t.userData = {}; t.userData.sinCpuReleased = true; });
+        list.forEach(function (t) {
+          if (!t.userData) t.userData = {};
+          if (sz.w && sz.h) {
+            t.userData.sinGpuW = t.userData.sinGpuW || sz.w;
+            t.userData.sinGpuH = t.userData.sinGpuH || sz.h;
+          }
+          t.image = null;
+          t.userData.sinCpuReleased = true;
+        });
         closeImage(img);
         released++;
       } catch (_) {}
     });
-    geos.forEach(function (g) {
-      if (g.userData && (g.userData.keepCpu || g.userData.palaceShared)) return;
-      if (typeof g.onUploadCallback !== 'function' || !g.userData || !g.userData.sinArmUpload) {
-        const self = g;
-        const prev = g.onUploadCallback;
-        g.onUploadCallback = function () {
-          try { if (typeof prev === 'function') prev.call(this); } catch (_) {}
-          dropGeometryCpu(self);
-        };
-        if (!g.userData) g.userData = {};
-        g.userData.sinArmUpload = true;
-      }
-    });
+    // Do not null attribute arrays unless explicitly asked. After the
+    // outdoor instance wrap started calling this every 2 s, Three.js hit
+    // "null is not an object (evaluating 'array.byteLength')" in the rAF
+    // loop past the Ishtar gate and the framebuffer went black on
+    // landscape restore. Texture CPU (~375 MB) is the jetsam term;
+    // geometry CPU is ~17 MB and is still needed for skinning / LOD / bounds.
+    if (opts && opts.dropGeometry) {
+      geos.forEach(function (g) {
+        if (g.userData && (g.userData.keepCpu || g.userData.palaceShared)) return;
+        if (typeof g.onUploadCallback !== 'function' || !g.userData || !g.userData.sinArmUpload) {
+          const self = g;
+          const prev = g.onUploadCallback;
+          g.onUploadCallback = function () {
+            try { if (typeof prev === 'function') prev.call(this); } catch (_) {}
+            dropGeometryCpu(self);
+          };
+          if (!g.userData) g.userData = {};
+          g.userData.sinArmUpload = true;
+        }
+      });
+    }
     return { sources: bySource.size, released: released };
   }
 

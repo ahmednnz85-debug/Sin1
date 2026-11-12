@@ -575,8 +575,8 @@
     if (typeof window === 'undefined') return null;
     if (window.__C && window.__C.isCamera) return window.__C;
     try {
-      if (window.SinGfx && typeof SinGfx.camera === 'function') {
-        const c = SinGfx.camera();
+      if (window.SinGfx && typeof SinGfx.getCamera === 'function') {
+        const c = SinGfx.getCamera();
         if (c && c.isCamera) return c;
       }
     } catch (_) {}

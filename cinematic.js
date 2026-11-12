@@ -385,7 +385,24 @@
       orig(s, c);
       if (q) { gl.endQuery(tq.TIME_ELAPSED_EXT); pendingQ = q; }
       // Record tris/draws even when the on-screen HUD is off (diag / estimator).
-      if (isMain) { perf.calls = R.info.render.calls; perf.tris = R.info.render.triangles; }
+      if (isMain) {
+        perf.calls = R.info.render.calls; perf.tris = R.info.render.triangles;
+        // Instance R.render shadows the process-memory prototype hook, so
+        // outdoor CPU ImageBitmaps (~375 MB) never dropped and process
+        // memory sat at ~994 MB (iOS jetsam range). Drain here, throttled,
+        // after the GPU has the copy. Same rule as palace: shared sources
+        // only after every clone is resident.
+        try {
+          if (window.SinProcessMemory && SinProcessMemory.releaseCpuFromObject) {
+            const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+            if (!R.__sinCpuRelAt || now - R.__sinCpuRelAt > 2000) {
+              R.__sinCpuRelAt = now;
+              const rel = SinProcessMemory.releaseCpuFromObject(s, R, { upload: false });
+              try { window.__sinCpuRelease = rel; } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
     };
   }
   function pollGpu() {
@@ -397,10 +414,22 @@
   function hud(ts) {
     if (!perf.on) { if (perf.el) { perf.el.remove(); perf.el = null; } return; }
     ensureHud(); pollGpu();
+    // Ignore harness/tab-stall gaps so a single long pause does not
+    // empty the 1 s window and flash "FPS 0   - ms" (r5 lab + any
+    // real >1 s hitch). Keep the last good reading.
+    const hudStall = 500;
+    if (perf._lastTs && ts - perf._lastTs > hudStall) perf.frames = [];
+    perf._lastTs = ts;
     perf.frames.push(ts);
-    while (perf.frames.length && ts - perf.frames[0] > 1000) perf.frames.shift();
+    while (perf.frames.length > 2 && ts - perf.frames[0] > 1000) perf.frames.shift();
     if (ts - perf.t < 400) return; perf.t = ts;
-    const fr = perf.frames.length > 1 ? (perf.frames.length - 1) * 1000 / (ts - perf.frames[0]) : 0;
+    let fr = perf._lastFr || 0;
+    if (perf.frames.length > 1 && ts > perf.frames[0]) {
+      const cand = (perf.frames.length - 1) * 1000 / (ts - perf.frames[0]);
+      if (Number.isFinite(cand) && cand > 0) { fr = cand; perf._lastFr = cand; }
+    } else if (!fr && perf.avg > 0 && perf.avg < 2000) {
+      fr = 1000 / perf.avg;
+    }
     const mapOn = !!(R && R.shadowMap && R.shadowMap.enabled);
     perf.el.textContent =
       'FPS ' + fr.toFixed(0) + '   ' + (fr ? (1000 / fr).toFixed(1) : '-') + ' ms\n' +
@@ -501,7 +530,10 @@
     update(dt, info) { updateAtmo(dt, info); cameraFrame(dt, ctx.interior(), info && info.running); },
     renderer() { return R; },
     scene() { return scene; },
-    camera() { return camera; },
+    // MUST NOT be named camera(): that overwrote camera: CAM, so
+    // SinGfx.camera.shoulder was undefined, follow-cam want became NaN,
+    // and the 3D view went fully black after NEW GAME (r5 / PR #45).
+    getCamera() { return camera; },
     status() { return { mode, tier: base, pressure, scale: E.scale, targetScale: dynamicResolution ? dynamicResolution.value() : E.scale, shadow: E.shadow ? E.res : 0, shadowPolicy: !!E.shadow, shadowMapEnabled: !!(R && R.shadowMap && R.shadowMap.enabled), zone: zoneName, fovH, vfov: camera && camera.fov, avgMs: perf.avg, calls: perf.calls, tris: perf.tris }; }
   };
   window.SinGfx = API;
