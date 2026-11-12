@@ -277,3 +277,13 @@ test('after two stall attempts a room that fits the budget alone is admitted (no
   assert.equal(s.status('K2'), 'ready', 'second stall admits a room that fits alone');
   assert.ok(s.report().stats.deferStalls >= 2);
 });
+
+test('defer-stall handler is re-entrant-safe and does not loop through onBudgetStall', () => {
+  const zs = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
+  assert.match(zs, /let stallBusy = false/);
+  assert.match(zs, /if \(stallBusy\) return false/);
+  assert.match(zs, /finally \{\s*stallBusy = false;/);
+  const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
+  const stall = wings.slice(wings.indexOf('onBudgetStall:'), wings.indexOf('onBudgetStall:') + 900);
+  assert.match(stall, /st === 'LOADING'/);
+});

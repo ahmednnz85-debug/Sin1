@@ -13,7 +13,7 @@ test('teardown gate reaches load only after verify phase 4', () => {
   assert.match(palace, /teardownPhase = 5/);
   assert.match(palace, /reportHeaviest\(ctx\.scene, 'pre-teardown'\)/);
   assert.match(palace, /reportHeaviest\(ctx\.scene, 'post-teardown'\)/);
-  assert.match(palace, /reportHeaviest\(ctx\.scene, 'post-palace-build'\)/);
+  assert.match(palace, /reportHeaviest\((?:ctx|saved)\.scene, 'post-palace-build'\)/);
 });
 
 test('door camera keeps a minimum distance behind the hero', () => {

@@ -329,29 +329,38 @@
     // budget (the CI content check guarantees this for shipped rooms),
     // admit it on the second stall so leftover estimate noise cannot
     // deadlock the door.
+    let stallBusy = false;
     function handleDeferStall(rec, t) {
       const wait = o.deferStallMs != null ? o.deferStallMs : 3000;
       if (!rec.deferred || rec.state !== 'cold') return false;
       if (!rec.deferredAt || t - rec.deferredAt < wait) return false;
-      stats.deferStalls++;
-      rec.stallAttempts = (rec.stallAttempts || 0) + 1;
-      stats.lastStall = { id: rec.id, at: t, attempt: rec.stallAttempts, usage: usage() };
-      zones.forEach(function (r) {
-        if (r.state !== 'cold' && !r.isCurrent && !r.visible) {
-          evict(r, 'defer-stall');
-          stats.budgetEvictions++;
+      // Re-entrancy: onBudgetStall -> releaseCity / purge must not re-enter
+      // evict/canStart on the same tick (that was a suspected infinite loop).
+      if (stallBusy) return false;
+      stallBusy = true;
+      try {
+        stats.deferStalls++;
+        rec.stallAttempts = (rec.stallAttempts || 0) + 1;
+        stats.lastStall = { id: rec.id, at: t, attempt: rec.stallAttempts, usage: usage() };
+        zones.forEach(function (r) {
+          if (r.state !== 'cold' && !r.isCurrent && !r.visible) {
+            evict(r, 'defer-stall');
+            stats.budgetEvictions++;
+          }
+        });
+        try { if (typeof o.onBudgetStall === 'function') o.onBudgetStall(rec, report()); } catch (e) { console.warn('onBudgetStall', e); }
+        rec.deferredAt = t;
+        if (canStart(rec)) return true;
+        if (roomFitsAlone(rec) && rec.stallAttempts >= 2) {
+          note('load', rec.id + ' admitted after defer-stall (room fits the device budget alone)');
+          rec.deferred = false;
+          rec.deferredAt = 0;
+          return true;
         }
-      });
-      try { if (typeof o.onBudgetStall === 'function') o.onBudgetStall(rec, report()); } catch (e) { console.warn('onBudgetStall', e); }
-      rec.deferredAt = t;
-      if (canStart(rec)) return true;
-      if (roomFitsAlone(rec) && rec.stallAttempts >= 2) {
-        note('load', rec.id + ' admitted after defer-stall (room fits the device budget alone)');
-        rec.deferred = false;
-        rec.deferredAt = 0;
-        return true;
+        return false;
+      } finally {
+        stallBusy = false;
       }
-      return false;
     }
 
         function start(rec, t) {

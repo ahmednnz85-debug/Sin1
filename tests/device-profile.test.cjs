@@ -82,6 +82,9 @@ test('installDecodeCap resizes an oversized ImageBitmap and closes the original'
   const out = await global.createImageBitmap({ width: 4096, height: 4096 });
   assert.equal(out.width, 1024);
   assert.equal(out.height, 1024);
-  assert.ok(closed.includes(4096), 'original 4K bitmap must be closed');
+  // Preferred path: decode already capped so a 4K bitmap is never allocated.
+  const first = calls[0];
+  assert.ok(first && first.opts && first.opts.resizeWidth === 1024, 'first createImageBitmap must pass resizeWidth');
+  assert.ok(!calls.some(c => c.w === 4096 && !(c.opts && c.opts.resizeWidth)), 'must not materialize a 4K ImageBitmap when size is known');
   delete global.createImageBitmap;
 });

@@ -52,6 +52,11 @@
     deferStallMs: 3000,
     onBudgetStall: function (rec) {
       try {
+        const st = window.PalaceInterior && PalaceInterior.state && PalaceInterior.state();
+        // During palace LOADING/SETUP the city is already gone. A purge of
+        // the loader cache on the same tick as a GLB parse would block the
+        // main thread and was a suspected stall -> evict -> re-admit loop.
+        if (st === 'LOADING' || st === 'FADING_OUT' || st === 'SETUP') return;
         if (window.PalaceInterior && typeof PalaceInterior.releaseCity === 'function') PalaceInterior.releaseCity();
         if (window.__releaseExteriorStage) window.__releaseExteriorStage();
         const PM = window.SinProcessMemory;
@@ -312,6 +317,8 @@
   }
   function pointInSolids(x, z, solids) {
     for (const s of solids || []) {
+      if (!s._bb && s.outer) s._bb = bbox(s.outer);
+      if (s._bb && (x < s._bb.x0 || x > s._bb.x1 || z < s._bb.z0 || z > s._bb.z1)) continue;
       if (!pointInPoly(x, z, s.outer)) continue;
       let hole = false;
       for (const h of s.holes || []) if (pointInPoly(x, z, h)) { hole = true; break; }
@@ -562,15 +569,24 @@
     if (name && /^K[234]-/.test(name)) m.userData.streamDress = true;
     (parent || state.root).add(m); return m;
   }
-  function makeColliders(solids, caps) {
+  async function makeColliders(solids, caps) {
     let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
     solids.forEach(s => { const b = bbox(s.outer); minX = Math.min(minX, b.x0); minZ = Math.min(minZ, b.z0); maxX = Math.max(maxX, b.x1); maxZ = Math.max(maxZ, b.z1); });
     const nx = Math.ceil((maxX - minX) / GRID), nz = Math.ceil((maxZ - minZ) / GRID);
+    try { console.info('[palace load] colliders-grid', nx, 'x', nz, 'solids', (solids||[]).length); } catch (_) {}
     const occupied = new Uint8Array(nx * nz);
-    for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) {
-      const x = minX + (ix + 0.5) * GRID, z = minZ + (iz + 0.5) * GRID;
-      if (pointInSolids(x, z, solids)) occupied[iz * nx + ix] = 1;
+    const tGrid = performance.now();
+    for (let iz = 0; iz < nz; iz++) {
+      for (let ix = 0; ix < nx; ix++) {
+        const x = minX + (ix + 0.5) * GRID, z = minZ + (iz + 0.5) * GRID;
+        if (pointInSolids(x, z, solids)) occupied[iz * nx + ix] = 1;
+      }
+      if ((iz & 7) === 7) {
+        try { console.info('[palace load] colliders-row', iz, '/', nz, Math.round(performance.now()-tGrid)+'ms'); } catch (_) {}
+        await yieldWing();
+      }
     }
+    try { console.info('[palace load] colliders-grid-done', Math.round(performance.now()-tGrid)+'ms'); } catch (_) {}
     const rects = [];
     for (let iz = 0; iz < nz; iz++) {
       let ix = 0;
@@ -2394,13 +2410,25 @@
   function wingMark(msg) {
     try { if (window.PalaceInterior && PalaceInterior.mark) PalaceInterior.mark(msg); } catch (e) { /* marks are diagnostic only */ }
   }
-  function build(ctx, hall) {
+  function yieldWing() {
+    return new Promise(function (r) {
+      let d = false;
+      const go = function () { if (!d) { d = true; r(); } };
+      try { requestAnimationFrame(go); } catch (_) {}
+      setTimeout(go, 0);
+    });
+  }
+  async function build(ctx, hall) {
     assertDeps(); dispose();
     state.building = true; deferredLoads.length = 0;
-    try { return buildNow(ctx, hall); }
+    try { return await buildNow(ctx, hall); }
     finally { state.building = false; deferredLoads.length = 0; }
   }
-  function buildNow(ctx, hall) {
+  async function buildNow(ctx, hall) {
+    const t0 = performance.now();
+    function phase(name) {
+      try { console.info('[palace load] wings-' + name, Math.round(performance.now() - t0) + 'ms'); } catch (_) {}
+    }
     state.ctx = ctx; state.hall = hall; state.debug = /(?:[?&#])debug=1(?:&|#|$)/.test(location.href);
     state.root = new THREE.Group(); state.root.name = 'PalaceWings';
     state.root.position.set(ctx.portal.x, hall.floorY || 0, ctx.portal.frontZ); ctx.scene.add(state.root);
@@ -2410,27 +2438,32 @@
     state.unifiedAmbient.name = 'PalaceWingsUnifiedAmbient';
     state.root.add(state.unifiedAmbient);
     const layout = solveLayout(hall);
-    wingMark('wings layout');
+    wingMark('wings layout'); phase('layout'); await yieldWing();
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
     state.regions = state.rooms.concat(state.connectors); state.links = layout.links; state.sealed = layout.sealed; state.back = layout.back;
     prepareArchitecture(layout);
-    wingMark('wings architecture');
+    wingMark('wings architecture'); phase('architecture'); await yieldWing();
     // Remove procedural walls inside K1 so the GLB model is the only interior
     const k1 = state.rooms.find(r => r.id === 'K1');
     if (k1) {
+      try { console.info('[palace load] k1-diff-start'); } catch (_) {}
+      const tDiff = performance.now();
       state.baseWall = difference(state.baseWall, solid(k1.poly));
       state.wallSolid = difference(state.wallSolid, solid(k1.poly));
+      try { console.info('[palace load] k1-diff-end', Math.round(performance.now()-tDiff)+'ms'); } catch (_) {}
     }
-    makeColliders(state.baseWall, state.caps);
-    wingMark('wings colliders');
-    buildVisuals(layout); wingMark('wings visuals'); rebuildSpatial(); loadRoomDoors();
+    await yieldWing();
+    await makeColliders(state.baseWall, state.caps);
+    wingMark('wings colliders'); phase('colliders'); await yieldWing();
+    buildVisuals(layout); wingMark('wings visuals'); phase('visuals'); await yieldWing();
+    rebuildSpatial(); loadRoomDoors(); phase('doors'); await yieldWing();
     state.built = true;
     if (state.debug) createDebugUI();
     updateCulling(true);
     // Models already downloaded behind the palace loading screen are attached
     // now, in the same order the network callbacks used to run after build.
-    flushDeferredLoads();
-    updateCulling(true);
+    flushDeferredLoads(); phase('deferred');
+    updateCulling(true); phase('cull-2');
     return {
       root: state.root,
       fires: state.fires,

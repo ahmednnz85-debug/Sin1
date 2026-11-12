@@ -124,6 +124,8 @@ If a **single** room is larger than the whole budget even after every evictable 
 
 A door must never wait forever at runtime either. If a deferral lasts more than `deferStallMs` (3 s), the streamer evicts every non-visible, non-current zone (adjacent included), then calls `onBudgetStall` (wired in `wings.js` to `PalaceInterior.releaseCity`, `__releaseExteriorStage`, and `purgeOrphanTextures`). If the room itself fits the device budget, it is admitted on the second stall so leftover estimate noise cannot deadlock the door. `report().stats.deferStalls` and `lastStall` record this.
 
+Palace entry itself is also time-sliced. After each hall GLB is parsed, CPU textures are capped to `maxTextureSize` and ImageBitmaps are queued; they are **not** uploaded with a synchronous `initTexture` burst (that blocked the main thread for minutes and grew WebKit RSS to ~3.6 GB — well outside the JS estimator — and is what jetsams iPhone Safari after the palace). `pumpGpuUploads` spends at most 50 ms per frame on the black screen, then `loadOk` flips. `window.__palaceLoadProfile` records parse and upload timings. The defer-stall callback is re-entrancy-guarded and is skipped while the palace is still in `LOADING` / `SETUP`.
+
 Inspect live state with `PalaceWings.zones()` and `SinZoneStreamer.report()` (or the streamer instance’s `report()`). The report includes `usage`, `budget`, `overBudget`, per-zone `deferred`, and stats (`evictions`, `budgetEvictions`, `deferred`, `cpuReleased`, uploads, worst upload ms, compiles, reveals).
 
 ### Proving the cap scales (test-only synthetic rooms)

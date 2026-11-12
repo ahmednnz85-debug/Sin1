@@ -102,6 +102,7 @@
   let camBack = 3.6;
   let entranceLeft = 0;
   let state = 'IDLE';
+  let setupTask = null;
   let busy = false;
   let contextLost = false;
   const CONTEXT_RELOAD_KEY = 'sinContextReload';
@@ -116,7 +117,7 @@
   let holdT = 0;
   let loadPromise = null;
   let palaceLoadStarted = false;
-  let loadOk = null;
+  let loadOk = null; setupTask = null;
   let loadError = null;
   let H = 1.8;
   let group = null;
@@ -464,7 +465,7 @@
     preTeardownInfo = null;
     postTeardownInfo = null;
     warmMeshes = null;
-    loadOk = null;
+    loadOk = null; setupTask = null;
     loadError = null;
     palaceLoadStarted = false;
     holdT = CONFIG.minBlackHoldSeconds;
@@ -579,32 +580,122 @@
       return !!(p && (p.__webglTexture || p.__webglInit));
     } catch (_) { return false; }
   }
-  function releaseCpuFromObject(root, renderer) {
-    if (!root || !root.traverse || !renderer || typeof renderer.initTexture !== 'function') return;
-    const bySource = new Map();
+  // GPU uploads during palace LOADING used to run synchronously inside
+  // settle() — every material of props-set / throne / K1 in one
+  // initTexture burst. On WebKit that blocked the main thread for minutes
+  // and grew process RSS to ~3.6 GB (the estimator only saw ~98 MB: the
+  // extra is the software-GL / ImageBitmap blind spot), which is what
+  // jetsams iPhone Safari after palace entry.
+  const gpuUploadQ = [];
+  const loadProfile = [];
+  function collectTextures(root, into) {
+    const out = into || [];
+    if (!root) return out;
+    function add(t) {
+      if (!t || !t.isTexture || t.isCompressedTexture || t.isRenderTargetTexture) return;
+      if (out.indexOf(t) < 0) out.push(t);
+    }
+    if (root.isTexture) { add(root); return out; }
+    if (!root.traverse) return out;
     root.traverse(function (o) {
       const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
       mats.forEach(function (m) {
         if (!m) return;
-        CPU_RELEASE_KEYS.forEach(function (k) {
-          const t = m[k];
-          if (!t || !t.isTexture || t.isCompressedTexture || t.isRenderTargetTexture || !t.source) return;
-          const list = bySource.get(t.source) || [];
-          if (list.indexOf(t) < 0) list.push(t);
-          bySource.set(t.source, list);
+        CPU_RELEASE_KEYS.forEach(function (k) { add(m[k]); });
+        if (m.uniforms) Object.keys(m.uniforms).forEach(function (uk) {
+          const v = m.uniforms[uk] && m.uniforms[uk].value;
+          if (v && v.isTexture) add(v);
         });
       });
     });
-    // Pass 1: upload every texture while the pixels are still present.
-    bySource.forEach(function (list) {
-      list.forEach(function (t) { try { if (t.image) renderer.initTexture(t); } catch (_) {} });
+    return out;
+  }
+  function capCpuTexture(t) {
+    if (!t) return;
+    try {
+      const max = (window.SinDevice && SinDevice.detect && SinDevice.detect().maxTextureSize) || 0;
+      if (max && window.SinDevice && SinDevice.capTexture) SinDevice.capTexture(t, max);
+    } catch (_) {}
+  }
+  function enqueueGpu(root) {
+    collectTextures(root, gpuUploadQ);
+  }
+  // At most budgetMs of initTexture + cap work, then return. Caller yields.
+  let pumpStamp = -1;
+  function pumpGpuUploads(renderer, budgetMs) {
+    renderer = renderer || (lastContext && lastContext.renderer);
+    if (!renderer || typeof renderer.initTexture !== 'function') { gpuUploadQ.length = 0; return true; }
+    const t0 = performance.now();
+    // One pump per animation frame — LOADING tick and the async loader
+    // share this gate so we never spend 2×50 ms on the same frame.
+    const stamp = Math.floor(t0 / 16);
+    if (stamp === pumpStamp) return gpuUploadQ.length === 0;
+    pumpStamp = stamp;
+    const budget = budgetMs != null ? budgetMs : 50;
+    let n = 0;
+    while (gpuUploadQ.length && performance.now() - t0 < budget) {
+      const t = gpuUploadQ.shift();
+      if (!t) continue;
+      try { capCpuTexture(t); } catch (_) {}
+      try {
+        const img = t.image || (t.source && t.source.data);
+        const w = img && (img.width || img.naturalWidth) || 0;
+        const h = img && (img.height || img.naturalHeight) || 0;
+        if (w && Math.max(w, h) > 1024) {
+          try { console.warn('[palace load] uncapped tex', w, h); } catch (_) {}
+          try { capCpuTexture(t); } catch (_) {}
+        }
+        if ((t.image || (t.source && t.source.data)) && !textureUploaded(renderer, t)) {
+          const tU = performance.now();
+          renderer.initTexture(t);
+          const dtU = performance.now() - tU;
+          n++;
+          if (dtU > 30) {
+            try { console.info('[palace load] initTexture', Math.round(dtU) + 'ms', w, 'x', h, 'mips', !!t.generateMipmaps); } catch (_) {}
+          }
+          // One expensive upload is enough for this frame — the 50 ms
+          // budget cannot preempt a single initTexture, so yield next.
+          if (dtU > 16) break;
+        }
+      } catch (_) {}
+      try {
+        if (window.SinProcessMemory && SinProcessMemory.dropTextureCpu && textureUploaded(renderer, t)) {
+          SinProcessMemory.dropTextureCpu(t);
+        }
+      } catch (_) {}
+    }
+    const dt = performance.now() - t0;
+    if (n || dt > 20) {
+      try { note('gpu pump ' + n + ' tex ' + Math.round(dt) + 'ms q=' + gpuUploadQ.length); } catch (_) {}
+    }
+    return gpuUploadQ.length === 0;
+  }
+  function releaseCpuFromObject(root, renderer, opts) {
+    if (!root || !root.traverse || !renderer || typeof renderer.initTexture !== 'function') return;
+    const upload = !!(opts && opts.upload);
+    const bySource = new Map();
+    const list = collectTextures(root);
+    list.forEach(function (t) {
+      capCpuTexture(t);
+      if (!t.source) return;
+      const arr = bySource.get(t.source) || [];
+      if (arr.indexOf(t) < 0) arr.push(t);
+      bySource.set(t.source, arr);
     });
-    // Pass 2: drop pixels only for sources fully resident on the GPU.
-    bySource.forEach(function (list, source) {
-      if (!source.data || !list.every(function (t) { return textureUploaded(renderer, t); })) return;
+    if (upload) {
+      list.forEach(function (t) { try { if (t.image) renderer.initTexture(t); } catch (_) {} });
+    } else if (!opts || opts.enqueue !== false) {
+      list.forEach(function (tex) {
+        if (!textureUploaded(renderer, tex) && gpuUploadQ.indexOf(tex) < 0) gpuUploadQ.push(tex);
+      });
+    }
+    // Drop pixels only for sources already on the GPU.
+    bySource.forEach(function (arr, source) {
+      if (!source.data || !arr.every(function (t) { return textureUploaded(renderer, t); })) return;
       try {
         const img = source.data;
         source.data = null;
+        arr.forEach(function (t) { try { t.image = null; } catch (_) {} });
         if (img && typeof img.close === 'function') img.close();
       } catch (_) {}
     });
@@ -615,9 +706,10 @@
     const roots = [group, wingRuntime && wingRuntime.root, ctx.hero, ctx.scene];
     for (let i = 0; i < roots.length; i++) {
       if (!roots[i]) continue;
-      try { releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
-      try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
+      try { releaseCpuFromObject(roots[i], ctx.renderer, { upload: false, enqueue: false }); } catch (_) {}
+      try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer, { upload: false }); } catch (_) {}
     }
+    try { pumpGpuUploads(ctx.renderer, 50); } catch (_) {}
     if (tag && window.SinProcessMemory) {
       try {
         const pe = SinProcessMemory.estimate({ renderer: ctx.renderer, scene: ctx.scene, phase: 'REVEAL' });
@@ -629,12 +721,17 @@
   function releaseCpuFromResult(result, renderer) {
     if (!result) return;
     // Loose textures (tex/wtex) are cloned per surface at build time and
-    // handed to the wings; they must keep their pixels.
-    if (result.isTexture) return;
-    if (result.scene) releaseCpuFromObject(result.scene, renderer);
+    // handed to the wings; they must keep their pixels until then — but
+    // still cap to maxTextureSize so a 4K bitmap is not held.
+    if (result.isTexture) { capCpuTexture(result); enqueueGpu(result); return; }
+    const root = result.scene || result;
+    collectTextures(root).forEach(capCpuTexture);
+    enqueueGpu(root);
+    // Never initTexture here: that was the multi-minute main-thread block.
+    releaseCpuFromObject(root, renderer, { upload: false });
     try {
-      if (window.SinProcessMemory && result.scene) {
-        SinProcessMemory.releaseCpuFromObject(result.scene, renderer);
+      if (window.SinProcessMemory && root) {
+        SinProcessMemory.releaseCpuFromObject(root, renderer, { upload: false });
       }
     } catch (_) {}
   }
@@ -804,7 +901,15 @@
     return waitDecoder().then(function (dec) {
       if (dec) loader.setMeshoptDecoder(dec);
       return new Promise(function (resolve, reject) {
-        loader.parse(buf, '', resolve, function (e) {
+        const tParse = performance.now();
+        loader.parse(buf, '', function (res) {
+          const dt = performance.now() - tParse;
+          try {
+            if (dt > (window.__palaceMaxSliceMs || 0)) window.__palaceMaxSliceMs = Math.round(dt);
+            loadProfile.push({ name: '__parse', ms: Math.round(dt) });
+          } catch (_) {}
+          resolve(res);
+        }, function (e) {
           reject(new Error('تعذّر قراءة النموذج — ' + ((e && (e.message || e)) || 'GLB')));
         });
       });
@@ -880,6 +985,7 @@
       if (!spec.buf) spec.buf = await fetchWithRetry(spec);
       tAfterDl = performance.now();
       const byteLen = spec.buf ? spec.buf.byteLength : 0;
+      try { console.info('[palace load] parse-start', spec.name, spec.kind, byteLen); } catch (_) {}
       if (spec.kind === 'js') spec.result = await installDecoder(spec.buf);
       else if (spec.kind === 'tex') spec.result = await textureFromBytes(spec.buf, spec.name, spec.linear);
       else if (spec.kind === 'wtex') spec.result = await textureFromBytes(spec.buf, spec.name, false);
@@ -1030,7 +1136,14 @@
       loadStage = 1; paint();
       // One GLB/texture at a time — never parse the next until the previous
       // ArrayBuffer has been freed.
-      function nextFrame() { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); }
+      function nextFrame() {
+        return new Promise(function (r) {
+          let done = false;
+          const go = function () { if (done) return; done = true; r(); };
+          try { requestAnimationFrame(function () { go(); }); } catch (_) {}
+          setTimeout(go, 0); // yield to the event loop even if rAF is paused (headless / blocked WebGL)
+        });
+      }
       for (let i = 0; i < specs.length; i++) {
         const s = specs[i];
         try {
@@ -1044,8 +1157,12 @@
           }
         }
         s.buf = null;
-        // Yield a frame and drain CPU so a 160s main-thread parse cannot
-        // freeze the tab (and so ImageBitmaps are closed before the next GLB).
+        try {
+          if (s.timing) loadProfile.push(Object.assign({ name: s.name, kind: s.kind }, s.timing));
+        } catch (_) {}
+        // Yield every asset so a single GLB parse cannot freeze the tab.
+        // GPU upload is deferred to the 50 ms pump below — never initTexture
+        // the whole hall in this loop.
         try {
           if (window.SinProcessMemory && lastContext) {
             if (s.result) SinProcessMemory.releaseCpuFromObject(s.result.scene || s.result, lastContext.renderer, { upload: false });
@@ -1053,6 +1170,28 @@
           }
         } catch (_) {}
         await nextFrame();
+      }
+      // Black-screen GPU upload, ≤50 ms per frame. This is the work that
+      // previously ran inside settle() and held the main thread for minutes
+      // at ~3.6 GB RSS on WebKit.
+      {
+        const renderer = lastContext && lastContext.renderer;
+        specs.forEach(function (s) { if (s.result) enqueueGpu(s.result.scene || s.result); });
+        const tUp = performance.now();
+        let pumps = 0;
+        try { console.info('[palace load] gpu-pump-start q=' + gpuUploadQ.length); } catch (_) {}
+        await nextFrame();
+        while (!pumpGpuUploads(renderer, 50)) {
+          pumps++;
+          if (statusEl) statusEl.textContent = 'جارٍ تجهيز القاعة';
+          try { paint(); } catch (_) {}
+          await nextFrame();
+          if (pumps > 2000) break;
+        }
+        loadProfile.push({ name: '__gpuUpload', uploadMs: Math.round(performance.now() - tUp), pumps: pumps, leftover: gpuUploadQ.length });
+        try { window.__palaceLoadProfile = loadProfile.slice(); } catch (_) {}
+        try { console.info('[palace load] gpu-pump-end', 'pumps=' + pumps, Math.round(performance.now() - tUp) + 'ms', 'leftover', gpuUploadQ.length); } catch (_) {}
+        note('gpu upload done pumps=' + pumps + ' ' + Math.round(performance.now() - tUp) + 'ms');
       }
       loadStage = 4; paint();
       await shareWingAssets();
@@ -1838,7 +1977,22 @@
   }
 
 
-  function build(ctx) {
+  async function build(ctx) {
+    const _y0 = { t: performance.now() };
+    function yieldBuild() {
+      return new Promise(function (r) {
+        let d = false;
+        const go = function () { if (!d) { d = true; r(); } };
+        try { requestAnimationFrame(go); } catch (_) {}
+        setTimeout(go, 0);
+      });
+    }
+    async function yieldSlice(force) {
+      if (!force && performance.now() - _y0.t < 45) return;
+      try { console.info('[palace load] build-yield', Math.round(performance.now() - _y0.t) + 'ms', force ? 'force' : ''); } catch (_) {}
+      await yieldBuild();
+      _y0.t = performance.now();
+    }
     const W = CONFIG.hallWidthH * H, L = CONFIG.hallLengthH * H;
     let CH = CONFIG.hallHeightH * H;
     const portal = ctx.portal;
@@ -2416,7 +2570,7 @@
     addLOD(brzSrc.geo, brzMat, brzLod.geo === brzSrc.geo ? brzSrc.geo.clone() : brzLod.geo, brzMat, brzMatrices, brzLocals, 7);
     slotModes.push({ id: 'brazier', count: brzMatrices.length, mode: 'real' });
 
-    function splitProps(gltf) {
+    async function splitProps(gltf) {
       const parts = [];
       if (!gltf || !gltf.scene) return parts;
       gltf.scene.updateMatrixWorld(true);
@@ -2424,12 +2578,14 @@
       gltf.scene.traverse(function (o) { if (o.isMesh) meshes.push(o); });
       if (!meshes.length) return parts;
       if (meshes.length > 2) {
-        meshes.forEach(function (o, i) {
+        for (let i = 0; i < meshes.length; i++) {
+          const o = meshes[i];
           const geo = o.geometry.clone();
           geo.applyMatrix4(o.matrixWorld);
           recenterGeo(geo);
           parts.push({ geo: geo, size: geoSize(geo), material: o.material, name: o.name || ('part' + i) });
-        });
+          if ((i & 7) === 7) await yieldSlice();
+        }
         return parts;
       }
       const mesh = meshes[0];
@@ -2440,6 +2596,7 @@
       const nrm = src.attributes.normal;
       const uv = src.attributes.uv;
       const ntri = index.count / 3;
+      try { console.info('[palace load] splitProps ntri=' + ntri + ' meshes=' + meshes.length); } catch (_) {}
       const voxel = 0.012;
       const parent = new Uint32Array(ntri);
       for (let i = 0; i < ntri; i++) parent[i] = i;
@@ -2464,8 +2621,12 @@
         const list = cells.get(key);
         if (list) list.push(t);
         else cells.set(key, [t]);
+        if ((t & 2047) === 2047) await yieldSlice();
       }
-      cells.forEach(function (tris, key) {
+      const cellKeys = Array.from(cells.keys());
+      for (let c = 0; c < cellKeys.length; c++) {
+        const key = cellKeys[c];
+        const tris = cells.get(key);
         for (let i = 1; i < tris.length; i++) union(tris[0], tris[i]);
         const bits = key.split(',');
         const x = parseInt(bits[0], 10), y = parseInt(bits[1], 10), z = parseInt(bits[2], 10);
@@ -2478,17 +2639,21 @@
             }
           }
         }
-      });
+        if ((c & 255) === 255) await yieldSlice();
+      }
       const groups = new Map();
       for (let t = 0; t < ntri; t++) {
         const r = find(t);
         const g = groups.get(r);
         if (g) g.push(t);
         else groups.set(r, [t]);
+        if ((t & 2047) === 2047) await yieldSlice();
       }
       let pi = 0;
-      groups.forEach(function (tris) {
-        if (tris.length < 40) return;
+      const groupList = Array.from(groups.values());
+      for (let gi = 0; gi < groupList.length; gi++) {
+        const tris = groupList[gi];
+        if (tris.length < 40) continue;
         const mapV = new Map();
         const positions = [];
         const normals = [];
@@ -2509,11 +2674,12 @@
           }
           indices.push(n);
         }
-        tris.forEach(function (t) {
-          add(index.getX(t * 3));
-          add(index.getX(t * 3 + 1));
-          add(index.getX(t * 3 + 2));
-        });
+        for (let ti = 0; ti < tris.length; ti++) {
+          const tt = tris[ti];
+          add(index.getX(tt * 3));
+          add(index.getX(tt * 3 + 1));
+          add(index.getX(tt * 3 + 2));
+        }
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
         if (normals.length) geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
@@ -2523,14 +2689,20 @@
         recenterGeo(geo);
         const size = geoSize(geo);
         parts.push({ geo: geo, size: size, material: mesh.material, name: 'piece' + (pi++) });
-      });
+        await yieldSlice();
+      }
+      try { console.info('[palace load] splitProps parts=' + parts.length); } catch (_) {}
       return parts;
     }
     let propParts = [];
-    try { propParts = splitProps(assets.props); }
-    catch (propErr) { console.warn('فصل الأغراض فشل', propErr); note('props split ' + (propErr && propErr.message)); }
+    try { propParts = await splitProps(assets.props); } catch (propErr) { console.warn('فصل الأغراض فشل', propErr); note('props split ' + (propErr && propErr.message)); }
+    try { console.info('[palace load] after-split'); } catch (_) {}
+    await yieldSlice(true);
     note('props parts=' + propParts.length);
+    await yieldSlice(true);
+    try { console.info('[palace load] palaceMat'); } catch (_) {}
     const propMat = propParts.length ? palaceMat(propParts[0].material) : null;
+    try { console.info('[palace load] palaceMat-done'); } catch (_) {}
     function dropProp(part, x, z, rot, targetH, y) {
       if (!part) return;
       y = y || 0;
@@ -2620,12 +2792,16 @@
       return a && b ? [a, b] : [part];
     }
     const banners = [], lows = [], vessels = [];
-    propParts.forEach(function (part) {
+    try { console.info('[palace load] role-start', propParts.length); } catch (_) {}
+    for (let pi = 0; pi < propParts.length; pi++) {
+      const part = propParts[pi];
       const role = roleOf(part.size);
       if (role === 'banner') splitBanner(part).forEach(function (b) { banners.push(b); });
       else if (role === 'low') lows.push(part);
       else vessels.push(part);
-    });
+      await yieldSlice();
+    }
+    try { console.info('[palace load] role-done banners', banners.length, 'lows', lows.length); } catch (_) {}
     lows.sort(function (a, b) { return (b.size.x * b.size.z) - (a.size.x * a.size.z); });
     vessels.sort(function (a, b) { return b.size.y - a.size.y; });
     const couch = lows[0] || null;
@@ -2655,6 +2831,7 @@
         rot: longIsX ? Math.PI / 2 : 0
       };
     }
+    try { console.info('[palace load] furniture-start'); } catch (_) {}
     if (couch && chest) {
       const stations = 3;
       const z0 = 4.2 * H;
@@ -2683,6 +2860,8 @@
       }
       slotModes.push({ id: 'furniture', count: stations * 2, mode: 'arranged' });
     }
+    try { console.info('[palace load] furniture-done'); } catch (_) {}
+    await yieldSlice(true);
     (function hangBanners() {
       const flags = banners.length ? banners : [];
       if (!flags.length) return;
@@ -2714,6 +2893,8 @@
 
     // Intensities tuned for r187 + three-compat (point lights keep author units;
     // hemi/ambient receive ×π only while rendering). Outdoor sun/hemi are zeroed.
+    try { console.info('[palace load] banners-done'); } catch (_) {}
+    await yieldSlice(true);
     const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.18);
     hemi.name = 'PalaceHallHemi';
     group.add(hemi);
@@ -2729,7 +2910,9 @@
       group.add(pl);
       lights.push(pl);
     }
+    try { console.info('[palace load] lights-done'); } catch (_) {}
     console.info('قاعة', n, 'وحدات، ارتفاع', (CH / H).toFixed(2), 'H، مباخر', brzMatrices.length, 'أقواس', CONFIG.PASSAGES.length);
+    await yieldSlice(true);
 
     function buildFires() {
       if (!fireList.length) return;
@@ -3177,13 +3360,17 @@
       }
     });
 
+    try { console.info('[palace load] props-slots-done'); } catch (_) {}
+    await yieldSlice(true);
     if (CONFIG.useWings && window.PalaceWings) {
       const tWings = performance.now();
       mark('phase wings start');
-      wingRuntime = PalaceWings.build(ctx, {
+      try { console.info('[palace load] wings-start'); } catch (_) {}
+      wingRuntime = await PalaceWings.build(ctx, {
         width: W, length: L, wallThickness: wallThick, alcoveDepth: 1.15 * H,
         floorY: gy, passages: CONFIG.PASSAGES
       });
+      try { console.info('[palace load] wings-end', Math.round(performance.now() - tWings) + 'ms'); } catch (_) {}
       note('wings ' + Math.round(performance.now() - tWings) + 'ms');
       wingRuntime.fires.forEach(function (f) { f._wing = true; fireList.push(f); });
     }
@@ -3505,7 +3692,7 @@
         state = 'FADING_OUT';
         fadeT = 0;
         holdT = 0;
-        loadOk = null;
+        loadOk = null; setupTask = null;
         loadError = null;
         hallBuilt = false;
         warmFrame = false;
@@ -3549,6 +3736,9 @@
       ctx.hero.position.y = floorY;
       aimCamera(ctx, false);
       renderUI();
+      // Keep GPU uploads inside the 50 ms budget even if the async loader
+      // is between assets. Never do an unbounded initTexture burst here.
+      try { pumpGpuUploads(ctx.renderer, 50); } catch (_) {}
       // Strict order: pause → dispose outside → confirm drop → only then load.
       if (teardownPhase < 5) {
         advanceTeardownGate(ctx);
@@ -3568,34 +3758,41 @@
       return;
     }
     if (state === 'SETUP') {
-      try {
-        if (statusEl) statusEl.textContent = 'جارٍ بناء القاعة';
-        renderUI();
-        const tBuild = performance.now();
-        build(ctx);
-        hallBuilt = true;
-        placeHero(ctx);
-        // Hide the city before any palace frame. Drawing the whole avenue
-        // together with the new hall uploads enough geometry to kill the tab,
-        // which reloads the game back to the opening loading screen at 99%.
-        holdCull(ctx.scene, ctx.hero);
-        note('built ' + Math.round(performance.now() - tBuild) + 'ms');
-        try {
-          snapshotMeshBudget('post-palace-build', ctx);
-          if (window.SinMemoryOverlay) SinMemoryOverlay.reportHeaviest(ctx.scene, 'post-palace-build');
-        } catch (_) {}
-        window.__sinEntryBlackout = false;
-        renderUI();
-        state = 'REVEAL';
-        fadeT = 0;
-        warmFrame = false;
-    warmMeshes = null;
-      } catch (err) {
-        console.error(err);
-        runtimeErrors.push('SETUP: ' + (err && (err.stack || err.message) || err));
-        loadError = err;
-        state = 'FAILED';
-        showFail(err);
+      if (statusEl) statusEl.textContent = 'جارٍ بناء القاعة';
+      renderUI();
+      if (!setupTask) {
+        const saved = ctx;
+        setupTask = (async function () {
+          try {
+            const tBuild = performance.now();
+            try { console.info('[palace load] SETUP build-start'); } catch (_) {}
+            await build(saved);
+            try { console.info('[palace load] SETUP build-end', Math.round(performance.now() - tBuild) + 'ms'); } catch (_) {}
+            hallBuilt = true;
+            placeHero(saved);
+            // Hide the city before any palace frame. Drawing the whole avenue
+            // together with the new hall uploads enough geometry to kill the tab,
+            // which reloads the game back to the opening loading screen at 99%.
+            holdCull(saved.scene, saved.hero);
+            note('built ' + Math.round(performance.now() - tBuild) + 'ms');
+            try {
+              snapshotMeshBudget('post-palace-build', saved);
+              if (window.SinMemoryOverlay) SinMemoryOverlay.reportHeaviest(saved.scene, 'post-palace-build');
+            } catch (_) {}
+            window.__sinEntryBlackout = false;
+            renderUI();
+            state = 'REVEAL';
+            fadeT = 0;
+            warmFrame = false;
+            warmMeshes = null;
+          } catch (err) {
+            console.error(err);
+            runtimeErrors.push('SETUP: ' + (err && (err.stack || err.message) || err));
+            loadError = err;
+            state = 'FAILED';
+            showFail(err);
+          }
+        })();
       }
       return;
     }
@@ -3745,9 +3942,10 @@
             const roots = [group, wingRuntime && wingRuntime.root, ctx.hero, ctx.scene];
             for (let i = 0; i < roots.length; i++) {
               if (!roots[i]) continue;
-              try { releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
-              try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer); } catch (_) {}
+              try { releaseCpuFromObject(roots[i], ctx.renderer, { upload: false, enqueue: false }); } catch (_) {}
+              try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer, { upload: false }); } catch (_) {}
             }
+            try { pumpGpuUploads(ctx.renderer, 50); } catch (_) {}
             if (window.SinProcessMemory) {
               const pe = SinProcessMemory.estimate({ renderer: ctx.renderer, scene: ctx.scene, phase: 'REVEAL' });
               mark('cpu drain after warm ~proc ' + (pe && pe.processMB) + ' cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB));
@@ -4074,6 +4272,8 @@
       const h = hero || (lastContext && lastContext.hero);
       return releaseCity(s, h);
     },
+    loadProfile: function () { return loadProfile.slice(); },
+    gpuUploadPending: function () { return gpuUploadQ.length; },
     metrics: function () { return { H: H, length: hallLen, width: hallW, front: portalFront, x: portalX, state: state, occupant: occupant, lights: lights.length + 1, ramp: ramp ? ramp.yTop : 0 }; }
   };
   if (debugOn()) { ensureLoadScreen(); renderDebug(); }
