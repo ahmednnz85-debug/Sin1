@@ -281,17 +281,57 @@
             if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url);
             return res.arrayBuffer();
           }).then(function (buf) {
-            return new Promise(function (resOk, resFail) {
-              const loader = new THREE.GLTFLoader();
-              if (dec) loader.setMeshoptDecoder(dec);
-              const tParse = performance.now();
-              try { console.info('[palace load] wing-parse-start', (url || '').split('/').pop(), buf && buf.byteLength); } catch (_) {}
-              loader.parse(buf, '', function (gltf) {
-                try { console.info('[palace load] wing-parse', (url || '').split('/').pop(), Math.round(performance.now() - tParse) + 'ms'); } catch (_) {}
-                try { releaseGltfCpu(gltf); } catch (_) {}
-                // buf dropped when this closure ends — no long-lived ArrayBuffer.
-                Promise.resolve(deliver(gltf)).then(resOk, resFail);
-              }, resFail);
+            const file = (url || '').split('/').pop();
+            const big = !!(buf && buf.byteLength >= 1500000);
+            // After the first hall present, a 2–4 s GLTFLoader.parse
+            // (عمود-المجلس, سقف-المجلس) must not run on the same turn as
+            // standing frames. Wait out the stream hold, then yield a
+            // few rAFs (more for large files) so the hall can paint.
+            const waitToParse = function () {
+              return new Promise(function (ready) {
+                const step = function () {
+                  try {
+                    if (typeof window !== 'undefined' && window.__sinStreamHold) {
+                      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(step);
+                      else setTimeout(step, 16);
+                      return;
+                    }
+                    const presented = typeof window !== 'undefined' && window.__sinFirstPresentLogged;
+                    if (presented) {
+                      const need = big ? 12 : 2;
+                      const held = window.__sinWingParseYields || 0;
+                      if (held < need) {
+                        window.__sinWingParseYields = held + 1;
+                        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(step);
+                        else setTimeout(step, 16);
+                        return;
+                      }
+                    }
+                  } catch (_) {}
+                  ready();
+                };
+                step();
+              });
+            };
+            return waitToParse().then(function () {
+              return new Promise(function (resOk, resFail) {
+                const loader = new THREE.GLTFLoader();
+                if (dec) loader.setMeshoptDecoder(dec);
+                const tParse = performance.now();
+                try { console.info('[palace load] wing-parse-start', file, buf && buf.byteLength); } catch (_) {}
+                loader.parse(buf, '', function (gltf) {
+                  const dt = Math.round(performance.now() - tParse);
+                  try { console.info('[palace load] wing-parse', file, dt + 'ms'); } catch (_) {}
+                  try {
+                    if (typeof window !== 'undefined' && dt > (window.__palaceMaxSliceMs || 0)) {
+                      window.__palaceMaxSliceMs = dt;
+                      window.__palaceMaxSliceName = 'wing:' + file;
+                    }
+                  } catch (_) {}
+                  try { releaseGltfCpu(gltf); } catch (_) {}
+                  Promise.resolve(deliver(gltf)).then(resOk, resFail);
+                }, resFail);
+              });
             });
           }).catch(function (e) {
             fail(e);

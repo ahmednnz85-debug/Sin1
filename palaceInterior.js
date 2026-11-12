@@ -905,8 +905,9 @@
 
   // Wing models are handed to PalaceWings untouched (no tuneGLTF), exactly as
   // its own GLTFLoader used to read them.
-  function parseRawGLB(buf) {
+  function parseRawGLB(buf, name) {
     const loader = new THREE.GLTFLoader();
+    const label = name || '__parse';
     return waitDecoder().then(function (dec) {
       if (dec) loader.setMeshoptDecoder(dec);
       return new Promise(function (resolve, reject) {
@@ -914,8 +915,12 @@
         loader.parse(buf, '', function (res) {
           const dt = performance.now() - tParse;
           try {
-            if (dt > (window.__palaceMaxSliceMs || 0)) window.__palaceMaxSliceMs = Math.round(dt);
-            loadProfile.push({ name: '__parse', ms: Math.round(dt) });
+            if (dt > (window.__palaceMaxSliceMs || 0)) {
+              window.__palaceMaxSliceMs = Math.round(dt);
+              window.__palaceMaxSliceName = label;
+            }
+            loadProfile.push({ name: label, ms: Math.round(dt) });
+            console.info('[palace load] parse-done', label, Math.round(dt) + 'ms');
           } catch (_) {}
           resolve(res);
         }, function (e) {
@@ -978,7 +983,7 @@
           PalaceWings.provideAsset(a.url, own.result);
           own.wingShared = true;
         } else if (own.buf) {
-          PalaceWings.provideAsset(a.url, a.kind === 'tex' ? await textureFromBytes(own.buf, own.name, false) : await parseRawGLB(own.buf));
+          PalaceWings.provideAsset(a.url, a.kind === 'tex' ? await textureFromBytes(own.buf, own.name, false) : await parseRawGLB(own.buf, a.url));
           own.wingShared = true;
           own.buf = null;
         }
@@ -998,7 +1003,7 @@
       if (spec.kind === 'js') spec.result = await installDecoder(spec.buf);
       else if (spec.kind === 'tex') spec.result = await textureFromBytes(spec.buf, spec.name, spec.linear);
       else if (spec.kind === 'wtex') spec.result = await textureFromBytes(spec.buf, spec.name, false);
-      else if (spec.kind === 'wglb') spec.result = await parseRawGLB(spec.buf);
+      else if (spec.kind === 'wglb') spec.result = await parseRawGLB(spec.buf, spec.name);
       else if (spec.kind === 'wglb-draco') spec.result = await parseDracoGLB(spec.buf);
       else {
         await waitDecoder();
