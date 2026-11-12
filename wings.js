@@ -2852,6 +2852,12 @@
   // dress even when the streamer has not yet called load() this visit — and
   // let isComplete() then drive upload / compile / reveal.
   function ensureCurrentDress(origin) {
+    // A teleport locks the dress target so a one-frame (or few-second)
+    // regionAt flicker cannot start the previous room and evict the one
+    // we just entered (playthrough-6: ensure-dress K2 after teleport K3).
+    if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
+      origin = state._dressLock.id;
+    }
     if (!origin) return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
@@ -2905,7 +2911,12 @@
         PalaceInterior.setDeepWing(!state.palaceNear && hopsToHall > 1);
       }
     } catch (_) {}
-    const origin = isArch && r.linkRoom ? r.linkRoom : id;
+    let origin = isArch && r.linkRoom ? r.linkRoom : id;
+    // Honour a teleport dress-lock so streamZones cannot treat a regionAt
+    // flicker as the new current room and evict the one just entered.
+    if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
+      origin = state._dressLock.id;
+    }
     try { console.info('[palace load] cull-enter'); } catch (_) {}
     const view = cameraView(state.root.position.x, state.root.position.z);
     let visibleIds, preparedIds, meta = null;
@@ -3105,7 +3116,11 @@
     }
     state.ctx.camera.lookAt(lx, p.y + 1.25, lz);
     if (window.PalaceInterior) PalaceInterior.constrainCamera(state.ctx.camera, state.ctx.hero);
-    resolveCamera(state.ctx.camera); updateCulling(true);
+    resolveCamera(state.ctx.camera);
+    // Lock before updateCulling so a stale regionAt cannot forceLoad the
+    // room we just left and evict the target mid-load.
+    state._dressLock = { id: id, until: (typeof performance !== 'undefined' ? performance.now() : Date.now()) + 8000 };
+    updateCulling(true);
     // updateCulling may return early (stream hold / non-DONE phase) before
     // streamZones. The teleport target must still be dressed — this is the
     // K4 second-visit path (playthrough-2 still timed out at 60 s).

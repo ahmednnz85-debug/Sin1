@@ -605,6 +605,15 @@
     // view = { current, distances: Map(id->hops), visible:Set, prepared:Set, memoryLevel, warmGroups }
     function update(view) {
       const t = now();
+      // A flicker of view.current must not evict or de-prioritize a mid-load
+      // room the player just entered (playthrough-6 first K3).
+      let midId = null;
+      zones.forEach(function (r) {
+        if (r.state !== 'cold' && r.state !== 'ready' && r._currentUntil && t < r._currentUntil) midId = r.id;
+      });
+      if (midId && view && view.current !== midId) {
+        view = Object.assign({}, view, { current: midId });
+      }
       const distances = view.distances || new Map();
       const visible = view.visible || new Set(), prepared = view.prepared || new Set();
       const level = view.memoryLevel || memLevel || 'normal';
@@ -632,7 +641,7 @@
         // yield once evictForCurrent decides the current room needs space.
         const protect = isCurrent || visible.has(id) || (!tight && hops <= 1);
         rec.hops = hops; rec.protected = protect; rec.visible = visible.has(id); rec.isCurrent = isCurrent;
-        if (isCurrent) rec._currentUntil = t + 2000;
+        if (isCurrent) rec._currentUntil = t + ((rec.state !== 'cold' && rec.state !== 'ready') ? 15000 : 2000);
         if (want) { rec.lastWanted = t; rec.leftAt = 0; wanted.push(rec); }
         else if (rec.state !== 'cold' && !rec.leftAt) rec.leftAt = t;
       });
@@ -705,7 +714,13 @@
       zones.forEach(function (r) {
         const cur = r.id === id;
         r.isCurrent = cur;
-        if (cur) { r.lastWanted = t; r._currentUntil = t + 2000; r.leftAt = 0; }
+        if (cur) {
+          r.lastWanted = t;
+          // Mid-load current rooms stay protected well past a 2 s region
+          // flicker (playthrough-6 evicted K3 at 2 s and the door waited 60 s).
+          r._currentUntil = t + ((r.state !== 'cold' && r.state !== 'ready') ? 15000 : 2000);
+          r.leftAt = 0;
+        }
         else {
           // `visible` was last computed in the previous room. It must not
           // protect that room from eviction when the player has already
@@ -736,6 +751,19 @@
     function forceLoad(id) {
       const rec = zones.get(id);
       if (!rec) return 'unregistered';
+      // A region flicker (ensure-dress K2 while the harness is visiting K3)
+      // must not steal a mid-load current room. Playthrough-6 evicted K3
+      // 2 s into its first visit and the door waited 60 s.
+      let mid = null;
+      zones.forEach(function (r) {
+        if (r.id === id) return;
+        if (r.state !== 'cold' && r.state !== 'ready' && r._currentUntil && now() < r._currentUntil) mid = r;
+      });
+      if (mid) {
+        try { console.info('[palace load] forceLoad-ignored', id, 'mid-load', mid.id); } catch (_) {}
+        if (mid.state !== 'cold' && mid.state !== 'ready') step(mid, now(), 0);
+        return mid.state;
+      }
       // Mark current first — and clear isCurrent on every other zone —
       // so evictForCurrent cannot unload the room the player just entered
       // and cannot skip the room they just left (playthrough-5 peak 693).

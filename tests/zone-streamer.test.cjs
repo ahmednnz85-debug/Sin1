@@ -402,6 +402,11 @@ test('K1 to K2 to K3 to K4 cold first visit: reveal under 10s and peak under 650
   s.forceLoad('K3');
   assert.strictEqual(s.status('K2'), 'cold', 'forceLoad K3 must evict K2 even while K2 isCurrent is stale, got ' + s.status('K2'));
   assert.ok(peak <= 650, 'peak after forceLoad K3 is ' + peak + ' (K2 still stacked)');
+  // A region flicker (the playthrough's ensure-dress K2 during a K3 visit)
+  // must not evict the mid-load current room.
+  s.forceLoad('K2');
+  assert.notStrictEqual(s.status('K3'), 'cold', 'flicker forceLoad K2 must not evict mid-load K3, got ' + s.status('K3'));
+  assert.strictEqual(s.status('K2'), 'cold', 'flicker must not restart K2, got ' + s.status('K2'));
 
   const t3 = await visit('K3');
   assert.ok(t3 <= 10000, 'K3 first visit ' + t3 + ' ms');
