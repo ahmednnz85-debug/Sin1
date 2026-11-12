@@ -3914,11 +3914,10 @@
           warmSlow = 0;
           mark('warm materials ' + warmMeshes.length);
           try { console.info('[palace load] REVEAL-warm-n', warmMeshes.length); } catch (_) {}
-          // Do not walk ctx.scene here. releaseCpuFromObject on the whole
-          // scene froze WebKit for minutes at ~3 GB RSS (same class of hang
-          // as reportHeaviest on the SETUP turn). Hall and wings are enough.
-          try { drainCpuNow({ renderer: ctx.renderer, hero: ctx.hero }, 'warm-start'); } catch (_) {}
-          try { console.info('[palace load] REVEAL-warm-drained'); } catch (_) {}
+          // Sync drainCpuNow here walked the hall and wings long enough to
+          // freeze WebKit for minutes. GPU uploads already ran during LOADING.
+          // A deferred drain still runs after the last warm slice.
+          try { console.info('[palace load] REVEAL-warm-ready'); } catch (_) {}
         }
         const e = warmMeshes[warmIndex];
         const o = e && e.obj;
