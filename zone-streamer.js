@@ -15,8 +15,10 @@
      and its shader programs are compiled against the REAL scene (lights,
      fog, environment) with renderer.compileAsync;
    - atomic reveal: the zone's content becomes visible in one frame, only
-     when all of the above finished (or `timeoutMs` expired, so a failed
-     download never hides a room forever);
+     when all of the above finished. A still-loading room is NEVER revealed
+     just because a short timer expired (that was the K2 table pop-in). A
+     long `abandonMs` (default 60 s) or `fail()` is the only way an incomplete
+     zone is shown, so a broken download cannot hide a room forever;
    - LRU eviction with hysteresis: zones that are no longer wanted linger for
      `graceMs`, and an LRU cache keeps up to `cacheZones[memoryLevel]` extra
      zones resident; visible / adjacent / wanted zones are never evicted;
@@ -28,7 +30,8 @@
      { id: 'K2',                 // region id in the wing layout / portal graph
        prefetchHops: 1,          // start loading this many hops away
        priority: 0,              // lower = uploads first among equal hops
-       timeoutMs: 14000,         // reveal anyway after this long
+       timeoutMs: 14000,         // legacy alias; prefer abandonMs
+       abandonMs: 60000,         // only THEN reveal an incomplete zone (failed/stuck load)
        load(api),                // start streaming; add content via api.add(obj)
        isComplete(),             // poll: true when everything requested arrived
        prepare(api),             // material tweaks before upload + compile
@@ -94,6 +97,10 @@
       cacheZones: { normal: 2, watch: 1, critical: 0 }, // extra (unwanted) zones kept resident
       maxConcurrentLoads: 1,     // zones loading at once (GLB parse is the peak-RAM step)
       defaultTimeoutMs: 14000,
+      defaultAbandonMs: 60000,   // reveal incomplete only after this (not a short timeout)
+      maxTextureSize: 0,         // 0 = no cap; set from SinDevice on phones
+      geometryBudget: 420,
+      textureBudget: 180,
       log: null                  // function(kind, msg) for the memory overlay
     }, options || {});
 
@@ -110,7 +117,7 @@
       if (!spec || !spec.id || typeof spec.load !== 'function') throw new Error('SinZoneStreamer.register: spec needs id + load()');
       const prev = zones.get(spec.id);
       const rec = prev || { id: spec.id, state: 'cold', lastWanted: 0, leftAt: 0, startedAt: 0, pending: new Set(), compilePromise: null, done: false, failed: null, waiters: [] };
-      rec.spec = Object.assign({ prefetchHops: 1, priority: 0, timeoutMs: o.defaultTimeoutMs }, spec);
+      rec.spec = Object.assign({ prefetchHops: 1, priority: 0, timeoutMs: o.defaultTimeoutMs, abandonMs: o.defaultAbandonMs }, spec);
       if (!prev) { zones.set(spec.id, rec); order.push(spec.id); }
       return rec;
     }
@@ -156,9 +163,18 @@
       if (!img) return;
       try { t.source.data = null; if (typeof img.close === 'function') img.close(); stats.cpuReleased++; } catch (_) {}
     }
+    function capOne(t) {
+      const max = o.maxTextureSize || 0;
+      if (!max) return;
+      try {
+        const D = (typeof window !== 'undefined' && window.SinDevice) || (typeof globalThis !== 'undefined' && globalThis.SinDevice);
+        if (D && typeof D.capTexture === 'function') D.capTexture(t, max);
+      } catch (_) {}
+    }
     function queueTextures(rec, obj, rank) {
       const renderer = ctx && ctx.renderer;
       texturesOf(obj).forEach(function (t) {
+        capOne(t);
         if (renderer && uploaded(renderer, t)) { tryReleaseCpu(t); return; }
         if (!t.image) return;
         if (rec) rec.pending.add(t);
@@ -207,7 +223,17 @@
     function step(rec, t, rank) {
       const g = group(rec);
       if (rec.state === 'loading') {
-        if (complete(rec) || t - rec.startedAt > rec.spec.timeoutMs) {
+        const elapsed = t - rec.startedAt;
+        const done = complete(rec);
+        const failed = !!rec.failed;
+        const abandonAt = rec.spec.abandonMs != null ? rec.spec.abandonMs
+          : (rec.spec.timeoutMs != null && rec.spec.timeoutMs > 30000 ? rec.spec.timeoutMs : (o.defaultAbandonMs || 60000));
+        // A short timeoutMs (legacy 14 s) must NOT reveal a still-loading room:
+        // on a phone the 6.8 MB K2 table often arrives after that, which was
+        // the visible pop-in. Only complete, fail(), or a long abandon reveal.
+        const abandon = elapsed > abandonAt;
+        if (done || failed || abandon) {
+          if (!done) note('load', rec.id + (failed ? ' failed' : ' abandoned') + ' after ' + Math.round(elapsed) + ' ms — revealing what is present');
           rec.state = 'uploading';
           // Program-affecting material tweaks run before upload/compile.
           try { if (rec.spec.prepare) rec.spec.prepare(apiFor(rec)); } catch (e) { console.warn('zone prepare', rec.id, e); }
@@ -264,9 +290,14 @@
             if (!m || (m.userData && m.userData.palaceShared)) return;
             TEX_KEYS.forEach(function (k) {
               const t = m[k];
-              // Only textures that cannot be shared any more (pixels released
-              // after upload, owned by this zone) are destroyed on the GPU.
-              if (t && !keep.has(t) && t.userData && t.userData.sinReleaseCpu && !t.image) { t.dispose(); stats.texturesDisposed++; }
+              // Every unshared texture this zone owned is released on the GPU.
+              // The previous condition (sinReleaseCpu && !image) skipped maps
+              // whose CPU pixels were still present (including canvas-capped
+              // phone textures), so repeated leave/return accumulated GPU
+              // memory until Safari killed the tab.
+              if (t && !keep.has(t) && !(t.userData && t.userData.palaceShared)) {
+                try { t.dispose(); stats.texturesDisposed++; } catch (_) {}
+              }
             });
             if (typeof m.dispose === 'function') m.dispose();
           });
@@ -285,7 +316,7 @@
     // ---- memory pressure (migrated from smart-memory-manager.js) -----------
     // Never changes render resolution. Only informs LRU cache size.
     let memLevel = 'normal', memStableMs = 0, memFrameEma = 16.7, memLast = { level: 'normal', geometryRatio: 0, textureRatio: 0, frameMs: 16.7 };
-    const memOpt = { geometryBudget: 420, textureBudget: 180, watchRatio: 0.82, criticalRatio: 0.96, frameWatchMs: 24, frameCriticalMs: 40, recoveryMs: 2500 };
+    const memOpt = { geometryBudget: o.geometryBudget || 420, textureBudget: o.textureBudget || 180, watchRatio: 0.82, criticalRatio: 0.96, frameWatchMs: 24, frameCriticalMs: 40, recoveryMs: 2500 };
     function sample(renderer, frameMs) {
       const memory = renderer && renderer.info && renderer.info.memory || {};
       const gr = Math.max(0, Number(memory.geometries) || 0) / memOpt.geometryBudget;

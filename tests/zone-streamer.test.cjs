@@ -91,10 +91,28 @@ test('LRU eviction with grace; visible / adjacent zones are never evicted', asyn
   assert.strictEqual(s.status('Z3'), 'ready');
 });
 
-test('a zone whose download fails is still revealed after its timeout', async () => {
+test('a still-loading zone is not revealed by a short timeout (K2 table pop-in)', async () => {
   const scene = obj('scene'); const g = obj('Z'); scene.add(g);
   const s = Z.create();
-  s.register({ id: 'Z', timeoutMs: 0, load() { /* never completes */ } });
+  s.register({ id: 'Z', timeoutMs: 0, abandonMs: 60000, load() { /* never completes, never fails */ } });
+  s.attach({ renderer: renderer(), scene, camera: {}, groupOf: () => g });
+  for (let i = 0; i < 8; i++) { s.update({ distances: new Map([['Z', 0]]) }); await tick(); }
+  assert.strictEqual(s.status('Z'), 'loading', 'must wait for isComplete, not a 14s-style timeout');
+});
+
+test('a zone whose load fails or hits abandonMs is revealed so it is not hidden forever', async () => {
+  const scene = obj('scene'); const g = obj('Z'); scene.add(g);
+  const s = Z.create();
+  s.register({ id: 'Z', abandonMs: 0, load() { /* never completes */ } });
+  s.attach({ renderer: renderer(), scene, camera: {}, groupOf: () => g });
+  for (let i = 0; i < 5; i++) { s.update({ distances: new Map([['Z', 0]]) }); await tick(); }
+  assert.strictEqual(s.status('Z'), 'ready');
+});
+
+test('fail() also lets an incomplete zone proceed to reveal', async () => {
+  const scene = obj('scene'); const g = obj('Z'); scene.add(g);
+  const s = Z.create();
+  s.register({ id: 'Z', abandonMs: 60000, load(api) { api.fail(new Error('404')); } });
   s.attach({ renderer: renderer(), scene, camera: {}, groupOf: () => g });
   for (let i = 0; i < 5; i++) { s.update({ distances: new Map([['Z', 0]]) }); await tick(); }
   assert.strictEqual(s.status('Z'), 'ready');
@@ -143,4 +161,22 @@ test('a zone the camera can see is never evicted even if hops are large', async 
   s.update({ current: 'FAR', distances: new Map([['Z', 6]]), visible: new Set(['Z']), prepared: new Set(), memoryLevel: 'critical' });
   assert.strictEqual(s.status('Z'), 'ready');
   assert.strictEqual(unloaded, 0);
+});
+
+test('evict disposes unshared textures even when CPU pixels remain (no accumulation)', async () => {
+  const scene = obj('scene');
+  const g = obj('Z'); scene.add(g);
+  const R = renderer();
+  const s = Z.create({ graceMs: 0, cacheZones: { normal: 0, watch: 0, critical: 0 } });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: () => g });
+  const t = tex(); // image still present — the old evict path would skip this
+  let disposed = 0;
+  t.dispose = function () { disposed++; this.disposed++; };
+  s.register({ id: 'Z', prefetchHops: 0, load(api) { api.add(mesh('Z-m', t)); api.done(); } });
+  for (let i = 0; i < 8; i++) { s.update({ current: 'Z', distances: new Map([['Z', 0]]) }); await tick(); }
+  assert.strictEqual(s.status('Z'), 'ready');
+  s.update({ current: 'Y', distances: new Map([['Z', 5]]), memoryLevel: 'critical' });
+  assert.strictEqual(s.status('Z'), 'cold');
+  assert.ok(disposed >= 1, 'GPU texture must be disposed on evict even if image is still set');
+  assert.strictEqual(g.children.length, 0);
 });

@@ -29,12 +29,23 @@
   // Data-driven zone streaming (prefetch -> budgeted upload -> shader
   // precompile -> atomic reveal -> LRU eviction). See zone-streamer.js and
   // ADDING_CONTENT.md. Streamed rooms are registered in WING_ZONES below.
+  const deviceProfile = (window.SinDevice && SinDevice.detect()) || {
+    prefetchHops: 7, cacheZones: { normal: 3, watch: 2, critical: 0 },
+    uploadsPerFrame: 3, uploadMsPerFrame: 4, graceMs: 20000,
+    maxTextureSize: 0, geometryBudget: 420, textureBudget: 180, constrained: false
+  };
   const zoneStreamer = window.SinZoneStreamer ? window.SinZoneStreamer.create({
-    // Three streamed dress rooms (K2/K3/K4) must stay resident at normal
-    // memory so a sprint-and-return finds them already settled. They fit
-    // comfortably in the 420/180 geometry/texture budget (measured peak
-    // 251 geo / 131 tex with all three ready).
-    cacheZones: { normal: 3, watch: 2, critical: 0 },
+    // Device-aware: on iOS / mobile, keep only one extra idle zone and a
+    // tighter texture budget. Keeping K2+K3+K4 all resident (cache 3,
+    // prefetch 8) reached ~295 MB / 118 textures and Safari killed the tab.
+    // Prefetch hops still start K2 from the palace hall (K2 is 3 hops).
+    cacheZones: deviceProfile.cacheZones,
+    uploadsPerFrame: deviceProfile.uploadsPerFrame,
+    uploadMsPerFrame: deviceProfile.uploadMsPerFrame,
+    graceMs: deviceProfile.graceMs,
+    maxTextureSize: deviceProfile.maxTextureSize || 0,
+    geometryBudget: deviceProfile.geometryBudget,
+    textureBudget: deviceProfile.textureBudget,
     log: function (kind, msg) { try { if (window.SinMemoryOverlay) SinMemoryOverlay.note(kind, msg); } catch (_) {} }
   }) : null;
 
@@ -1804,7 +1815,13 @@
     dress._tableLoading = true;
     const r = dress._tableRoom, g = dress._tableHost, b = r.bbox;
     k2LoadGLB(K2_ASSETS.meetings, false, gltf => {
-      if (!gltf) return;
+      if (!gltf) {
+        // Failed download: mark complete so the zone can reveal the rest of
+        // the room instead of waiting forever. The door gate still waits for
+        // isComplete / ready, and there is no late pop-in of a missing table.
+        if (state.k2Dress) { state.k2Dress.table = true; state.k2Dress.tableFailed = true; }
+        return;
+      }
       const model = gltf.scene;
       model.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model);
@@ -2222,20 +2239,69 @@
   }
   // Kept as no-op compatibility methods: wing doors are intentionally not manually interactable.
   function interact() { return false; }
-  // Readiness gate: a door into a streamed zone that is still preparing waits
-  // (closed, at most ZONE_DOOR_WAIT_MS) so the player never walks into a
-  // half-built room. With hop prefetch the zone is normally ready long before.
-  const ZONE_DOOR_WAIT_MS = 2500;
+  // Readiness gate: a door (or open passage) into a streamed zone stays
+  // closed until that zone is fully ready (upload + compile + isComplete).
+  // There is no 2.5 s give-up: opening early was the K2 table pop-in on a
+  // real phone. The door never opens on a timeout: only when ready (or the
+  // zone failed and was revealed). A 60 s abandon would be pop-in.
+  // For a door whose other side is a short corridor (K1-KC12 → KC12 → K2),
+  // we wait for the first streamed room one hop past the corridor.
+  const ZONE_DOOR_ABANDON_MS = 60000;
+  function streamedZoneIds() { return WING_ZONES.map(function (z) { return z.id; }); }
+  function streamedTargets(d, fromId) {
+    const cur = fromId || state.current;
+    if (!d) return [];
+    const other = d.to === cur ? d.from : (d.from === cur ? d.to : d.to);
+    const set = new Set(streamedZoneIds());
+    if (set.has(other)) return [other];
+    const dist = distancesFrom(other);
+    const found = [];
+    dist.forEach(function (h, id) { if (set.has(id) && h <= 1) found.push(id); });
+    found.sort(function (a, b) { return dist.get(a) - dist.get(b); });
+    return found;
+  }
+  function zoneIsReady(id) {
+    if (!zoneStreamer) return true;
+    const st = zoneStreamer.status(id);
+    return st === 'unregistered' || st === 'ready';
+  }
   function zoneGateOpen(d) {
     if (!zoneStreamer) return true;
-    const cur = state.current;
-    const target = d.to === cur ? d.from : d.to;
-    const st = zoneStreamer.status(target);
-    if (st === 'unregistered' || st === 'ready') { d._gateSince = 0; return true; }
-    const t = performance.now();
-    if (!d._gateSince) d._gateSince = t;
-    if (t - d._gateSince >= ZONE_DOOR_WAIT_MS) { d._gateSince = 0; return true; }
+    const targets = streamedTargets(d);
+    const waiting = targets.filter(function (id) { return !zoneIsReady(id); });
+    if (!waiting.length) { d._gateSince = 0; return true; }
+    // Never open into a still-loading room. fail() reveals the zone (it
+    // becomes ready) so a truly failed load is not stuck behind the door.
+    // The 60 s abandon used to open into a half-built room — that is pop-in.
     return false;
+  }
+  // Open passages into a streamed room (KC12-K2 is excluded from isRoomDoor)
+  // still get a temporary collider so the player cannot walk into a
+  // half-built room even if they reached the passage another way.
+  function updatePassageGates() {
+    const boxes = state.dynamicDoorBoxes || (state.dynamicDoorBoxes = []);
+    // Drop previous gate-only boxes, keep real door colliders.
+    let w = 0;
+    for (let i = 0; i < boxes.length; i++) {
+      if (boxes[i] && boxes[i]._streamGate) continue;
+      boxes[w++] = boxes[i];
+    }
+    boxes.length = w;
+    if (!zoneStreamer || !state.doors || !state.current) return;
+    const cur = state.current;
+    state.doors.forEach(function (d) {
+      if (!d || d._roomDoor || d.kind === 'arch') return;
+      const targets = streamedTargets(d, cur);
+      // Only block when approaching from outside a not-ready streamed room.
+      const waiting = targets.filter(function (id) { return id !== cur && !zoneIsReady(id); });
+      if (!waiting.length) return;
+      const half = (d.width || 4.5) * 0.5;
+      const thick = 0.22;
+      const box = d.axis === 'x'
+        ? { minx: d.x - thick, maxx: d.x + thick, miny: 0, maxy: (d.height || 4) * 0.94, minz: d.z - half, maxz: d.z + half, _streamGate: true, _door: true, _doorRef: d }
+        : { minx: d.x - half, maxx: d.x + half, miny: 0, maxy: (d.height || 4) * 0.94, minz: d.z - thick, maxz: d.z + thick, _streamGate: true, _door: true, _doorRef: d };
+      boxes.push(box);
+    });
   }
   function updateRoomDoors(dt) {
     if (!state.built || !state.ctx || !state.ctx.hero || !state.root) return;
@@ -2247,10 +2313,17 @@
       if (c.distance > 4.0) { d.autoRearm = true; d._gateSince = 0; }
       if (d.state === 'Closed' && near && d.autoRearm && !busyDoor && zoneGateOpen(d) && beginDoorMotion(d, true, c)) busyDoor = d;
       if (d.state === 'Open') {
-        // Wing doors are persistent state: after the hero opens one, it stays
-        // open when he leaves the room. Do not arm an automatic close timer.
+        // Stay open after the hero leaves — unless the streamed room behind
+        // the door has been evicted. An open door into a half-built room is
+        // the return-visit pop-in (dress appearing after the player walks in).
         d.crossed = true;
         d.autoCloseTimer = 0;
+        const targets = streamedTargets(d);
+        const cur = state.current;
+        const waiting = targets.filter(function (id) { return id !== cur && !zoneIsReady(id); });
+        if (waiting.length && !busyDoor) {
+          if (beginDoorMotion(d, false, c)) busyDoor = d;
+        }
       }
       if (d.progress === d.target) return;
       const opening = d.target > d.progress;
@@ -2271,6 +2344,7 @@
       }
     });
     rebuildDoorColliders();
+    updatePassageGates();
   }
   function canInteract() { return false; }
   function doorLocked() { return !!state.activeDoor && (state.activeDoor.state === 'Opening' || state.activeDoor.state === 'Closing'); }
@@ -2425,7 +2499,7 @@
   const zoneDone = new Set();
   function streamedName(id) { const re = new RegExp('^' + id + '-'); return function (ch) { return !!(ch.userData && ch.userData.streamDress) || !!(ch.name && re.test(ch.name)); }; }
   const WING_ZONES = [
-    { id: 'K2', prefetchHops: 8, priority: 0,
+    { id: 'K2', prefetchHops: deviceProfile.prefetchHops, priority: 0,
       load: function () { dressK2(); },
       isComplete: function () { return zoneDone.has('K2') || !!(state.k2Dress && state.k2Dress.chandelier && state.k2Dress.columns && state.k2Dress.table); },
       unload: function (api) {
@@ -2434,12 +2508,12 @@
         if (api.group) api.group.userData.k2Dressed = false;
       },
       ownsObject: streamedName('K2') },
-    { id: 'K3', prefetchHops: 8, priority: 1,
+    { id: 'K3', prefetchHops: deviceProfile.prefetchHops, priority: 1,
       load: function () { dressK3(); },
       isComplete: function () { return zoneDone.has('K3') || !!(state.k3Dress && state.k3Dress.furniture); },
       unload: function (api) { state.k3Lights = null; state.k3LightBase = null; if (api.group) api.group.userData.k3Dressed = false; },
       ownsObject: streamedName('K3') },
-    { id: 'K4', prefetchHops: 8, priority: 2,
+    { id: 'K4', prefetchHops: deviceProfile.prefetchHops, priority: 2,
       load: function () { dressK4(); loadK4Assets(); },
       isComplete: function () { return zoneDone.has('K4') || !!(state.k4Dress && state.k4Dress.loadStarted && state.k4Dress._assetsCommitted); },
       unload: function (api) { state.k4Dress = null; if (api.group) api.group.userData.k4Dressed = false; },
@@ -3258,6 +3332,10 @@
     return resized;
   }
   function k4TextureEdge() {
+    if (window.SinDevice) {
+      const p = SinDevice.detect();
+      return p.k4TextureSize || (p.constrained ? 512 : 1024);
+    }
     const nav = window.navigator || {};
     const touchDevice = (nav.maxTouchPoints || 0) > 1 && Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 1024;
     const mobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent || '') || touchDevice;
@@ -3738,6 +3816,10 @@
     zones: function () { return zoneStreamer ? zoneStreamer.report() : null; },
     // Test/diagnostic hook: evict a zone now (ignores protection).
     forceEvictZone: function (id) { return zoneStreamer ? zoneStreamer.forceEvict(id) : 0; },
+    streamedTargets: streamedTargets,
+    zoneGateOpen: zoneGateOpen,
+    zoneIsReady: zoneIsReady,
+    deviceProfile: deviceProfile,
     palaceVisible: function () { return state.palaceNear !== false; },
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
     teleport, overview, runTests, formatReport, cameraTour, metrics, corridorReport: () => state.corridorReport,

@@ -19,10 +19,15 @@
         recoveryMs = 0;
         return { value: value, changed: false };
       }
-      if (fps < lowerFps) {
+      // Memory pressure (from the zone streamer) is a second signal: under
+      // critical GPU residency, drop scale the same way a slow frame would,
+      // then recover with the same 3 s hysteresis so it does not flicker.
+      var mem = hint && hint.memoryLevel;
+      var heavyMem = mem === 'critical';
+      if (fps < lowerFps || heavyMem) {
         recoveryMs = 0;
         value = Math.max(min, value - down);
-      } else if (fps > upperFps) {
+      } else if (fps > upperFps && mem !== 'watch') {
         recoveryMs += elapsedMs;
         if (recoveryMs >= recoveryNeeded) {
           var steps = Math.floor(recoveryMs / recoveryNeeded);

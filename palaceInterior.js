@@ -103,6 +103,15 @@
   let entranceLeft = 0;
   let state = 'IDLE';
   let busy = false;
+  let contextLost = false;
+  const CONTEXT_RELOAD_KEY = 'sinContextReload';
+  try {
+    // A previous recovery reload landed on this fresh page: drop the flag so
+    // a later loss can still offer one reload, and so nothing blocks palace load.
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(CONTEXT_RELOAD_KEY) === 'pending') {
+      sessionStorage.setItem(CONTEXT_RELOAD_KEY, 'done');
+    }
+  } catch (_) {}
   let fadeT = 0;
   let holdT = 0;
   let loadPromise = null;
@@ -424,6 +433,20 @@
 
   function onRetry() {
     if (state !== 'FAILED') return;
+    if (contextLost) {
+      note('retry after context loss — clean page reload');
+      try {
+        if (sessionStorage.getItem(CONTEXT_RELOAD_KEY) === 'pending') {
+          // Already reloaded once this session for a context loss: do not loop.
+          if (statusEl) statusEl.textContent = 'أعد فتح الصفحة يدوياً إن لم يُستعد الرسم';
+          return;
+        }
+        sessionStorage.setItem(CONTEXT_RELOAD_KEY, 'pending');
+      } catch (_) {}
+      try { location.reload(); } catch (_) {}
+      return;
+    }
+    busy = false;
     note('retry');
     errEl.style.display = 'none';
     errEl.textContent = '';
@@ -3332,32 +3355,37 @@
     if (!gl || !gl.canvas) return;
     contextWatch = true;
     gl.canvas.addEventListener('webglcontextlost', function (e) {
+      // Keep the canvas from being cleared so we can show a recovery UI.
+      // Do NOT auto-reload (that loops on a dying tab) and do NOT auto-retry
+      // an in-place rebuild (GPU resources are gone; the palace would fail to
+      // open). A single user-initiated reload starts clean.
       if (e && e.preventDefault) e.preventDefault();
+      contextLost = true;
+      window.__sinWebGLLost = true;
       runtimeErrors.push('webglcontextlost');
       try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('error', 'webglcontextlost'); } catch (_) {}
-      const detail = new Error('فُقد سياق الرسم WebGL — ذاكرة الجهاز لا تكفي لعرض القاعة');
+      try { if (window.SinDevice) SinDevice.rememberCrash({ reason: 'webglcontextlost', phase: state }); } catch (_) {}
+      const detail = new Error('فُقد سياق الرسم WebGL — اضغط لإعادة التحميل');
       detail.name = 'WebGLContextLost';
       loadError = detail;
-      if (state !== 'DONE' && state !== 'IDLE') {
-        state = 'FAILED';
-        showFail(loadError);
-      } else {
-        // During gameplay: show the load screen instead of a blank crash.
-        ensureLoadScreen();
-        loadEl.style.opacity = '1';
-        loadEl.style.pointerEvents = 'auto';
-        if (statusEl) statusEl.textContent = 'فُقد سياق الرسم — أعد المحاولة';
-        state = 'FAILED';
-        showFail(loadError);
-      }
+      state = (state === 'IDLE') ? 'IDLE' : 'FAILED';
+      if (state === 'FAILED') busy = false;
+      ensureLoadScreen();
+      loadEl.style.opacity = '1';
+      loadEl.style.pointerEvents = 'auto';
+      if (statusEl) statusEl.textContent = 'فُقد سياق الرسم — اضغط لإعادة التحميل';
+      if (retryBtn) retryBtn.textContent = 'إعادة التحميل';
+      showFail(loadError);
       renderDebug();
     }, false);
     gl.canvas.addEventListener('webglcontextrestored', function () {
       runtimeErrors.push('webglcontextrestored');
       try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('info', 'webglcontextrestored'); } catch (_) {}
       note('webglcontextrestored');
-      // Full retry path rebuilds palace state safely after a kill.
-      if (state === 'FAILED' && lastContext) onRetry();
+      // GPU objects from the previous context are invalid. Do not auto-onRetry
+      // (that left the palace unable to open). Offer one clean reload instead.
+      if (statusEl) statusEl.textContent = 'تم استعادة الرسم — اضغط لإعادة التحميل';
+      if (retryBtn) { retryBtn.style.display = 'inline-block'; retryBtn.textContent = 'إعادة التحميل'; }
     }, false);
   }
 
@@ -3959,7 +3987,8 @@
         teardownPhase: teardownPhase,
         preTeardown: preTeardownInfo,
         postTeardown: postTeardownInfo,
-        palaceLoadStarted: !!palaceLoadStarted
+        palaceLoadStarted: !!palaceLoadStarted,
+        contextLost: !!contextLost
       };
     },
     percent: shownPercent,
