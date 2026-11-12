@@ -35,10 +35,14 @@
   };
   const ORDER = ['low', 'medium', 'high'];
   function isMobileUA() {
+    if (window.SinDevice) return SinDevice.isMobile(navigator);
     const ua = navigator.userAgent || '';
     return /iPhone|iPad|iPod|Android/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
   }
   function detectTier() {
+    // Starting AUTO tier only. The governor below scales render resolution
+    // up and down with hysteresis; we never lock a device onto a lower look.
+    if (window.SinDevice) return SinDevice.detect().gfxTier;
     const mobile = isMobileUA();
     const mem = navigator.deviceMemory || 8, cores = navigator.hardwareConcurrency || 4;
     if (mobile) return (mem <= 3 || cores <= 4) ? 'low' : 'medium';
@@ -52,8 +56,15 @@
   // migrate the old two-state preference written by index.html
   try { if (!store.get('tier') && localStorage.getItem('sin.quality') === 'low') mode = 'low'; } catch (_) {}
   let base = mode === 'auto' ? detectTier() : mode;
-  let pressure = 0;                                  // 0..3 adaptive degradation level
+  let pressure = 0;                                  // 0..3 adaptive (resolution) degradation, not a locked tier
   const dynamicResolution = window.SinDynamicResolution ? window.SinDynamicResolution.create({ min: 0.58, max: 1.00, initial: 1.00, downStep: 0.08, upStep: 0.01, lowerFps: 52, upperFps: 58, recoveryMs: 3000 }) : null;
+  // After a memory-kill, start a little under native and ramp back up if
+  // the frame time allows — temporary, not a permanent look change.
+  try {
+    if (dynamicResolution && window.SinDevice && SinDevice.pendingCrashDowngrade && SinDevice.pendingCrashDowngrade()) {
+      dynamicResolution.reset(0.88);
+    }
+  } catch (_) {}
   let fovH = Number(store.get('fov')) || 73;         // horizontal FOV (degrees), 73 = test starting point
 
   function eff() {                                   // effective settings = tier ∘ pressure
@@ -318,7 +329,15 @@
     const avg = acc / n, sampleMs = winT; acc = n = winT = 0;
     perf.avg = avg;
     if (dynamicResolution) {
-      const change = dynamicResolution.sample(1000 / avg, sampleMs, false, { triangles: perf.tris || 0 });
+      let memoryLevel = 'normal';
+      try {
+        const zr = window.PalaceWings && PalaceWings.zones && PalaceWings.zones();
+        memoryLevel = (zr && zr.memory && zr.memory.level) || 'normal';
+      } catch (_) {}
+      if (memoryLevel === 'critical') pressure = Math.min(3, pressure + 1);
+      else if (memoryLevel === 'watch') pressure = Math.min(2, Math.max(pressure, 1));
+      else if (pressure > 0) pressure -= 1;
+      const change = dynamicResolution.sample(1000 / avg, sampleMs, false, { triangles: perf.tris || 0, memoryLevel: memoryLevel });
       if (change.changed) { E = eff(); if (ctx.resize) ctx.resize(); }
     }
     // Keep shadow policy, material layout, LOD distances and grade fixed during
@@ -420,7 +439,8 @@
     tier() { return base; },
     setMode(m) {
       mode = (m === 'auto' || TIERS[m]) ? m : 'auto';
-      base = mode === 'auto' ? detectTier() : mode; pressure = 0; slowWins = 0; fastT = 0;
+      base = mode === 'auto' ? detectTier() : mode;
+      pressure = 0; slowWins = 0; fastT = 0;
       store.set('tier', mode); refresh();
     },
     cycleMode() { const L = ['auto', 'low', 'medium', 'high']; API.setMode(L[(L.indexOf(mode) + 1) % L.length]); return mode; },

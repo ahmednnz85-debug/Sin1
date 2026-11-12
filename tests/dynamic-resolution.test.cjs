@@ -50,3 +50,13 @@ test('triangle budgets under 600k raise the dynamic resolution floor to at least
   assert.equal(g.sample(55, 1500, false, { triangles: 450000 }).value, 0.85);
   assert.ok(g.sample(55, 1500, false, { triangles: 900000 }).value <= 0.85);
 });
+
+test('critical memory pressure drops scale; recovery still needs 3 s of headroom (hysteresis)', () => {
+  const g = create({ min: 0.70, max: 1.00, initial: 1.00, downStep: 0.08, upStep: 0.01, lowerFps: 52, upperFps: 58, recoveryMs: 3000 });
+  assert.equal(g.sample(60, 1500, false, { memoryLevel: 'critical' }).value, 0.92);
+  assert.equal(g.sample(60, 1500, false, { memoryLevel: 'critical' }).value, 0.84);
+  // High FPS but still 'watch' must not climb (hysteresis).
+  assert.equal(g.sample(60, 3000, false, { memoryLevel: 'watch' }).value, 0.84);
+  // After memory returns to normal, 3 s above 58 FPS climbs one step.
+  assert.equal(g.sample(60, 3000, false, { memoryLevel: 'normal' }).value, 0.85);
+});

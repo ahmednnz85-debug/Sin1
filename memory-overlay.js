@@ -172,7 +172,7 @@
       teardown: palace && palace.teardownPhase != null ? palace.teardownPhase : null,
       geometries: mem.geometries || 0,
       textures: mem.textures || 0,
-      programs: mem.programs || (Array.isArray(mem.programs) ? mem.programs.length : 0) || 0,
+      programs: Array.isArray(info && info.programs) ? info.programs.length : (mem.programs || 0),
       calls: render.calls || 0,
       triangles: render.triangles || 0,
       texMB: +estimateTextureBytes(renderer).toFixed(1),
@@ -188,8 +188,9 @@
         return { kind: e.kind, msg: e.msg.slice(0, 120), t: Math.round(e.t) };
       })
     };
-    // programs may be an array in some three builds
-    if (Array.isArray(mem.programs)) lastSample.programs = mem.programs.length;
+    // programs live on renderer.info.programs (an array) in three r187, not on info.memory.
+    if (Array.isArray(info && info.programs)) lastSample.programs = info.programs.length;
+    else if (Array.isArray(mem.programs)) lastSample.programs = mem.programs.length;
     return lastSample;
   }
 
