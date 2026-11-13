@@ -4850,7 +4850,7 @@
   const FOLLOW_DIST = 3.45, FOLLOW_PITCH = 0.22;                // = index.html CAM_DIST / CAM_PITCH
   const ENTRY_DIST = 3.85, ENTRY_PITCH = 0.24, ENTRY_LOOK = 1.12; // entrance: doorway shot, same cinematic scale
   let entryCam = null, entryCut = false;
-  const rig = { d: -1, ds: FOLLOW_DIST, yaw: 0, pitch: FOLLOW_PITCH, idle: 0, fresh: false };
+  const rig = { d: -1, ds: FOLLOW_DIST, yaw: 0, pitch: FOLLOW_PITCH, idle: 0, fresh: false, escapeYaw: 0, escapePitch: 0, escapeTargetYaw: 0, escapeTargetPitch: 0, escapeCheckAt: 0 };
   const camBox = { minx: 0, maxx: 0, miny: 0, maxy: 0, minz: 0, maxz: 0 };
   function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
@@ -4924,9 +4924,35 @@
     rig.yaw += wrapAngle(yaw - rig.yaw) * turn;
     rig.pitch += (pitch - rig.pitch) * turn;
     rig.ds += (dist - rig.ds) * (1 - Math.exp(-dt * CAM_ZOOM));
-    const pt = Math.max(-0.1, Math.min(1.2, rig.pitch)), cp = Math.cos(pt);
-    const ux = -Math.sin(rig.yaw) * cp, uy = Math.sin(pt), uz = -Math.cos(rig.yaw) * cp;
     const px = p.x, py = p.y + CAM_PIVOT, pz = p.z;
+    const now = performance.now();
+    const basePitch = Math.max(-0.1, Math.min(1.2, rig.pitch));
+    if (now >= rig.escapeCheckAt) {
+      const baseCp = Math.cos(basePitch);
+      const baseSafe = castCamera(px, py, pz, -Math.sin(rig.yaw) * baseCp, Math.sin(basePitch), -Math.cos(rig.yaw) * baseCp, rig.ds, p.y, false);
+      if (baseSafe < 1.35) {
+        // Tested clear directions for tight palace/doorway framing. This short
+        // candidate scan runs only while the direct camera path is obstructed.
+        const candidates = [[-1.1, 0.55], [1.1, 0.55]];
+        let bestSafe = baseSafe, bestYaw = 0, bestPitch = 0;
+        for (let i = 0; i < candidates.length; i++) {
+          const cy = rig.yaw + candidates[i][0];
+          const cpitch = Math.max(-0.1, Math.min(1.2, basePitch + candidates[i][1]));
+          const ccos = Math.cos(cpitch);
+          const candidateSafe = castCamera(px, py, pz, -Math.sin(cy) * ccos, Math.sin(cpitch), -Math.cos(cy) * ccos, rig.ds, p.y, false);
+          if (candidateSafe > bestSafe) { bestSafe = candidateSafe; bestYaw = candidates[i][0]; bestPitch = candidates[i][1]; }
+        }
+        if (bestSafe > Math.max(1.35, baseSafe + 0.45)) {
+          rig.escapeTargetYaw = bestYaw; rig.escapeTargetPitch = bestPitch;
+        } else { rig.escapeTargetYaw = 0; rig.escapeTargetPitch = 0; }
+      } else if (baseSafe > 1.8) { rig.escapeTargetYaw = 0; rig.escapeTargetPitch = 0; }
+      rig.escapeCheckAt = now + 500;
+    }
+    rig.escapeYaw += wrapAngle(rig.escapeTargetYaw - rig.escapeYaw) * turn;
+    rig.escapePitch += (rig.escapeTargetPitch - rig.escapePitch) * turn;
+    const camYaw = rig.yaw + rig.escapeYaw;
+    const pt = Math.max(-0.1, Math.min(1.2, rig.pitch + rig.escapePitch)), cp = Math.cos(pt);
+    const ux = -Math.sin(camYaw) * cp, uy = Math.sin(pt), uz = -Math.cos(camYaw) * cp;
     const safe = castCamera(px, py, pz, ux, uy, uz, rig.ds, p.y, false);
     const want = Math.max(Math.min(CAM_MIN, safe), Math.min(rig.ds, safe));
     if (snap || want < rig.d) rig.d = want;
