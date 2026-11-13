@@ -1981,9 +1981,9 @@
           '  diffuseColor.rgb *= mix(vec3(0.42, 0.38, 0.34), tint, joint) * macro;',
           '}'
         ].join('\n'))
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor * (0.82 + 0.36 * fract(sin(dot(floor(vPalaceWorld.xz / max(0.001, slabSize)), vec2(12.9, 78.2))) * 437.1)), 0.14, 0.55);');
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor * (0.55 + 0.28 * fract(sin(dot(floor(vPalaceWorld.xz / max(0.001, slabSize)), vec2(12.9, 78.2))) * 437.1)), 0.08, 0.36);');
     };
-    material.customProgramCacheKey = function () { return 'palaceMarble7'; };
+    material.customProgramCacheKey = function () { return 'palaceMarble8'; };
   }
 
   function instanceCullOn() {
@@ -2540,9 +2540,9 @@
     const floorGeo = new THREE.PlaneGeometry(W + floorPadX * 2, L + floorPadZ * 2);
     floorGeo.setAttribute('uv2', floorGeo.attributes.uv);
     const floorMat = new THREE.MeshStandardMaterial({
-      map: marble, roughness: 1, metalness: 0, roughnessMap: orm, aoMap: orm, aoMapIntensity: 0.85
+      map: marble, roughness: 1, metalness: 0.08, roughnessMap: orm, aoMap: orm, aoMapIntensity: 0.7
     });
-    if (palaceEnv) { floorMat.envMap = palaceEnv; floorMat.envMapIntensity = 0.6; }
+    if (palaceEnv) { floorMat.envMap = palaceEnv; floorMat.envMapIntensity = 1.35; }
     attachFloorShader(floorMat);
     floorMat.side = THREE.DoubleSide;
     const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -3250,24 +3250,81 @@
     // hemi/ambient receive ×π only while rendering). Outdoor sun/hemi are zeroed.
     try { console.info('[palace load] banners-done'); } catch (_) {}
     await yieldSlice(true);
-    const hemi = new THREE.HemisphereLight(0xffe2b8, 0x5c3a28, 0.18);
+    // Throne-hall look (user reference): warm golden-amber fill, hall only.
+    // Intensities are authored here; cinematic.js leaves PalaceHall* colors
+    // and gains alone so rooms/corridors stay on the existing look.
+    const hemi = new THREE.HemisphereLight(0xffe8c0, 0x6a3e1c, 0.52);
     hemi.name = 'PalaceHallHemi';
     group.add(hemi);
-    const fill = new THREE.AmbientLight(0xffd0a4, 0.035);
+    const fill = new THREE.AmbientLight(0xffd0a4, 0.14);
     fill.name = 'PalaceHallAmbient';
     group.add(fill);
     lights = [];
     for (let i = 0; i < CONFIG.lightCount; i++) {
-      const pl = new THREE.PointLight(0xffb15a, 0, 9 * H, 2);
+      const pl = new THREE.PointLight(0xffb15a, 0, 12 * H, 2);
       pl.castShadow = false;
       pl.position.set(0, 2.2 * H, L * 0.45);
       pl.name = 'PalaceHallPoint' + i;
       group.add(pl);
       lights.push(pl);
     }
+    // One unshadowed window key — cheap, hall-only, not in the 8-point budget.
+    const windowSun = new THREE.DirectionalLight(0xffe0a8, 0.62);
+    windowSun.name = 'PalaceHallWindowSun';
+    windowSun.castShadow = false;
+    windowSun.position.set(-W * 0.18, CH * 0.98, L * 0.12);
+    windowSun.target.position.set(0, 0.35 * H, L * 0.70);
+    group.add(windowSun);
+    group.add(windowSun.target);
     try { console.info('[palace load] lights-done'); } catch (_) {}
     console.info('قاعة', n, 'وحدات، ارتفاع', (CH / H).toFixed(2), 'H، مباخر', brzMatrices.length, 'أقواس', CONFIG.PASSAGES.length);
     await yieldSlice(true);
+
+
+    function buildHallLightShafts() {
+      // Cheap additive billboards from the high side windows. One instanced
+      // draw, no shadows, hall group only — rooms and corridors are untouched.
+      const vs = 'varying vec2 vUv;\nvoid main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
+      const fs = [
+        'varying vec2 vUv;',
+        'uniform float uTime;',
+        'void main(){',
+        '  float beam = smoothstep(0.0,0.20,vUv.x)*smoothstep(1.0,0.80,vUv.x);',
+        '  float fall = pow(max(0.0,1.0-vUv.y),1.25);',
+        '  float dust = 0.88+0.12*sin(uTime*0.31+vUv.y*9.0);',
+        '  float a = beam*fall*0.26*dust;',
+        '  gl_FragColor = vec4(1.0,0.84,0.52,a);',
+        '}'
+      ].join('\n');
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 } },
+        vertexShader: vs, fragmentShader: fs,
+        transparent: true, depthWrite: false,
+        blending: THREE.AdditiveBlending, side: THREE.DoubleSide
+      });
+      const geo = new THREE.PlaneGeometry(1, 1);
+      geo.translate(0, -0.5, 0);
+      const mesh = new THREE.InstancedMesh(geo, mat, 6);
+      mesh.name = 'hall-light-shafts';
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 1;
+      const dummy = new THREE.Object3D();
+      const zs = [0.20, 0.42, 0.64];
+      let i = 0;
+      for (let side = -1; side <= 1; side += 2) {
+        for (let k = 0; k < zs.length; k++) {
+          dummy.position.set(side * (W * 0.36), CH * 0.93, L * zs[k]);
+          dummy.scale.set(1.25 * H, CH * 0.82, 1);
+          dummy.rotation.set(side * 0.16, 0, side * 0.28);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(i++, dummy.matrix);
+        }
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      group.add(mesh);
+      hallDecorMeshes.push(mesh);
+      fireMats.push(mat);
+    }
 
     function buildFires() {
       if (!fireList.length) return;
@@ -3349,9 +3406,9 @@
       for (let i = 0; i < lights.length; i++) {
         const f = sorted[Math.min(sorted.length - 1, Math.round(i * (sorted.length - 1) / Math.max(1, lights.length - 1)))];
         lights[i].position.set(f.x, ly, f.z);
-        const baseIntensity = 0.82 * Math.max(0.6, Math.min(1.7, Number(f.intensity) || 1));
+        const baseIntensity = 1.48 * Math.max(0.6, Math.min(1.7, Number(f.intensity) || 1));
         lights[i].intensity = baseIntensity;
-        lights[i].distance = 9 * H;
+        lights[i].distance = 12 * H;
         lightTargets[i] = { x: f.x, y: ly, z: f.z, baseIntensity: baseIntensity, seed: Number(f.seed) || i };
       }
       // (Additive torch-glow sprites removed: they only existed to fake light
@@ -3379,6 +3436,10 @@
       else if (type === 'daybed') { color = 0x6a3a32; metal = 0.08; rough = 0.72; }
       else if (type === 'lampStand') { color = 0xc4923e; metal = 0.55; rough = 0.4; }
       const m = new THREE.MeshStandardMaterial({ color: color, roughness: rough, metalness: metal });
+      if (type === 'lantern' || type === 'lampStand') {
+        m.emissive = new THREE.Color(0xffb45a);
+        m.emissiveIntensity = 0.9;
+      }
       matCache[key] = m;
       return m;
     }
@@ -3733,6 +3794,7 @@
       note('wings ' + Math.round(performance.now() - tWings) + 'ms');
       wingRuntime.fires.forEach(function (f) { f._wing = true; fireList.push(f); });
     }
+    buildHallLightShafts();
     buildFires();
     if (wingRuntime) {
       ['fire', 'fire-glow', 'embers'].forEach(function (name) {

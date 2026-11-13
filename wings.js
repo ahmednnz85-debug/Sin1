@@ -2584,31 +2584,34 @@
       const c = doorCoordinates(d, hero), near = nearDoor(d, c);
       if (c.distance > 4.0) { d.autoRearm = true; d._gateSince = 0; }
       if (d.state === 'Closed' && near && d.autoRearm && !busyDoor) {
-        let gate = zoneGateOpen(d);
+        const gate = zoneGateOpen(d);
         if (!gate) {
-          // Standing at the door from outside (K3/K4): ask the streamer to
-          // build the room now, and open once it is ready — or after a short
-          // grace so the door never stays shut for good.
+          // Standing at a closed door: ask the streamer to finish the room.
+          // Never force-open on a timer — that opened into a half-built room
+          // and the gate slammed the door shut in the hero's face.
           const now = performance.now();
-          const first = !d._outsideWaitSince;
-          if (first) d._outsideWaitSince = now;
-          if (first && zoneStreamer && typeof zoneStreamer.forceLoad === 'function') {
-            streamedTargets(d).forEach(function (id) { if (!zoneIsReady(id)) { try { zoneStreamer.forceLoad(id); } catch (_) {} } });
+          if (!d._forceLoadAt || now - d._forceLoadAt > 400) {
+            d._forceLoadAt = now;
+            if (zoneStreamer && typeof zoneStreamer.forceLoad === 'function') {
+              streamedTargets(d).forEach(function (id) { if (!zoneIsReady(id)) { try { zoneStreamer.forceLoad(id); } catch (_) {} } });
+            }
           }
-          if (now - d._outsideWaitSince > 2500) gate = true;
+        } else if (beginDoorMotion(d, true, c)) {
+          busyDoor = d;
+          d._forceLoadAt = 0;
         }
-        if (gate && beginDoorMotion(d, true, c)) { busyDoor = d; d._outsideWaitSince = 0; }
-      } else if (!near) d._outsideWaitSince = 0;
+      }
       if (d.state === 'Open') {
-        // Stay open after the hero leaves — unless the streamed room behind
-        // the door has been evicted. An open door into a half-built room is
-        // the return-visit pop-in (dress appearing after the player walks in).
+        // Stay open while the hero is near or passing. Only close after
+        // the streamed room is evicted AND the hero has walked away, so
+        // a return visit cannot walk into a half-built room.
         d.crossed = true;
         d.autoCloseTimer = 0;
         const targets = streamedTargets(d);
         const cur = state.current;
         const waiting = targets.filter(function (id) { return id !== cur && !zoneIsReady(id); });
-        if (waiting.length && !busyDoor) {
+        const passing = near || doorOccupied(d) || c.distance <= 4.0;
+        if (waiting.length && !busyDoor && !passing) {
           if (beginDoorMotion(d, false, c)) busyDoor = d;
         }
       }
@@ -2939,8 +2942,11 @@
   let zoneDistKey = '', zoneDist = null;
   // Start loading a room once the player is heading toward its door and
   // close enough that, at phone run speed (~7 m/s), the room is complete
-  // before they arrive. 36 m ≈ 5 s. Far rooms evict first (streamer budget).
-  const APPROACH_DIST = 36;
+  // before they arrive. 48 m ≈ 7 s. Far rooms evict first (streamer budget).
+  // 48 m ≈ 7 s at phone run speed: the room should be ready when the hero
+  // reaches the door. Still only the single nearest streamed target ahead,
+  // so leftover dress evicts first and we never stack past the 650 cap.
+  const APPROACH_DIST = 48;
   function approachRoomIds() {
     const set = new Set();
     if (!state.doors || !state.ctx || !state.ctx.hero || !state.root) return set;
@@ -2958,8 +2964,9 @@
     } catch (_) {}
     const roomIds = new Set();
     (state.rooms || []).forEach(function (r) { if (r && r.id) roomIds.add(r.id); });
-    // Only the single nearest room ahead. Adding every door's from+to inside
-    // 36 m stacked K2+K3+K4 to 658 MB (over the 650 cap) on the KC1 walk.
+    // Only the single nearest streamed room ahead (including one hop past a
+    // short corridor, e.g. K1-KC12 → K2). Adding every door's from+to inside
+    // range stacked K2+K3+K4 to 658 MB (over the 650 cap) on the KC1 walk.
     let bestId = null, bestDist = Infinity;
     for (let i = 0; i < state.doors.length; i++) {
       const d = state.doors[i];
@@ -2970,16 +2977,17 @@
       const nd = dist > 0.05 ? (dx * hx + dz * hz) / dist : 1;
       if (nd < 0.15 && dist > 8) continue;
       let ahead = null;
-      if (d.to && d.to !== cur && roomIds.has(d.to)) ahead = d.to;
-      if (d.from && d.from !== cur && roomIds.has(d.from)) {
-        // Standing in a corridor (cur is neither side): pick the side
-        // that sits further along the heading, i.e. the first ahead we set
-        // only if to wasn't already chosen; if both qualify, prefer `to`
-        // when that is the conventional forward id, else the nearer door wins
-        // via bestDist anyway (one door, one ahead). If `to` is behind us
-        // and `from` is ahead, take from.
-        if (!ahead) ahead = d.from;
-        else if (ahead === d.to && nd < 0) ahead = d.from;
+      // Streamed destination on the far side, including one hop past a corridor.
+      const targets = streamedTargets(d, cur);
+      for (let t = 0; t < targets.length; t++) {
+        if (targets[t] && targets[t] !== cur) { ahead = targets[t]; break; }
+      }
+      if (!ahead) {
+        if (d.to && d.to !== cur && roomIds.has(d.to)) ahead = d.to;
+        if (d.from && d.from !== cur && roomIds.has(d.from)) {
+          if (!ahead) ahead = d.from;
+          else if (ahead === d.to && nd < 0) ahead = d.from;
+        }
       }
       if (ahead && dist < bestDist) { bestDist = dist; bestId = ahead; }
     }

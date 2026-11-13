@@ -261,7 +261,18 @@
     if (t - lookScanAt > 1000) { lookScanAt = t; scanLookLights(); }
     for (let i = 0; i < lookLights.length; i++) {
       const o = lookLights[i], u = o.userData;
-      if (o.isHemisphereLight) {
+      // PalaceHall* keeps the throne-hall gold look. Wing/room lights stay
+      // on the existing interior look so rooms and corridors do not change.
+      if (o.name === 'PalaceHallHemi') {
+        u.lookGain = 1.25;
+        setRGB(o.color, [1.00, 0.90, 0.68]); setRGB(o.groundColor, [0.46, 0.26, 0.12]);
+      } else if (o.name === 'PalaceHallAmbient') {
+        u.lookGain = 1.35;
+      } else if (o.name && o.name.indexOf('PalaceHallPoint') === 0) {
+        setRGB(o.color, [1.00, 0.74, 0.38]); u.lookGain = 1.50;
+      } else if (o.name === 'PalaceHallWindowSun') {
+        u.lookGain = 1.15;
+      } else if (o.isHemisphereLight) {
         if (o.name === 'PalaceWingsUnifiedAmbient') u.lookGain = L.wingAmbientGain; else u.lookGain = L.hemiGain;
         setRGB(o.color, L.hemiSky); setRGB(o.groundColor, L.hemiGround);
       } else if (o.isAmbientLight) { u.lookGain = L.ambientGain; }
