@@ -138,18 +138,47 @@ ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
 window.THREE = THREE;
 window.__SIN_THREE_VERSION__ = ThreeModule.REVISION;
 
+// Version every same-origin GLB / JSON / texture load going through Three's
+// FileLoader so a deploy cannot be held by a cached unversioned asset URL.
+(function hookSinAssetUrls() {
+  function sinAssetUrl(url) {
+    if (typeof url !== 'string' || !url) return url;
+    if (/^(data:|blob:)/i.test(url)) return url;
+    if (/jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com|esm\.sh|googleapis\.com|gstatic\.com/i.test(url)) return url;
+    if (/[?&](?:v|sin|fix)=/.test(url)) return url;
+    const b = (typeof window !== 'undefined' && window.__SIN_BUILD__) || 'dev';
+    const sep = url.indexOf('?') >= 0 ? '&' : '?';
+    return url + sep + 'v=' + encodeURIComponent(b);
+  }
+  window.__sinAsset = sinAssetUrl;
+  function wrap(proto) {
+    if (!proto || proto.__sinAssetHooked) return;
+    const orig = proto.load;
+    proto.load = function (url, onLoad, onProgress, onError) {
+      return orig.call(this, sinAssetUrl(url), onLoad, onProgress, onError);
+    };
+    proto.__sinAssetHooked = true;
+  }
+  wrap(ThreeModule.FileLoader && ThreeModule.FileLoader.prototype);
+  wrap(ThreeModule.TextureLoader && ThreeModule.TextureLoader.prototype);
+  wrap(ThreeModule.ImageLoader && ThreeModule.ImageLoader.prototype);
+})();
+
+
+// Bypass Safari / Fastly HTTP caches when loading game scripts. A stale
+// index.html that still points at an old ?v= would otherwise keep serving
+// the previously cached JS body. fetch({cache:'no-store'}) always hits the
+// origin body (GitHub Pages serves the same file for any query string).
 async function bootLegacyScripts() {
   const scripts = [...document.querySelectorAll('script[data-legacy-script]')];
   for (const original of scripts) {
     if (original.dataset.src) {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = original.dataset.src;
-        script.async = false;
-        script.onload = resolve;
-        script.onerror = () => reject(new Error(`تعذر تحميل السكربت: ${script.src}`));
-        document.body.appendChild(script);
-      });
+      const url = new URL(original.dataset.src, document.baseURI).href;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`تعذر تحميل السكربت: ${url} (${res.status})`);
+      const script = document.createElement('script');
+      script.textContent = await res.text();
+      document.body.appendChild(script);
     } else {
       const script = document.createElement('script');
       script.textContent = original.textContent;
