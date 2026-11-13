@@ -346,32 +346,29 @@ function makeSkyPhoto(r){
 }
 let sky=makeSkyPhoto(1500); sky.name='SkyPhoto'; scene.add(sky);
 
-// ===================== EXTRAS: distant Babylonian skyline ring (images only, background only: no colliders, no gameplay) =====================
-// Two supplied skyline images, mirrored/repeated and cross-faded in Python into one seamless 360-degree ring (assets/skyline_ring_a/b.jpg, 2 halves of 180 deg each).
-// Aspect ratio is preserved (arc length / height == source pixels). The ring follows the camera like the sky (infinitely far) so the hero can never reach it.
+// ===================== EXTRAS: distant Babylonian city ring (image only, background only: no colliders, no gameplay) =====================
+// Source: assets/مدينة بعيدة.JPG -> assets/distant_city_ring.jpg (full image with its own sky, uncut).
+// One full 360-degree ring, the image mirrored 4x around the horizon (seamless), low on the horizon line so it reads truly distant.
+// Named "skyline_*" so outdoor-perf's city far-hide skips it (it used to hide the ring after the Ishtar gate).
 const skyline={rings:[]};
 function buildSkyline(){
-  const R=1100,W=5024,H=418,YB=-18,HGT=R*Math.PI*H/(W/2);        // 180 deg of arc = W/2 source pixels
-  const START=-(728/W)*2*Math.PI;                                 // image A's centre (ziggurat + blue gate) sits at bearing 0 = +Z, behind the Ishtar gate
-  const mk=(file,b0)=>{
-    const N=64,pos=[],uv=[],idx=[];
-    for(let i=0;i<=N;i++){const u=i/N,b=b0+u*Math.PI,x=-R*Math.sin(b),z=R*Math.cos(b);pos.push(x,YB,z,x,YB+HGT,z);uv.push(u,0,u,1);if(i<N){const k=i*2;idx.push(k,k+1,k+2,k+1,k+3,k+2);}}
-    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);
-    const t=new THREE.TextureLoader().load('assets/'+file,()=>{m.visible=true;},undefined,()=>console.warn(file+' missing - existing sky kept'));
-    t.userData=t.userData||{};t.userData.sinKeepCpu=true;t.userData.sinSky=true;
-    t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;t.anisotropy=4;t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;
-    const mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,fog:false,side:THREE.DoubleSide,
-      uniforms:{map:{value:t},haze:{value:HAZE}},
-      vertexShader:'varying vec2 vU;void main(){vU=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-      fragmentShader:'uniform sampler2D map;uniform vec3 haze;varying vec2 vU;void main(){'+
-        'vec3 c=pow(texture2D(map,vU).rgb,vec3(2.2));'+
-        'float l=dot(c,vec3(0.2126,0.7152,0.0722));c=mix(vec3(l),c,0.92);'+                 // keep the palette calm
-        'c=mix(c,haze*1.7,0.18*(1.0-smoothstep(0.0,0.25,vU.y)));'+                           // light aerial perspective at the base
-        'float a=1.0-smoothstep(0.70,0.95,vU.y);'+                                            // image sky fades into the game sky
-        'gl_FragColor=vec4(c,a);\n#include <colorspace_fragment>\n}'});
-    const m=new THREE.Mesh(g,mat);m.renderOrder=-9;m.frustumCulled=false;m.visible=false;scene.add(m);skyline.rings.push(m);
-  };
-  mk('skyline_ring_a.jpg',START);mk('skyline_ring_b.jpg',START+Math.PI);
+  const R=1100,TILES=4,TW=2048,TH=683,HGT=2*Math.PI*R*TH/(TW*TILES),YB=-0.20*HGT;
+  const N=128,pos=[],uv=[],idx=[];
+  for(let i=0;i<=N;i++){const u=i/N,b=u*2*Math.PI,x=-R*Math.sin(b),z=R*Math.cos(b);pos.push(x,YB,z,x,YB+HGT,z);uv.push(u*TILES,0,u*TILES,1);if(i<N){const k=i*2;idx.push(k,k+1,k+2,k+1,k+3,k+2);}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);
+  let m=null;
+  const t=new THREE.TextureLoader().load('assets/distant_city_ring.jpg',()=>{if(m)m.visible=true;},undefined,()=>console.warn('distant_city_ring.jpg missing - existing sky kept'));
+  t.userData=t.userData||{};t.userData.sinKeepCpu=true;t.userData.sinSky=true;
+  t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;t.anisotropy=4;t.wrapS=THREE.MirroredRepeatWrapping;t.wrapT=THREE.ClampToEdgeWrapping;
+  const mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,fog:false,side:THREE.DoubleSide,
+    uniforms:{map:{value:t},haze:{value:HAZE}},
+    vertexShader:'varying vec2 vU;void main(){vU=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+    fragmentShader:'uniform sampler2D map;uniform vec3 haze;varying vec2 vU;void main(){'+
+      'vec4 tx=texture2D(map,vU);'+
+      'vec3 c=pow(tx.rgb,vec3(2.2));'+
+      'c=mix(c,haze*1.6,0.12*(1.0-smoothstep(0.0,0.3,vU.y)));'+                                                             // aerial perspective: far city sits in the haze
+      'gl_FragColor=vec4(c,1.0-smoothstep(0.94,1.0,vU.y));\n#include <colorspace_fragment>\n}'});
+  m=new THREE.Mesh(g,mat);m.name='skyline_distant_city';m.renderOrder=-9;m.frustumCulled=false;m.visible=false;m.userData.keepOutdoorSky=true;scene.add(m);skyline.rings.push(m);
 }
 function updateSkyline(){for(const m of skyline.rings)m.position.copy(camera.position);}
 try{buildSkyline();}catch(e){showErr(e);}
