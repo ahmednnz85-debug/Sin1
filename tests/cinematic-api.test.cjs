@@ -34,7 +34,7 @@ test('SinGfx.camera stays the CAM settings object (PR #45 black-screen regressio
 });
 
 test('cinematic.js is cache-busted after the getCamera fix', () => {
-  assert.match(index, /cinematic\.js\?v=20261112trace1/);
+  assert.match(index, /cinematic\.js\?v=20261113c3/);
 });
 
 test('FPS HUD keeps last good reading across a >1 s stall (no "FPS 0")', () => {
