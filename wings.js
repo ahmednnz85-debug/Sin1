@@ -1039,7 +1039,14 @@
     // relief around the open arches. Colliders still use the full baseWall, so walking limits are unchanged.
     const hwv = state.hall.width * 0.5, wtv = state.hall.wallThickness || 0;
     const palaceBand = solid(polyRect(-hwv - wtv - 0.02, -0.5, (hwv + wtv + 0.02) * 2, state.hall.length + 1));
-    const visualWall = difference(state.baseWall, palaceBand);
+    let visualWall = difference(state.baseWall, palaceBand);
+    // K1's GLB is stretched east to the palace arch (PalaceL3). The 1 m wing
+    // wall ring between K1's region edge and that arch stood inside the model
+    // and showed as a flat white slab over the decorated K1 wall. Visual only:
+    // colliders still use baseWall + addK1Colliders.
+    const k1v = state.rooms.find(r => r.id === 'K1'), pl3v = state.doors.find(d => d.id === 'PalaceL3');
+    if (k1v && pl3v) visualWall = difference(visualWall, solid(polyRect(k1v.bbox.x0, k1v.bbox.z0, pl3v.x - k1v.bbox.x0 + 0.05, k1v.bbox.z1 - k1v.bbox.z0)));
+    state.visualWallSolid = visualWall;
     vis('wall-diff');
     await yieldWing();
     state.wallGeometry = mergeGeometries([extrudeSolids(visualWall, 0, MAX_H)].concat(capGeos));
@@ -1300,7 +1307,7 @@
     let roomsSolid = []; state.rooms.forEach(r => { roomsSolid = union(roomsSolid, solid(r.poly)); });
     state.corridorCeilings = [];
     let claimed = [], claimedDoors = [];
-    const plantSlots = [], report = [], torchSlots = [];
+    const plantSlots = [], report = [], torchSlots = [], dressedRuns = [];
     for (const r of corridors) {
       const g = state.regionGroups.get(r.id); if (!g) continue;
       const tC = performance.now();
@@ -1337,6 +1344,7 @@
       ];
       soffits.forEach(sf => parts.push(flatSheet(sf.under, Math.min(sf.d.height, h) - 0.012, false, CORRIDOR_TILE.wall)));
       mesh(mergeGeometriesUV(parts), mats.wall, r.id + '-corridor-walls', g);
+      runs.forEach(x => dressedRuns.push(x)); lintelRuns.forEach(x => dressedRuns.push(x));
       const lintels = lintelRuns;
       placeCorridorTorches(r, runs, freeArea, torchSlots);
       const rugB = r.bbox, rugDx = rugB.x1 - rugB.x0, rugDz = rugB.z1 - rugB.z0;
@@ -1386,6 +1394,7 @@
       try { console.info('[palace load] dress-corridor', r.id, Math.round(performance.now() - tC) + 'ms', 'plants', count); } catch (_) {}
       if (performance.now() - tDress > 45) await yieldWing();
     }
+    try { fillUndressedCorridorWalls(dressedRuns, roomsSolid, mats.wall); } catch (e) { try { console.warn('[palace load] corridor wall fill', e && (e.message || e)); } catch (_) {} }
     dressLog('corridors-done n=' + corridors.length);
     state.corridorReport = report;
     state.corridorPlants = plantSlots;
@@ -1397,6 +1406,53 @@
     loadCorridorPlants(plantSlots);
     state.corridorTorches = torchSlots;
     loadCorridorTorches(torchSlots);
+  }
+  // Some wall faces bordering corridor/passage floor were never covered by a
+  // corridor dress (corner pieces claimed by a neighbouring corridor, short
+  // arch passages) and showed the bare light plaster. Cover exactly those
+  // faces with the same corridor wall texture, full corridor height.
+  function fillUndressedCorridorWalls(dressedRuns, roomsSolid, wallMat) {
+    const CELL = 0.25, cov = new Set();
+    const ck = (x, z, nx, nz) => Math.round(x / CELL) + ',' + Math.round(z / CELL) + ',' + Math.round(nx) + ',' + Math.round(nz);
+    dressedRuns.forEach(r => {
+      for (let s = r.s0; s <= r.s1 + 1e-6; s += 0.1) {
+        const x = r.a[0] + r.tx * s, z = r.a[1] + r.tz * s;
+        for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) cov.add(ck(x + dx * CELL, z + dz * CELL, r.nx, r.nz));
+      }
+    });
+    const wall = state.visualWallSolid || state.baseWall;
+    let floor = [];
+    state.connectors.forEach(c => { floor = union(floor, solid(c.poly)); });
+    state.doors.forEach(d => { if (d.floorPoly) floor = union(floor, solid(d.floorPoly)); });
+    const walk = difference(difference(floor, roomsSolid), state.baseWall);
+    const all = corridorWallRuns(wall, walk);
+    const fill = [];
+    all.forEach(r => {
+      const n = Math.max(1, Math.round((r.s1 - r.s0) / 0.25)), st = (r.s1 - r.s0) / n;
+      let cur = null;
+      for (let k = 0; k < n; k++) {
+        const s = r.s0 + st * (k + 0.5), x = r.a[0] + r.tx * s, z = r.a[1] + r.tz * s;
+        const miss = !cov.has(ck(x, z, r.nx, r.nz));
+        if (miss) { if (cur) cur.s1 = r.s0 + st * (k + 1); else cur = Object.assign({}, r, { s0: r.s0 + st * k, s1: r.s0 + st * (k + 1) }); }
+        else if (cur) { fill.push(cur); cur = null; }
+      }
+      if (cur) fill.push(cur);
+    });
+    if (!fill.length) return;
+    const byRegion = new Map();
+    fill.forEach(r => {
+      const m = (r.s0 + r.s1) * 0.5, x = r.a[0] + r.tx * m - r.nx * 0.3, z = r.a[1] + r.tz * m - r.nz * 0.3;
+      const reg = state.connectors.find(c => pointInSolids(x, z, solid(c.poly))) || state.connectors.find(c => pointInSolids(x - r.nx * 0.6, z - r.nz * 0.6, solid(c.poly)));
+      const id = reg ? reg.id : '__fill';
+      if (!byRegion.has(id)) byRegion.set(id, { reg, runs: [] });
+      byRegion.get(id).runs.push(r);
+    });
+    byRegion.forEach((v, id) => {
+      const h = v.reg ? v.reg.height : 6;
+      const g = (v.reg && state.regionGroups.get(v.reg.id)) || state.root;
+      mesh(wallQuads(v.runs, () => [0, h - 0.012], CORRIDOR_TILE.wall), wallMat, id + '-corridor-walls-fill', g);
+    });
+    state.corridorWallFill = fill.length;
   }
   function mergeGeometriesUV(list) {
     const pos = [], nor = [], uv = [];
@@ -2324,7 +2380,9 @@
     // safety band during the animation; a full-width slab makes the hero appear
     // to walk in the air. Once open, there is deliberately no door collider.
     const half = d.width * 0.5;
-    const span = d.state === 'Open' ? 0 : Math.max(0.08, half * (1 - d.progress) * 0.18);
+    // Closed: block the whole opening (the old 18% band let the hero walk
+    // straight through the sides of a shut K3/K4 door).
+    const span = d.state === 'Open' ? 0 : (d.state === 'Closed' ? half + 0.05 : Math.max(0.08, half * (1 - d.progress) * 0.18));
     const b = out || { _door: true, _doorRef: d };
     const thickness = d.state === 'Open' ? 0 : 0.14;
     b.minx = d.axis === 'x' ? d.x - thickness : d.x - span;
@@ -2350,7 +2408,11 @@
     model.rotation.y = d.axis === 'x' ? Math.PI * .5 : 0; model.updateMatrixWorld(true);
     const raw = new THREE.Box3().setFromObject(model), rs = raw.getSize(new THREE.Vector3());
     const span = d.axis === 'x' ? rs.z : rs.x;
-    model.scale.setScalar(Math.min(d.width / Math.max(.001, span), d.height / Math.max(.001, rs.y)));
+    // Fill each room opening exactly (width x height of its wall cut) so no
+    // gap shows around the leaves. Local X is the door's span axis both for
+    // 'x' and 'z' doors (the rotation maps it onto the wall).
+    const sSpan = d.width / Math.max(.001, span), sUp = d.height / Math.max(.001, rs.y);
+    model.scale.set(sSpan, sUp, Math.min(sSpan, sUp));
     model.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(model), c = box.getCenter(new THREE.Vector3());
     model.position.x += -c.x; model.position.z += -c.z; model.position.y += -box.min.y;
     // Pivot on the door plane: mirroring it across the plane flips the swing so the leaves always open away from the hero.
@@ -2521,7 +2583,22 @@
       if (!d._roomDoor || !d.model) return;
       const c = doorCoordinates(d, hero), near = nearDoor(d, c);
       if (c.distance > 4.0) { d.autoRearm = true; d._gateSince = 0; }
-      if (d.state === 'Closed' && near && d.autoRearm && !busyDoor && zoneGateOpen(d) && beginDoorMotion(d, true, c)) busyDoor = d;
+      if (d.state === 'Closed' && near && d.autoRearm && !busyDoor) {
+        let gate = zoneGateOpen(d);
+        if (!gate) {
+          // Standing at the door from outside (K3/K4): ask the streamer to
+          // build the room now, and open once it is ready — or after a short
+          // grace so the door never stays shut for good.
+          const now = performance.now();
+          const first = !d._outsideWaitSince;
+          if (first) d._outsideWaitSince = now;
+          if (first && zoneStreamer && typeof zoneStreamer.forceLoad === 'function') {
+            streamedTargets(d).forEach(function (id) { if (!zoneIsReady(id)) { try { zoneStreamer.forceLoad(id); } catch (_) {} } });
+          }
+          if (now - d._outsideWaitSince > 2500) gate = true;
+        }
+        if (gate && beginDoorMotion(d, true, c)) { busyDoor = d; d._outsideWaitSince = 0; }
+      } else if (!near) d._outsideWaitSince = 0;
       if (d.state === 'Open') {
         // Stay open after the hero leaves — unless the streamed room behind
         // the door has been evicted. An open door into a half-built room is
@@ -4488,7 +4565,7 @@
     deviceProfile: deviceProfile,
     palaceVisible: function () { return state.palaceNear !== false; },
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
-    teleport, overview, runTests, formatReport, cameraTour, current, metrics, corridorReport: () => state.corridorReport,
+    teleport, overview, runTests, formatReport, cameraTour, current, metrics, corridorReport: () => state.corridorReport, corridorWallFill: () => state.corridorWallFill || 0,
     shortestPath,
     assetList, provideAsset, preloadReport,
     provideBake: function (data) { state.bake = data; if (typeof window !== 'undefined') window.__palaceColliderBake = data; },
