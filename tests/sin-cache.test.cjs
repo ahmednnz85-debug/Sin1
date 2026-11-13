@@ -34,6 +34,7 @@ describe('sin cache-proof asset URLs', () => {
   it('does not stamp image, hdr, or other non-model URLs', () => {
     assert.equal(sinAssetUrl('assets/sky_babylon_blood.jpeg', 'abc'), 'assets/sky_babylon_blood.jpeg');
     assert.equal(sinAssetUrl('assets/skyline_ring_a.jpg', 'abc'), 'assets/skyline_ring_a.jpg');
+    assert.equal(sinAssetUrl('assets/distant_city_ring.jpg', 'abc'), 'assets/distant_city_ring.jpg');
     assert.equal(sinAssetUrl('assets/foo.png', 'abc'), 'assets/foo.png');
     assert.equal(sinAssetUrl('assets/env.hdr', 'abc'), 'assets/env.hdr');
   });
@@ -54,7 +55,7 @@ describe('cache-proof boot is wired into the shipped files', () => {
     const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
     assert.match(html, /function __sinPlaceholderSky/);
     assert.match(html, /SKY_IMG failed to load/);
-    assert.match(html, /skyline_ring_a/);
+    assert.match(html, /distant_city_ring\.jpg/);
     assert.match(html, /sinKeepCpu=true;t\.userData\.sinSky=true/);
   });
   it('index.html boots a build stamp and ?sin= redirect, and versions leftover scripts', () => {
