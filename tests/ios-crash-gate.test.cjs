@@ -15,6 +15,13 @@ test('door gate waits until the streamed destination is ready (no 2.5 s give-up)
   assert.match(wings, /function streamedTargets\(/);
   assert.match(wings, /ZONE_DOOR_ABANDON_MS\s*=\s*60000/);
   assert.doesNotMatch(wings, /ZONE_DOOR_WAIT_MS\s*=\s*2500/);
+  assert.doesNotMatch(wings, /_outsideWaitSince\s*>\s*2500/);
+  assert.doesNotMatch(wings, /now - d\._outsideWaitSince > 2500/);
+  assert.match(wings, /Never force-open on a timer/);
+  assert.match(wings, /Stay open while the hero is near or passing/);
+  assert.match(wings, /passing = near \|\| doorOccupied\(d\) \|\| c\.distance <= 4\.0/);
+  assert.match(wings, /APPROACH_DIST = 48/);
+  assert.match(wings, /streamedTargets\(d, cur\)/);
   // A short corridor (K1-KC12) waits for K2 one hop past KC12.
   assert.match(wings, /set\.has\(id\) && h <= 1/);
   // Open passage KC12-K2 still gets a collider until K2 is ready.

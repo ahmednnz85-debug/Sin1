@@ -56,16 +56,20 @@ test('palace braziers retain fixed warm lighting without traveling glow, and out
   assert.match(palace, /fireList\.push\(\{ x: x, y: y \+ targetMeters \* 0\.66, z: z, intensity: intensity/);
   assert.match(palace, /fireMats\.forEach\(function \(m\)[\s\S]{0,150}m\.uniforms\.uTime\.value = clock/);
   assert.doesNotMatch(palace, /m\.uniforms\.uTime\.value = 1\.15/);
-  // Pre-upgrade hall light levels (three-compat restores r147's PI scale).
-  assert.match(palace, /new THREE\.HemisphereLight\(0xffe2b8, 0x5c3a28, 0\.18\)/);
-  assert.match(palace, /new THREE\.AmbientLight\(0xffd0a4, 0\.035\)/);
-  assert.doesNotMatch(palace, /const wash = new THREE\.DirectionalLight/);
-  assert.match(palace, /new THREE\.PointLight\(0xffb15a, 0, 9 \* H, 2\)/);
+  // Throne-hall gold look (user-requested). Rooms/corridors are unchanged:
+  // only PalaceHall* lights and the hall floor/shafts are retuned.
+  assert.match(palace, /new THREE\.HemisphereLight\(0xffe8c0, 0x6a3e1c, 0\.52\)/);
+  assert.match(palace, /new THREE\.AmbientLight\(0xffd0a4, 0\.14\)/);
+  assert.match(palace, /PalaceHallWindowSun/);
+  assert.match(palace, /new THREE\.PointLight\(0xffb15a, 0, 12 \* H, 2\)/);
   assert.doesNotMatch(palace, /const flicker = 0\.92 \+ 0\.05 \* Math\.sin/);
-  assert.match(palace, /lights\[i\]\.distance = 9 \* H/);
+  assert.match(palace, /lights\[i\]\.distance = 12 \* H/);
+  assert.match(palace, /function buildHallLightShafts/);
+  assert.match(palace, /hall-light-shafts/);
   // Fixed braziers: no 4-nearest switching, no fake glow sprites.
   assert.doesNotMatch(palace, /const ACTIVE = 4/);
   assert.doesNotMatch(palace, /spr\.name = 'torch-glow'/);
+  assert.doesNotMatch(palace, /const wash = new THREE\.DirectionalLight/);
   assert.match(index, /sun\.intensity=2\.6/);
   assert.match(index, /sun\.target\.position\.set\(0,0,93\)/);
   assert.match(index, /hemi\.intensity=0\.9/);
