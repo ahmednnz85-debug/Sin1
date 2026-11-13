@@ -10,7 +10,7 @@
    is stale, location.replace with ?sin=<id> — a new URL that both Fastly
    and Safari treat as a new cache key. A visible build stamp lets the player
    confirm which deploy is running. */
-window.__SIN_BUILD__ = "20261113c1";
+window.__SIN_BUILD__ = "20261113c2";
 (function(){
   function badge(id){
     try{
@@ -281,14 +281,39 @@ const HAZE=new THREE.Vector3(0.2373,0.1285,0.0522);                 // golden ho
 scene.fog.color.setRGB(HAZE.x,HAZE.y,HAZE.z);                       // fog fades into the same haze as the sky
 const SKY_THETA=Math.atan2(SUN.z,SUN.x), SKY_ROT=SKY_SUN_U-0.5-SKY_THETA/(2*Math.PI);
 {const e=SKY_SUN_EL+SKY_RAISE,c=Math.cos(e);SUN.set(c*Math.cos(SKY_THETA),Math.sin(e),c*Math.sin(SKY_THETA));} // light = the sun you see in the sky (same azimuth as before, golden-hour elevation)
-let skyTex;
-const skyReady=new Promise(res=>{skyTex=new THREE.TextureLoader().load(SKY_IMG,()=>res(),undefined,()=>res());});
-skyTex.wrapS=THREE.RepeatWrapping;skyTex.wrapT=THREE.ClampToEdgeWrapping;skyTex.minFilter=THREE.LinearFilter;skyTex.magFilter=THREE.LinearFilter;skyTex.generateMipmaps=false;
-skyTex.userData=skyTex.userData||{};skyTex.userData.sinKeepCpu=true;skyTex.userData.sinSky=true;
-let redSkyTex,redSkyLoaded=false;
-const redSkyReady=new Promise(res=>{redSkyTex=new THREE.TextureLoader().load('assets/sky_babylon_blood.jpeg',()=>{redSkyLoaded=true;res(true);},undefined,()=>{console.warn('assets/sky_babylon_blood.jpeg failed to load');res(false);});});
-redSkyTex.wrapS=THREE.RepeatWrapping;redSkyTex.wrapT=THREE.ClampToEdgeWrapping;redSkyTex.minFilter=THREE.LinearFilter;redSkyTex.magFilter=THREE.LinearFilter;redSkyTex.generateMipmaps=false;
-redSkyTex.userData=redSkyTex.userData||{};redSkyTex.userData.sinKeepCpu=true;redSkyTex.userData.sinSky=true;
+function __sinPlaceholderSky(){
+  const c=document.createElement('canvas');c.width=16;c.height=16;
+  const g=c.getContext('2d'),lg=g.createLinearGradient(0,0,0,16);
+  // Same haze/horizon palette as HAZE / fog so a failed photo sky still
+  // reads as the golden-hour dome, never a black void.
+  lg.addColorStop(0,'#6e8aab');lg.addColorStop(0.42,'#c6a77b');lg.addColorStop(1,'#e0b06a');
+  g.fillStyle=lg;g.fillRect(0,0,16,16);
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=THREE.RepeatWrapping;t.wrapT=THREE.ClampToEdgeWrapping;t.minFilter=THREE.LinearFilter;t.magFilter=THREE.LinearFilter;t.generateMipmaps=false;
+  if('colorSpace' in t && THREE.SRGBColorSpace) t.colorSpace=THREE.SRGBColorSpace;
+  else if(THREE.sRGBEncoding) t.encoding=THREE.sRGBEncoding;
+  t.userData={sinKeepCpu:true,sinSky:true};
+  return t;
+}
+let skyTex=__sinPlaceholderSky();
+const skyReady=new Promise(res=>{
+  new THREE.TextureLoader().load(SKY_IMG,function(loaded){
+    skyTex.image=loaded.image;
+    if('colorSpace' in loaded && 'colorSpace' in skyTex) skyTex.colorSpace=loaded.colorSpace;
+    else if('encoding' in loaded) skyTex.encoding=loaded.encoding;
+    skyTex.needsUpdate=true;
+    res();
+  },undefined,function(err){console.warn('SKY_IMG failed to load',err);res();});
+});
+let redSkyTex=__sinPlaceholderSky(),redSkyLoaded=false;
+const redSkyReady=new Promise(res=>{
+  new THREE.TextureLoader().load('assets/sky_babylon_blood.jpeg',function(loaded){
+    redSkyTex.image=loaded.image;
+    if('colorSpace' in loaded && 'colorSpace' in redSkyTex) redSkyTex.colorSpace=loaded.colorSpace;
+    else if('encoding' in loaded) redSkyTex.encoding=loaded.encoding;
+    redSkyTex.needsUpdate=true;redSkyLoaded=true;res(true);
+  },undefined,function(err){console.warn('assets/sky_babylon_blood.jpeg failed to load',err);res(false);});
+});
 function makeSkyPhoto(r){
   const m=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,
     uniforms:{map:{value:skyTex},redMap:{value:redSkyTex},blend:{value:0},rot:{value:SKY_ROT},raise:{value:SKY_RAISE},haze:{value:HAZE},sunDir:{value:SUN}},
@@ -319,6 +344,7 @@ function buildSkyline(){
     for(let i=0;i<=N;i++){const u=i/N,b=b0+u*Math.PI,x=-R*Math.sin(b),z=R*Math.cos(b);pos.push(x,YB,z,x,YB+HGT,z);uv.push(u,0,u,1);if(i<N){const k=i*2;idx.push(k,k+1,k+2,k+1,k+3,k+2);}}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);
     const t=new THREE.TextureLoader().load('assets/'+file,()=>{m.visible=true;},undefined,()=>console.warn(file+' missing - existing sky kept'));
+    t.userData=t.userData||{};t.userData.sinKeepCpu=true;t.userData.sinSky=true;
     t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;t.anisotropy=4;t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;
     const mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,fog:false,side:THREE.DoubleSide,
       uniforms:{map:{value:t},haze:{value:HAZE}},

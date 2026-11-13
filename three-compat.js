@@ -138,14 +138,21 @@ ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
 window.THREE = THREE;
 window.__SIN_THREE_VERSION__ = ThreeModule.REVISION;
 
-// Version every same-origin GLB / JSON / texture load going through Three's
-// FileLoader so a deploy cannot be held by a cached unversioned asset URL.
+// Version same-origin GLB / GLTF / JSON / BIN / WASM fetches going through
+// FileLoader so a deploy cannot be held by a cached unversioned model URL.
+// Do NOT wrap TextureLoader or ImageLoader and do NOT stamp image / data
+// URLs: after #48 those wrappers were the prime suspect for the iPhone
+// photo-sky going pitch black from the first outdoor frame (the sky is a
+// data: JPEG; the blood sky and skyline rings are .jpeg/.jpg). JS cache
+// busting is already handled by fetch({cache:'no-store'}).
 (function hookSinAssetUrls() {
   function sinAssetUrl(url) {
     if (typeof url !== 'string' || !url) return url;
     if (/^(data:|blob:)/i.test(url)) return url;
     if (/jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com|esm\.sh|googleapis\.com|gstatic\.com/i.test(url)) return url;
     if (/[?&](?:v|sin|fix)=/.test(url)) return url;
+    // Only model / data manifests. Images, HDR, audio, etc. pass through.
+    if (!/\.(glb|gltf|json|bin|wasm)(?:$|\?)/i.test(url)) return url;
     const b = (typeof window !== 'undefined' && window.__SIN_BUILD__) || 'dev';
     const sep = url.indexOf('?') >= 0 ? '&' : '?';
     return url + sep + 'v=' + encodeURIComponent(b);
@@ -160,8 +167,6 @@ window.__SIN_THREE_VERSION__ = ThreeModule.REVISION;
     proto.__sinAssetHooked = true;
   }
   wrap(ThreeModule.FileLoader && ThreeModule.FileLoader.prototype);
-  wrap(ThreeModule.TextureLoader && ThreeModule.TextureLoader.prototype);
-  wrap(ThreeModule.ImageLoader && ThreeModule.ImageLoader.prototype);
 })();
 
 
