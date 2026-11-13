@@ -9,6 +9,7 @@ function sinAssetUrl(url, build) {
   if (/^(data:|blob:)/i.test(url)) return url;
   if (/jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com|esm\.sh|googleapis\.com|gstatic\.com/i.test(url)) return url;
   if (/[?&](?:v|sin|fix)=/.test(url)) return url;
+  if (!/\.(glb|gltf|json|bin|wasm)(?:$|\?)/i.test(url)) return url;
   const b = build || 'dev';
   const sep = url.indexOf('?') >= 0 ? '&' : '?';
   return url + sep + 'v=' + encodeURIComponent(b);
@@ -30,6 +31,12 @@ describe('sin cache-proof asset URLs', () => {
   it('appends with & when a different query already exists', () => {
     assert.equal(sinAssetUrl('a.glb?foo=1', 'abc'), 'a.glb?foo=1&v=abc');
   });
+  it('does not stamp image, hdr, or other non-model URLs', () => {
+    assert.equal(sinAssetUrl('assets/sky_babylon_blood.jpeg', 'abc'), 'assets/sky_babylon_blood.jpeg');
+    assert.equal(sinAssetUrl('assets/skyline_ring_a.jpg', 'abc'), 'assets/skyline_ring_a.jpg');
+    assert.equal(sinAssetUrl('assets/foo.png', 'abc'), 'assets/foo.png');
+    assert.equal(sinAssetUrl('assets/env.hdr', 'abc'), 'assets/env.hdr');
+  });
 });
 
 describe('cache-proof boot is wired into the shipped files', () => {
@@ -38,7 +45,17 @@ describe('cache-proof boot is wired into the shipped files', () => {
     const t = fs.readFileSync(path.join(root, 'three-compat.js'), 'utf8');
     assert.match(t, /fetch\(url,\s*\{\s*cache:\s*'no-store'\s*\}\)/);
     assert.match(t, /function sinAssetUrl/);
+    assert.match(t, /FileLoader && ThreeModule\.FileLoader\.prototype/);
+    assert.doesNotMatch(t, /wrap\(ThreeModule\.TextureLoader/);
+    assert.doesNotMatch(t, /wrap\(ThreeModule\.ImageLoader/);
     assert.doesNotMatch(t, /script\.src = original\.dataset\.src/);
+  });
+  it('index.html keeps a golden placeholder sky and pins skyline CPU', () => {
+    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    assert.match(html, /function __sinPlaceholderSky/);
+    assert.match(html, /SKY_IMG failed to load/);
+    assert.match(html, /skyline_ring_a/);
+    assert.match(html, /sinKeepCpu=true;t\.userData\.sinSky=true/);
   });
   it('index.html boots a build stamp and ?sin= redirect, and versions leftover scripts', () => {
     const t = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
