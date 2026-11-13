@@ -10,7 +10,7 @@
    is stale, location.replace with ?sin=<id> — a new URL that both Fastly
    and Safari treat as a new cache key. A visible build stamp lets the player
    confirm which deploy is running. */
-window.__SIN_BUILD__ = "20261113c2";
+window.__SIN_BUILD__ = "20261113c3";
 (function(){
   function badge(id){
     try{
@@ -19,10 +19,18 @@ window.__SIN_BUILD__ = "20261113c2";
         el = document.createElement('div');
         el.id = 'sin-build';
         el.setAttribute('aria-hidden','true');
-        el.style.cssText = 'position:fixed;bottom:3px;left:3px;z-index:99999;font:10px/1.3 ui-monospace,monospace;color:rgba(246,232,208,.9);background:rgba(0,0,0,.4);padding:2px 6px;border-radius:4px;pointer-events:none;direction:ltr';
+        el.style.cssText = 'position:fixed;bottom:3px;left:3px;z-index:99999;font:10px/1.3 ui-monospace,monospace;color:rgba(246,232,208,.9);background:rgba(0,0,0,.45);padding:2px 6px;border-radius:4px;pointer-events:none;direction:ltr;max-width:96vw';
         (document.body||document.documentElement).appendChild(el);
       }
-      el.textContent = 'build ' + id;
+      var prev = document.getElementById('sin-tex-diag');
+        var prevTxt = prev ? prev.textContent : '';
+        el.textContent = '';
+        el.appendChild(document.createTextNode('build ' + id));
+        var d = document.createElement('div');
+        d.id = 'sin-tex-diag';
+        d.style.cssText = 'font:9px/1.25 ui-monospace,monospace;opacity:.92;white-space:pre;margin-top:1px';
+        d.textContent = prevTxt;
+        el.appendChild(d);
     }catch(e){}
   }
   try{ badge(window.__SIN_BUILD__); }catch(e){}
@@ -42,6 +50,12 @@ window.__SIN_BUILD__ = "20261113c2";
     })
     .catch(function(){});
 })();
+window.__sinSetTexDiag = function(t){
+  try{
+    var d = document.getElementById('sin-tex-diag');
+    if(d && typeof t === 'string') d.textContent = t;
+  }catch(e){}
+};
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>سين: لعنة بابل — المشهد الأول</title>
@@ -198,13 +212,13 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 
 
 <script type="text/plain" data-legacy-script data-src="device-profile.js?v=20261112ios6"></script>
-  <script type="text/plain" data-legacy-script data-src="process-memory.js?v=20261112r11"></script>
+  <script type="text/plain" data-legacy-script data-src="process-memory.js?v=20261113c3"></script>
 <script type="text/plain" data-legacy-script data-src="dynamic-resolution.js?v=20261112r4"></script>
 <script type="text/plain" data-legacy-script data-src="memory-overlay.js?v=mem6-diag&r=8"></script>
-<script type="text/plain" data-legacy-script data-src="cinematic.js?v=20261112trace1"></script>
+<script type="text/plain" data-legacy-script data-src="cinematic.js?v=20261113c3"></script>
 <script type="text/plain" data-legacy-script data-src="vendor/clipper.js?v=20261113c1"></script>
 <script type="text/plain" data-legacy-script data-src="wing-architecture.js?v=20261112bake3"></script>
-<script type="text/plain" data-legacy-script data-src="palaceInterior.js?v=hall31&fix=20261112r39"></script>
+<script type="text/plain" data-legacy-script data-src="palaceInterior.js?v=hall31&fix=20261113c3"></script>
 <script type="text/plain" data-legacy-script data-src="wing-gpu-residency.js?v=20261109k4"></script>
 <script type="text/plain" data-legacy-script data-src="wing-visibility.js?v=20261112portal1"></script>
 <script type="text/plain" data-legacy-script data-src="zone-streamer.js?v=20261112ios20"></script>
@@ -266,7 +280,7 @@ resize();
 // ---------- sky (gradient dome, also used as image-based lighting) ----------
 function makeSky(r){
   const m=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,uniforms:{sunDir:{value:SUN}},
-  vertexShader:'varying vec3 vD;void main(){vD=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+  vertexShader:'varying vec3 vD;void main(){vD=position;vec4 cp=projectionMatrix*modelViewMatrix*vec4(position,1.0);cp.z=cp.w*0.9999;gl_Position=cp;}',
   fragmentShader:'varying vec3 vD;uniform vec3 sunDir;void main(){vec3 d=normalize(vD);float h=d.y;'+
   'vec3 hor=vec3(1.0,0.60,0.33),mid=vec3(0.50,0.58,0.78),zen=vec3(0.07,0.17,0.45);'+
   'vec3 c=mix(hor,mid,smoothstep(0.0,0.28,h));c=mix(c,zen,smoothstep(0.22,0.95,h));'+
@@ -317,7 +331,7 @@ const redSkyReady=new Promise(res=>{
 function makeSkyPhoto(r){
   const m=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,
     uniforms:{map:{value:skyTex},redMap:{value:redSkyTex},blend:{value:0},rot:{value:SKY_ROT},raise:{value:SKY_RAISE},haze:{value:HAZE},sunDir:{value:SUN}},
-    vertexShader:'varying vec3 vD;void main(){vD=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+    vertexShader:'varying vec3 vD;void main(){vD=position;vec4 cp=projectionMatrix*modelViewMatrix*vec4(position,1.0);cp.z=cp.w*0.9999;gl_Position=cp;}',
     fragmentShader:'uniform sampler2D map;uniform sampler2D redMap;uniform float blend;uniform float rot;uniform float raise;uniform vec3 haze;uniform vec3 sunDir;varying vec3 vD;\n'+
     'void main(){vec3 d=normalize(vD);float el=asin(clamp(d.y,-1.0,1.0));float eh=el-raise;\n'+
     'float u=fract(atan(d.z,d.x)*0.15915494+0.5+rot);float v=clamp((eh+'+SKY_HORIZON.toFixed(4)+')*0.63661977,0.002,0.998);\n'+
@@ -2038,7 +2052,46 @@ function loop(ts){requestAnimationFrame(loop);try{if(!window.__sinFirstTickLogge
   else{if(insideHall&&window.PalaceInterior.clampFollowTarget)window.PalaceInterior.clampFollowTarget(want);else{let ct=clipFollowCamera(want,hx,hy,hz);if(window.SinGfx)ct=SinGfx.smoothClip(ct,dt);if(ct<1){want.x=hx+(want.x-hx)*ct;want.y=hy+(want.y-hy)*ct;want.z=hz+(want.z-hz)*ct;}}camera.position.lerp(want,introT>=0?1-Math.pow(.0008,dt):1);followCam=true;}
   if(window.PalaceInterior&&PalaceInterior.constrainCamera)PalaceInterior.constrainCamera(camera,hp);
   if(followCam)camera.lookAt(hx,hy,hz);
-  if(!window.__sinCityReleased&&sky){sky.position.copy(camera.position);updateSkyline();}
+  
+function __sinTexSnap(t,R){
+  if(!t)return 'none';
+  var img=t.image||(t.source&&t.source.data);
+  var w=(img&&(img.width||img.naturalWidth))||(t.userData&&t.userData.sinGpuW)||0;
+  var h=(img&&(img.height||img.naturalHeight))||(t.userData&&t.userData.sinGpuH)||0;
+  var gpu=false;
+  try{var p=R&&R.properties&&R.properties.get(t);gpu=!!(p&&(p.__webglTexture||p.__webglInit));}catch(e){}
+  return (w||0)+'x'+(h||0)+(img?' img':' noImg')+(gpu?' gpu':' noGpu')+(t.needsUpdate?' NU':'')+(t.userData&&t.userData.sinCpuReleased?' drop':'');
+}
+function __sinFindMap(scene,name){
+  var found=null;
+  if(!scene||!scene.traverse)return null;
+  scene.traverse(function(o){if(found||!o||o.name!==name)return;var m=o.material&&(Array.isArray(o.material)?o.material[0]:o.material);if(m&&m.map)found=m.map;});
+  return found;
+}
+var __sinDiagAt=0;
+function __sinUpdateTexDiag(){
+  try{
+    var now=(typeof performance!=='undefined'?performance.now():Date.now());
+    if(now-__sinDiagAt<400)return;
+    __sinDiagAt=now;
+    var R=window.__R||(typeof renderer!=='undefined'?renderer:null);
+    var skyU=sky&&sky.material&&sky.material.uniforms;
+    var map=skyU&&skyU.map&&skyU.map.value;
+    var red=skyU&&skyU.redMap&&skyU.redMap.value;
+    var blend=skyU&&skyU.blend?skyU.blend.value:0;
+    var far=camera&&camera.far;
+    var fl=__sinFindMap(scene,'floor')||__sinFindMap(scene,'floor-chunks');
+    var cl=__sinFindMap(scene,'ceiling')||__sinFindMap(scene,'ceiling-chunks');
+    var bk=__sinFindMap(scene,'back-relief');
+    // Chunk holder is named 'floor-chunks'; tiles keep name 'floor'.
+    var line='sky '+__sinTexSnap(map,R)+' red '+__sinTexSnap(red,R)+' b='+(blend!=null?Number(blend).toFixed(2):'?')+' far='+far
+      +' | fl '+__sinTexSnap(fl,R)+' cl '+__sinTexSnap(cl,R)+' bk '+__sinTexSnap(bk,R);
+    if(window.__sinSetTexDiag)window.__sinSetTexDiag(line);
+  }catch(e){}
+}
+
+if(!window.__sinCityReleased&&sky){sky.position.copy(camera.position);updateSkyline();}
+  try{__sinUpdateTexDiag();}catch(e){}
   // Keep the outdoor shadow camera anchored to the gate-to-palace route; following
   // the hero here moved the whole shadow frustum and made nearby shadows swim.
   if(!window.__sinCityReleased&&sun&&sun.target){sun.target.position.set(0,0,93);sun.position.set(0,0,93).addScaledVector(SUN,80);sun.target.updateMatrixWorld();}

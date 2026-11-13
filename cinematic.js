@@ -57,6 +57,14 @@
   try { if (!store.get('tier') && localStorage.getItem('sin.quality') === 'low') mode = 'low'; } catch (_) {}
   let base = mode === 'auto' ? detectTier() : mode;
   let pressure = 0;                                  // 0..3 adaptive (resolution) degradation, not a locked tier
+  try {
+    const qs = new URLSearchParams(location.search);
+    if (qs.has('forceP')) {
+      const v = parseInt(qs.get('forceP'), 10);
+      if (Number.isFinite(v)) window.__sinForcePressure = Math.max(0, Math.min(3, v));
+    }
+    if (window.__sinForcePressure != null) pressure = Math.max(0, Math.min(3, window.__sinForcePressure | 0));
+  } catch (_) {}
   // Target 60 fps (16.7 ms). Drop scale below 55, recover above 59.
   const dynamicResolution = window.SinDynamicResolution ? window.SinDynamicResolution.create({ min: 0.58, max: 1.00, initial: 1.00, downStep: 0.08, upStep: 0.01, lowerFps: 55, upperFps: 59, recoveryMs: 2500 }) : null;
   // After a memory-kill, start a little under native and ramp back up if
@@ -343,7 +351,9 @@
         const zr = window.PalaceWings && PalaceWings.zones && PalaceWings.zones();
         memoryLevel = (zr && zr.memory && zr.memory.level) || 'normal';
       } catch (_) {}
-      if (memoryLevel === 'critical') pressure = Math.min(3, pressure + 1);
+      if (window.__sinForcePressure != null) {
+        pressure = Math.max(0, Math.min(3, window.__sinForcePressure | 0));
+      } else if (memoryLevel === 'critical') pressure = Math.min(3, pressure + 1);
       else if (memoryLevel === 'watch') pressure = Math.min(2, Math.max(pressure, 1));
       else if (pressure > 0) pressure -= 1;
       const change = dynamicResolution.sample(1000 / avg, sampleMs, false, { triangles: perf.tris || 0, memoryLevel: memoryLevel });
@@ -390,6 +400,12 @@
       const main = perf.on && isMain;
       let q = null;
       if (main && tq && !pendingQ) { q = gl.createQuery(); gl.beginQuery(tq.TIME_ELAPSED_EXT, q); }
+      // Must run BEFORE render: Three.js uploads on version mismatch, and
+      // a null-image + bumped version becomes a permanent 1×1 black map.
+      try {
+        if (window.SinProcessMemory && SinProcessMemory.guardNullUploads)
+          SinProcessMemory.guardNullUploads(s, R);
+      } catch (_) {}
       orig(s, c);
       if (q) { gl.endQuery(tq.TIME_ELAPSED_EXT); pendingQ = q; }
       // Record tris/draws even when the on-screen HUD is off (diag / estimator).
@@ -517,6 +533,11 @@
     },
     mode() { return mode; },
     tier() { return base; },
+    setPressure(p) {
+      try { window.__sinForcePressure = Math.max(0, Math.min(3, p | 0)); } catch (_) {}
+      pressure = Math.max(0, Math.min(3, p | 0));
+      return pressure;
+    },
     setMode(m) {
       mode = (m === 'auto' || TIERS[m]) ? m : 'auto';
       base = mode === 'auto' ? detectTier() : mode;

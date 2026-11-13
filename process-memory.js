@@ -147,7 +147,49 @@
     } catch (_) {}
   }
 
-  function dropGeometryCpu(g) {
+  // If CPU pixels were already dropped and something later bumped
+  // texture.version (srgb, capTexture, anisotropy, colorSpace,
+  // material.needsUpdate is separate — this is texture.needsUpdate,
+  // which is a version++), Three.js would re-upload a 1×1 black
+  // default and permanently replace a good GPU copy. That is the
+  // black hall floor/ceiling/back mural (and was the black blood-sky
+  // after the Ishtar gate). Revert version to the uploaded one BEFORE
+  // render so the existing GPU texture is kept.
+  function guardNullUploads(root, renderer) {
+    if (!root || typeof root.traverse !== 'function') return 0;
+    let n = 0;
+    function guard(t) {
+      if (!t || !t.isTexture) return;
+      const img = t.image || (t.source && t.source.data);
+      if (img) return;
+      let uploadedVer = null;
+      try {
+        const p = renderer && renderer.properties && renderer.properties.get(t);
+        if (p && (p.__webglTexture || p.__webglInit) && p.__version != null) uploadedVer = p.__version;
+      } catch (_) {}
+      if (uploadedVer == null) return;
+      if (t.version !== uploadedVer) {
+        t.version = uploadedVer;
+        n++;
+      }
+    }
+    root.traverse(function (o) {
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      mats.forEach(function (m) {
+        if (!m) return;
+        TEX_KEYS.forEach(function (k) { guard(m[k]); });
+        if (m.uniforms) {
+          Object.keys(m.uniforms).forEach(function (uk) {
+            const v = m.uniforms[uk] && m.uniforms[uk].value;
+            if (v && v.isTexture) guard(v);
+          });
+        }
+      });
+    });
+    return n;
+  }
+
+    function dropGeometryCpu(g) {
     // Never detach attribute arrays. Three.js r187 reads array.byteLength
     // on every render (and InstancedMesh / LOD swaps still reference a
     // "disposed" geo). Nulling them threw in the rAF loop past the Ishtar
@@ -597,6 +639,7 @@
       const rr = THREE.WebGLRenderer.prototype.render;
       let frames = 0, lastRelease = 0;
       THREE.WebGLRenderer.prototype.render = function (scene, camera) {
+        try { if (scene) guardNullUploads(scene, this); } catch (_) {}
         const out = rr.apply(this, arguments);
         if (!this.getRenderTarget() && scene) {
           frames++;
@@ -635,6 +678,7 @@
     releaseCpuFromObject: releaseCpuFromObject,
     dropTextureCpu: dropTextureCpu,
     dropGeometryCpu: dropGeometryCpu,
+    guardNullUploads: guardNullUploads,
     dropGltfParser: dropGltfParser,
     installHooks: installHooks,
     peak: function () { return peak; },

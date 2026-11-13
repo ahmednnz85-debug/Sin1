@@ -483,6 +483,13 @@
     startPalaceLoad(lastContext);
   }
 
+  function keepHallTex(t) {
+    if (!t) return t;
+    if (!t.userData) t.userData = {};
+    t.userData.sinKeepCpu = true;
+    t.userData.sinHallShell = true;
+    return t;
+  }
   function srgb(tex) {
     if (!tex) return tex;
     tex.encoding = THREE.sRGBEncoding;
@@ -490,7 +497,10 @@
     tex.generateMipmaps = true;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
-    tex.needsUpdate = true;
+    // Never bump version if the CPU image is already gone — that would
+    // make Three.js replace the good GPU copy with a 1×1 black default.
+    const img = tex.image || (tex.source && tex.source.data);
+    if (img) tex.needsUpdate = true;
     return tex;
   }
 
@@ -698,8 +708,15 @@
       });
     }
     // Drop pixels only for sources already on the GPU.
+    // Hall floor/ceiling/carpet/back (sinKeepCpu) must keep their CPU
+    // image: a later srgb/cap/needsUpdate with a null image would upload
+    // the 1×1 black default and the marble, coffered ceiling and throne
+    // mural go black on the phone (P3 / memory drain). Also skip any
+    // source that still has needsUpdate (pending cap / first upload).
     bySource.forEach(function (arr, source) {
       if (!source.data || !arr.every(function (t) { return textureUploaded(renderer, t); })) return;
+      if (arr.some(function (t) { return t.userData && t.userData.sinKeepCpu; })) return;
+      if (arr.some(function (t) { return !!t.needsUpdate; })) return;
       try {
         const img = source.data;
         source.data = null;
@@ -831,6 +848,7 @@
           tex.magFilter = THREE.LinearFilter;
           tex.needsUpdate = true;
         } else srgb(tex);
+        keepHallTex(tex);
         resolve(tex);
       };
       img.onerror = function () {
@@ -1272,7 +1290,7 @@
     srgb(map);
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
     map.repeat.set(rx, ry);
-    return map;
+    return keepHallTex(map);
   }
 
   function normalizeColumn(node, targetH) {
@@ -2510,11 +2528,11 @@
 
     const floorPadX = Math.max(0.5 * H, wallThick * 0.9);
     const floorPadZ = 0.05 * H;
-    const marble = tex.floor.clone();
+    const marble = keepHallTex(tex.floor.clone());
     srgb(marble);
     marble.wrapS = marble.wrapT = THREE.RepeatWrapping;
     marble.repeat.set((W + floorPadX * 2) / 1.8, (L + floorPadZ * 2) / 1.8);
-    const orm = tex.floorOrm ? tex.floorOrm.clone() : null;
+    const orm = tex.floorOrm ? keepHallTex(tex.floorOrm.clone()) : null;
     if (orm) {
       orm.wrapS = orm.wrapT = THREE.RepeatWrapping;
       orm.repeat.copy(marble.repeat);
@@ -2540,7 +2558,7 @@
     group.add(floor);
     chunkHallPlane(floor, 4, 8);
 
-    const borderMap = tex.floorBorder.clone();
+    const borderMap = keepHallTex(tex.floorBorder.clone());
     srgb(borderMap);
     borderMap.wrapS = borderMap.wrapT = THREE.RepeatWrapping;
     const borderMat = new THREE.MeshStandardMaterial({ map: borderMap, roughness: 0.72, metalness: 0.08 });
@@ -2551,7 +2569,7 @@
       m.rotation.x = -Math.PI / 2;
       m.position.set(x, 0.006 * H, z);
       m.material = borderMat.clone();
-      m.material.map = borderMap.clone();
+      m.material.map = keepHallTex(borderMap.clone());
       srgb(m.material.map);
       m.material.map.wrapS = m.material.map.wrapT = THREE.RepeatWrapping;
       m.material.map.repeat.set(alongX ? w / (1.2 * H) : 1, alongX ? 1 : len / (1.2 * H));
@@ -2581,7 +2599,7 @@
     const tileLen = portrait ? cw * (ih / Math.max(1, iw)) : cw * (iw / Math.max(1, ih));
     function carpetSeg(z0, z1) {
       const len = Math.max(0.2, z1 - z0);
-      const map = carpetSrc.clone();
+      const map = keepHallTex(carpetSrc.clone());
       srgb(map);
       map.wrapS = THREE.ClampToEdgeWrapping;
       map.wrapT = THREE.RepeatWrapping;
@@ -2683,9 +2701,9 @@
     let panelH = CH * 0.94;
     let panelW = panelH * bwA;
     if (panelW > W * 0.94) { panelW = W * 0.94; panelH = panelW / bwA; }
-    const backMap = tex.back.clone();
+    const backMap = keepHallTex(tex.back.clone());
     srgb(backMap);
-    const backEmit = backMap.clone();
+    const backEmit = keepHallTex(backMap.clone());
     srgb(backEmit);
     const backMat = new THREE.MeshStandardMaterial({
       map: backMap, emissive: new THREE.Color(0xffffff), emissiveMap: backEmit, emissiveIntensity: 0.2,
@@ -2805,7 +2823,7 @@
     const ceilOver = wallThick + 0.4 * H;
     const ceilSpanX = W + ceilOver * 2;
     const ceilSpanZ = L + 0.7 * H;
-    const ceilMap = tex.ceiling.clone();
+    const ceilMap = keepHallTex(tex.ceiling.clone());
     srgb(ceilMap);
     ceilMap.wrapS = ceilMap.wrapT = THREE.RepeatWrapping;
     const ceilTile = 4.2 * H;

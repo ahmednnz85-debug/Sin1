@@ -226,3 +226,28 @@ test('releaseCpuFromObject does not drop CPU when needsUpdate is set (cap pendin
   assert.equal(tex.image, img);
   assert.equal(tex.needsUpdate, true);
 });
+
+test('guardNullUploads reverts a bumped version when the CPU image is gone', () => {
+  assert.match(src, /function guardNullUploads/);
+  assert.match(src, /guardNullUploads:\s*guardNullUploads/);
+  // Must run BEFORE renderer.render, not after (upload already happened).
+  assert.match(src, /try \{ if \(scene\) guardNullUploads\(scene, this\); \} catch/);
+  const api = load().SinProcessMemory;
+  const source = { data: null };
+  const tex = { isTexture: true, image: null, source, userData: { sinCpuReleased: true }, version: 7 };
+  const mat = { map: tex };
+  const mesh = { material: mat, traverse(fn) { fn(this); } };
+  const props = new Map();
+  props.set(tex, { __webglTexture: {}, __webglInit: true, __version: 4 });
+  const renderer = { properties: { get(t) { return props.get(t); } } };
+  const n = api.guardNullUploads(mesh, renderer);
+  assert.equal(n, 1);
+  assert.equal(tex.version, 4, 'version must match the live GPU copy so Three.js does not upload a 1×1 black default');
+  // A texture that still has pixels is left alone (pending legitimate upload).
+  tex.image = { width: 64, height: 64 };
+  source.data = tex.image;
+  tex.version = 8;
+  const n2 = api.guardNullUploads(mesh, renderer);
+  assert.equal(n2, 0);
+  assert.equal(tex.version, 8);
+});
