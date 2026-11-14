@@ -4,8 +4,8 @@
    relief walls (robed figures, vessels, crescents, rosette and cuneiform
    friezes), torch sconces, smoking braziers, crescent floor mosaic and the
    grand arched lamassu portal.
-   Everything is primitive GREY by design.  Each family of parts has its own
-   material so it can be painted / textured later:
+   Each family of parts has its own material, allowing the finished room to be
+   painted without changing its geometry or the materials' surface properties:
      SinT1Entrance.setColor('wallTile', 0x23408f)
      SinT1Entrance.setTexture('floor', texture)
      SinT1Entrance.materials  -> { key: MeshStandardMaterial }
@@ -37,6 +37,34 @@
   api.setTexture = function (key, tex) { const m = api.materials[key]; if (m) { m.map = tex || null; m.needsUpdate = true; } return !!m; };
   api.setEmissive = function (key, hex, k) { const m = api.materials[key]; if (m) { m.emissive.set(hex); if (k != null) m.emissiveIntensity = k; } return !!m; };
   api.keys = function () { return Object.keys(PALETTE); };
+
+  // Royal Babylonian finish: setColor changes only material color, preserving
+  // the existing roughness, metalness, emissive settings, and any texture maps.
+  function paintRoyalT1() {
+    api.setColor('wallTile', 0x23408F);
+    api.setColor('relief', 0xA88A61);
+    api.setColor('frieze', 0xB58A42);
+    api.setColor('column', 0x888477);
+    api.setColor('capital', 0xB28A48);
+    api.setColor('floor', 0x242A35);
+    api.setColor('mosaic', 0x193A79);
+    api.setColor('mosaicMoon', 0xD7B45C);
+    api.setColor('inlay', 0xA17B39);
+    api.setColor('door', 0x38291D);
+    api.setColor('doorRelief', 0xC09A50);
+    api.setColor('portal', 0x8B7658);
+    api.setColor('gallery', 0x243A60);
+    api.setColor('beam', 0x403020);
+    api.setColor('ceiling', 0x18263D);
+    api.setColor('window', 0x78B5D9);
+    api.setColor('brazier', 0x87572F);
+    api.setColor('metal', 0xC09A50);
+
+    // Complementary structural slots not listed in the 18-color brief.
+    api.setColor('wallStone', 0x888477);
+    api.setColor('base', 0x888477);
+    api.setColor('floorJoint', 0x242A35);
+  }
 
   /* ---- geometry buckets: merged per material => few draw calls ---------- */
   function Buckets() { this.parts = {}; }
@@ -375,6 +403,7 @@
     for (let x = b.x0 + 1; x < b.x1; x += 2) for (let z = b.z0 + 1; z < b.z1; z += 2) B.add('relief', cyl(0.22, 0.22, 0.06, 12), x, H - 0.08, z);
 
     B.flush(root);
+    paintRoyalT1();
     try { console.info('[T1] sacred entrance built:', root.children.length, 'material groups'); } catch (_) {}
     return root;
   };
