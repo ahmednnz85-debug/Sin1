@@ -91,11 +91,12 @@ test('opening intro and interior-entry cinematics are bypassed while the palace-
   assert.match(palace, /state = 'DONE';\s*fadeT = 0;\s*entranceLeft = 0;/);
 });
 
-test('K4 old asset files are deleted and the room is rebuilt from the split, compressed kits', () => {
-  ['اثاث الخزانة.glb', 'اثاث الخزانة 2.glb', 'اثاث الخزانة 3.glb', 'جدارية الخزانة.glb',
+test('K4 legacy assets are removed unless shared by K5; K4 is rebuilt from split compressed kits', () => {
+  ['اثاث الخزانة.glb', 'اثاث الخزانة 3.glb', 'جدارية الخزانة.glb',
     'ارضية الخزانة.JPG', 'سقف الخزانة .JPG', 'جدارية ايمن الخزانة.JPG'].forEach(f => {
     assert.equal(fs.existsSync(path.join(root, 'assets', f)), false, f + ' must be deleted');
   });
+  assert.ok(fs.existsSync(path.join(root, 'assets', 'اثاث الخزانة 2.glb')), 'K5 still uses this shared furniture source');
   ['k4_kit_a.glb', 'k4_kit_b.glb', 'k4_kit_c.glb', 'k4_front_mural.glb',
     'ارضية-الخزانة.jpg', 'سقف-الخزانة.jpg', 'جدارية-ايمن-الخزانة.jpg'].forEach(f => {
     assert.ok(fs.existsSync(path.join(root, 'ارضيات وسقوف', 'optimized', 'k4', f)), f + ' must exist');
@@ -107,6 +108,7 @@ test('K4 old asset files are deleted and the room is rebuilt from the split, com
   const dress = wings.slice(start, end);
   assert.ok(start >= 0 && end > start);
   assert.doesNotMatch(dress, /futureZone|addTorches|addColumns|boxAt/);
+  assert.doesNotMatch(dress, /اثاث الخزانة 2\.glb/);
 });
 
 test('K4 layout follows the reference picture: mural at the back, altar centre, shelves on the right, king statue on the left', () => {

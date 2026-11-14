@@ -121,10 +121,11 @@
     k5Floor: 'assets/\u0627\u0631\u0636\u064A\u0629 \u0627\u0644\u0645\u0644\u0643.JPG',
     k5Ceiling: 'assets/\u0633\u0642\u0641 \u0627\u0644\u0645\u0644\u0643.JPG',
     k5WallKing: 'assets/\u062C\u062F\u0627\u0631\u064A\u0629 \u0627\u0644\u0645\u0644\u0643.JPG',
-    k5WallWoman: 'assets/\u062C\u062F\u0627\u0631\u064A\u0629 \u0627\u0644\u0645\u0631\u0627\u0654\u0629.PNG',
+    k5WallWoman: 'assets/k5-woman-balcony-mural-red.png',
     k5Bed: 'assets/\u0633\u0631\u064A\u0631 \u0627\u0644\u0645\u0644\u0643.glb',
     k5Steps: 'assets/\u062F\u0631\u062C \u0627\u0644\u0633\u0631\u064A\u0631.glb',
-    k5Furniture: 'assets/\u0627\u062B\u0627\u062B \u0627\u0644\u062E\u0632\u0627\u0646\u0629 2.glb'
+    k5Furniture: 'assets/\u0627\u062B\u0627\u062B \u0627\u0644\u062E\u0632\u0627\u0646\u0629 2.glb',
+    k5Chandelier: 'assets/\u062B\u0631\u064A\u0627 \u0627\u0644\u0645\u062C\u0644\u0633 .glb'
   };
   // K4's authored GLBs have large embedded textures. Keep them out of the
   // palace-entry preload so the first WebGL warm-up fits mobile GPU budgets.
@@ -3831,7 +3832,8 @@
     const pos = [], uv = [], nor = [];
     segs.forEach(r => {
       if (r.s1 - r.s0 < 1.2) return;
-      const y0 = r.door ? Math.min(r.door.height, h) : 0, y1 = h;
+      // Slightly overlap floor/ceiling trims so no black seam is exposed.
+      const y0 = r.door ? Math.min(r.door.height, h) : -0.045, y1 = h + 0.055;
       if (y1 - y0 < 0.02) return;
       const ix = -r.nx * r.inset, iz = -r.nz * r.inset;
       const P = s => [r.a[0] + r.tx * s + ix, r.a[1] + r.tz * s + iz];
@@ -4540,7 +4542,7 @@
     put('statue', b.x1 - 1.0, b.cz + 5.4, -P / 2, 2.8);
     put('throne', b.x1 - 3.2, b.cz, -P / 2, 1.9);
     // Hanging lamp over the middle of the room.
-    put('chandelier', b.cx + 2.0, b.cz, 0, 1.6, { y: h - 1.65, collider: false });
+    // The chandelier is loaded separately from the dedicated المجلس GLB.
     dress.furniture = true;
   }
   function k5PlaceModel(dress, gltf, name, x, z, y, facing, sx, sy, sz, collider) {
@@ -4560,6 +4562,25 @@
     hideUntilReady(holder);
     dress.host.add(holder);
     if (collider) k5Collider(x, z, sx, sz, facing, y, y + sy);
+  }
+  function loadK5Chandelier(dress, onDone) {
+    k3LoadGLB(WING_FILES.k5Chandelier, function (gltf) {
+      if (state.k5Dress !== dress || !gltf) { if (!gltf) dress.errors.push('chandelier failed'); onDone(); return; }
+      const model = gltf.scene; model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+      const targetH = 2.25, scale = targetH / Math.max(1e-4, size.y), seat = dress.height - 0.10;
+      model.scale.setScalar(scale);
+      model.position.set(dress.bbox.cx - c.x * scale, seat - box.max.y * scale, dress.bbox.cz - c.z * scale);
+      model.name = 'K5-majlis-chandelier';
+      model.traverse(function (o) { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.frustumCulled = false; } });
+      hideUntilReady(model); dress.host.add(model);
+      // A handful of restrained animated flame sprites, seated just beneath the lamp cups.
+      const cups = [[0.18,0,0],[ -0.18,0,0],[0,0,0.18],[0,0,-0.18],[0.10,0,-0.21],[-0.10,0,0.21],[0.21,0.0,-0.10],[-0.21,0,0.10]].map(function (q,i) {
+        return { x: dress.bbox.cx + q[0]*scale, y: seat - size.y*scale*0.72, z: dress.bbox.cz + q[2]*scale, s: 0.38, seed: 0.19+i*0.37 };
+      });
+      addK2ChandelierFire(dress.host, cups);
+      dress.chandelier = true; onDone();
+    });
   }
   function dressK5() {
     const r = state.rooms.find(function (q) { return q.id === 'K5'; }), g = state.regionGroups.get('K5');
@@ -4583,8 +4604,7 @@
     if (state.floorMeshes) state.floorMeshes.push(floor);
     dress.floor = true;
 
-    // Walls: king mural behind the bed (west) and on both side walls, the
-    // woman mural with its twin arches on the east wall facing the bed.
+    // Preserve the woman's mural frame and colors; only the view through its arches changes.
     const area = solid(r.poly);
     const freeArea = difference(area, state.baseWall);
     const runs = corridorWallRuns(intersection(state.baseWall, offset(area, 1.6)), freeArea);
@@ -4636,7 +4656,7 @@
       k3LoadGLB(WING_FILES.k5Bed, function (bed) {
         if (!alive()) return;
         // سرير الملك: foot end is +X in the file, so facing 0 looks into the room.
-        if (bed) { k5PlaceModel(dress, bed, 'K5-king-bed', D.cx - 0.25, D.cz, D.h, 0, 3.12, 3.4, 4.27, true); dress.bed = true; }
+        if (bed) { k5PlaceModel(dress, bed, 'K5-king-bed', D.cx - 0.25, D.cz, D.h, 0, 3.65, 3.75, 4.65, true); dress.bed = true; }
         else dress.errors.push('bed failed');
         k3LoadGLB(WING_FILES.k5Furniture, function (kit) {
           if (!alive()) return;
@@ -4644,7 +4664,7 @@
             const by = k5Classify(k3SplitFurniture(kit.scene));
             k5PlaceFurniture(dress, by);
           } else dress.errors.push('furniture failed');
-          done();
+          loadK5Chandelier(dress, function () { done(); });
         });
       });
     });
@@ -4672,9 +4692,9 @@
     ],
     K5: [
       'K5-king-floor', 'K5-king-mural-walls', 'K5-woman-mural-wall', 'K5-king-ceiling',
-      'K5-bed-steps', 'K5-king-bed',
+      'K5-bed-steps', 'K5-king-bed', 'K5-majlis-chandelier',
       'K5-sphinx', 'K5-brazier', 'K5-vase', 'K5-statue', 'K5-throne',
-      'K5-banner', 'K5-winged-disc', 'K5-chandelier'
+      'K5-banner', 'K5-winged-disc'
     ]
   };
   const STREAM_EXPECT_MIN = { K5: { 'K5-sphinx': 2, 'K5-brazier': 2, 'K5-vase': 4, 'K5-statue': 2, 'K5-banner': 2 }, K4: { 'K4-column': 2, 'K4-banner': 2, 'K4-palmPot': 3, 'K4-brazier': 2, 'K4-goldChest': 4, 'K4-vase': 4, 'K4-shelfCabinet': 2 } };
