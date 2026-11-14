@@ -762,6 +762,102 @@
     parts.push(boxAt(1.12, 0.12, 1.12, 0, 0.94, 0));
     return mergeGeometries(parts);
   }
+  // T1 is composed of editable, UV-ready primitives rather than a room asset.
+  // Box/Cylinder/Torus geometries all carry standard UV attributes for later
+  // texture painting. Keep all added stone pieces on one neutral clay material.
+  function addT1Architecture(r, parent) {
+    const b=r.bbox, cx=b.cx, cz=b.cz, h=r.height;
+    const clay=new THREE.MeshStandardMaterial({color:0x858585,roughness:0.92,metalness:0});
+    state.materials.push(clay);
+    const box=(n,w,ht,d,x,y,z)=>{
+      const o=mesh(new THREE.BoxGeometry(w,ht,d),clay,n,parent);o.position.set(x,y,z);return o;
+    };
+    const cyl=(n,rt,rb,ht,x,y,z,segments)=>{
+      const g=new THREE.CylinderGeometry(rt,rb,ht,segments||24,1,false),o=mesh(g,clay,n,parent);o.position.set(x,y,z);return o;
+    };
+    const ring=(n,x,y,z,radius,tube)=>{
+      const g=new THREE.TorusGeometry(radius,tube,8,48),o=mesh(g,clay,n,parent);o.rotation.x=Math.PI/2;o.position.set(x,y,z);return o;
+    };
+    // Room-only overlay: preserves the shared wing floor and all adjacent areas.
+    box('T1-clay-floor-underlay',b.x1-b.x0-0.12,0.055,b.z1-b.z0-0.12,cx,0.035,cz);
+    // Gray interior wall/ceiling liners are clipped around the two existing
+    // six-metre portals; the shared wall shell and neighboring rooms are intact.
+    [-1,1].forEach(side=>{
+      const z=cz+side*(b.z1-b.z0)*0.5-side*0.08;
+      if(side>0){
+        box('T1-gray-side-wall-liner-R-entry',4.9,h-0.18,0.10,b.x0+2.55,(h-0.18)/2,z);
+        box('T1-gray-side-wall-liner-R-sanctum',4.9,h-0.18,0.10,b.x1-2.55,(h-0.18)/2,z);
+      }else box('T1-gray-side-wall-liner-L',b.x1-b.x0-0.18,h-0.18,0.10,cx,(h-0.18)/2,z);
+    });
+    box('T1-gray-ceiling-liner',b.x1-b.x0-0.16,0.08,b.z1-b.z0-0.16,cx,h-0.06,cz);
+    [-1,1].forEach(end=>{
+      const x=end<0?b.x0+0.08:b.x1-0.08;
+      [-1,1].forEach(side=>box('T1-gray-end-wall-return-'+(end<0?'entry':'sanctum')+'-'+(side<0?'L':'R'),0.10,h,3.0,x,h/2,cz+side*4.5));
+    });
+    for(let i=0;i<4;i++) ring('T1-floor-medallion-ring-'+(i+1),cx,0.082,cz,1.15+i*0.34,0.045);
+    cyl('T1-floor-medallion-center',0.92,0.92,0.045,cx,0.065,cz,32);
+    for(let i=0;i<12;i++){
+      const a=i*Math.PI/6, ray=box('T1-floor-rosette-ray-'+(i+1),0.16,0.035,0.62,cx+Math.cos(a)*2.05,0.095,cz+Math.sin(a)*2.05);
+      ray.rotation.y=-a;
+    }
+    // Three paired bays follow the room's long axis; every shaft and capital is independent.
+    [b.x0+3,cx,b.x1-3].forEach((x,i)=>[-1,1].forEach(side=>{
+      const z=cz+side*4.05,p='T1-column-'+(i+1)+(side<0?'-L':'-R'),shaftH=h-1.05;
+      box(p+'-plinth',1.46,0.34,1.46,x,0.17,z);
+      cyl(p+'-base-torus',0.67,0.67,0.12,x,0.40,z,24);
+      cyl(p+'-shaft',0.46,0.57,shaftH-0.48,x,0.56+(shaftH-0.48)/2,z,24);
+      cyl(p+'-neck',0.56,0.52,0.18,x,h-0.75,z,24);
+      box(p+'-abacus',1.38,0.22,1.38,x,h-0.60,z);
+      box(p+'-capital-band',1.18,0.18,1.18,x,h-0.80,z);
+      state.colliders.push({minx:x-0.62,maxx:x+0.62,miny:0,maxy:h,minz:z-0.62,maxz:z+0.62,_wing:true,_t1:true});
+    }));
+    // Symmetric pilasters and stepped geometric relief registers on both walls.
+    [-1,1].forEach(side=>{
+      const wz=cz+side*(b.z1-b.z0)*0.5;
+      [b.x0+1.1,b.x1-1.1].forEach((x,j)=>{
+        box('T1-pilaster-'+(side<0?'L':'R')+'-'+j,0.42,h-0.3,0.38,x,(h-0.3)/2,wz-side*0.28);
+        box('T1-pilaster-cap-'+(side<0?'L':'R')+'-'+j,0.72,0.28,0.70,x,h-0.44,wz-side*0.28);
+      });
+      for(let band=0;band<3;band++){
+        const yy=2.05+band*1.72;
+        box('T1-relief-register-'+(side<0?'L':'R')+'-'+band,b.x1-b.x0-2.5,0.16,0.18,cx,yy,wz-side*0.16);
+        for(let k=0;k<9;k++){
+          const x=b.x0+1.6+k*(b.x1-b.x0-3.2)/8;
+          box('T1-relief-chevron-'+(side<0?'L':'R')+'-'+band+'-'+k,0.20,0.48,0.13,x,yy+0.34,wz-side*0.18).rotation.z=(k%2?-1:1)*0.62;
+        }
+      }
+      // Matching offering basins on carved stems and broad feet.
+      const bx=cx+side*4.9,bz=cz+side*2.7,suffix=side<0?'L':'R';
+      cyl('T1-basin-'+suffix+'-foot',0.35,0.46,0.40,bx,0.20,bz,24);
+      cyl('T1-basin-'+suffix+'-stem',0.24,0.30,0.72,bx,0.76,bz,20);
+      cyl('T1-basin-'+suffix+'-bowl',0.88,0.48,0.42,bx,1.30,bz,28);
+      cyl('T1-basin-'+suffix+'-rim',0.91,0.84,0.12,bx,1.55,bz,28);
+    });
+    // East portal frame. The existing six-metre T1→T2 link remains unobstructed.
+    const px=b.x1-0.35,portalW=6,portalH=5.35;
+    [-1,1].forEach(side=>{
+      const z=cz+side*(portalW/2+0.43),suffix=side<0?'L':'R';
+      box('T1-double-portal-jamb-'+suffix,0.82,portalH,0.82,px,portalH/2,z);
+      box('T1-portal-jamb-base-'+suffix,1.12,0.42,1.10,px,0.21,z);
+      box('T1-portal-jamb-cap-'+suffix,1.18,0.30,1.14,px,portalH-0.14,z);
+    });
+    const archR=portalW/2+0.43,springY=4.75;
+    for(let i=0;i<15;i++){
+      const a=Math.PI*i/14,z=cz+Math.cos(a)*archR,y=springY+Math.sin(a)*archR;
+      const voussoir=box('T1-portal-arch-voussoir-'+(i+1),0.82,0.46,0.72,px,y,z);voussoir.rotation.x=-a;
+    }
+    box('T1-double-door-head-lintel',0.58,0.38,portalW+1.95,px,6.55,cz);
+    // Open double leaves are modeled as separate, recessed panels, leaving a clear walk-through.
+    [-1,1].forEach(side=>{
+      const suffix=side<0?'L':'R',z=cz+side*3.0,openAngle=side*Math.PI/2,x=px-1.35;
+      const leaf=box('T1-double-door-leaf-'+suffix,0.18,4.65,2.72,x,2.55,z);leaf.rotation.y=openAngle;
+      const upper=box('T1-door-panel-upper-'+suffix,0.12,1.35,2.28,x-0.08,3.75,z);upper.rotation.y=openAngle;
+      const lower=box('T1-door-panel-lower-'+suffix,0.12,1.45,2.28,x-0.08,1.65,z);lower.rotation.y=openAngle;
+    });
+    const roundel=cyl('T1-lunar-roundel',0.58,0.58,0.16,px-0.06,7.18,cz,32);roundel.rotation.z=Math.PI/2;
+    const inset=cyl('T1-lunar-roundel-inset',0.38,0.38,0.18,px-0.14,7.18,cz,32);inset.rotation.z=Math.PI/2;
+    parent.userData.t1Architecture={procedural:true,uvReady:true,grayClay:true,separateMeshes:true,portalWidth:portalW,roomBounds:{x0:b.x0,x1:b.x1,z0:b.z0,z1:b.z1,height:h}};
+  }
   function addColumns(r, parent, pairs, radius) {
     if (!pairs.length) return;
     const geo = state.columnGeo || (state.columnGeo = columnGeometry());
@@ -1100,7 +1196,7 @@
       }
       if (r.id === 'K1') { /* procedural geometry removed for GLB model */ loadK1Model(r, g); }
       // K2 columns are the real asset extracted from الاستقبال.glb (dressK2).
-      if (r.id === 'T1') addColumns(r, g, columnPairs(r, 3, 2.3, 2.2), 0.48);
+      if (r.id === 'T1') addT1Architecture(r, g);
       if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
       if (r.id === 'L1') addColumns(r, g, columnPairs(r, 4, 4.0, 3.4), 0.60);
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
