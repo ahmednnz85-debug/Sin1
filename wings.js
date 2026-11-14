@@ -3828,16 +3828,22 @@
   }
   // One copy of a mural across a whole wall. U runs to the viewer's right
   // when they face that wall, so the picture is not mirrored.
-  function k3WallQuads(segs, b, h) {
+  function k3WallQuads(segs, b, h, opts) {
     const pos = [], uv = [], nor = [];
+    opts = opts || {};
+    const minSpan = opts.minSpan == null ? 1.2 : opts.minSpan;
+    const endOverlap = opts.endOverlap || 0;
+    const bottomOverlap = opts.bottomOverlap == null ? 0.045 : opts.bottomOverlap;
+    const topOverlap = opts.topOverlap == null ? 0.055 : opts.topOverlap;
     segs.forEach(r => {
-      if (r.s1 - r.s0 < 1.2) return;
-      // Slightly overlap floor/ceiling trims so no black seam is exposed.
-      const y0 = r.door ? Math.min(r.door.height, h) : -0.045, y1 = h + 0.055;
+      if (r.s1 - r.s0 < minSpan) return;
+      // Overlap adjoining runs at corners and floor/ceiling trims to hide black seams.
+      const y0 = r.door ? Math.min(r.door.height, h) : -bottomOverlap, y1 = h + topOverlap;
       if (y1 - y0 < 0.02) return;
       const ix = -r.nx * r.inset, iz = -r.nz * r.inset;
+      const s0 = r.s0 - endOverlap, s1 = r.s1 + endOverlap;
       const P = s => [r.a[0] + r.tx * s + ix, r.a[1] + r.tz * s + iz];
-      const p0 = P(r.s0), p1 = P(r.s1);
+      const p0 = P(s0), p1 = P(s1);
       const along = p => {
         // corridorWallRuns stores the outward normal (away from the room).
         if (Math.abs(r.nx) >= Math.abs(r.nz)) {
@@ -4615,7 +4621,7 @@
     const west = [], east = [], sides = [];
     runs.forEach(function (seg) { (seg.nx < -0.5 ? west : seg.nx > 0.5 ? east : sides).push(seg); });
     const addWall = function (segs, url, rep, name) {
-      const geo = k3WallQuads(segs, b, h);
+      const geo = k3WallQuads(segs, b, h, { minSpan: 0.02, endOverlap: 0.08, bottomOverlap: 0.18, topOverlap: 0.18 });
       if (geo.attributes.position.count) hideUntilReady(mesh(geo, k5WallMaterial(url, rep), name, g)); else geo.dispose();
     };
     addWall(west, WING_FILES.k5WallKing, 1, 'K5-king-mural-walls-west');
@@ -4655,8 +4661,9 @@
       else dress.errors.push('steps failed');
       k3LoadGLB(WING_FILES.k5Bed, function (bed) {
         if (!alive()) return;
-        // سرير الملك: foot end is +X in the file, so facing 0 looks into the room.
-        if (bed) { k5PlaceModel(dress, bed, 'K5-king-bed', D.cx - 0.25, D.cz, D.h, 0, 3.65, 3.75, 4.65, true); dress.bed = true; }
+        // Center the bed on the steps and overlap the top by 8 cm so mesh tolerances
+        // cannot expose a black hairline between their contact surfaces.
+        if (bed) { k5PlaceModel(dress, bed, 'K5-king-bed', D.cx, D.cz, D.h - 0.08, 0, 3.65, 3.75, 4.65, true); dress.bed = true; }
         else dress.errors.push('bed failed');
         k3LoadGLB(WING_FILES.k5Furniture, function (kit) {
           if (!alive()) return;

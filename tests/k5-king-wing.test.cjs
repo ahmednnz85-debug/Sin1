@@ -27,8 +27,14 @@ test('K5 is a streamed zone expecting bed, steps and the cut furniture', () => {
 });
 
 test('K5 bed is enlarged and uses the dedicated council chandelier with procedural fire', () => {
-  assert.match(wings, /k5PlaceModel\(dress, bed,[^;]*3\.65, 3\.75, 4\.65/);
+  assert.match(wings, /k5PlaceModel\(dress, bed, 'K5-king-bed', D\.cx, D\.cz, D\.h - 0\.08, 0, 3\.65, 3\.75, 4\.65/);
   assert.match(wings, /loadK5Chandelier\(dress/);
   assert.match(wings, /addK2ChandelierFire\(dress\.host, cups\)/);
-  assert.match(wings, /y0 = r\.door \? Math\.min\(r\.door\.height, h\) : -0\.045, y1 = h \+ 0\.055/);
+});
+
+test('K5 wall seams are closed at short runs, corners, ceiling and floor', () => {
+  assert.match(wings, /k3WallQuads\(segs, b, h, \{ minSpan: 0\.02, endOverlap: 0\.08, bottomOverlap: 0\.18, topOverlap: 0\.18 \}\)/);
+  assert.match(wings, /const minSpan = opts\.minSpan == null \? 1\.2 : opts\.minSpan/);
+  assert.match(wings, /const s0 = r\.s0 - endOverlap, s1 = r\.s1 \+ endOverlap/);
+  assert.match(wings, /const y0 = r\.door \? Math\.min\(r\.door\.height, h\) : -bottomOverlap, y1 = h \+ topOverlap/);
 });
