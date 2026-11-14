@@ -1,0 +1,674 @@
+{
+  "source_atlas": "assets/خامات T1.PNG",
+  "source_size": [
+    1536,
+    1024
+  ],
+  "runtime_format": "WebP",
+  "upscaled": false,
+  "resolution_note": "الأطلس المصدر 1536x1024 بكسل فقط، والقصاصات أصغر؛ حُفظت بدقتها الحقيقية بدلاً من تكبير 2K/4K استيفائياً، لأن ذلك لا يضيف تفاصيل أصلية ويزيد استهلاك ذاكرة GPU على الأجهزة المحمولة. يلزم أطلس مصدر أعلى دقة للحصول على تفاصيل أصلية بدقة 2K/4K.",
+  "entries": [
+    {
+      "name": "t1_wall_tile",
+      "source_panel_crop_px": [
+        12,
+        45,
+        270,
+        233
+      ],
+      "surface_crop_px": [
+        12,
+        45,
+        270,
+        233
+      ],
+      "surface_origin_panel": "wall_tile",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_wall_tile.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_wall_tile.webp",
+      "material_slot": "wallTile",
+      "uv_repeat_meters": {
+        "width": 2.2,
+        "height": 1.45
+      },
+      "panel_size_px": [
+        258,
+        188
+      ],
+      "map_size_px": [
+        258,
+        188
+      ],
+      "map_bytes": 27862
+    },
+    {
+      "name": "t1_relief",
+      "source_panel_crop_px": [
+        348,
+        48,
+        578,
+        232
+      ],
+      "surface_crop_px": [
+        385,
+        118,
+        420,
+        153
+      ],
+      "surface_origin_panel": "relief",
+      "surface_note": "قصاصة دقيقة من نقش القماش الحجري؛ تُحفظ لوحة الشخصيات كاملة في المصدر ولا تُلصق على الجدار.",
+      "source_file": "assets/textures/rooms/T1/source/t1_relief.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_relief.webp",
+      "material_slot": "relief",
+      "uv_repeat_meters": {
+        "width": 0.42,
+        "height": 0.42
+      },
+      "panel_size_px": [
+        230,
+        184
+      ],
+      "map_size_px": [
+        35,
+        35
+      ],
+      "map_bytes": 1242
+    },
+    {
+      "name": "t1_frieze",
+      "source_panel_crop_px": [
+        652,
+        47,
+        884,
+        232
+      ],
+      "surface_crop_px": [
+        652,
+        47,
+        884,
+        232
+      ],
+      "surface_origin_panel": "frieze",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_frieze.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_frieze.webp",
+      "material_slot": "frieze",
+      "uv_repeat_meters": {
+        "width": 2.8,
+        "height": 0.42
+      },
+      "panel_size_px": [
+        232,
+        185
+      ],
+      "map_size_px": [
+        232,
+        185
+      ],
+      "map_bytes": 28552
+    },
+    {
+      "name": "t1_column",
+      "source_panel_crop_px": [
+        14,
+        286,
+        130,
+        497
+      ],
+      "surface_crop_px": [
+        20,
+        376,
+        122,
+        427
+      ],
+      "surface_origin_panel": "column",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_column.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_column.webp",
+      "material_slot": "column",
+      "uv_repeat_meters": {
+        "width": 2.55,
+        "height": 0.9
+      },
+      "panel_size_px": [
+        116,
+        211
+      ],
+      "map_size_px": [
+        102,
+        51
+      ],
+      "map_bytes": 3424
+    },
+    {
+      "name": "t1_capital",
+      "source_panel_crop_px": [
+        276,
+        286,
+        493,
+        496
+      ],
+      "surface_crop_px": [
+        300,
+        335,
+        467,
+        414
+      ],
+      "surface_origin_panel": "capital",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_capital.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_capital.webp",
+      "material_slot": "capital",
+      "uv_repeat_meters": {
+        "width": 1.5,
+        "height": 0.9
+      },
+      "panel_size_px": [
+        217,
+        210
+      ],
+      "map_size_px": [
+        167,
+        79
+      ],
+      "map_bytes": 8548
+    },
+    {
+      "name": "t1_column_base",
+      "source_panel_crop_px": [
+        506,
+        286,
+        719,
+        497
+      ],
+      "surface_crop_px": [
+        506,
+        366,
+        719,
+        425
+      ],
+      "surface_origin_panel": "column_base",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_column_base.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_column_base.webp",
+      "material_slot": "base",
+      "uv_repeat_meters": {
+        "width": 2.1,
+        "height": 0.58
+      },
+      "panel_size_px": [
+        213,
+        211
+      ],
+      "map_size_px": [
+        213,
+        59
+      ],
+      "map_bytes": 8796
+    },
+    {
+      "name": "t1_floor",
+      "source_panel_crop_px": [
+        780,
+        285,
+        1035,
+        498
+      ],
+      "surface_crop_px": [
+        780,
+        285,
+        1035,
+        498
+      ],
+      "surface_origin_panel": "floor",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_floor.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_floor.webp",
+      "material_slot": "floor",
+      "uv_repeat_meters": {
+        "width": 1.5,
+        "height": 1.5
+      },
+      "panel_size_px": [
+        255,
+        213
+      ],
+      "map_size_px": [
+        255,
+        213
+      ],
+      "map_bytes": 26166
+    },
+    {
+      "name": "t1_mosaic",
+      "source_panel_crop_px": [
+        956,
+        44,
+        1194,
+        234
+      ],
+      "surface_crop_px": [
+        1160,
+        49,
+        1193,
+        82
+      ],
+      "surface_origin_panel": "mosaic",
+      "surface_note": "فسيفساء البلاط الأزرق فقط، دون الهلال أو إطار اللوحة.",
+      "source_file": "assets/textures/rooms/T1/source/t1_mosaic.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_mosaic.webp",
+      "material_slot": "mosaic",
+      "uv_repeat_meters": {
+        "width": 0.42,
+        "height": 0.42
+      },
+      "panel_size_px": [
+        238,
+        190
+      ],
+      "map_size_px": [
+        33,
+        33
+      ],
+      "map_bytes": 946
+    },
+    {
+      "name": "t1_mosaic_moon",
+      "source_panel_crop_px": [
+        1274,
+        44,
+        1521,
+        234
+      ],
+      "surface_crop_px": [
+        1326,
+        144,
+        1347,
+        164
+      ],
+      "surface_origin_panel": "mosaic_moon",
+      "surface_note": "بلاط ذهبي من داخل الهلال، لا صورة الهلال كاملة.",
+      "source_file": "assets/textures/rooms/T1/source/t1_mosaic_moon.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_mosaic_moon.webp",
+      "material_slot": "mosaicMoon",
+      "uv_repeat_meters": {
+        "width": 0.3,
+        "height": 0.3
+      },
+      "panel_size_px": [
+        247,
+        190
+      ],
+      "map_size_px": [
+        21,
+        20
+      ],
+      "map_bytes": 528
+    },
+    {
+      "name": "t1_inlay",
+      "source_panel_crop_px": [
+        1055,
+        285,
+        1274,
+        498
+      ],
+      "surface_crop_px": [
+        1069,
+        285,
+        1107,
+        498
+      ],
+      "surface_origin_panel": "inlay",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_inlay.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_inlay.webp",
+      "material_slot": "inlay",
+      "uv_repeat_meters": {
+        "width": 0.18,
+        "height": 1.6
+      },
+      "panel_size_px": [
+        219,
+        213
+      ],
+      "map_size_px": [
+        38,
+        213
+      ],
+      "map_bytes": 5556
+    },
+    {
+      "name": "t1_door",
+      "source_panel_crop_px": [
+        14,
+        545,
+        263,
+        740
+      ],
+      "surface_crop_px": [
+        1035,
+        553,
+        1263,
+        735
+      ],
+      "surface_origin_panel": "لوحة العوارض الخشبية الداكنة",
+      "surface_note": "خشب داكن نظيف من لوحة العوارض؛ تُحفظ صورة الباب الأصلية منفصلة ولا تُستخدم كملصق.",
+      "source_file": "assets/textures/rooms/T1/source/t1_door.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_door.webp",
+      "material_slot": "door",
+      "uv_repeat_meters": {
+        "width": 2.1,
+        "height": 1.8
+      },
+      "panel_size_px": [
+        249,
+        195
+      ],
+      "map_size_px": [
+        228,
+        182
+      ],
+      "map_bytes": 18420
+    },
+    {
+      "name": "t1_door_relief",
+      "source_panel_crop_px": [
+        280,
+        545,
+        507,
+        740
+      ],
+      "surface_crop_px": [
+        294,
+        545,
+        497,
+        571
+      ],
+      "surface_origin_panel": "door_relief",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_door_relief.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_door_relief.webp",
+      "material_slot": "doorRelief",
+      "uv_repeat_meters": {
+        "width": 2.0,
+        "height": 0.34
+      },
+      "panel_size_px": [
+        227,
+        195
+      ],
+      "map_size_px": [
+        203,
+        26
+      ],
+      "map_bytes": 4278
+    },
+    {
+      "name": "t1_door_frame",
+      "source_panel_crop_px": [
+        520,
+        545,
+        764,
+        740
+      ],
+      "surface_crop_px": [
+        525,
+        586,
+        546,
+        715
+      ],
+      "surface_origin_panel": "door_frame",
+      "surface_note": "شريط حجري ضيق من قائم إطار الباب الزخرفي.",
+      "source_file": "assets/textures/rooms/T1/source/t1_door_frame.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_door_frame.webp",
+      "material_slot": "doorFrame",
+      "uv_repeat_meters": {
+        "width": 0.28,
+        "height": 1.45
+      },
+      "panel_size_px": [
+        244,
+        195
+      ],
+      "map_size_px": [
+        21,
+        129
+      ],
+      "map_bytes": 2246
+    },
+    {
+      "name": "t1_portal",
+      "source_panel_crop_px": [
+        1291,
+        286,
+        1522,
+        497
+      ],
+      "surface_crop_px": [
+        1303,
+        335,
+        1325,
+        495
+      ],
+      "surface_origin_panel": "portal",
+      "surface_note": "شريط نحت حجري ضيق من لوحة البوابة.",
+      "source_file": "assets/textures/rooms/T1/source/t1_portal.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_portal.webp",
+      "material_slot": "portal",
+      "uv_repeat_meters": {
+        "width": 0.3,
+        "height": 1.4
+      },
+      "panel_size_px": [
+        231,
+        211
+      ],
+      "map_size_px": [
+        22,
+        160
+      ],
+      "map_bytes": 3084
+    },
+    {
+      "name": "t1_gallery",
+      "source_panel_crop_px": [
+        782,
+        545,
+        1015,
+        740
+      ],
+      "surface_crop_px": [
+        782,
+        622,
+        1004,
+        680
+      ],
+      "surface_origin_panel": "gallery",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_gallery.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_gallery.webp",
+      "material_slot": "gallery",
+      "uv_repeat_meters": {
+        "width": 2.2,
+        "height": 0.58
+      },
+      "panel_size_px": [
+        233,
+        195
+      ],
+      "map_size_px": [
+        222,
+        58
+      ],
+      "map_bytes": 9054
+    },
+    {
+      "name": "t1_beam",
+      "source_panel_crop_px": [
+        1025,
+        545,
+        1272,
+        740
+      ],
+      "surface_crop_px": [
+        1035,
+        553,
+        1263,
+        735
+      ],
+      "surface_origin_panel": "beam",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_beam.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_beam.webp",
+      "material_slot": "beam",
+      "uv_repeat_meters": {
+        "width": 2.1,
+        "height": 0.52
+      },
+      "panel_size_px": [
+        247,
+        195
+      ],
+      "map_size_px": [
+        228,
+        182
+      ],
+      "map_bytes": 18420
+    },
+    {
+      "name": "t1_ceiling",
+      "source_panel_crop_px": [
+        1293,
+        545,
+        1520,
+        740
+      ],
+      "surface_crop_px": [
+        1298,
+        548,
+        1368,
+        618
+      ],
+      "surface_origin_panel": "ceiling",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_ceiling.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_ceiling.webp",
+      "material_slot": "ceiling",
+      "uv_repeat_meters": {
+        "width": 0.9,
+        "height": 0.9
+      },
+      "panel_size_px": [
+        227,
+        195
+      ],
+      "map_size_px": [
+        70,
+        70
+      ],
+      "map_bytes": 3094
+    },
+    {
+      "name": "t1_window",
+      "source_panel_crop_px": [
+        13,
+        790,
+        285,
+        1008
+      ],
+      "surface_crop_px": [
+        48,
+        840,
+        128,
+        930
+      ],
+      "surface_origin_panel": "window",
+      "surface_note": "زجاج أزرق وشبكة فقط؛ دون صورة النافذة المقوسة كاملة.",
+      "source_file": "assets/textures/rooms/T1/source/t1_window.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_window.webp",
+      "material_slot": "window",
+      "uv_repeat_meters": {
+        "width": 0.9,
+        "height": 1.25
+      },
+      "panel_size_px": [
+        272,
+        218
+      ],
+      "map_size_px": [
+        80,
+        90
+      ],
+      "map_bytes": 4820
+    },
+    {
+      "name": "t1_brazier",
+      "source_panel_crop_px": [
+        305,
+        790,
+        527,
+        1008
+      ],
+      "surface_crop_px": [
+        320,
+        862,
+        507,
+        901
+      ],
+      "surface_origin_panel": "brazier",
+      "surface_note": "شريط زخرفي معدني من حوض المبخرة، دون صورة الجسم كاملة.",
+      "source_file": "assets/textures/rooms/T1/source/t1_brazier.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_brazier.webp",
+      "material_slot": "brazier",
+      "uv_repeat_meters": {
+        "width": 1.4,
+        "height": 0.38
+      },
+      "panel_size_px": [
+        222,
+        218
+      ],
+      "map_size_px": [
+        187,
+        39
+      ],
+      "map_bytes": 5200
+    },
+    {
+      "name": "t1_metal",
+      "source_panel_crop_px": [
+        543,
+        790,
+        774,
+        1008
+      ],
+      "surface_crop_px": [
+        543,
+        790,
+        774,
+        1008
+      ],
+      "surface_origin_panel": "metal",
+      "surface_note": "قصاصة سطح أُعدت من القسم المطابق في الأطلس.",
+      "source_file": "assets/textures/rooms/T1/source/t1_metal.png",
+      "runtime_map": "assets/textures/rooms/T1/maps/t1_metal.webp",
+      "material_slot": "metal",
+      "uv_repeat_meters": {
+        "width": 0.95,
+        "height": 0.65
+      },
+      "panel_size_px": [
+        231,
+        218
+      ],
+      "map_size_px": [
+        231,
+        218
+      ],
+      "map_bytes": 18674
+    }
+  ],
+  "estimated_decoded_rgba_bytes_with_full_mip_chain": 1944826,
+  "runtime_map_bytes_total": 198910
+}

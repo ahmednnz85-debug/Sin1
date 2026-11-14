@@ -13,30 +13,111 @@
    doorway of the room open. */
 (function () {
   'use strict';
-  const PALETTE = {             // all neutral greys — paint later
+  const PALETTE = {             // fallback colors remain available beneath atlas maps
     wallStone:  0x8a8a8a, wallTile:  0x7a7a7a, frieze:  0x9a9a9a, relief:  0xb0b0b0,
     column:     0x949494, capital:   0xa4a4a4, base:    0x7e7e7e,
     floor:      0x4a4a4a, floorJoint:0x3a3a3a, mosaic:  0x6e6e6e, mosaicMoon: 0xc8c8c8, inlay: 0xa8a8a8,
-    portal:     0x9c9c9c, door:      0x6a6a6a, doorRelief: 0xbababa,
+    portal:     0x9c9c9c, doorFrame: 0x9c9c9c, door: 0x6a6a6a, doorRelief: 0xbababa,
     gallery:    0x888888, ceiling:   0x5e5e5e, beam:    0x707070,
     window:     0xd8dde4, metal:     0x5a5a5a, brazier: 0x8e8e8e, flame: 0xffffff
   };
-  const api = { materials: {}, groups: {}, root: null };
+  const api = { materials: {}, groups: {}, root: null, textureLoadStatus: {} };
+  const textureCache = Object.create(null);
+  const TEXTURE_ROOT = 'assets/textures/rooms/T1/maps/';
+  const TEXTURE_DEFS = [
+    { slot: 'wallTile', file: 't1_wall_tile.webp', tile: [2.2, 1.45] },
+    { slot: 'relief', file: 't1_relief.webp', tile: [0.42, 0.42] },
+    { slot: 'frieze', file: 't1_frieze.webp', tile: [2.8, 0.42] },
+    { slot: 'column', file: 't1_column.webp', tile: [2.55, 0.9] },
+    { slot: 'wallStone', file: 't1_column.webp', tile: [2.55, 0.9] },
+    { slot: 'capital', file: 't1_capital.webp', tile: [1.5, 0.9] },
+    { slot: 'base', file: 't1_column_base.webp', tile: [2.1, 0.58] },
+    { slot: 'floor', file: 't1_floor.webp', tile: [1.5, 1.5] },
+    { slot: 'mosaic', file: 't1_mosaic.webp', tile: [0.42, 0.42] },
+    { slot: 'mosaicMoon', file: 't1_mosaic_moon.webp', tile: [0.3, 0.3] },
+    { slot: 'inlay', file: 't1_inlay.webp', tile: [0.18, 1.6] },
+    { slot: 'door', file: 't1_door.webp', tile: [0.85, 0.42] },
+    { slot: 'doorRelief', file: 't1_door_relief.webp', tile: [2.0, 0.34] },
+    { slot: 'doorFrame', file: 't1_door_frame.webp', tile: [0.28, 1.45] },
+    { slot: 'portal', file: 't1_portal.webp', tile: [0.3, 1.4] },
+    { slot: 'gallery', file: 't1_gallery.webp', tile: [2.2, 0.58] },
+    { slot: 'beam', file: 't1_beam.webp', tile: [2.1, 0.52] },
+    { slot: 'ceiling', file: 't1_ceiling.webp', tile: [0.9, 0.9] },
+    { slot: 'window', file: 't1_window.webp', tile: [0.9, 1.25] },
+    { slot: 'brazier', file: 't1_brazier.webp', tile: [1.4, 0.38] },
+    { slot: 'metal', file: 't1_metal.webp', tile: [0.95, 0.65] }
+  ];
+  const MATERIAL_ALIAS = { columnBase: 'base' };
+  function materialKey(key) { return MATERIAL_ALIAS[key] || key; }
 
   function mat(key) {
     if (api.materials[key]) return api.materials[key];
     const glow = key === 'window' || key === 'flame';
+    const finish = {
+      floor: [0.4, 0.02], wallTile: [0.78, 0.03], mosaic: [0.42, 0.05], mosaicMoon: [0.42, 0.05],
+      metal: [0.38, 0.58], brazier: [0.52, 0.3], capital: [0.62, 0.16], frieze: [0.66, 0.14],
+      inlay: [0.56, 0.25], door: [0.7, 0.03], doorRelief: [0.62, 0.16], doorFrame: [0.76, 0.04],
+      portal: [0.78, 0.03], beam: [0.74, 0.02], window: [0.38, 0.04]
+    }[key] || [0.84, 0.02];
     const m = new THREE.MeshStandardMaterial({
-      color: PALETTE[key], roughness: key === 'floor' ? 0.35 : (key === 'metal' ? 0.5 : 0.85),
-      metalness: key === 'metal' ? 0.4 : 0.02,
+      color: PALETTE[key], roughness: finish[0], metalness: finish[1],
       emissive: glow ? PALETTE[key] : 0x000000, emissiveIntensity: key === 'window' ? 0.55 : (key === 'flame' ? 1.4 : 0)
     });
     m.name = 'T1-mat-' + key; api.materials[key] = m; return m;
   }
-  api.setColor = function (key, hex) { const m = api.materials[key]; if (m) { m.color.set(hex); m.needsUpdate = true; } return !!m; };
-  api.setTexture = function (key, tex) { const m = api.materials[key]; if (m) { m.map = tex || null; m.needsUpdate = true; } return !!m; };
+  api.setColor = function (key, hex) { const m = api.materials[materialKey(key)]; if (m) { m.color.set(hex); m.needsUpdate = true; } return !!m; };
+  api.setTexture = function (key, tex) { const m = api.materials[materialKey(key)]; if (m) { m.map = tex || null; m.needsUpdate = true; } return !!m; };
   api.setEmissive = function (key, hex, k) { const m = api.materials[key]; if (m) { m.emissive.set(hex); if (k != null) m.emissiveIntensity = k; } return !!m; };
   api.keys = function () { return Object.keys(PALETTE); };
+  api.textureKeys = function () { return TEXTURE_DEFS.map(x => x.slot); };
+  api.getTextureLoadStatus = function () { return Object.assign({}, api.textureLoadStatus); };
+
+  function loadAtlasTextures() {
+    if (typeof THREE.TextureLoader !== 'function') return;
+    TEXTURE_DEFS.forEach(function (def) {
+      const material = api.materials[materialKey(def.slot)];
+      if (!material) { api.textureLoadStatus[def.slot] = 'material-missing'; return; }
+      const url = TEXTURE_ROOT + def.file;
+      let texture = textureCache[url];
+      if (!texture) {
+        api.textureLoadStatus[def.slot] = 'loading';
+        texture = new THREE.TextureLoader().load(encodeURI(url), function (loaded) {
+          loaded.wrapS = loaded.wrapT = THREE.MirroredRepeatWrapping;
+          loaded.minFilter = THREE.LinearMipmapLinearFilter;
+          loaded.magFilter = THREE.LinearFilter;
+          loaded.generateMipmaps = true;
+          loaded.encoding = THREE.sRGBEncoding;
+          loaded.anisotropy = 4;
+          loaded.userData = loaded.userData || {};
+          loaded.userData.palaceShared = true;
+          loaded.userData.t1AtlasMap = def.file;
+          loaded.needsUpdate = true;
+          textureCache[url] = loaded;
+          TEXTURE_DEFS.filter(peer => peer.file === def.file).forEach(function (peer) {
+            api.setTexture(peer.slot, loaded);
+            api.setColor(peer.slot, 0xffffff);
+            api.textureLoadStatus[peer.slot] = 'loaded';
+          });
+        }, undefined, function (error) {
+          delete textureCache[url];
+          TEXTURE_DEFS.filter(peer => peer.file === def.file).forEach(peer => { api.textureLoadStatus[peer.slot] = 'error'; });
+          try { console.warn('[T1] texture failed:', def.file, error); } catch (_) {}
+        });
+        texture.wrapS = texture.wrapT = THREE.MirroredRepeatWrapping;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.encoding = THREE.sRGBEncoding;
+        texture.anisotropy = 4;
+        texture.userData = texture.userData || {};
+        texture.userData.palaceShared = true;
+        textureCache[url] = texture;
+      } else {
+        api.textureLoadStatus[def.slot] = texture.image ? 'loaded-cached' : 'loading-cached';
+      }
+      api.setTexture(def.slot, texture);
+      api.setColor(def.slot, 0xffffff);
+    });
+  }
 
   // Royal Babylonian finish: setColor changes only material color, preserving
   // the existing roughness, metalness, emissive settings, and any texture maps.
@@ -52,6 +133,7 @@
     api.setColor('inlay', 0xA17B39);
     api.setColor('door', 0x38291D);
     api.setColor('doorRelief', 0xC09A50);
+    api.setColor('doorFrame', 0x8B7658);
     api.setColor('portal', 0x8B7658);
     api.setColor('gallery', 0x243A60);
     api.setColor('beam', 0x403020);
@@ -67,13 +149,57 @@
   }
 
   /* ---- geometry buckets: merged per material => few draw calls ---------- */
+  function repeatUvs(g, key, type, sx, sy, sz) {
+    const def = TEXTURE_DEFS.find(x => materialKey(x.slot) === key);
+    if (!def || !g.attributes.position || !g.attributes.uv) return;
+    const uv = g.attributes.uv, p = g.attributes.position, tileX = def.tile[0], tileY = def.tile[1];
+    const scale = [Math.abs(sx || 1), Math.abs(sy || 1), Math.abs(sz || 1)];
+    if (type === 'BoxGeometry' && p.count % 6 === 0) {
+      for (let start = 0; start < p.count; start += 6) {
+        const axisScore = function (axis, channel) {
+          let mp = 0, mu = 0;
+          for (let i = start; i < start + 6; i++) { mp += p.getComponent(i, axis); mu += uv.getComponent(i, channel); }
+          mp /= 6; mu /= 6;
+          let cov = 0, vp = 0, vu = 0, lo = Infinity, hi = -Infinity;
+          for (let i = start; i < start + 6; i++) {
+            const dp = p.getComponent(i, axis) - mp, du = uv.getComponent(i, channel) - mu;
+            cov += dp * du; vp += dp * dp; vu += du * du;
+            lo = Math.min(lo, p.getComponent(i, axis)); hi = Math.max(hi, p.getComponent(i, axis));
+          }
+          return { axis: axis, score: vp && vu ? Math.abs(cov) / Math.sqrt(vp * vu) : 0, extent: hi - lo };
+        };
+        const best = [0, 1].map(channel => [0, 1, 2].map(axis => axisScore(axis, channel)).sort((a, b) => b.score - a.score)[0]);
+        if (best[0].axis === best[1].axis) {
+          const alternatives = [0, 1, 2].filter(axis => axis !== best[0].axis).map(axis => axisScore(axis, 1)).sort((a, b) => b.score - a.score);
+          if (alternatives.length) best[1] = alternatives[0];
+        }
+        const uRepeat = best[0].extent * scale[best[0].axis] / tileX;
+        const vRepeat = best[1].extent * scale[best[1].axis] / tileY;
+        for (let i = start; i < start + 6; i++) { uv.setX(i, uv.getX(i) * uRepeat); uv.setY(i, uv.getY(i) * vRepeat); }
+      }
+    } else if (type === 'CylinderGeometry' || type === 'LatheGeometry') {
+      g.computeBoundingBox();
+      const b = g.boundingBox, diameter = (b.max.x - b.min.x) * scale[0] + (b.max.z - b.min.z) * scale[2];
+      const circumference = Math.PI * diameter / 2;
+      const height = (b.max.y - b.min.y) * scale[1];
+      for (let i = 0; i < uv.count; i++) { uv.setX(i, uv.getX(i) * circumference / tileX); uv.setY(i, uv.getY(i) * height / tileY); }
+    } else {
+      g.computeBoundingBox();
+      const b = g.boundingBox;
+      const width = (b.max.x - b.min.x) * scale[0], height = (b.max.y - b.min.y) * scale[1];
+      for (let i = 0; i < uv.count; i++) { uv.setX(i, uv.getX(i) * width / tileX); uv.setY(i, uv.getY(i) * height / tileY); }
+    }
+    uv.needsUpdate = true;
+  }
   function Buckets() { this.parts = {}; }
   Buckets.prototype.add = function (key, geo, x, y, z, ry, rx, rz, sx, sy, sz) {
     const m4 = new THREE.Matrix4();
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0, 'YXZ'));
     m4.compose(new THREE.Vector3(x || 0, y || 0, z || 0), q, new THREE.Vector3(sx || 1, sy || 1, sz || 1));
+    const type = geo.type;
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
     if (geo.index) geo.dispose();
+    repeatUvs(g, key, type, sx, sy, sz);
     g.applyMatrix4(m4);
     (this.parts[key] || (this.parts[key] = [])).push(g);
   };
@@ -325,7 +451,7 @@
           const top = hh + 0.35, archR = half + jw, avail = H - 1.0 - top;
           const ar = Math.min(archR, avail);
           if (ar > 0.6) {
-            put(B, F, 'portal', new THREE.RingGeometry(ar - 0.35, ar, 32, 1, 0, Math.PI), o.u, top, 0.47);
+            put(B, F, 'doorFrame', new THREE.RingGeometry(ar - 0.35, ar, 32, 1, 0, Math.PI), o.u, top, 0.47);
             put(B, F, 'relief', new THREE.RingGeometry(ar - 0.45, ar - 0.38, 32, 1, 0, Math.PI), o.u, top, 0.48);
             put(B, F, 'wallTile', new THREE.CircleGeometry(ar - 0.35, 32, 0, Math.PI), o.u, top, 0.44);
             put(B, F, 'doorRelief', crescent(ar * 0.36, ar * 0.29, ar * 0.13, 0.05), o.u, top + ar * 0.42, 0.45);
@@ -404,6 +530,7 @@
 
     B.flush(root);
     paintRoyalT1();
+    loadAtlasTextures();
     try { console.info('[T1] sacred entrance built:', root.children.length, 'material groups'); } catch (_) {}
     return root;
   };
