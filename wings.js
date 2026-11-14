@@ -116,7 +116,15 @@
     k2Reception: OPT_DIR + 'عمود-المجلس.glb',
     k2Meetings: 'assets/اجتماعات .glb',
     k3Table: 'assets/طاولة الخرائط.glb',
-    k3Furniture: 'assets/اثاث_الخرائط.glb'
+    k3Furniture: 'assets/اثاث_الخرائط.glb',
+    // K5 king private wing: only the supplied repository artwork and models.
+    k5Floor: 'assets/\u0627\u0631\u0636\u064A\u0629 \u0627\u0644\u0645\u0644\u0643.JPG',
+    k5Ceiling: 'assets/\u0633\u0642\u0641 \u0627\u0644\u0645\u0644\u0643.JPG',
+    k5WallKing: 'assets/\u062C\u062F\u0627\u0631\u064A\u0629 \u0627\u0644\u0645\u0644\u0643.JPG',
+    k5WallWoman: 'assets/\u062C\u062F\u0627\u0631\u064A\u0629 \u0627\u0644\u0645\u0631\u0627\u0654\u0629.PNG',
+    k5Bed: 'assets/\u0633\u0631\u064A\u0631 \u0627\u0644\u0645\u0644\u0643.glb',
+    k5Steps: 'assets/\u062F\u0631\u062C \u0627\u0644\u0633\u0631\u064A\u0631.glb',
+    k5Furniture: 'assets/\u0627\u062B\u0627\u062B \u0627\u0644\u062E\u0632\u0627\u0646\u0629 2.glb'
   };
   // K4's authored GLBs have large embedded textures. Keep them out of the
   // palace-entry preload so the first WebGL warm-up fits mobile GPU budgets.
@@ -804,20 +812,7 @@
       state.floorSupport.push(support);
       futureZone(T4, tg, 'ALTAR', T4.bbox.x1 - 4, T4.bbox.cz, 4, 3);
     }
-    const K5 = state.rooms.find(r => r.id === 'K5'), kg = state.regionGroups.get('K5');
-    if (K5 && kg) {
-      const bx = K5.bbox.cx, bz = K5.bbox.z1 - 1.5;
-      const balcony = mesh(boxAt(14, 1.2, 3, bx - 2, 0.6, bz), stone, 'K5-balcony', kg);
-      state.floorSupport.push(balcony);
-      const ramp = [];
-      for (let i = 0; i < 6; i++) ramp.push(boxAt(14, (i + 1) * 0.2, 0.5, bx - 2, (i + 1) * 0.1, K5.bbox.z1 - 5.75 + i * 0.5));
-      const rampMesh = mesh(mergeGeometries(ramp), stone, 'K5-balcony-ramp', kg); state.floorSupport.push(rampMesh);
-      const rails = [boxAt(14, 0.16, 0.18, bx - 2, 2.05, bz - 1.42)];
-      for (let x = bx - 8.5; x <= bx + 4.5; x += 1.3) rails.push(boxAt(0.12, 0.9, 0.12, x, 1.65, bz - 1.42));
-      mesh(mergeGeometries(rails), stone, 'K5-balustrade', kg);
-      mesh(boxAt(3, 0.08, 5, K5.bbox.x1 - 2, 0.06, K5.bbox.z1 - 4), dark, 'K5-closed-dark-shaft', kg);
-      state.colliders.push({ minx: bx - 9, maxx: bx + 5, miny: 1.1, maxy: 2.2, minz: bz - 1.55, maxz: bz - 1.28, _wing: true });
-    }
+    // K5 has no procedural props: dressK5 uses only the supplied assets.
     const sealed = state.hall.passages.find(p => p.id === 'passage-L0');
     if (sealed) {
       const sg = new THREE.Group(); sg.name = 'L1-sealed-arch'; state.root.add(sg);
@@ -1109,8 +1104,8 @@
       if (r.id === 'L1') addColumns(r, g, columnPairs(r, 4, 4.0, 3.4), 0.60);
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
       if (r.id !== 'K1') {
-        if (r.id !== 'K4') addFutureZones(r, g);
-        if (r.id !== 'K2' && r.id !== 'K3' && r.id !== 'K4') addTorches(r);
+        if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
+        if (r.id !== 'K2' && r.id !== 'K3' && r.id !== 'K4' && r.id !== 'K5') addTorches(r);
       }
     }
     vis('regions');
@@ -2664,7 +2659,7 @@
     wingDoorLoadStarted = false;
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
-    state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null;
+    state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null; state.k5Dress = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0; state.gpuResidency = null; state.renderBudget = null;
     dressedRooms.clear(); zoneDone.clear(); dressFailures.length = 0; state.deferredDress.clear(); state._streamSets = null; zoneDistKey = ''; zoneDist = null;
     if (zoneStreamer) zoneStreamer.reset();
@@ -2878,7 +2873,12 @@
       load: function () { dressK4(); loadK4Assets(); },
       isComplete: function () { return roomCompleteness('K4').complete; },
       unload: function (api) { state.k4Dress = null; state.colliders = state.colliders.filter(function (c) { return !c._k4Prop; }); if (api.group) api.group.userData.k4Dressed = false; },
-      ownsObject: streamedName('K4') }
+      ownsObject: streamedName('K4') },
+    { id: 'K5', prefetchHops: deviceProfile.prefetchHops, priority: 3,
+      load: function () { dressK5(); },
+      isComplete: function () { return roomCompleteness('K5').complete; },
+      unload: function (api) { state.k5Dress = null; state.colliders = state.colliders.filter(function (c) { return !c._k5Prop; }); if (api.group) api.group.userData.k5Dressed = false; },
+      ownsObject: streamedName('K5') }
   ];
   function zonePrepare(api) {
     // Material fixes that change the shader program must happen BEFORE the
@@ -3187,11 +3187,7 @@
       if (x > start) return Math.min(1.5, (x - start) / (end - start) * 1.5);
     }
     const K5 = state.rooms.find(r => r.id === 'K5');
-    if (K5 && pointInPoly(x, z, K5.poly) && x < K5.bbox.x1 - 5) {
-      const rampStart = K5.bbox.z1 - 6, balcony = K5.bbox.z1 - 3;
-      if (z >= balcony) return 1.2;
-      if (z > rampStart) return (z - rampStart) / 3 * 1.2;
-    }
+    if (K5 && pointInPoly(x, z, K5.poly)) return k5DaisHeight(K5.bbox, x, z);
     return 0;
   }
   function resolveCamera(cam) {
@@ -4431,6 +4427,228 @@
   // Named assets that MUST be resident before a streamed room is revealed or
   // its door opens. Walls-only is not complete (the K3/K4 pop-in). Visibility
   // is checked separately (`revealed`) after the atomic dress reveal.
+  /* ---------------------------------------------------------------------------
+     K5 king private wing. Dressed only with the repository assets, laid out
+     after the king-bedroom reference picture: canopy bed on its round stepped
+     dais against the west wall under the king mural, winged lions on plinths
+     flanking it, the woman mural (twin arches) on the opposite east wall,
+     and the pieces cut from اثاث الخزانة 2 around the room. No procedural props.
+  --------------------------------------------------------------------------- */
+  const K5_DAIS = { radius: 3.6, height: 0.66, wallGap: 0.3 };
+  function k5Dais(b) {
+    return { cx: b.x0 + K5_DAIS.wallGap + K5_DAIS.radius, cz: b.cz, r: K5_DAIS.radius, h: K5_DAIS.height };
+  }
+  // Walkable profile of درج السرير: three tiers (outer ring, middle ring, top).
+  function k5DaisHeight(b, x, z) {
+    const d = k5Dais(b), r = Math.hypot(x - d.cx, z - d.cz);
+    if (r > d.r) return 0;
+    if (r > d.r * 0.85) return d.h / 3;
+    if (r > d.r * 0.77) return d.h * 2 / 3;
+    return d.h;
+  }
+  // Pieces of اثاث الخزانة 2 after k3SplitFurniture, identified by their
+  // centre in the source file. yaw turns the piece's own front to +Z.
+  const K5_PIECES = [
+    { kind: 'throne', c: [-0.157, -0.178, 0.37], yaw: 0 },
+    { kind: 'chandelier', c: [0.16, -0.191, -0.34], yaw: 0 },
+    { kind: 'sphinx', c: [0.033, 0.141, -0.198], yaw: 0 },
+    { kind: 'statue', c: [-0.162, 0.178, 0.405], yaw: -Math.PI / 2 },
+    { kind: 'brazier', c: [-0.034, -0.188, 0.102], yaw: 0 },
+    { kind: 'banner', c: [0.145, 0.182, -0.422], yaw: -Math.PI / 2 },
+    { kind: 'winged-disc', c: [-0.07, 0.186, 0.134], yaw: -Math.PI / 2 },
+    { kind: 'vase', c: [0.016, -0.205, -0.121], yaw: 0 }
+  ];
+  function k5Classify(pieces) {
+    const by = {};
+    K5_PIECES.forEach(function (ref) {
+      let best = null, bestD = 0.06;
+      pieces.forEach(function (p) {
+        if (p._used) return;
+        const d = Math.hypot(p.center.x - ref.c[0], p.center.y - ref.c[1], p.center.z - ref.c[2]);
+        if (d < bestD) { bestD = d; best = p; }
+      });
+      if (best) { best._used = true; by[ref.kind] = { piece: best, yaw: ref.yaw }; }
+    });
+    return by;
+  }
+  function k5WallMaterial(url, repeatU) {
+    let map = corridorTexture(url);
+    if (repeatU !== 1) map = map.clone();
+    map.wrapS = THREE.RepeatWrapping; map.wrapT = THREE.ClampToEdgeWrapping;
+    map.repeat.set(repeatU, 1); map.needsUpdate = true;
+    const m = new THREE.MeshStandardMaterial({
+      map: map, roughness: 0.7, metalness: 0.06,
+      emissive: new THREE.Color(0x1a140c), emissiveIntensity: 0.12
+    });
+    state.materials.push(m);
+    return m;
+  }
+  // Facing f: the object's front points to (sin f, 0, cos f).
+  function k5Collider(x, z, sx, sz, rot, y0, y1) {
+    const c = Math.abs(Math.cos(rot)), sn = Math.abs(Math.sin(rot));
+    const wx = sx * 0.5 * c + sz * 0.5 * sn, wz = sx * 0.5 * sn + sz * 0.5 * c;
+    state.colliders.push({ minx: x - wx, maxx: x + wx, miny: y0, maxy: y1, minz: z - wz, maxz: z + wz, _wing: true, _k5Prop: true });
+  }
+  function k5PlaceFurniture(dress, by) {
+    const g = dress.host, b = dress.bbox, h = dress.height, D = k5Dais(b), P = Math.PI;
+    const seated = {};
+    Object.keys(by).forEach(function (k) {
+      const p = by[k].piece;
+      p.geo.translate(-p.center.x, -p.min.y, -p.center.z);
+      p.geo.computeBoundingSphere();
+      seated[k] = p;
+    });
+    let n = 0;
+    const put = function (kind, x, z, facing, fitH, opt) {
+      const p = seated[kind];
+      if (!p) { dress.errors.push('missing piece ' + kind); return; }
+      opt = opt || {};
+      const s = fitH / Math.max(1e-4, p.size.y), rot = facing + by[kind].yaw, y = opt.y || 0;
+      const holder = new THREE.Group();
+      holder.name = 'K5-' + kind + '-' + (n++);
+      holder.position.set(x, y, z);
+      holder.rotation.y = rot;
+      const m = new THREE.Mesh(p.geo, p.mat);
+      m.name = holder.name + '-mesh';
+      m.scale.setScalar(s);
+      m.castShadow = false; m.receiveShadow = true;
+      holder.add(m);
+      hideUntilReady(holder);
+      g.add(holder);
+      if (opt.collider !== false) k5Collider(x, z, p.size.x * s, p.size.z * s, rot, y, y + p.size.y * s);
+    };
+    const edge = D.cx + D.r;
+    // Winged lions on their plinths, flanking the bed and facing the room.
+    put('sphinx', b.x0 + 1.45, b.cz - 4.7, P / 2, 1.7);
+    put('sphinx', b.x0 + 1.45, b.cz + 4.7, P / 2, 1.7);
+    // Winged disc above the headboard, on the king mural.
+    put('winged-disc', b.x0 + 0.3, b.cz, P / 2, 1.0, { y: 4.4, collider: false });
+    // Fire bowls at the foot of the dais steps.
+    put('brazier', edge + 0.9, b.cz - 2.8, -P / 2, 1.5);
+    put('brazier', edge + 0.9, b.cz + 2.8, -P / 2, 1.5);
+    // Moon banners on the side walls beside the bed.
+    put('banner', b.x0 + 7.0, b.z0 + 0.45, 0, 3.2, { y: 1.3, collider: false });
+    put('banner', b.x0 + 7.0, b.z1 - 0.45, P, 3.2, { y: 1.3, collider: false });
+    // Tall vases in the four corners.
+    put('vase', b.x0 + 0.9, b.z0 + 0.9, P / 4, 1.3);
+    put('vase', b.x0 + 0.9, b.z1 - 0.9, 3 * P / 4, 1.3);
+    put('vase', b.x1 - 0.9, b.z0 + 0.9, -P / 4, 1.3);
+    put('vase', b.x1 - 0.9, b.z1 - 0.9, -3 * P / 4, 1.3);
+    // East side, in front of the arched woman mural: crowned statues and the
+    // lion throne looking back across the room toward the bed.
+    put('statue', b.x1 - 1.0, b.cz - 5.4, -P / 2, 2.8);
+    put('statue', b.x1 - 1.0, b.cz + 5.4, -P / 2, 2.8);
+    put('throne', b.x1 - 3.2, b.cz, -P / 2, 1.9);
+    // Hanging lamp over the middle of the room.
+    put('chandelier', b.cx + 2.0, b.cz, 0, 1.6, { y: h - 1.65, collider: false });
+    dress.furniture = true;
+  }
+  function k5PlaceModel(dress, gltf, name, x, z, y, facing, sx, sy, sz, collider) {
+    const model = gltf.scene;
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+    const kx = sx / Math.max(1e-4, size.x), ky = sy / Math.max(1e-4, size.y), kz = sz / Math.max(1e-4, size.z);
+    model.scale.set(kx, ky, kz);
+    model.position.set(-c.x * kx, -box.min.y * ky, -c.z * kz);
+    const holder = new THREE.Group();
+    holder.name = name;
+    holder.position.set(x, y, z);
+    holder.rotation.y = facing;
+    holder.add(model);
+    model.traverse(function (o) { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
+    hideUntilReady(holder);
+    dress.host.add(holder);
+    if (collider) k5Collider(x, z, sx, sz, facing, y, y + sy);
+  }
+  function dressK5() {
+    const r = state.rooms.find(function (q) { return q.id === 'K5'; }), g = state.regionGroups.get('K5');
+    if (!r || !g) return;
+    if (state.k5Dress && state.k5Dress.host === g && (state.k5Dress.loading || findNamed(g, 'K5-king-floor').length)) return;
+    const b = r.bbox, h = r.height, w = b.x1 - b.x0, d = b.z1 - b.z0;
+    const dress = state.k5Dress = { host: g, bbox: b, height: h, errors: [], loading: true, floor: false, walls: false, ceiling: false, bed: false, steps: false, furniture: false };
+
+    // ارضية الملك repeated as whole tiles across the floor (about 4 m each).
+    const floorMap = corridorTexture(WING_FILES.k5Floor);
+    floorMap.wrapS = floorMap.wrapT = THREE.RepeatWrapping;
+    floorMap.repeat.set(Math.max(1, Math.round(w / 4)), Math.max(1, Math.round(d / 4)));
+    const floorMat = new THREE.MeshStandardMaterial({ map: floorMap, roughness: 0.32, metalness: 0.04, emissive: new THREE.Color(0x0c0a10), emissiveIntensity: 0.06 });
+    state.materials.push(floorMat);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
+    floor.name = 'K5-king-floor';
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(b.cx, 0.018, b.cz);
+    floor.receiveShadow = true; floor.renderOrder = 2;
+    g.add(floor); hideUntilReady(floor);
+    if (state.floorMeshes) state.floorMeshes.push(floor);
+    dress.floor = true;
+
+    // Walls: king mural behind the bed (west) and on both side walls, the
+    // woman mural with its twin arches on the east wall facing the bed.
+    const area = solid(r.poly);
+    const freeArea = difference(area, state.baseWall);
+    const runs = corridorWallRuns(intersection(state.baseWall, offset(area, 1.6)), freeArea);
+    state.doors.filter(function (door) { return door.kind !== 'arch' && door.openPoly && (door.from === 'K5' || door.to === 'K5'); }).forEach(function (door) {
+      const op = solid(door.openPoly);
+      corridorWallRuns(op, difference(freeArea, op)).forEach(function (seg) { seg.door = door; runs.push(seg); });
+    });
+    const west = [], east = [], sides = [];
+    runs.forEach(function (seg) { (seg.nx < -0.5 ? west : seg.nx > 0.5 ? east : sides).push(seg); });
+    const addWall = function (segs, url, rep, name) {
+      const geo = k3WallQuads(segs, b, h);
+      if (geo.attributes.position.count) hideUntilReady(mesh(geo, k5WallMaterial(url, rep), name, g)); else geo.dispose();
+    };
+    addWall(west, WING_FILES.k5WallKing, 1, 'K5-king-mural-walls-west');
+    addWall(sides, WING_FILES.k5WallKing, 2, 'K5-king-mural-walls-sides');
+    addWall(east, WING_FILES.k5WallWoman, 1, 'K5-woman-mural-wall');
+    dress.walls = true;
+
+    const ceilingMat = new THREE.MeshStandardMaterial({
+      map: k3ClampedMap(WING_FILES.k5Ceiling), color: 0xf0e2c4, roughness: 0.8, metalness: 0.02,
+      side: THREE.DoubleSide, emissive: new THREE.Color(0x0e0c18), emissiveIntensity: 0.1
+    });
+    state.materials.push(ceilingMat);
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(w, d), ceilingMat);
+    ceiling.name = 'K5-king-ceiling';
+    ceiling.rotation.x = -Math.PI / 2;
+    ceiling.position.set(b.cx, h - 0.045, b.cz);
+    ceiling.userData.ceiling = true;
+    ceiling.visible = !state.cutaway;
+    g.add(ceiling); hideUntilReady(ceiling);
+    state.ceilings.push(ceiling);
+    dress.ceiling = true;
+
+    const D = k5Dais(b);
+    const alive = function () { return state.k5Dress === dress && dress.host === g; };
+    const done = function () {
+      dress.loading = false;
+      if (dress.errors.length) console.warn('K5 dress', dress.errors);
+      if (g.userData) g.userData.k5Dressed = true;
+      rebuildSpatial();
+      if (state.root) state.root.updateMatrixWorld(true);
+      markDressReady('K5');
+    };
+    // Sequential loads so two Draco parses never overlap on mobile.
+    k3LoadGLB(WING_FILES.k5Steps, function (steps) {
+      if (!alive()) return;
+      if (steps) { k5PlaceModel(dress, steps, 'K5-bed-steps', D.cx, D.cz, 0, 0, D.r * 2, D.h, D.r * 2, false); dress.steps = true; }
+      else dress.errors.push('steps failed');
+      k3LoadGLB(WING_FILES.k5Bed, function (bed) {
+        if (!alive()) return;
+        // سرير الملك: foot end is +X in the file, so facing 0 looks into the room.
+        if (bed) { k5PlaceModel(dress, bed, 'K5-king-bed', D.cx - 0.25, D.cz, D.h, 0, 3.12, 3.4, 4.27, true); dress.bed = true; }
+        else dress.errors.push('bed failed');
+        k3LoadGLB(WING_FILES.k5Furniture, function (kit) {
+          if (!alive()) return;
+          if (kit) {
+            const by = k5Classify(k3SplitFurniture(kit.scene));
+            k5PlaceFurniture(dress, by);
+          } else dress.errors.push('furniture failed');
+          done();
+        });
+      });
+    });
+  }
   const STREAM_EXPECT = {
     K2: [
       'K2-majlis-floor', 'K2-majlis-walls', 'K2-majlis-ceiling',
@@ -4451,9 +4669,15 @@
       'K4-column', 'K4-banner', 'K4-palmPot', 'K4-chandelier',
       'K4-brazier', 'K4-goldChest', 'K4-vase', 'K4-shelfCabinet',
       'K4-candelabra', 'K4-lionSphinx'
+    ],
+    K5: [
+      'K5-king-floor', 'K5-king-mural-walls', 'K5-woman-mural-wall', 'K5-king-ceiling',
+      'K5-bed-steps', 'K5-king-bed',
+      'K5-sphinx', 'K5-brazier', 'K5-vase', 'K5-statue', 'K5-throne',
+      'K5-banner', 'K5-winged-disc', 'K5-chandelier'
     ]
   };
-  const STREAM_EXPECT_MIN = { K4: { 'K4-column': 2, 'K4-banner': 2, 'K4-palmPot': 3, 'K4-brazier': 2, 'K4-goldChest': 4, 'K4-vase': 4, 'K4-shelfCabinet': 2 } };
+  const STREAM_EXPECT_MIN = { K5: { 'K5-sphinx': 2, 'K5-brazier': 2, 'K5-vase': 4, 'K5-statue': 2, 'K5-banner': 2 }, K4: { 'K4-column': 2, 'K4-banner': 2, 'K4-palmPot': 3, 'K4-brazier': 2, 'K4-goldChest': 4, 'K4-vase': 4, 'K4-shelfCabinet': 2 } };
 
   function expectedNames(id) {
     if (id === 'K4' && state.k4Dress && Array.isArray(state.k4Dress.assetSpecs) && state.k4Dress.assetSpecs.length) {
