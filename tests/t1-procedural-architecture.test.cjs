@@ -22,7 +22,11 @@ test('T1 includes symmetric colonnade, reliefs, twin basins and an open double p
   assert.match(arch, /T1-relief-chevron-/);
   assert.match(arch, /T1-basin-/);
   assert.match(arch, /T1-double-door-leaf-/);
-  assert.match(arch, /T1-portal-arch-voussoir-/);
+  assert.match(arch, /T1-portal-arch-layer-/);
+  assert.match(arch, /T1-crescent-moon-relief/);
+  assert.match(arch, /T1-guardian-lion-/);
+  assert.match(arch, /T1-ceiling-coffer-crossbeam-/);
+  assert.match(arch, /T1-wall-recess-frame-/);
   assert.match(arch, /existing six-metre T1→T2 link remains unobstructed/);
 });
 
@@ -34,5 +38,5 @@ test('T1 keeps its palace footprint and existing T2/TR1 connections', () => {
 
 test('HTML cache-bust points to the T1 procedural build', () => {
   const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert.match(index, /wings\.js\?v=20261114t1-clay1/);
+  assert.match(index, /wings\.js\?v=20261114t1-ref2/);
 });

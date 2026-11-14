@@ -775,6 +775,9 @@
     const cyl=(n,rt,rb,ht,x,y,z,segments)=>{
       const g=new THREE.CylinderGeometry(rt,rb,ht,segments||24,1,false),o=mesh(g,clay,n,parent);o.position.set(x,y,z);return o;
     };
+    const reliefSphere=(n,x,y,z,sx,sy,sz)=>{
+      const o=mesh(new THREE.SphereGeometry(1,16,12),clay,n,parent);o.position.set(x,y,z);o.scale.set(sx,sy,sz);return o;
+    };
     const ring=(n,x,y,z,radius,tube)=>{
       const g=new THREE.TorusGeometry(radius,tube,8,48),o=mesh(g,clay,n,parent);o.rotation.x=Math.PI/2;o.position.set(x,y,z);return o;
     };
@@ -794,6 +797,32 @@
       const x=end<0?b.x0+0.08:b.x1-0.08;
       [-1,1].forEach(side=>box('T1-gray-end-wall-return-'+(end<0?'entry':'sanctum')+'-'+(side<0?'L':'R'),0.10,h,3.0,x,h/2,cz+side*4.5));
     });
+    // Long temple nave: three stepped horizontal registers, framed mural bays,
+    // and a coffered roof rhythm visible from the west entrance viewpoint.
+    [-1,1].forEach(side=>{
+      const wz=cz+side*5.91, faceZ=wz-side*0.12;
+      [0.72,1.02,1.30,1.58,6.62,6.90,7.18].forEach((yy,i)=>
+        box('T1-wall-cornice-'+(side<0?'L':'R')+'-'+i,b.x1-b.x0-0.30,0.12,0.20,cx,yy,faceZ));
+      [b.x0+3.0,cx,b.x1-3.0].forEach((x,i)=>{
+        box('T1-wall-recess-frame-'+(side<0?'L':'R')+'-'+i,2.08,3.65,0.15,x,4.02,faceZ-side*0.10);
+        box('T1-wall-recess-inner-'+(side<0?'L':'R')+'-'+i,1.76,3.30,0.10,x,4.02,faceZ-side*0.19);
+        box('T1-wall-recess-sill-'+(side<0?'L':'R')+'-'+i,2.30,0.22,0.30,x,2.18,faceZ-side*0.15);
+        box('T1-wall-recess-crown-'+(side<0?'L':'R')+'-'+i,2.30,0.22,0.30,x,5.86,faceZ-side*0.15);
+        // Raised moon-disc and a simple three-piece relief silhouette (no images).
+        const moon=cyl('T1-wall-moon-relief-'+(side<0?'L':'R')+'-'+i,0.42,0.42,0.10,x,6.22,faceZ-side*0.30,24);
+        moon.rotation.x=Math.PI/2;
+      });
+      // Continuous architrave rests on each colonnade like the reference nave.
+      box('T1-colonnade-architrave-'+(side<0?'L':'R'),b.x1-b.x0-1.0,0.48,0.72,cx,7.35,cz+side*4.05);
+      for(let x=b.x0+1.1,i=0;x<b.x1-0.8;x+=1.25,i++){
+        box('T1-architrave-engraved-block-'+(side<0?'L':'R')+'-'+i,0.18,0.26,0.78,x,7.35,cz+side*4.05);
+      }
+    });
+    for(let i=0;i<5;i++){
+      const x=b.x0+1.1+i*(b.x1-b.x0-2.2)/4;
+      box('T1-ceiling-coffer-crossbeam-'+(i+1),0.18,0.28,b.z1-b.z0-0.7,x,h-0.32,cz);
+    }
+    [-1,1].forEach(side=>box('T1-ceiling-longitudinal-rib-'+(side<0?'L':'R'),b.x1-b.x0-0.5,0.20,0.22,cx,h-0.56,cz+side*3.85));
     for(let i=0;i<4;i++) ring('T1-floor-medallion-ring-'+(i+1),cx,0.082,cz,1.15+i*0.34,0.045);
     cyl('T1-floor-medallion-center',0.92,0.92,0.045,cx,0.065,cz,32);
     for(let i=0;i<12;i++){
@@ -806,6 +835,12 @@
       box(p+'-plinth',1.46,0.34,1.46,x,0.17,z);
       cyl(p+'-base-torus',0.67,0.67,0.12,x,0.40,z,24);
       cyl(p+'-shaft',0.46,0.57,shaftH-0.48,x,0.56+(shaftH-0.48)/2,z,24);
+      for(let flute=0;flute<12;flute++){
+        const a=flute*Math.PI/6,fy=0.72,fh=shaftH-0.82;
+        const rib=box(p+'-shaft-flute-'+flute,0.055,fh,0.055,x+Math.cos(a)*0.49,fy+fh/2,z+Math.sin(a)*0.49);
+        rib.rotation.y=-a;
+      }
+      [0.60,h-1.10,h-0.92].forEach((yy,band)=>cyl(p+'-shaft-band-'+band,0.53,0.53,0.075,x,yy,z,24));
       cyl(p+'-neck',0.56,0.52,0.18,x,h-0.75,z,24);
       box(p+'-abacus',1.38,0.22,1.38,x,h-0.60,z);
       box(p+'-capital-band',1.18,0.18,1.18,x,h-0.80,z);
@@ -841,21 +876,46 @@
       box('T1-portal-jamb-base-'+suffix,1.12,0.42,1.10,px,0.21,z);
       box('T1-portal-jamb-cap-'+suffix,1.18,0.30,1.14,px,portalH-0.14,z);
     });
-    const archR=portalW/2+0.43,springY=4.75;
-    for(let i=0;i<15;i++){
-      const a=Math.PI*i/14,z=cz+Math.cos(a)*archR,y=springY+Math.sin(a)*archR;
-      const voussoir=box('T1-portal-arch-voussoir-'+(i+1),0.82,0.46,0.72,px,y,z);voussoir.rotation.x=-a;
-    }
-    box('T1-double-door-head-lintel',0.58,0.38,portalW+1.95,px,6.55,cz);
+    const archR=portalW/2+0.43,springY=4.55;
+    // Three nested voussoir bands give the deeply stepped ceremonial arch.
+    [0,1,2].forEach(layer=>{
+      const radius=archR+layer*0.18,depth=0.72+layer*0.12;
+      for(let i=0;i<21;i++){
+        const a=Math.PI*i/20,z=cz+Math.cos(a)*radius,y=springY+Math.sin(a)*radius;
+        const block=box('T1-portal-arch-layer-'+layer+'-voussoir-'+i,0.82,0.24,depth,px-layer*0.17,y,z);
+        block.rotation.x=-a;
+      }
+    });
+    // The entrance view is down the nave toward this portal; the two leaves
+    // fold back to the jambs, preserving the current navigable T1–T2 opening.
     // Open double leaves are modeled as separate, recessed panels, leaving a clear walk-through.
     [-1,1].forEach(side=>{
-      const suffix=side<0?'L':'R',z=cz+side*3.0,openAngle=side*Math.PI/2,x=px-1.35;
-      const leaf=box('T1-double-door-leaf-'+suffix,0.18,4.65,2.72,x,2.55,z);leaf.rotation.y=openAngle;
-      const upper=box('T1-door-panel-upper-'+suffix,0.12,1.35,2.28,x-0.08,3.75,z);upper.rotation.y=openAngle;
-      const lower=box('T1-door-panel-lower-'+suffix,0.12,1.45,2.28,x-0.08,1.65,z);lower.rotation.y=openAngle;
+      const suffix=side<0?'L':'R',z=cz+side*(portalW/2-0.10),openAngle=side*Math.PI/2,x=px-1.38;
+      const leaf=box('T1-double-door-leaf-'+suffix,0.20,4.72,2.72,x,2.55,z);leaf.rotation.y=openAngle;
+      const upper=box('T1-door-panel-upper-'+suffix,0.12,1.46,2.28,x-0.08,3.72,z);upper.rotation.y=openAngle;
+      const lower=box('T1-door-panel-lower-'+suffix,0.12,1.72,2.28,x-0.08,1.60,z);lower.rotation.y=openAngle;
+      const crossbar=box('T1-door-panel-crossbar-'+suffix,0.14,0.16,2.50,x-0.10,2.70,z);crossbar.rotation.y=openAngle;
     });
     const roundel=cyl('T1-lunar-roundel',0.58,0.58,0.16,px-0.06,7.18,cz,32);roundel.rotation.z=Math.PI/2;
     const inset=cyl('T1-lunar-roundel-inset',0.38,0.38,0.18,px-0.14,7.18,cz,32);inset.rotation.z=Math.PI/2;
+    // Crescent relief and paired inward-facing guardian-lion silhouettes
+    // occupy the tympanum; both are sculpted meshes rather than image decals.
+    const crescentPts=[];
+    for(let i=0;i<=32;i++){
+      const a=0.34+(Math.PI*2-0.68)*i/32;
+      crescentPts.push(new THREE.Vector3(px-0.26,7.18+Math.sin(a)*0.56,cz+Math.cos(a)*0.56));
+    }
+    mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(crescentPts),64,0.085,8,false),clay,'T1-crescent-moon-relief',parent);
+    [-1,1].forEach(side=>{
+      const z=cz+side*1.42,suffix=side<0?'L':'R',front=px-0.24;
+      reliefSphere('T1-guardian-lion-'+suffix+'-torso',front,6.25,z,0.08,0.30,0.48);
+      reliefSphere('T1-guardian-lion-'+suffix+'-head',front,6.47,z-side*0.42,0.10,0.24,0.23);
+      for(let leg=0;leg<4;leg++){
+        const zz=z+side*((leg<2?-.25:.25));
+        box('T1-guardian-lion-'+suffix+'-leg-'+leg,0.12,0.42,0.13,front,5.94,zz);
+      }
+      const tail=box('T1-guardian-lion-'+suffix+'-tail',0.10,0.54,0.12,front,6.44,z+side*0.48);tail.rotation.x=side*0.55;
+    });
     parent.userData.t1Architecture={procedural:true,uvReady:true,grayClay:true,separateMeshes:true,portalWidth:portalW,roomBounds:{x0:b.x0,x1:b.x1,z0:b.z0,z1:b.z1,height:h}};
   }
   function addColumns(r, parent, pairs, radius) {
