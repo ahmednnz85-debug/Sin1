@@ -1100,13 +1100,14 @@
       }
       if (r.id === 'K1') { /* procedural geometry removed for GLB model */ loadK1Model(r, g); }
       // K2 columns are the real asset extracted from الاستقبال.glb (dressK2).
-      if (r.id === 'T1') addColumns(r, g, columnPairs(r, 3, 2.3, 2.2), 0.48);
+      // T1: old generated columns removed; full procedural sacred entrance (t1-entrance.js).
+      if (r.id === 'T1' && window.SinT1Entrance) { try { window.SinT1Entrance.build(r, g, { doors: state.doors || layout.doors, colliders: state.colliders, fires: state.fires }); } catch (e) { console.warn('[T1] build failed', e); } }
       if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
       if (r.id === 'L1') addColumns(r, g, columnPairs(r, 4, 4.0, 3.4), 0.60);
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
       if (r.id !== 'K1') {
         if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
-        if (r.id !== 'K2' && r.id !== 'K3' && r.id !== 'K4' && r.id !== 'K5') addTorches(r);
+        if (r.id !== 'K2' && r.id !== 'K3' && r.id !== 'K4' && r.id !== 'K5' && r.id !== 'T1') addTorches(r);
       }
     }
     vis('regions');
