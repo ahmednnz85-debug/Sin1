@@ -831,6 +831,157 @@
       inst.instanceMatrix.needsUpdate = true; sg.add(inst);
     }
   }
+  /* L1 Great Library — reference-led architectural dressing.
+     All additions stay inside the existing L1 room footprint; the room graph,
+     doors, adjacent zones and player navigation remain unchanged. */
+  function dressGreatLibrary(r, parent) {
+    const b = r.bbox;
+    const stone = new THREE.MeshStandardMaterial({ color: 0xb69a72, roughness: 0.88, metalness: 0.02 });
+    const darkStone = new THREE.MeshStandardMaterial({ color: 0x70563b, roughness: 0.92 });
+    const wood = new THREE.MeshStandardMaterial({ color: 0x382316, roughness: 0.78 });
+    const bookMats = [
+      new THREE.MeshStandardMaterial({ color: 0x553326, roughness: 0.9 }),
+      new THREE.MeshStandardMaterial({ color: 0x7b4d2c, roughness: 0.88 }),
+      new THREE.MeshStandardMaterial({ color: 0x9a7545, roughness: 0.86 }),
+      new THREE.MeshStandardMaterial({ color: 0x343c39, roughness: 0.9 }),
+      new THREE.MeshStandardMaterial({ color: 0x6b3026, roughness: 0.9 })
+    ];
+    const brass = new THREE.MeshStandardMaterial({ color: 0x98713b, metalness: 0.78, roughness: 0.28 });
+    const brassDark = new THREE.MeshStandardMaterial({ color: 0x49331e, metalness: 0.68, roughness: 0.36 });
+    const ivory = new THREE.MeshStandardMaterial({ color: 0xd2bd96, roughness: 0.82 });
+    const addBox = (name, w, h, d, x, y, z, material) =>
+      mesh(boxAt(w, h, d, x, y, z), material, name, parent);
+    const shelfGeos = [];
+    const shelfBooks = [[], [], [], [], []];
+    const bayCount = 5;
+    const bayLength = 5.25;
+    const zStart = b.z0 + 2.25;
+    [-1, 1].forEach(side => {
+      const x = side < 0 ? b.x0 + 0.82 : b.x1 - 0.82;
+      for (let bay = 0; bay < bayCount; bay++) {
+        const z = zStart + bay * bayLength;
+        const width = 4.75, depth = 0.72, height = 4.15, baseY = 0.18;
+        shelfGeos.push(boxAt(depth, height, width, x, baseY + height * 0.5, z));
+        shelfGeos.push(boxAt(depth + 0.12, 0.18, width + 0.12, x, baseY + 0.09, z));
+        shelfGeos.push(boxAt(depth + 0.12, 0.18, width + 0.12, x, baseY + height - 0.08, z));
+        for (let level = 1; level < 6; level++) {
+          const y = baseY + level * (height / 6);
+          shelfGeos.push(boxAt(depth + 0.12, 0.13, width + 0.12, x, y, z));
+          for (let k = 0; k < 10; k++) {
+            const bookZ = z - width * 0.43 + k * (width * 0.086);
+            const bookH = 0.43 + ((bay * 7 + level * 3 + k * 5) % 5) * 0.055;
+            const bookW = 0.22 + ((bay + k) % 3) * 0.035;
+            shelfBooks[(bay + level + k) % bookMats.length].push({
+              x: x + (side < 0 ? 0.05 : -0.05),
+              y: y + 0.11 + bookH * 0.5,
+              z: bookZ,
+              w: bookW, h: bookH, d: 0.43
+            });
+          }
+        }
+      }
+    });
+    mesh(mergeGeometries(shelfGeos), wood, 'L1-dark-walnut-library-shelves', parent);
+    shelfBooks.forEach((items, index) => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const inst = new THREE.InstancedMesh(geo, bookMats[index], items.length);
+      inst.name = 'L1-bound-books-' + index;
+      const dummy = new THREE.Object3D();
+      items.forEach((p, i) => {
+        dummy.position.set(p.x, p.y, p.z); dummy.scale.set(p.w, p.h, p.d);
+        dummy.rotation.y = ((i % 5) - 2) * 0.025; dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
+      });
+      inst.instanceMatrix.needsUpdate = true; inst.castShadow = false; inst.receiveShadow = true;
+      parent.add(inst);
+    });
+
+    // Upper timber galleries and carved balustrades on both long sides.
+    [-1, 1].forEach(side => {
+      const x = side < 0 ? b.x0 + 2.0 : b.x1 - 2.0;
+      addBox('L1-upper-gallery-walkway-' + side, 2.25, 0.34, b.z1 - b.z0 - 1.1,
+        x, 5.05, b.cz, darkStone);
+      addBox('L1-gallery-front-rail-' + side, 0.16, 0.22, b.z1 - b.z0 - 1.1,
+        x + (side < 0 ? 1.02 : -1.02), 5.78, b.cz, wood);
+      for (let i = 0; i < 19; i++) {
+        const z = b.z0 + 0.85 + i * ((b.z1 - b.z0 - 1.7) / 18);
+        addBox('L1-gallery-baluster-' + side + '-' + i, 0.13, 0.68, 0.13,
+          x + (side < 0 ? 1.02 : -1.02), 5.34, z, stone);
+      }
+      addBox('L1-gallery-top-rail-' + side, 0.25, 0.16, b.z1 - b.z0 - 1.1,
+        x + (side < 0 ? 1.02 : -1.02), 6.13, b.cz, wood);
+    });
+
+    // A circular astronomical floor inlay, built as real raised/recessed rings.
+    const floorCenter = new THREE.Vector3(b.cx, 0.075, b.cz);
+    [2.7, 3.15, 4.65, 5.05].forEach((radius, i) => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, i % 2 ? 0.055 : 0.085, 8, 128),
+        i % 2 ? brassDark : brass);
+      ring.rotation.x = Math.PI / 2; ring.position.copy(floorCenter); ring.position.y += 0.015 + i * 0.003;
+      ring.name = 'L1-floor-astronomical-ring-' + i; parent.add(ring);
+    });
+    const compass = new THREE.Mesh(new THREE.CircleGeometry(2.62, 96), darkStone);
+    compass.rotation.x = -Math.PI / 2; compass.position.set(b.cx, 0.084, b.cz);
+    compass.name = 'L1-floor-star-compass'; parent.add(compass);
+    const inner = new THREE.Mesh(new THREE.CircleGeometry(2.42, 96), ivory);
+    inner.rotation.x = -Math.PI / 2; inner.position.set(b.cx, 0.09, b.cz);
+    inner.name = 'L1-floor-compass-inlay'; parent.add(inner);
+    for (let i = 0; i < 24; i++) {
+      const a = i * Math.PI / 12, radius = 2.28;
+      const star = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.38, 4), brassDark);
+      star.position.set(b.cx + Math.cos(a) * radius, 0.15, b.cz + Math.sin(a) * radius);
+      star.rotation.y = -a; star.name = 'L1-floor-zodiac-marker-' + i; parent.add(star);
+    }
+
+    // Central inscribed stone lectern and a bronze armillary sphere.
+    addBox('L1-central-reading-plinth', 2.15, 0.34, 1.65, b.cx, 0.24, b.cz - 0.2, darkStone);
+    addBox('L1-central-reading-pedestal', 1.25, 1.05, 1.05, b.cx, 0.92, b.cz - 0.2, stone);
+    const tablet = addBox('L1-central-inscribed-tablet', 1.45, 1.55, 0.18,
+      b.cx, 2.18, b.cz - 0.2, ivory);
+    tablet.rotation.x = -0.08;
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.55, 32, 24), brassDark);
+    orb.position.set(b.cx + 4.3, 1.75, b.cz - 2.0); orb.name = 'L1-armillary-core'; parent.add(orb);
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.92 + i * 0.14, 0.045, 8, 64), brass);
+      ring.position.copy(orb.position); ring.rotation.set(i * 0.72, i * 0.95, i * 0.48);
+      ring.name = 'L1-armillary-ring-' + i; parent.add(ring);
+    }
+    const axis = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 2.5, 12), brass);
+    axis.position.copy(orb.position); axis.rotation.z = Math.PI / 2.7;
+    axis.name = 'L1-armillary-axis'; parent.add(axis);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.95, 0.22, 32), brassDark);
+    base.position.set(orb.position.x, 0.28, orb.position.z); base.name = 'L1-armillary-base'; parent.add(base);
+
+    // Suspended bronze orrery/chandelier and the ceiling's zodiac medallion.
+    const ceilingY = r.height - 0.34;
+    const medallion = new THREE.Mesh(new THREE.TorusGeometry(4.4, 0.13, 10, 128), brassDark);
+    medallion.rotation.x = Math.PI / 2; medallion.position.set(b.cx, ceilingY - 0.08, b.cz);
+    medallion.name = 'L1-ceiling-zodiac-border'; parent.add(medallion);
+    const medallionInner = new THREE.Mesh(new THREE.TorusGeometry(3.85, 0.055, 8, 128), brass);
+    medallionInner.rotation.x = Math.PI / 2; medallionInner.position.set(b.cx, ceilingY - 0.1, b.cz);
+    medallionInner.name = 'L1-ceiling-zodiac-inner'; parent.add(medallionInner);
+    const chandelier = new THREE.Group(); chandelier.name = 'L1-hanging-orrery';
+    chandelier.position.set(b.cx, ceilingY - 2.15, b.cz); parent.add(chandelier);
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 18), brassDark); chandelier.add(core);
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.25 + i * 0.25, 0.055, 8, 72), brass);
+      ring.rotation.set(i * 0.82, i * 0.65, i * 0.9); chandelier.add(ring);
+    }
+    const drop = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), brass);
+    drop.position.y = -1.55; chandelier.add(drop);
+
+    // Warm wall lanterns at alternating bays; emissive material is subtle.
+    const lanternMat = new THREE.MeshStandardMaterial({ color: 0x6b3c18, emissive: 0xff9b3d,
+      emissiveIntensity: 0.42, roughness: 0.55 });
+    [-1, 1].forEach(side => {
+      for (let i = 0; i < 4; i++) {
+        const z = b.z0 + 3.5 + i * 6.0;
+        const x = side < 0 ? b.x0 + 1.35 : b.x1 - 1.35;
+        const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), lanternMat);
+        lamp.position.set(x, 3.25, z); lamp.name = 'L1-amber-library-lantern-' + side + '-' + i; parent.add(lamp);
+      }
+    });
+  }
+
   function addFutureZones(r, parent) {
     const b = r.bbox;
     if (r.id === 'K2') futureZone(r, parent, 'COUNCIL TABLE', b.cx, b.cz, 12, 4);
@@ -1104,6 +1255,7 @@
       if (r.id === 'T1' && window.SinT1Entrance) { try { window.SinT1Entrance.build(r, g, { doors: state.doors || layout.doors, colliders: state.colliders, fires: state.fires }); } catch (e) { console.warn('[T1] build failed', e); } }
       if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
       if (r.id === 'L1') addColumns(r, g, columnPairs(r, 4, 4.0, 3.4), 0.60);
+      if (r.id === 'L1') dressGreatLibrary(r, g);
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
       if (r.id !== 'K1') {
         if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
