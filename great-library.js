@@ -337,7 +337,7 @@
       asset('statue-niches', parts.niche, host, u, 0.08, 0.68, w, h, 1.2);
       // The asset has the statue and its back wall, so the sconce sits beside it.
       lantern(host, u + w * 0.38, h * 0.67, 0);
-      light(host, u + w * 0.16, h * 0.72, 1.28, 10.2, 6.1);
+      light(host, u + w * 0.16, h * 0.72, 1.32, 7.4, 6.1);
       boxCollider(new THREE.Box3(new THREE.Vector3(u - w * 0.45, 0, 0),
         new THREE.Vector3(u + w * 0.45, h, 1.21)).applyMatrix4(host));
     }
@@ -546,12 +546,70 @@
     return new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, toneMapped: false });
   }
 
+  // Measure the imported treads before placing the flights. The mesh has
+  // rounded nosings and uneven step spacing, so an inclined floor cuts through it.
+  function stairProfile(part) {
+    const mesh = new THREE.Mesh(part.geometry, part.material);
+    const ray = new THREE.Raycaster();
+    const samples = new Float32Array(241);
+    const hits = [];
+    samples.forEach((_, i) => {
+      const x = (i / (samples.length - 1) - 0.5) * part.size.x;
+      for (const across of [-0.28, 0, 0.28]) {
+        ray.ray.origin.set(x, part.size.y * 2, part.size.z * across);
+        ray.ray.direction.set(0, -1, 0);
+        hits.length = 0;
+        ray.intersectObject(mesh, false, hits);
+        if (hits.length) samples[i] = Math.max(samples[i], hits[0].point.y / part.size.y);
+      }
+    });
+    // The join at the upper edge has a stone threshold, level with the landing.
+    return function (fraction) {
+      if (fraction < 0.022) return 1;
+      const i = THREE.MathUtils.clamp(fraction, 0, 1) * (samples.length - 1);
+      return Math.max(samples[Math.floor(i)], samples[Math.ceil(i)]);
+    };
+  }
+
+  function libraryStaircase(draw, materials, part, bridge, deck, z, width) {
+    const flightCount = 3, run = 4.16, landing = 0.68;
+    const rise = (deck - floorY) / flightCount;
+    const end = bridge + run * flightCount + landing * (flightCount - 1);
+    const profile = stairProfile(part);
+    let edge = bridge;
+    for (let i = 0; i < flightCount; i++) {
+      const base = deck - (i + 1) * rise;
+      draw.asset('stairs', part, null, edge + run / 2, base, z, run, rise, width);
+      draw.box('stair-thresholds', materials.wall, null, edge + 0.045, deck - i * rise - 0.055,
+        z, 0.09, 0.11, width - 0.012, 3.2);
+      if (i < flightCount - 1) {
+        draw.box('stair-foundations', materials.darkStone, null, edge + run / 2,
+          (base + floorY) / 2, z, run, base - floorY, width - 0.018);
+        draw.box('stair-landings', materials.wall, null, edge + run + landing / 2,
+          (base + floorY) / 2, z, landing, base - floorY, width, 3.2);
+      }
+      edge += run + landing;
+    }
+    return {
+      contains(x, atZ, margin = 0) {
+        return x >= bridge - margin && x <= end + margin && Math.abs(atZ - z) <= width / 2;
+      },
+      floor(x) {
+        const distance = THREE.MathUtils.clamp(x - bridge, 0, end - bridge);
+        const flight = Math.min(flightCount - 1, Math.floor(distance / (run + landing)));
+        const progress = (distance - flight * (run + landing)) / run;
+        const base = deck - (flight + 1) * rise;
+        return progress >= 1 ? base : base + rise * profile(progress);
+      }
+    };
+  }
+
   function galleries(build, materials, parts, room) {
     const { box, asset } = build;
     const { timber, wall } = materials;
     const { length, width } = room;
     const deck = 6.38, aisle = 3.05, bridge = 4.06;
-    const stairEnd = 12.0, stairZ = width - 4.52, stairWidth = 2.12;
+    const stairZ = width - 4.52, stairWidth = 2.12;
     const railY = deck - 0.32;
     function joists(a, b, alongX, at) {
       const columns = Math.ceil((b - a) / 1.45);
@@ -596,22 +654,145 @@
     box('gallery-posts', timber, null, bridge - 0.25, deck + 0.63,
       stairZ + stairWidth / 2, 0.27, 1.48, 0.27);
 
-    // The asset's original stairs rise toward -X. The landing touches the
-    // cross-gallery and the floor sampler follows the treads as a gentle ramp.
-    asset('stairs', parts.stairs, null, (bridge + stairEnd) / 2, floorY,
-      stairZ, stairEnd - bridge + 0.025, deck - floorY, stairWidth);
-    const treadStart = stairZ - stairWidth / 2;
-    const treadEnd = stairZ + stairWidth / 2;
+    const stairs = libraryStaircase(build, materials, parts.stairs, bridge, deck, stairZ, stairWidth);
     return {
+      onStairs(x, z, feet) {
+        return stairs.contains(x, z, 0.30) && (x >= bridge || feet >= deck - 0.6);
+      },
+      crossesStairSide(x0, z0, x1, z1) {
+        return stairs.contains(x0, z0) !== stairs.contains(x1, z1) &&
+          stairs.contains(x0, stairZ) && stairs.contains(x1, stairZ);
+      },
       floor(x, z, feet) {
         if (x < 0 || x > length || z < 0 || z > width) return 0;
-        if (x >= bridge && x <= stairEnd && z >= treadStart && z <= treadEnd) {
-          return floorY + (deck - floorY) * (stairEnd - x) / (stairEnd - bridge);
-        }
+        if (stairs.contains(x, z)) return stairs.floor(x);
         if (feet >= deck - 0.95 && (x <= bridge || z <= aisle || z >= width - aisle)) return deck;
         return 0;
       }
     };
+  }
+
+  function bootSamples(mesh, ankle, toe) {
+    const { position, skinIndex, skinWeight } = mesh.geometry.attributes;
+    const ankleIndex = mesh.skeleton.bones.indexOf(ankle);
+    const toeIndex = mesh.skeleton.bones.indexOf(toe);
+    const bindInverse = mesh.skeleton.boneInverses[ankleIndex];
+    const bounds = new THREE.Box3(), point = new THREE.Vector3();
+    const vertices = [];
+    for (let i = 0; i < position.count; i++) {
+      let weight = 0;
+      for (let k = 0; k < 4; k++) {
+        const joint = skinIndex.getComponent(i, k);
+        if (joint === ankleIndex || joint === toeIndex) weight += skinWeight.getComponent(i, k);
+      }
+      if (weight < 0.5) continue;
+      point.fromBufferAttribute(position, i).applyMatrix4(mesh.bindMatrix).applyMatrix4(bindInverse);
+      bounds.expandByPoint(point);
+      vertices.push({ i, x: point.x, y: point.y, z: point.z });
+    }
+    // Keep the lowest point and leading edges in each section of the sole.
+    // Edge points can already be over a riser while the sole centre is behind it.
+    const size = bounds.getSize(point);
+    const sections = new Map();
+    const columns = 5, rows = 9;
+    vertices.forEach(vertex => {
+      if (vertex.y > bounds.min.y + 0.085) return;
+      const x = Math.min(columns - 1, Math.floor(columns * (vertex.x - bounds.min.x) / Math.max(size.x, 1e-6)));
+      const z = Math.min(rows - 1, Math.floor(rows * (vertex.z - bounds.min.z) / Math.max(size.z, 1e-6)));
+      const key = x + z * columns;
+      if (!sections.has(key)) sections.set(key, [vertex, vertex, vertex, vertex, vertex]);
+      const group = sections.get(key);
+      if (vertex.y < group[0].y) group[0] = vertex;
+      if (vertex.z < group[1].z) group[1] = vertex;
+      if (vertex.z > group[2].z) group[2] = vertex;
+      if (vertex.x < group[3].x) group[3] = vertex;
+      if (vertex.x > group[4].x) group[4] = vertex;
+    });
+    return Array.from(new Set(Array.from(sections.values()).flat().map(vertex => vertex.i)));
+  }
+
+  function stairPose(hero) {
+    let mesh;
+    hero.traverse(node => { if (node.isSkinnedMesh) mesh = node; });
+    if (!mesh) return null;
+    const legs = ['Left', 'Right'].map(side => {
+      const bones = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => mesh.skeleton.getBoneByName(side + name));
+      if (bones.some(bone => !bone)) return null;
+      const [hip, knee, ankle, toe] = bones;
+      return { hip, knee, ankle, samples: bootSamples(mesh, ankle, toe),
+        rest: bones.slice(0, 3).map(bone => ({ bone, q: bone.quaternion.clone() })) };
+    }).filter(Boolean);
+    const upper = new THREE.Vector3(), joint = new THREE.Vector3(), lower = new THREE.Vector3();
+    const direction = new THREE.Vector3(), bend = new THREE.Vector3(), target = new THREE.Vector3();
+    const newJoint = new THREE.Vector3(), sample = new THREE.Vector3();
+    const a = new THREE.Vector3(), b = new THREE.Vector3();
+    const current = new THREE.Quaternion(), desired = new THREE.Quaternion(), ankleWorld = new THREE.Quaternion();
+    const parent = new THREE.Quaternion();
+    let applied = false;
+    function worldRotation(bone, q) {
+      bone.parent.getWorldQuaternion(parent).invert();
+      bone.quaternion.copy(parent.multiply(q));
+      bone.updateWorldMatrix(false, true);
+    }
+    function aim(bone, from, to) {
+      bone.getWorldQuaternion(current);
+      desired.setFromUnitVectors(from.normalize(), to.normalize()).multiply(current);
+      worldRotation(bone, desired);
+    }
+    function restore() {
+      if (!applied) return;
+      legs.forEach(leg => leg.rest.forEach(({ bone, q }) => bone.quaternion.copy(q)));
+      applied = false;
+    }
+    function liftSole({ hip, knee, ankle, samples }, surface) {
+      let lift = 0;
+      for (const vertex of samples) {
+        mesh.getVertexPosition(vertex, sample).applyMatrix4(mesh.matrixWorld);
+        const tread = Math.max(surface(sample.x - 0.018, sample.z), surface(sample.x + 0.018, sample.z));
+        lift = Math.max(lift, tread + 0.014 - sample.y);
+      }
+      if (lift < 0.005) return false;
+      hip.getWorldPosition(upper);
+      knee.getWorldPosition(joint);
+      ankle.getWorldPosition(lower);
+      ankle.getWorldQuaternion(ankleWorld);
+      const upperLength = upper.distanceTo(joint), lowerLength = joint.distanceTo(lower);
+      target.copy(lower);
+      target.y += lift;
+      direction.subVectors(target, upper);
+      const distance = THREE.MathUtils.clamp(direction.length(),
+        Math.abs(upperLength - lowerLength) + 0.002, upperLength + lowerLength - 0.002);
+      direction.normalize();
+      bend.subVectors(joint, upper).addScaledVector(direction, -a.subVectors(joint, upper).dot(direction));
+      if (bend.lengthSq() < 1e-7) {
+        bend.set(0, 0, 1).applyQuaternion(ankleWorld);
+        bend.addScaledVector(direction, -bend.dot(direction));
+      }
+      bend.normalize();
+      const along = (upperLength * upperLength - lowerLength * lowerLength + distance * distance) / (2 * distance);
+      const sideways = Math.sqrt(Math.max(0, upperLength * upperLength - along * along));
+      newJoint.copy(upper).addScaledVector(direction, along).addScaledVector(bend, sideways);
+      target.copy(upper).addScaledVector(direction, distance);
+      aim(hip, a.subVectors(joint, upper), b.subVectors(newJoint, upper));
+      ankle.getWorldPosition(lower);
+      knee.getWorldPosition(joint);
+      aim(knee, a.subVectors(lower, joint), b.subVectors(target, joint));
+      worldRotation(ankle, ankleWorld);
+      return true;
+    }
+    function ground(surface) {
+      if (!legs.length) return;
+      hero.updateMatrixWorld(true);
+      legs.forEach(leg => {
+        leg.rest.forEach(({ bone, q }) => q.copy(bone.quaternion));
+        if (liftSole(leg, surface)) {
+          // Blended ankle and shin weights can leave a small residual after IK.
+          liftSole(leg, surface);
+          applied = true;
+        }
+      });
+    }
+    return { restore, ground };
   }
 
   function chartTexture(floor = false) {
@@ -801,7 +982,7 @@
   function atmosphere(group, well, height, constrained) {
     const source = new THREE.Vector3(well.x + 0.63, height + 1.61, well.z + 0.36);
     const aim = new THREE.Vector3(well.x - 12.5, 0.04, well.z - 9.1);
-    const sun = new THREE.SpotLight(0xffdb9c, 690, 37, 0.48, 0.59, 2);
+    const sun = new THREE.SpotLight(0xffe2b4, 345, 37, 0.48, 0.59, 2);
     sun.name = 'L1-skylight-sun';
     sun.position.copy(source);
     sun.target.position.copy(aim);
@@ -817,11 +998,11 @@
     sun.shadow.autoUpdate = false;
     sun.shadow.needsUpdate = true;
     group.add(sun, sun.target);
-    const reflected = new THREE.PointLight(0xffcf97, 105, 24, 2);
+    const reflected = new THREE.PointLight(0xffdaa8, 19, 17, 2);
     reflected.name = 'L1-skylight-reflection';
     reflected.position.set(well.x - 0.8, height - 0.47, well.z);
     group.add(reflected);
-    const bounce = new THREE.PointLight(0xf6cfaa, 46, 22, 2);
+    const bounce = new THREE.PointLight(0xf6cfaa, 9, 14, 2);
     bounce.name = 'L1-floor-bounce';
     bounce.position.set(well.x - 16.7, 2.7, well.z - 1.35);
     group.add(bounce);
@@ -841,7 +1022,7 @@
           float edge = pow(sin(3.141593 * rayUv.x), 1.8);
           float falloff = smoothstep(0.0, 0.12, rayUv.y) * (1.0 - smoothstep(0.38, 1.0, rayUv.y));
           float streaks = 0.69 + 0.19*sin(26.0 * rayUv.x) + 0.10*sin(78.0 * rayUv.x);
-          gl_FragColor = vec4(0.83, 0.63, 0.38, edge * falloff * streaks * 0.157);
+          gl_FragColor = vec4(0.83, 0.63, 0.38, edge * falloff * streaks * 0.137);
         }
       `
     });
@@ -925,6 +1106,25 @@
     textures.forEach(texture => texture.dispose());
   }
 
+  function setLibraryExposure(root) {
+    const materials = new Set();
+    root.traverse(node => {
+      if (node.material && node.material.isMeshStandardMaterial) materials.add(node.material);
+    });
+    // Unshadowed palace fill still reaches L1 through its shared renderer.
+    // Balance it in linear space on the library surfaces, including reflections.
+    materials.forEach(material => {
+      const compile = material.onBeforeCompile;
+      const key = material.customProgramCacheKey();
+      material.onBeforeCompile = function (shader, renderer) {
+        compile.call(this, shader, renderer);
+        shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>',
+          'outgoingLight *= 0.63;\n#include <opaque_fragment>');
+      };
+      material.customProgramCacheKey = () => key + ':L1-exposure';
+    });
+  }
+
   async function build(room, doors, loadModel, constrained) {
     const base = room.bbox, length = base.x1 - base.x0, width = base.z1 - base.z0, height = room.height;
     const loader = new THREE.TextureLoader();
@@ -1005,6 +1205,10 @@
     draw.surface('armillary-suspension', materials.brass, plate, null, chartX, height - 0.09, chartZ);
     draw.flush();
     const { dustMaterial, sun } = atmosphere(root, well, height, constrained);
+    root.traverse(node => {
+      if (node.isPointLight || node.isSpotLight) node.userData.physicalFalloff = true;
+    });
+    setLibraryExposure(root);
 
     const camera = new THREE.PerspectiveCamera(51, 1280 / 698, 0.12, 150);
     camera.name = 'L1-Presentation-Camera';
@@ -1013,11 +1217,28 @@
     // Attach after lookAt so the camera is aimed in L1-local space.
     root.add(camera);
 
+    let pose;
+    const origin = new THREE.Vector3();
     return {
       root, camera, colliders, sun,
       floor(x, z, feet) { return gallery.floor(x - base.x0, z - base.z0, feet); },
+      onStairs(x, z, feet) { return gallery.onStairs(x - base.x0, z - base.z0, feet); },
+      crossesStairSide(x0, z0, x1, z1) {
+        return gallery.crossesStairSide(x0 - base.x0, z0 - base.z0, x1 - base.x0, z1 - base.z0);
+      },
+      restoreGroundPose() { if (pose) pose.restore(); },
+      groundHero(hero) {
+        if (pose === undefined) pose = stairPose(hero);
+        if (!pose) return;
+        root.getWorldPosition(origin);
+        const feet = hero.position.y - origin.y;
+        pose.ground((x, z) => Math.max(floorY, gallery.floor(x - origin.x, z - origin.z, feet)) + origin.y);
+      },
       tick(t) { dustMaterial.uniforms.time.value = t; },
-      dispose() { disposeResources(root); }
+      dispose() {
+        if (pose) pose.restore();
+        disposeResources(root);
+      }
     };
   }
 

@@ -244,7 +244,7 @@
     const _tSc = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     lookLights.length = 0;
     scene.traverse(function (o) {
-      if (!o.isLight) return;
+      if (!o.isLight || o.userData.physicalFalloff) return;
       let inside = false;
       for (let p = o.parent; p; p = p.parent) if (p.name === 'PalaceInterior' || p.name === 'PalaceWings') { inside = true; break; }
       if (inside) lookLights.push(o);

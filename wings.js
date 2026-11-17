@@ -748,8 +748,10 @@
     const hero = state.ctx && state.ctx.hero;
     if (library && fromY != null && hero) {
       const position = hero.position;
-      const previous = library.floor(position.x - state.root.position.x, position.z - state.root.position.z, fromY);
-      if (Math.abs(feet - previous) > 0.95) return true;
+      const px = position.x - state.root.position.x, pz = position.z - state.root.position.z;
+      const previous = library.floor(px, pz, fromY);
+      const maxStep = library.crossesStairSide(px, pz, x, z) ? 0.23 : 0.95;
+      if (Math.abs(feet - previous) > maxStep) return true;
     }
     for (const b of state.dynamicDoorBoxes) {
       const qx = Math.max(b.minx, Math.min(x, b.maxx)), qz = Math.max(b.minz, Math.min(z, b.maxz));
@@ -2925,6 +2927,7 @@
       },
       unload: function (api) {
         if (state.library) {
+          state.library.restoreGroundPose();
           state.library.sun.shadow.dispose();
           state.library.sun.map.dispose();
         }
@@ -3274,6 +3277,11 @@
     const K5 = state.rooms.find(r => r.id === 'K5');
     if (K5 && pointInPoly(x, z, K5.poly)) return k5DaisHeight(K5.bbox, x, z);
     return 0;
+  }
+  function onLibraryStairs(position) {
+    if (!state.library || !state.library.ready) return false;
+    const origin = state.root.position;
+    return state.library.onStairs(position.x - origin.x, position.z - origin.z, position.y - origin.y);
   }
   function resolveCamera(cam) {
     if (!state.built || !cam) return;
@@ -4922,6 +4930,9 @@
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
     teleport, overview, runTests, formatReport, cameraTour, current, metrics, corridorReport: () => state.corridorReport, corridorWallFill: () => state.corridorWallFill || 0,
     libraryCamera: () => state.library && state.library.ready ? state.library.camera : null,
+    onLibraryStairs,
+    restoreLibraryPose: () => { if (state.library) state.library.restoreGroundPose(); },
+    groundLibraryHero: hero => { if (onLibraryStairs(hero.position)) state.library.groundHero(hero); },
     shortestPath,
     assetList, provideAsset, preloadReport,
     provideBake: function (data) { state.bake = data; if (typeof window !== 'undefined') window.__palaceColliderBake = data; },

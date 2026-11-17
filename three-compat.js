@@ -91,7 +91,18 @@ const lightsChunk = ThreeModule.ShaderChunk && ThreeModule.ShaderChunk.lights_pa
 if (lightsChunk && lightsChunk.indexOf('getDistanceAttenuation') >= 0) {
   ThreeModule.ShaderChunk.lights_pars_begin = lightsChunk.replace(
     'float distanceFalloff = 1.0 / max( pow( lightDistance, decayExponent ), 0.01 );\n\tif ( cutoffDistance > 0.0 ) {\n\t\tdistanceFalloff *= pow2( saturate( 1.0 - pow4( lightDistance / cutoffDistance ) ) );\n\t}\n\treturn distanceFalloff;',
-    'if ( cutoffDistance > 0.0 && decayExponent > 0.0 ) {\n\t\treturn pow( saturate( - lightDistance / cutoffDistance + 1.0 ), decayExponent );\n\t}\n\treturn 1.0;'
+    [
+      // A negative GPU exponent marks an explicitly photometric light.
+      'if ( decayExponent < 0.0 ) {',
+      '  float falloff = 1.0 / max( pow( lightDistance, - decayExponent ), 0.01 );',
+      '  if ( cutoffDistance > 0.0 ) falloff *= pow2( saturate( 1.0 - pow4( lightDistance / cutoffDistance ) ) );',
+      '  return falloff;',
+      '}',
+      'if ( cutoffDistance > 0.0 && decayExponent > 0.0 ) {',
+      '  return pow( saturate( - lightDistance / cutoffDistance + 1.0 ), decayExponent );',
+      '}',
+      'return 1.0;'
+    ].join('\n')
   );
 }
 const renderWithModernLights = ThreeModule.WebGLRenderer.prototype.render;
@@ -101,6 +112,10 @@ ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
     const light = entry.lights[i];
     const intensity = light.intensity;
     entry.intensities[i] = intensity;
+    if (light.userData.physicalFalloff) {
+      light.decay = -light.decay;
+      continue;
+    }
     // RectAreaLight / LightProbe were never PI-scaled in r147; every other light was.
     const gain = light.userData && light.userData.lookGain != null ? light.userData.lookGain : 1; // cinematic look (cinematic.js)
         if (!light.isRectAreaLight && !light.isLightProbe && intensity !== 0 && Number.isFinite(intensity)) light.intensity = intensity * Math.PI * gain;
@@ -109,7 +124,9 @@ ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
     return renderWithModernLights.call(this, scene, camera);
   } finally {
     if (entry) for (let i = 0; i < entry.lights.length; i++) {
-      entry.lights[i].intensity = entry.intensities[i];
+      const light = entry.lights[i];
+      if (light.userData.physicalFalloff) light.decay = -light.decay;
+      light.intensity = entry.intensities[i];
     }
   }
 };
