@@ -1155,7 +1155,7 @@
   let colliderBakePromise = null;
   function loadColliderBake() {
     if (colliderBakePromise) return colliderBakePromise;
-    colliderBakePromise = fetch('data/palace-colliders.json?v=20261112bake3', { cache: 'no-cache' })
+    colliderBakePromise = fetch('data/palace-colliders.json?v=20261117l1', { cache: 'no-cache' })
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
@@ -4045,12 +4045,12 @@
     }, false);
   }
 
-  function floorAt(x, z) {
+  function floorAt(x, z, fromY) {
     if (!Number.isFinite(x) || !Number.isFinite(z)) return floorY;
     const lx = x - portalX;
     const lz = z - portalFront;
     if (wingRuntime && window.PalaceWings) {
-      const wh = PalaceWings.floorAt(lx, lz);
+      const wh = PalaceWings.floorAt(lx, lz, fromY == null ? 0 : fromY - floorY);
       if (wh != null) return floorY + wh;
     }
     if (!ramp) return floorY;
@@ -4860,10 +4860,12 @@
   function blocks(x, z) {
     const active = state === 'FADING_IN' || state === 'REVEAL' || state === 'SETUP' || state === 'ENTRANCE' || state === 'SETTLE' || (state === 'DONE' && occupant);
     if (!active) return false;
-    if (wingRuntime && window.PalaceWings && PalaceWings.capsuleBlocked(x - portalX, z - portalFront, 0.32)) return true;
+    const hero = wingRuntime && window.PalaceWings && PalaceWings.state.ctx.hero;
+    const fromY = hero ? hero.position.y : floorY;
+    if (wingRuntime && window.PalaceWings && PalaceWings.capsuleBlocked(x - portalX, z - portalFront, 0.32, fromY - floorY)) return true;
     // Height-aware: boxes entirely above the hero's head (arch lintels over the open wing
     // passages) or below the feet must not act as full-height walls in this 2D check.
-    const feet = floorAt(x, z), head = feet + Math.max(1.9, H * 1.05);
+    const feet = floorAt(x, z, fromY), head = feet + Math.max(1.9, H * 1.05);
     for (const c of colliders) {
       if (c.miny >= head || c.maxy <= feet + 0.08) continue;
       if (x > c.minx && x < c.maxx && z > c.minz && z < c.maxz) return true;
@@ -4914,6 +4916,7 @@
   let entryCam = null, entryCut = false;
   const rig = { d: -1, ds: FOLLOW_DIST, yaw: 0, pitch: FOLLOW_PITCH, idle: 0, fresh: false, escapeYaw: 0, escapePitch: 0, escapeTargetYaw: 0, escapeTargetPitch: 0, escapeCheckAt: 0 };
   const camBox = { minx: 0, maxx: 0, miny: 0, maxy: 0, minz: 0, maxz: 0 };
+  const noCameraColliders = [];
   function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
   function insideBox(x, y, z, b) { return x >= b.minx && x <= b.maxx && y >= b.miny && y <= b.maxy && z >= b.minz && z <= b.maxz; }
@@ -4948,8 +4951,10 @@
     const loy = Math.min(py, ey) - r, hiy = Math.max(py, ey) + r;
     const loz = Math.min(pz, ez) - r, hiz = Math.max(pz, ez) + r;
     let best = len;
-    for (let i = 0; i < colliders.length; i++) {
-      const b = colliders[i];
+    const library = wingRuntime && window.PalaceWings && PalaceWings.state.library;
+    const libraryBoxes = (library && library.cameraColliders) || noCameraColliders;
+    for (let i = 0; i < colliders.length + libraryBoxes.length; i++) {
+      const b = i < colliders.length ? colliders[i] : libraryBoxes[i - colliders.length];
       if (b.maxx < lox || b.minx > hix || b.maxy < loy || b.miny > hiy || b.maxz < loz || b.minz > hiz) continue;
       if (isProp(b) !== !!props) continue;
       let box = padBox(b, r);

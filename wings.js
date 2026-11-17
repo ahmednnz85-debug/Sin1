@@ -511,11 +511,11 @@
 
     const L1 = addRoom(rectRegion('L1', 'Library', ROOM_NAMES.L1, back, zL - 13, 40, 26, 11));
     const L2 = addRoom(rectRegion('L2', 'Library', ROOM_NAMES.L2, back + 5, L1.bbox.z0 - 21, 18, 14, 5.5));
-    const LC2 = addCon(rectRegion('LC2', 'Library', 'Archive corridor', L2.bbox.cx - 3, L2.bbox.z1, 6, L1.bbox.z0 - L2.bbox.z1, 6, 'corridor'));
-    door('L1-LC2', 'L1', 'LC2', L2.bbox.cx, L1.bbox.z0 - 0.5, 'z'); door('LC2-L2', 'LC2', 'L2', L2.bbox.cx, L2.bbox.z1 + 0.5, 'z');
+    const LC2 = addCon(rectRegion('LC2', 'Library', 'Archive corridor', L2.bbox.cx + 1, L2.bbox.z1, 6, L1.bbox.z0 - L2.bbox.z1, 6, 'corridor'));
+    door('L1-LC2', 'L1', 'LC2', LC2.bbox.cx, L1.bbox.z0 - 0.5, 'z'); door('LC2-L2', 'LC2', 'L2', LC2.bbox.cx, L2.bbox.z1 + 0.5, 'z');
     const L3 = addRoom(rectRegion('L3', 'Library', ROOM_NAMES.L3, back + 30, L1.bbox.z0 - 21, 20, 14, 5.5));
-    const LC3 = addCon(rectRegion('LC3', 'Library', 'Scribes corridor', L3.bbox.cx - 3, L3.bbox.z1, 6, L1.bbox.z0 - L3.bbox.z1, 6, 'corridor'));
-    door('L1-LC3', 'L1', 'LC3', L3.bbox.cx, L1.bbox.z0 - 0.5, 'z'); door('LC3-L3', 'LC3', 'L3', L3.bbox.cx, L3.bbox.z1 + 0.5, 'z');
+    const LC3 = addCon(rectRegion('LC3', 'Library', 'Scribes corridor', L3.bbox.cx - 9, L3.bbox.z1, 6, L1.bbox.z0 - L3.bbox.z1, 6, 'corridor'));
+    door('L1-LC3', 'L1', 'LC3', LC3.bbox.cx, L1.bbox.z0 - 0.5, 'z'); door('LC3-L3', 'LC3', 'L3', LC3.bbox.cx, L3.bbox.z1 + 0.5, 'z');
     const L4 = addRoom(region('L4', 'Library', ROOM_NAMES.L4, polyCircle(L1.bbox.x1 + 18, zL, 12, 32), 11));
     const LC4 = addCon(rectRegion('LC4', 'Library', 'Observatory opening', L1.bbox.x1, zL - 3, L4.bbox.x0 - L1.bbox.x1 + 1, 6, 6, 'corridor'));
     door('L1-LC4', 'L1', 'LC4', L1.bbox.x1 + 0.5, zL, 'x'); door('LC4-L4', 'LC4', 'L4', L4.bbox.x0 + 0.5, zL, 'x', 6, 'opening');
@@ -741,14 +741,22 @@
     }
     return out;
   }
-  function capsuleBlocked(x, z, radius) {
+  function capsuleBlocked(x, z, radius, fromY) {
     const r = radius == null ? 0.32 : radius;
+    const library = state.library && state.library.ready ? state.library : null;
+    const feet = library && fromY != null ? library.floor(x, z, fromY) : 0;
+    const hero = state.ctx && state.ctx.hero;
+    if (library && fromY != null && hero) {
+      const position = hero.position;
+      const previous = library.floor(position.x - state.root.position.x, position.z - state.root.position.z, fromY);
+      if (Math.abs(feet - previous) > 0.95) return true;
+    }
     for (const b of state.dynamicDoorBoxes) {
       const qx = Math.max(b.minx, Math.min(x, b.maxx)), qz = Math.max(b.minz, Math.min(z, b.maxz));
       if ((x - qx) * (x - qx) + (z - qz) * (z - qz) < r * r) return true;
     }
     for (const b of nearbyBoxes(x, z)) {
-      if (b.miny > 1.65 || b.maxy < 0.08) continue;
+      if (b.miny > feet + 1.65 || b.maxy < feet + 0.08) continue;
       const qx = Math.max(b.minx, Math.min(x, b.maxx)), qz = Math.max(b.minz, Math.min(z, b.maxz));
       if ((x - qx) * (x - qx) + (z - qz) * (z - qz) < r * r) return true;
     }
@@ -838,7 +846,6 @@
     if (r.id === 'K4') { futureZone(r, parent, 'ROYAL CHESTS', b.cx - 3, b.cz, 3, 7); futureZone(r, parent, 'TOOLS', b.cx + 4, b.cz, 2, 6); }
     if (r.id === 'T2') futureZone(r, parent, 'PURIFICATION BASIN', b.cx, b.cz, 8, 6);
     if (r.id === 'T5') futureZone(r, parent, 'OFFERING TOOLS', b.cx, b.cz, 6, 3);
-    if (r.id === 'L1') { futureZone(r, parent, 'WALL SHELVES', b.cx, b.z0 + 1.2, 30, 1.2); futureZone(r, parent, 'WALL SHELVES', b.cx, b.z1 - 1.2, 30, 1.2); }
     if (r.id === 'L3') { futureZone(r, parent, 'WRITING TABLES', b.cx - 4, b.cz, 4, 8); futureZone(r, parent, 'WRITING TABLES', b.cx + 4, b.cz, 4, 8); }
   }
   function addTorches(r) {
@@ -1021,7 +1028,10 @@
     const tCaps = performance.now();
     const capGeos = (state.caps || []).map(function (c, i) {
       const t1 = performance.now();
-      const g = extrudeSolids(c.solids, c.door.height, MAX_H);
+      // L1's large arch rises past the corridor's flat ceiling. Set the
+      // visible lintel back from its crown while keeping the baked collider.
+      const bottom = c.door.id === 'L1-LC4' ? 7.78 : c.door.height;
+      const g = extrudeSolids(c.solids, bottom, MAX_H);
       const dt = performance.now() - t1;
       if (dt > 16) {
         try { console.info('[palace load] visuals-slow-cap', i, c.door && c.door.id, Math.round(dt) + 'ms'); } catch (_) {}
@@ -1091,6 +1101,7 @@
         let poly = solid(r.poly);
         if (r.id === 'L4') poly = difference(poly, solid(polyCircle(r.bbox.cx, r.bbox.cz, 2.5, 32)));
         const ceiling = mesh(extrudeSolids(poly, r.height, r.height + 0.25), state.wallMat, r.id + '-ceiling', g);
+        if (r.id === 'L1') ceiling.userData.hallShell = true;
         ceiling.userData.ceiling = true; state.ceilings.push(ceiling);
         if (r.id === 'L4') {
           const ring = difference(solid(polyCircle(r.bbox.cx, r.bbox.cz, 3.0, 32)), solid(polyCircle(r.bbox.cx, r.bbox.cz, 2.5, 32)));
@@ -1103,11 +1114,10 @@
       // T1: old generated columns removed; full procedural sacred entrance (t1-entrance.js).
       if (r.id === 'T1' && window.SinT1Entrance) { try { window.SinT1Entrance.build(r, g, { doors: state.doors || layout.doors, colliders: state.colliders, fires: state.fires }); } catch (e) { console.warn('[T1] build failed', e); } }
       if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
-      if (r.id === 'L1') addColumns(r, g, columnPairs(r, 4, 4.0, 3.4), 0.60);
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
       if (r.id !== 'K1') {
         if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
-        if (r.id !== 'K2' && r.id !== 'K3' && r.id !== 'K4' && r.id !== 'K5' && r.id !== 'T1') addTorches(r);
+        if (!['K2', 'K3', 'K4', 'K5', 'T1', 'L1'].includes(r.id)) addTorches(r);
       }
     }
     vis('regions');
@@ -1339,7 +1349,10 @@
         wallQuads(runs, () => [0, h - 0.012], CORRIDOR_TILE.wall),
         wallQuads(lintelRuns, l => [Math.min(l.door.height, h), h - 0.012], CORRIDOR_TILE.wall)
       ];
-      soffits.forEach(sf => parts.push(flatSheet(sf.under, Math.min(sf.d.height, h) - 0.012, false, CORRIDOR_TILE.wall)));
+      soffits.forEach(sf => {
+        // L1 supplies a recessed stone soffit at the observatory arch.
+        if (sf.d.id !== 'L1-LC4') parts.push(flatSheet(sf.under, Math.min(sf.d.height, h) - 0.012, false, CORRIDOR_TILE.wall));
+      });
       mesh(mergeGeometriesUV(parts), mats.wall, r.id + '-corridor-walls', g);
       runs.forEach(x => dressedRuns.push(x)); lintelRuns.forEach(x => dressedRuns.push(x));
       const lintels = lintelRuns;
@@ -2651,6 +2664,12 @@
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
   function dispose() {
+    if (state.library) {
+      state.library.root.removeFromParent();
+      state.library.dispose();
+    }
+    state.library = null;
+    state.libraryLoad = null;
     if (state.root && state.root.parent) state.root.parent.remove(state.root);
     if (state.root) state.root.traverse(o => {
       if (o.geometry) o.geometry.dispose();
@@ -2856,7 +2875,66 @@
   // ADDING_CONTENT.md) or call PalaceWings.registerZone(spec) at runtime.
   const zoneDone = new Set();
   function streamedName(id) { const re = new RegExp('^' + id + '-'); return function (ch) { return !!(ch.userData && ch.userData.streamDress) || !!(ch.name && re.test(ch.name)); }; }
+  function loadLibrary(api) {
+    const room = state.rooms.find(r => r.id === 'L1');
+    const host = state.regionGroups.get('L1');
+    if (!room || !host) { api.fail(new Error('Great Library room unavailable')); return; }
+    const loader = new THREE.GLTFLoader();
+    const loadModel = url => enqueueWingLoad(() => loader.loadAsync(encodeURI(url)));
+    const doors = state.doors.filter(d => d.from === 'L1' || d.to === 'L1');
+    const pending = window.SinGreatLibrary.build(room, doors, loadModel, deviceProfile.constrained);
+    state.libraryLoad = pending;
+    pending.then(library => {
+      if (state.libraryLoad !== pending) { library.dispose(); return; }
+      state.library = library;
+      zoneStreamer.markReleasable(library.root);
+      api.add(library.root);
+      api.done();
+    }, error => {
+      if (state.libraryLoad !== pending) return;
+      console.error('[L1] Great Library asset load failed', error);
+      api.fail(error);
+    });
+  }
+  function setLibraryCeiling(group) {
+    const fallback = group && group.getObjectByName('L1-ceiling');
+    if (fallback) fallback.visible = !(state.library && state.library.ready) && !state.cutaway;
+    if (state.library && state.library.ready) {
+      state.library.root.traverse(node => {
+        if (/^L1-(?:ceiling|skylight)/.test(node.name) && !node.isLight) node.visible = !state.cutaway;
+      });
+    }
+  }
   const WING_ZONES = [
+    { id: 'L1', prefetchHops: 3, priority: 0,
+      load: loadLibrary,
+      onReady: function (api) {
+        if (!state.library) return;
+        state.library.ready = true;
+        state.library.sun.shadow.needsUpdate = true;
+        const origin = state.root.position;
+        state.library.cameraColliders = state.library.colliders.map(b => ({
+          minx: b.minx + origin.x, maxx: b.maxx + origin.x,
+          miny: b.miny + origin.y, maxy: b.maxy + origin.y,
+          minz: b.minz + origin.z, maxz: b.maxz + origin.z, _wing: true
+        }));
+        state.colliders.push(...state.library.colliders);
+        rebuildSpatial();
+        triCache.clear();
+        setLibraryCeiling(api.group);
+      },
+      unload: function (api) {
+        if (state.library) {
+          state.library.sun.shadow.dispose();
+          state.library.sun.map.dispose();
+        }
+        state.library = null;
+        state.libraryLoad = null;
+        state.colliders = state.colliders.filter(c => !c._library);
+        triCache.clear();
+        setLibraryCeiling(api.group);
+      },
+      ownsObject: function (node) { return node.name === 'L1-Grand-Library'; } },
     { id: 'K2', prefetchHops: deviceProfile.prefetchHops, priority: 0,
       load: function () { dressK2(); },
       isComplete: function () { return roomCompleteness('K2').complete; },
@@ -3166,6 +3244,7 @@
     updateRoomDoors(Math.max(.001, Math.min(.05, Number(dt) || .016)));
     if (_trT) _trT('PalaceWings.updateRoomDoors');
     updateCulling(false);
+    if (state.library && state.current === 'L1') state.library.tick(performance.now() * 0.001);
     if (_trT) _trT('PalaceWings.updateCulling');
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
     if ((state.k2Lights && state.k2Lights.length) || (state.k3Lights && state.k3Lights.length)) {
@@ -3178,8 +3257,12 @@
     }
     if (state.debug && state.ui && performance.now() - state.minimapAt > 120) { state.minimapAt = performance.now(); drawMinimap(); }
   }
-  function floorAt(x, z) {
+  function floorAt(x, z, fromY) {
     if (!contains(x, z)) return null;
+    if (state.library && state.library.ready && fromY != null) {
+      const gallery = state.library.floor(x, z, fromY);
+      if (gallery > 0) return gallery;
+    }
     const K1 = state.rooms.find(r => r.id === 'K1');
     if (K1 && pointInPoly(x, z, K1.poly)) return state.k1FloorY;
     const T4 = state.rooms.find(r => r.id === 'T4');
@@ -3208,7 +3291,8 @@
   }
   function clampFollowTarget(want) {
     if (!want) return;
-    want.y = Math.max(state.root.position.y + 1.2, Math.min(state.root.position.y + 6.5, want.y));
+    const limit = state.current === 'L1' ? 10.65 : 6.5;
+    want.y = Math.max(state.root.position.y + 1.2, Math.min(state.root.position.y + limit, want.y));
   }
   function localToWorld(x, z, y) {
     return new THREE.Vector3(state.root.position.x + x, state.root.position.y + (y || 0), state.root.position.z + z);
@@ -3301,7 +3385,11 @@
     ui.addEventListener('click', ev => {
       const b = ev.target.closest('button'); if (!b) return;
       if (b.dataset.tp) teleport(b.dataset.tp);
-      if (b.dataset.act === 'cutaway') { state.cutaway = !state.cutaway; state.ceilings.concat(state.corridorCeilings || []).forEach(c => { c.visible = !state.cutaway; }); }
+      if (b.dataset.act === 'cutaway') {
+        state.cutaway = !state.cutaway;
+        state.ceilings.concat(state.corridorCeilings || []).forEach(c => { c.visible = !state.cutaway; });
+        setLibraryCeiling(state.regionGroups.get('L1'));
+      }
       if (b.dataset.act === 'bright') {
         state.fullbright = !state.fullbright;
         state.materials.forEach(m => { if (m.emissive) { if (m.userData.oldEmissive == null) m.userData.oldEmissive = m.emissiveIntensity || 0; m.emissiveIntensity = state.fullbright ? 0.85 : m.userData.oldEmissive; } });
@@ -4678,6 +4766,13 @@
     });
   }
   const STREAM_EXPECT = {
+    L1: [
+      'L1-floor-medallion', 'L1-ceiling-zodiac', 'L1-skylight',
+      'L1-open-arch-L1-LC4', 'L1-open-arch-L1-LC2', 'L1-open-arch-L1-LC3',
+      'L1-north-gallery-rail', 'L1-south-gallery-rail', 'L1-stairs',
+      'L1-bookcases', 'L1-statue-niches', 'L1-lanterns',
+      'L1-suspended-armillary', 'L1-instrument', 'L1-stele'
+    ],
     K2: [
       'K2-majlis-floor', 'K2-majlis-walls', 'K2-majlis-ceiling',
       'K2-council-table', 'K2-majlis-columns',
@@ -4826,6 +4921,7 @@
     palaceVisible: function () { return state.palaceNear !== false; },
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
     teleport, overview, runTests, formatReport, cameraTour, current, metrics, corridorReport: () => state.corridorReport, corridorWallFill: () => state.corridorWallFill || 0,
+    libraryCamera: () => state.library && state.library.ready ? state.library.camera : null,
     shortestPath,
     assetList, provideAsset, preloadReport,
     provideBake: function (data) { state.bake = data; if (typeof window !== 'undefined') window.__palaceColliderBake = data; },

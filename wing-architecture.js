@@ -180,11 +180,11 @@
 
     const L1 = addRoom(rectRegion('L1', 'Library', ROOM_NAMES.L1, back, zL - 13, 40, 26, 11));
     const L2 = addRoom(rectRegion('L2', 'Library', ROOM_NAMES.L2, back + 5, L1.bbox.z0 - 21, 18, 14, 5.5));
-    const LC2 = addCon(rectRegion('LC2', 'Library', 'Archive corridor', L2.bbox.cx - 3, L2.bbox.z1, 6, L1.bbox.z0 - L2.bbox.z1, 6, 'corridor'));
-    door('L1-LC2', 'L1', 'LC2', L2.bbox.cx, L1.bbox.z0 - 0.5, 'z'); door('LC2-L2', 'LC2', 'L2', L2.bbox.cx, L2.bbox.z1 + 0.5, 'z');
+    const LC2 = addCon(rectRegion('LC2', 'Library', 'Archive corridor', L2.bbox.cx + 1, L2.bbox.z1, 6, L1.bbox.z0 - L2.bbox.z1, 6, 'corridor'));
+    door('L1-LC2', 'L1', 'LC2', LC2.bbox.cx, L1.bbox.z0 - 0.5, 'z'); door('LC2-L2', 'LC2', 'L2', LC2.bbox.cx, L2.bbox.z1 + 0.5, 'z');
     const L3 = addRoom(rectRegion('L3', 'Library', ROOM_NAMES.L3, back + 30, L1.bbox.z0 - 21, 20, 14, 5.5));
-    const LC3 = addCon(rectRegion('LC3', 'Library', 'Scribes corridor', L3.bbox.cx - 3, L3.bbox.z1, 6, L1.bbox.z0 - L3.bbox.z1, 6, 'corridor'));
-    door('L1-LC3', 'L1', 'LC3', L3.bbox.cx, L1.bbox.z0 - 0.5, 'z'); door('LC3-L3', 'LC3', 'L3', L3.bbox.cx, L3.bbox.z1 + 0.5, 'z');
+    const LC3 = addCon(rectRegion('LC3', 'Library', 'Scribes corridor', L3.bbox.cx - 9, L3.bbox.z1, 6, L1.bbox.z0 - L3.bbox.z1, 6, 'corridor'));
+    door('L1-LC3', 'L1', 'LC3', LC3.bbox.cx, L1.bbox.z0 - 0.5, 'z'); door('LC3-L3', 'LC3', 'L3', LC3.bbox.cx, L3.bbox.z1 + 0.5, 'z');
     const L4 = addRoom(region('L4', 'Library', ROOM_NAMES.L4, polyCircle(L1.bbox.x1 + 18, zL, 12, 32), 11));
     const LC4 = addCon(rectRegion('LC4', 'Library', 'Observatory opening', L1.bbox.x1, zL - 3, L4.bbox.x0 - L1.bbox.x1 + 1, 6, 6, 'corridor'));
     door('L1-LC4', 'L1', 'LC4', L1.bbox.x1 + 0.5, zL, 'x'); door('LC4-L4', 'LC4', 'L4', L4.bbox.x0 + 0.5, zL, 'x', 6, 'opening');
@@ -215,28 +215,28 @@
     return { rooms, connectors: connectors.concat(thresholds), doors, links, sealed, passages, back };
   }
 
+  function assignPortalPolygons(door) {
+    function footprint(depth, width) {
+      const w = door.axis === 'x' ? depth : width;
+      const d = door.axis === 'x' ? width : depth;
+      return polyRect(door.x - w * 0.5, door.z - d * 0.5, w, d);
+    }
+    door.floorPoly = footprint(door.thickness + 0.1, door.width);
+    door.wallPoly = footprint(1, door.width + 2);
+    door.openPoly = footprint(1.2, door.width);
+  }
+
   function prepareArchitecture(layout, hall) {
     const regions = layout.rooms.concat(layout.connectors);
     const allFloor = regions.reduce((acc, r) => union(acc, solid(r.poly)), []);
-    const doorFloors = [];
-    layout.doors.forEach(d => {
-      if (d.kind === 'arch') return;
-      const w = d.width, t = d.thickness + 0.1;
-      const poly = d.axis === 'x' ? polyRect(d.x - t * 0.5, d.z - w * 0.5, t, w) : polyRect(d.x - w * 0.5, d.z - t * 0.5, w, t);
-      d.floorPoly = poly;
-      doorFloors.push(solid(poly));
-    });
-    const floors = doorFloors.reduce((acc, s) => union(acc, s), allFloor);
+    const portals = layout.doors.filter(door => door.kind !== 'arch');
+    portals.forEach(assignPortalPolygons);
+    const floors = portals.reduce((acc, door) => union(acc, solid(door.floorPoly)), allFloor);
     const floorExtended = offset(floors, 0.3);
     const doorWalls = [], openings = [], caps = [];
-    layout.doors.forEach(d => {
-      if (d.kind === 'arch') return;
-      const span = d.width + 2;
-      const wallPoly = d.axis === 'x' ? polyRect(d.x - 0.5, d.z - span * 0.5, 1, span) : polyRect(d.x - span * 0.5, d.z - 0.5, span, 1);
-      const openPoly = d.axis === 'x' ? polyRect(d.x - 0.6, d.z - d.width * 0.5, 1.2, d.width) : polyRect(d.x - d.width * 0.5, d.z - 0.6, d.width, 1.2);
-      d.wallPoly = wallPoly; d.openPoly = openPoly;
-      doorWalls.push(solid(wallPoly)); openings.push(solid(openPoly));
-      caps.push({ door: d, solids: solid(openPoly) });
+    portals.forEach(d => {
+      doorWalls.push(solid(d.wallPoly)); openings.push(solid(d.openPoly));
+      caps.push({ door: d, solids: solid(d.openPoly) });
     });
     let wallSolid = union(difference(offset(floors, WALL), floors), doorWalls.reduce((a, s) => union(a, s), []));
     const hw = hall.width * 0.5, hl = hall.length;
@@ -507,6 +507,9 @@
     state.wallSolid = baked.wallSolid;
     state.baseWall = baked.baseWall;
     state.caps = baked.caps || [];
+    // The bake stores solids without portal footprints. Reconstruct them for
+    // the live corridor and room dressers without recalculating the union.
+    (state.doors || []).filter(door => door.kind !== 'arch').forEach(assignPortalPolygons);
     state.colliders = (baked.colliders || []).map(function (b) {
       return Object.assign({}, b, { _wing: true });
     });
