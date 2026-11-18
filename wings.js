@@ -747,10 +747,12 @@
     const library = state.library && state.library.ready ? state.library : null;
     const libraryFeet = library && fromY != null ? library.floor(x, z, fromY) : 0;
     const observatory = state.observatory && zoneIsReady('L4') && state.observatory;
+    const purification = state.purificationHall && zoneIsReady('T2') ? state.purificationHall.floorAt(x, z) : 0;
+    if (purification > 0 && fromY != null && purification > fromY + .25) return true;
     const sanctuary = state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.floorAt(x, z) : 0;
     if (sanctuary > 0 && fromY != null && sanctuary > fromY + .33) return true;
     const offerings = state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.floorAt(x, z) : 0;
-    const feet = (observatory && observatory.floorAt(x, z)) || offerings || sanctuary || libraryFeet;
+    const feet = (observatory && observatory.floorAt(x, z)) || offerings || sanctuary || purification || libraryFeet;
     if (offerings > 0 && fromY != null && offerings > fromY + .28) return true;
     if (observatory && observatory.blocks(x, z, r, feet)) return true;
     const hero = state.ctx && state.ctx.hero;
@@ -1071,11 +1073,18 @@
     };
     state.floorMeshes = []; state.floorWingSolids = [];
     const sacredRoom = window.SinSacredColumns && state.rooms.find(r => r.id === 'T3');
-    let sacredChannelCuts = [];
+    let templeWaterCuts = [];
     if (sacredRoom) {
       const { cx, cz } = sacredRoom.bbox;
       for (const { l, r, n, f } of SinSacredColumns.channelLayout(sacredRoom).flatMap(channel => channel.tiles)) {
-        sacredChannelCuts = union(sacredChannelCuts, solid(polyRect(cx + l, cz + n, r - l, f - n)));
+        templeWaterCuts = union(templeWaterCuts, solid(polyRect(cx + l, cz + n, r - l, f - n)));
+      }
+    }
+    const purification = window.SinPurificationHall && state.rooms.find(r => r.id === 'T2');
+    if (purification) {
+      const { cx, cz } = purification.bbox;
+      for (const { l, r, n, f } of SinPurificationHall.pools(purification)) {
+        templeWaterCuts = union(templeWaterCuts, solid(polyRect(cx + l, cz + n, r - l, f - n)));
       }
     }
     let claimedFloor = [];
@@ -1089,9 +1098,9 @@
       wingFloor = difference(wingFloor, claimedFloor);
       claimedFloor = union(claimedFloor, wingFloor);
       state.floorWingSolids.push({ wing,
-        solids: wing === 'Temple' && sacredChannelCuts.length ? difference(wingFloor, sacredChannelCuts) : wingFloor });
+        solids: wing === 'Temple' && templeWaterCuts.length ? difference(wingFloor, templeWaterCuts) : wingFloor });
       let skirt = offset(wingFloor, 0.3);
-      if (wing === 'Temple' && sacredChannelCuts.length) skirt = difference(skirt, sacredChannelCuts);
+      if (wing === 'Temple' && templeWaterCuts.length) skirt = difference(skirt, templeWaterCuts);
       if (wing === 'Kings') {
         const k2 = state.regions.find(r => r.id === 'K2');
         if (k2) {
@@ -1132,7 +1141,7 @@
       if (r.id !== 'K1') {
         if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
         if (!['K2', 'K3', 'K4', 'K5', 'T1', 'T3', 'L1', 'L2', 'L4'].includes(r.id) &&
-            !(r.id === 'T5' && window.SinRoyalOfferings) && !(r.id === 'T4' && window.SinLunarSanctuary)) addTorches(r);
+            !(r.id === 'T5' && window.SinRoyalOfferings) && !(r.id === 'T4' && window.SinLunarSanctuary) && !(r.id === 'T2' && window.SinPurificationHall)) addTorches(r);
       }
     }
     vis('regions');
@@ -1157,6 +1166,13 @@
       state.offeringScreen = mesh(boxAt(width + .08, height + .04, .16, x, height / 2, z),
         state.darkMat, 'TC5-offerings-portal-occluder', offeringCorridor);
       state.offeringScreen.castShadow = false;
+    }
+    if (window.SinPurificationHall) {
+      state.purificationScreens = state.purificationDoors.map(d => {
+        const corridor = state.regionGroups.get(d.from === 'T2' ? d.to : d.from);
+        return mesh(boxAt(.17, d.height + .05, d.width + .06, d.x, d.height / 2, d.z),
+          state.darkMat, d.id + '-purification-portal-occluder', corridor);
+      });
     }
     if (window.SinLunarSanctuary) {
       state.sanctuaryScreens = state.sanctuaryDoors.map(d => {
@@ -2627,9 +2643,10 @@
     state.doors.forEach(function (d) {
       if (!d || d._roomDoor || (d.kind === 'arch' && d.id !== 'PalaceR1')) return;
       const targets = d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] : d === state.offeringPortal ? ['T5'] :
+        window.SinPurificationHall && state.purificationDoors.includes(d) ? ['T2'] :
         window.SinLunarSanctuary && state.sanctuaryDoors.includes(d) ? ['T4'] :
         state.observatoryDoors.includes(d) ? ['L4'] : state.sacredHallDoors.includes(d) ? ['T3'] :
-          streamedTargets(d, cur).filter(id => !libraryZones.has(id) && id !== 'T3' && id !== 'T5' && id !== 'T4');
+          streamedTargets(d, cur).filter(id => !libraryZones.has(id) && id !== 'T2' && id !== 'T3' && id !== 'T5' && id !== 'T4');
       // Only block when approaching from outside a not-ready streamed room.
       const waiting = targets.filter(function (id) { return id !== cur && !zoneIsReady(id); });
       if (!waiting.length) return;
@@ -2720,6 +2737,12 @@
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
   function dispose() {
+    if (state.purificationLoad) state.purificationLoad.abort();
+    if (state.purificationHall) {
+      state.purificationHall.root.removeFromParent();
+      state.purificationHall.dispose();
+    }
+    state.purificationHall = state.purificationLoad = state.purificationScreens = null;
     if (state.lunarSanctuaryLoad) state.lunarSanctuaryLoad.abort();
     if (state.lunarSanctuary) {
       state.lunarSanctuary.root.removeFromParent();
@@ -2829,6 +2852,12 @@
     const doorFor = id => state.doors.find(d => d.id === id);
     state.sacredHallEntry = doorFor('PalaceR3');
     const t3ViaWest = [doorFor('T2-TC23'), doorFor('TC23-T3')];
+    const purgeWest = [doorFor('TC12-T2'), doorFor('T1-TC12')];
+    state.purificationDoors = [purgeWest[0], t3ViaWest[0]];
+    state.purificationRoutes = new Map([
+      ['T1', [purgeWest[1], purgeWest[0]]], ['TC12', [purgeWest[0]]],
+      ['T3', [...t3ViaWest].reverse()], ['TC23', [t3ViaWest[0]]]
+    ]);
     const t3ViaEast = [doorFor('TC34-T4'), doorFor('T3-TC34')];
     const t3ViaNorth = [doorFor('TC5-T5'), doorFor('T3-TC5')];
     const lunarExit = doorFor('T4-MP1');
@@ -3090,6 +3119,21 @@
     });
   }
 
+  function loadPurification(api) {
+    const room = state.rooms.find(r => r.id === 'T2');
+    const controller = new AbortController();
+    state.purificationLoad = controller;
+    SinPurificationHall.build(room, state.purificationDoors, loadRoomModel, controller.signal, deviceProfile.constrained).then(hall => {
+      if (controller.signal.aborted || state.purificationLoad !== controller) { hall.dispose(); return; }
+      state.purificationHall = hall;
+      zoneStreamer.markReleasable(hall.root);
+      api.add(hall.root);
+      api.done();
+    }, error => {
+      if (!controller.signal.aborted && state.purificationLoad === controller) api.fail(error);
+    });
+  }
+
   function loadLunarSanctuary(api) {
     const room = state.rooms.find(r => r.id === 'T4');
     const controller = new AbortController();
@@ -3187,6 +3231,25 @@
         openings.push(door);
         if (!SinWingVisibility.throughOpenings(view, openings, .06)) break;
         visible.add(id);
+      }
+    }
+  }
+
+  function purificationSight(view) {
+    if (!view || !window.SinWingVisibility) return false;
+    const id = regionAt(view.x, view.z)?.id;
+    if (id === 'T2' || state.current === 'T2') return true;
+    const route = state.purificationRoutes.get(id);
+    return !!(route && SinWingVisibility.throughOpenings(view, route, .07));
+  }
+
+  function syncPurificationShell(group, ready) {
+    for (const screen of state.purificationScreens || []) screen.visible = !ready;
+    const ceiling = group && group.getObjectByName('T2-ceiling');
+    if (ceiling) ceiling.visible = !ready && !state.cutaway;
+    if (state.purificationHall) {
+      for (const node of state.purificationHall.root.children) {
+        if (node.userData.ceiling) node.visible = ready && !state.cutaway;
       }
     }
   }
@@ -3387,6 +3450,11 @@
       if (library) library.visible = true;
     }
     state.archiveDemand = sight && !archiveReady;
+    if (window.SinPurificationHall) {
+      const group = state.regionGroups.get('T2');
+      group.visible = purificationSight(view) && zoneIsReady('T2');
+      if (group.visible && state.purificationHall) state.purificationHall.refreshWater(state.ctx.renderer, scene, camera);
+    }
     const observatory = state.regionGroups.get('L4');
     if (observatory) observatory.visible = observatorySight(view);
     const sacredHall = state.regionGroups.get('T3');
@@ -3417,6 +3485,50 @@
   }
 
   const WING_ZONES = [
+    ...(window.SinPurificationHall ? [{ id: 'T2', prefetchHops: 2, priority: -2, requireComplete: true,
+      keepShell: true, serialPreparation: true,
+      estProcessMB: deviceProfile.constrained ? 43 : 105,
+      estGpuMB: deviceProfile.constrained ? 25 : 72,
+      estCpuMB: deviceProfile.constrained ? 18 : 39,
+      load: loadPurification,
+      prepareGeometry: (api, renderer) => state.purificationHall.warmup.step(renderer),
+      onReady: function (api) {
+        const hall = state.purificationHall, origin = state.root.position;
+        hall.cameraColliders = [...hall.collision,...hall.stairBoxes].map(b => ({
+          minx:b.minx+origin.x,maxx:b.maxx+origin.x,miny:b.miny+origin.y,maxy:b.maxy+origin.y,
+          minz:b.minz+origin.z,maxz:b.maxz+origin.z,_wing:true
+        }));
+        const first = state.colliders.length;
+        state.colliders.push(...hall.collision);
+        indexSpatialFrom(first);
+        syncPurificationShell(api.group, true);
+        updatePassageGates();
+        const visible = api.group.visible;
+        try {
+          api.group.visible = true;
+          hall.refreshWater(state.ctx.renderer, state.ctx.scene, hall.camera, true);
+        } finally {
+          api.group.visible = visible;
+        }
+        triCache.delete('T2');
+      },
+      onFailure: function (error) {
+        registerLibraryFailure('T2');
+        console.warn('[T2] Purification Hall preparation failed', error);
+      },
+      unload: function (api) {
+        if (state.purificationLoad) state.purificationLoad.abort();
+        if (state.purificationHall) {
+          state.purificationHall.disposeReflection();
+          state.purificationHall.warmup.dispose();
+        }
+        state.purificationHall = state.purificationLoad = null;
+        state.colliders = state.colliders.filter(b => !b._purification);
+        rebuildSpatial();
+        syncPurificationShell(api.group, false);
+        triCache.delete('T2');
+      },
+      ownsObject: node => node.name === 'T2-Purification-Hall' }] : []),
     { id: 'T3', prefetchHops: 2, priority: -1, requireComplete: true, keepShell: true, serialPreparation: true,
       estProcessMB: deviceProfile.constrained ? 64 : 138,
       estGpuMB: deviceProfile.constrained ? 41 : 88,
@@ -3785,6 +3897,7 @@
   const retainedObservatory = new Set(['L1', 'L4']);
   const retainedMoonPassage = new Set(['L4']);
   const retainedSacredHall = new Set(['T3', 'T5']);
+  const retainedPurification = new Set(['T2', 'T3']);
   const retainedSanctuary = new Set(['T3', 'T4']);
   const retainedTemple = new Set(['T3', 'T4', 'T5']);
   const offeringApproaches = new Set(['T2', 'TC23', 'T3', 'TC34', 'T4', 'TC5', 'T5']);
@@ -3929,11 +4042,21 @@
       if (atSanctuary) retained = retainedSanctuary;
       else if (level === 'normal') retained = retainedTemple;
     }
+    // Keep T2 and T3 prepared at either side of the connecting hallway.
+    // Distant temple rooms still yield under the current device budget.
+    const purgeEntry = origin === 'T1' || origin === 'TC12' || origin === 'T2' || origin === 'TC23';
+    const purgeNear = window.SinPurificationHall && !inLibrary && (purgeEntry ||
+      (origin === 'T3' && move && Math.abs(move.x - state.purificationDoors[1].x) < 21));
+    if (purgeNear) {
+      approach.add('T2');
+      if (purgeEntry || level === 'normal') retained = retainedPurification;
+      else if (!retained) retained = retainedPurification;
+    }
     const allowBackgroundWarm = !inLibrary && (!move || Math.hypot(move.vx, move.vz) < 0.40);
     if (allowBackgroundWarm) {
       const eligible = new Set([...(preparedIds || []), ...(visibleIds || [])]);
       eligible.forEach(id => {
-        const g = id !== 'T3' && id !== 'T4' && id !== 'T5' && !libraryZones.has(id) && state.regionGroups.get(id);
+        const g = id !== 'T2' && id !== 'T3' && id !== 'T4' && id !== 'T5' && !libraryZones.has(id) && state.regionGroups.get(id);
         if (g) warmGroups.push(g);
       });
     }
@@ -3944,7 +4067,8 @@
         approach.add(id);
       }
     });
-    const demand = towardSanctuary && atSanctuary && !zoneIsReady('T4') ? 'T4' :
+    const demand = purgeNear && purgeEntry && !zoneIsReady('T2') ? 'T2' :
+      towardSanctuary && atSanctuary && !zoneIsReady('T4') ? 'T4' :
       nearTemple && !zoneIsReady('T3') ? 'T3' :
       (origin === 'T3' || origin === 'TC5') && !zoneIsReady('T5') ? 'T5' :
       !zoneIsReady('L1') ? 'L1' : (state.archiveDemand || archiveNear) && !zoneIsReady('L2') ? 'L2' :
@@ -3965,7 +4089,7 @@
     if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
       origin = state._dressLock.id;
     }
-    if (!origin || origin === 'T3' || origin === 'T4' || origin === 'T5' || libraryZones.has(origin)) return;
+    if (!origin || origin === 'T2' || origin === 'T3' || origin === 'T4' || origin === 'T5' || libraryZones.has(origin)) return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
     if (c && c.complete) {
@@ -4057,6 +4181,10 @@
         if (sacredHallSight(view)) planned.visible.add('T3');
         else planned.visible.delete('T3');
         cullFromSacredHall(view, planned.visible);
+        if (window.SinPurificationHall) {
+          if (purificationSight(view)) planned.visible.add('T2');
+          else planned.visible.delete('T2');
+        }
         if (window.SinLunarSanctuary) {
           if (sanctuarySight(view)) planned.visible.add('T4');
           else planned.visible.delete('T4');
@@ -4099,7 +4227,7 @@
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
         g.visible = visibleIds.has(rr.id) && (rr.id !== 'L2' || zoneIsReady('L2')) &&
-          (rr.id !== 'T5' || zoneIsReady('T5')) && (rr.id !== 'T4' || zoneIsReady('T4'));
+          (rr.id !== 'T5' || zoneIsReady('T5')) && (rr.id !== 'T4' || zoneIsReady('T4')) && (rr.id !== 'T2' || zoneIsReady('T2'));
       });
       // Zone streaming is the single source of truth: prefetch, budgeted
       // uploads, shader compile (shells + dress), atomic reveal, LRU eviction
@@ -4153,6 +4281,9 @@
     if (state.sacredHall && zoneIsReady('T3') && state.regionGroups.get('T3').visible) {
       state.sacredHall.tick(performance.now() * .001);
     }
+    if (state.purificationHall && zoneIsReady('T2') && state.regionGroups.get('T2').visible) {
+      state.purificationHall.tick(performance.now() * .001);
+    }
     if (state.lunarSanctuary && zoneIsReady('T4') && state.regionGroups.get('T4').visible) {
       state.lunarSanctuary.tick(performance.now() * .001);
     }
@@ -4173,6 +4304,10 @@
   }
   function floorAt(x, z, fromY) {
     if (!contains(x, z)) return null;
+    if (state.purificationHall && zoneIsReady('T2')) {
+      const step = state.purificationHall.floorAt(x, z);
+      if (step > 0) return step;
+    }
     if (state.royalOfferings && zoneIsReady('T5')) {
       const step = state.royalOfferings.floorAt(x, z);
       if (step > 0) return step;
@@ -4331,6 +4466,7 @@
         setLibraryCeiling(state.regionGroups.get('L1'));
         setObservatoryShell(state.regionGroups.get('L4'));
         setSacredHallCeiling(state.regionGroups.get('T3'), zoneIsReady('T3'));
+        if (window.SinPurificationHall) syncPurificationShell(state.regionGroups.get('T2'), zoneIsReady('T2'));
         if (window.SinLunarSanctuary) syncSanctuaryShell(state.regionGroups.get('T4'), zoneIsReady('T4'));
         if (window.SinRoyalOfferings) syncOfferingShell(state.regionGroups.get('T5'));
       }
@@ -5710,6 +5846,7 @@
     });
   }
   const STREAM_EXPECT = {
+    ...(window.SinPurificationHall ? { T2: SinPurificationHall.expected } : {}),
     T3: window.SinSacredColumns ? SinSacredColumns.expected : [],
     ...(window.SinLunarSanctuary ? { T4: SinLunarSanctuary.expected } : {}),
     ...(window.SinRoyalOfferings ? { T5: SinRoyalOfferings.expected } : {}),
@@ -5874,6 +6011,7 @@
     archiveCamera: () => state.archive && zoneIsReady('L2') ? state.archive.camera : null,
     observatoryCamera: () => state.observatory && zoneIsReady('L4') ? state.observatory.camera : null,
     sacredHallCamera: () => state.sacredHall && zoneIsReady('T3') ? state.sacredHall.camera : null,
+    purificationCamera: () => state.purificationHall && zoneIsReady('T2') ? state.purificationHall.camera : null,
     sanctuaryCamera: () => state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.camera : null,
     offeringsCamera: () => state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.camera : null,
     beforePresent,
