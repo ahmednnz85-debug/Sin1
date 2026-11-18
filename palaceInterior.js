@@ -152,6 +152,7 @@
   let preTeardownInfo = null;
   let postTeardownInfo = null;
   let warmFrame = false;
+  let libraryEntryPending = false;
   let loadStartedAt = 0;
   let loadStage = 0;
   const LOAD_STAGES = ['جاري تحميل القصر الرئيسي', 'جاري تحميل جناح الملوك', 'جاري تحميل المكتبة الكبرى', 'جاري تحميل المعبد الملكي للقمر', 'جاري تجهيز الإضاءة والخامات والمؤثرات', 'جاري تجهيز الكاميرا والموارد المشتركة', 'اكتمل تحميل القصر'];
@@ -325,6 +326,7 @@
   }
 
   function shownPercent() {
+    if (libraryEntryPending && warmFrame && state === 'REVEAL') return 99;
     if (warmFrame && hallBuilt && filesReady()) return 100;
     if (state === 'REVEAL' && warmMeshes && warmMeshes.length) {
       return Math.min(99, 92 + Math.floor((7 * warmIndex) / warmMeshes.length));
@@ -341,7 +343,8 @@
     if (pctEl) pctEl.textContent = pct + '%';
     if (statusEl) {
       if (state === 'FAILED') statusEl.textContent = 'توقف تحميل القصر الملكي';
-      else if (state === 'REVEAL') statusEl.textContent = 'جاري تجهيز الإضاءة والخامات والمؤثرات';
+      else if (state === 'REVEAL') statusEl.textContent = libraryEntryPending && warmFrame
+        ? 'جاري تجهيز جناح المكتبة' : 'جاري تجهيز الإضاءة والخامات والمؤثرات';
       else if (filesReady() && !warmFrame) statusEl.textContent = 'جاري تجهيز الكاميرا والموارد المشتركة';
       else if (pct >= 100) statusEl.textContent = LOAD_STAGES[6];
       else statusEl.textContent = LOAD_STAGES[Math.max(0, Math.min(5, loadStage))];
@@ -631,7 +634,11 @@
   function capCpuTexture(t) {
     if (!t) return;
     try {
-      const max = (window.SinDevice && SinDevice.detect && SinDevice.detect().maxTextureSize) || 0;
+      const deviceMax = (window.SinDevice && SinDevice.detect && SinDevice.detect().maxTextureSize) || 0;
+      // These shared palace atlases stay resident while the wings stream.
+      // A 4K RGBA atlas costs ~85 MiB with mipmaps. Bound the resident core
+      // separately from the room models and the display resolution.
+      const max = Math.min(deviceMax, 1536);
       if (max && window.SinDevice && SinDevice.capTexture) SinDevice.capTexture(t, max);
     } catch (_) {}
   }
@@ -737,13 +744,7 @@
       try { releaseCpuFromObject(roots[i], ctx.renderer, { upload: false, enqueue: false }); } catch (_) {}
       try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer, { upload: false }); } catch (_) {}
     }
-    try { pumpGpuUploads(ctx.renderer, 50); } catch (_) {}
-    if (tag && window.SinProcessMemory) {
-      try {
-        const pe = SinProcessMemory.estimate({ renderer: ctx.renderer, scene: ctx.scene, phase: 'REVEAL' });
-        mark('cpu drain ' + tag + ' ~proc ' + (pe && pe.processMB) + ' cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB));
-      } catch (_) {}
-    }
+    if (tag) mark('cpu drain ' + tag);
   }
 
   function releaseCpuFromResult(result, renderer) {
@@ -4569,6 +4570,7 @@
             state = 'REVEAL';
             fadeT = 0;
             warmFrame = false;
+            libraryEntryPending = !!(wingRuntime && window.PalaceWings && PalaceWings.prepareEntryLibrary);
             warmMeshes = null;
             warmScene = null;
             warmPending = false;
@@ -4706,6 +4708,11 @@
         }
         if (!warmPending) beginWarmSlice(ctx);
         return;
+      }
+      if (libraryEntryPending) {
+        const libraryPhase = PalaceWings.prepareEntryLibrary(() => drainCpuNow(ctx, 'library-budget'));
+        if (libraryPhase !== 'ready') return;
+        libraryEntryPending = false;
       }
       fadeT += dt;
       loadEl.style.opacity = '1';

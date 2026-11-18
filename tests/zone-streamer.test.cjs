@@ -677,3 +677,40 @@ test('the archive can coexist with a visible library within a 650 MB budget', as
   assert.equal(shared.disposed, 0);
   assert.equal(content.geometry.d, undefined);
 });
+
+test('palace entry prepares L1 first and leaves L2 cold when its memory would exceed the device budget', async () => {
+  const scene = obj('scene'), groups = { L1: obj('L1'), L2: obj('L2'), K2: obj('K2') };
+  Object.values(groups).forEach(g => scene.add(g));
+  let memory = { processMB: 460, gpuMB: 270, cpuMB: 110 };
+  const s = Z.create({ processBudgetMB: 650, gpuBudgetMB: 480, cpuBudgetMB: 80, estimate: () => memory });
+  const shell = mesh('archive ceiling', tex());
+  groups.L2.add(shell);
+  const loaded = [];
+  for (const id of Object.keys(groups)) {
+    s.register({ id, requireComplete: true, keepShell: true, serialPreparation: true,
+      estProcessMB: 90,
+      load(api) { loaded.push(id); api.add(mesh(id + ' content', tex())); api.done(); } });
+  }
+  s.attach({ renderer: renderer(), scene, camera: {}, groupOf: id => groups[id] });
+  const distances = new Map([['L1', 1], ['L2', 1], ['K2', 1]]);
+  const retained = new Set(['L1', 'L2']);
+  const boot = only => ({ current: 'Palace', distances, only: new Set([only]), retained });
+  for (let i = 0; i < 6; i++) { s.update(boot('L1')); await tick(); }
+  const library = groups.L1.children[0];
+  assert.equal(s.status('L1'), 'ready');
+  assert.deepEqual(loaded, ['L1']);
+
+  memory = { processMB: 575, gpuMB: 340, cpuMB: 125 };
+  for (let i = 0; i < 6; i++) { s.update(boot('L2')); await tick(); }
+  assert.deepEqual(loaded, ['L1']);
+  assert.equal(s.status('L2'), 'cold');
+  assert.equal(s.report().zones.L2.deferred, true);
+  assert.equal(shell.visible, true);
+  assert.equal(library.visible, true);
+
+  memory = { processMB: 545, gpuMB: 340, cpuMB: 125 };
+  for (let i = 0; i < 6; i++) { s.update(boot('L2')); await tick(); }
+  assert.deepEqual(loaded, ['L1', 'L2']);
+  assert.equal(s.status('L2'), 'ready');
+  assert.equal(groups.L1.children[0], library);
+});

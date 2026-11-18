@@ -1099,7 +1099,7 @@
     state.ceilings = [];
     for (const r of state.regions) {
       const g = new THREE.Group(); g.name = 'wing-region-' + r.id; state.root.add(g); state.regionGroups.set(r.id, g);
-      if (r.ceiling !== false && r.id !== 'L2') {
+      if (r.ceiling !== false) {
         let poly = solid(r.poly);
         if (r.id === 'L4') poly = difference(poly, solid(polyCircle(r.bbox.cx, r.bbox.cz, 2.5, 32)));
         const ceiling = mesh(extrudeSolids(poly, r.height, r.height + 0.25), state.wallMat, r.id + '-ceiling', g);
@@ -2582,9 +2582,9 @@
     if (!zoneStreamer || !state.doors || !state.current) return;
     const cur = state.current;
     state.doors.forEach(function (d) {
-      if (!d || d._roomDoor || d.kind === 'arch') return;
-      const targets = d.id === 'LC2-L2' ? (cur === 'L2' ? [] : ['L2']) :
-        streamedTargets(d, cur).filter(id => id !== 'L2');
+      if (!d || d._roomDoor || (d.kind === 'arch' && d.id !== 'PalaceR1')) return;
+      const targets = d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] :
+        streamedTargets(d, cur).filter(id => id !== 'L1' && id !== 'L2');
       // Only block when approaching from outside a not-ready streamed room.
       const waiting = targets.filter(function (id) { return id !== cur && !zoneIsReady(id); });
       if (!waiting.length) return;
@@ -2682,7 +2682,10 @@
     }
     state.archive = state.archiveLoad = state.archiveMotion = null;
     state.archiveDemand = false;
-    if (state.archiveUI) { state.archiveUI.panel.remove(); state.archiveUI = null; }
+    state.entryLibrary = null;
+    state.libraryFailures = null;
+    if (state.libraryWarmup) state.libraryWarmup.dispose();
+    state.libraryWarmup = null;
     if (state.library) {
       state.library.root.removeFromParent();
       state.library.dispose();
@@ -2916,6 +2919,7 @@
     pending.then(library => {
       if (state.libraryLoad !== pending) { library.dispose(); return; }
       state.library = library;
+      state.libraryWarmup = SinGreatLibrary.geometryWarmup(library.root);
       zoneStreamer.markReleasable(library.root);
       api.add(library.root);
       api.done();
@@ -2999,38 +3003,11 @@
       const library = state.regionGroups.get('L1');
       if (library) library.visible = true;
     }
-    const waiting = sight && !zoneIsReady('L2');
-    state.archiveDemand = waiting;
-    if (!waiting && !state.archiveUI) return;
-    if (!state.archiveUI) {
-      const panel = document.createElement('div');
-      panel.id = 'l2-streaming';
-      panel.dir = 'rtl';
-      panel.setAttribute('role', 'status');
-      panel.style.cssText = 'position:fixed;inset:0;z-index:180;display:grid;place-content:center;text-align:center;gap:14px;background:#17100b;color:#f3dcad;font:600 17px system-ui;pointer-events:none';
-      const text = document.createElement('div');
-      const retry = document.createElement('button');
-      retry.type = 'button';
-      retry.textContent = 'إعادة المحاولة';
-      retry.style.pointerEvents = 'auto';
-      retry.onclick = () => { zoneStreamer.forceEvict('L2'); };
-      panel.append(text, retry);
-      document.body.append(panel);
-      state.archiveUI = { panel, text, retry };
-    }
-    const ui = state.archiveUI, status = zoneStreamer.status('L2');
-    const failed = status === 'failed';
-    if (ui.waiting !== waiting || ui.status !== status) {
-      ui.status = status;
-      ui.waiting = waiting;
-      ui.panel.style.display = waiting ? 'grid' : 'none';
-      ui.text.textContent = failed ? 'تعذّر تجهيز الأرشيف الملكي' : 'جارٍ تجهيز الأرشيف الملكي';
-      ui.retry.hidden = !failed;
-    }
+    state.archiveDemand = sight && !zoneIsReady('L2');
   }
 
   const WING_ZONES = [
-    { id: 'L2', prefetchHops: 2, priority: -1, requireComplete: true,
+    { id: 'L2', prefetchHops: 2, priority: -1, requireComplete: true, keepShell: true, serialPreparation: true,
       estProcessMB: deviceProfile.constrained ? 90 : 225,
       estGpuMB: deviceProfile.constrained ? 61 : 145,
       estCpuMB: deviceProfile.constrained ? 29 : 80,
@@ -3039,6 +3016,7 @@
       onFailure: function (error) {
         if (state.archiveLoad) state.archiveLoad.abort();
         if (state.archive) state.archive.warmup.dispose();
+        registerLibraryFailure('L2');
         console.warn('[L2] Archive preparation failed', error);
       },
       onReady: function () {
@@ -3051,17 +3029,31 @@
         state.colliders.push(...state.archive.colliders);
         rebuildSpatial();
         triCache.delete('L2');
+        const ceiling = state.regionGroups.get('L2').getObjectByName('L2-ceiling');
+        if (ceiling) ceiling.visible = false;
       },
-      unload: function () {
+      unload: function (api) {
         if (state.archiveLoad) state.archiveLoad.abort();
         if (state.archive) state.archive.warmup.dispose();
         state.archive = state.archiveLoad = null;
         state.colliders = state.colliders.filter(box => !box._archive);
         triCache.delete('L2');
+        const ceiling = api.group && api.group.getObjectByName('L2-ceiling');
+        if (ceiling) ceiling.visible = !state.cutaway;
       },
       ownsObject: node => node.name === 'L2-Royal-Archive' },
-    { id: 'L1', prefetchHops: 3, priority: 0,
+    { id: 'L1', prefetchHops: 3, priority: 0, requireComplete: true, keepShell: true, serialPreparation: true,
+      estProcessMB: deviceProfile.constrained ? 95 : 155,
+      estGpuMB: deviceProfile.constrained ? 65 : 104,
+      estCpuMB: deviceProfile.constrained ? 30 : 51,
       load: loadLibrary,
+      prepareGeometry: (api, renderer) => state.libraryWarmup.step(renderer),
+      onFailure: function (error) {
+        state.libraryLoad = null;
+        if (state.libraryWarmup) state.libraryWarmup.dispose();
+        registerLibraryFailure('L1');
+        console.warn('[L1] Library preparation failed', error);
+      },
       onReady: function (api) {
         if (!state.library) return;
         state.library.ready = true;
@@ -3078,6 +3070,8 @@
         setLibraryCeiling(api.group);
       },
       unload: function (api) {
+        if (state.libraryWarmup) state.libraryWarmup.dispose();
+        state.libraryWarmup = null;
         if (state.library) {
           state.library.restoreGroundPose();
           state.library.sun.shadow.dispose();
@@ -3229,27 +3223,115 @@
     if (bestId) set.add(bestId);
     return set;
   }
+  const libraryZones = new Set(['L1', 'L2']);
+  const entryLibraryOnly = new Set(['L1']);
+  const entryArchiveOnly = new Set(['L2']);
+  function registerLibraryFailure(id) {
+    const failures = state.libraryFailures || (state.libraryFailures = new Map());
+    const prior = failures.get(id);
+    failures.set(id, { count: prior ? prior.count + 1 : 1, retryAt: performance.now() + 12000 });
+  }
+  function attachStreamer() {
+    const { renderer, scene, camera } = state.ctx;
+    zoneStreamer.attach({ renderer, scene, camera, groupOf: id => state.regionGroups.get(id) || null });
+  }
+  function sampleEntryMemory() {
+    if (window.SinProcessMemory && SinProcessMemory.estimate) {
+      const { renderer, scene } = state.ctx;
+      SinProcessMemory.estimate({ renderer, scene });
+    }
+  }
+  function prepareEntryLibrary(reclaim) {
+    if (!state.built || !zoneStreamer) return 'ready';
+    if (!state.entryLibrary) {
+      attachStreamer();
+      sampleEntryMemory();
+      state.entryLibrary = { started: performance.now(), archiveStarted: 0 };
+    }
+    const entry = state.entryLibrary, now = performance.now();
+    if (entry.done) return 'ready';
+    const libraryReady = zoneIsReady('L1');
+    if (libraryReady && !entry.archiveStarted) {
+      // Measure again after L1's GPU uploads and decoded image cleanup.
+      // L2 is optional at entry and goes through the normal memory budget.
+      sampleEntryMemory();
+      entry.archiveStarted = now;
+    }
+    const id = libraryReady ? 'L2' : 'L1';
+    const only = libraryReady ? entryArchiveOnly : entryLibraryOnly;
+    zoneStreamer.update({ current: 'Palace', only, approach: only, retained: libraryZones,
+      allowBackgroundWarm: false });
+    const status = zoneStreamer.status(id);
+    if (!libraryReady) {
+      if (status === 'cold' && !entry.reclaimed && reclaim) {
+        entry.reclaimed = true;
+        reclaim();
+        sampleEntryMemory();
+        return 'pending';
+      }
+      const elapsed = now - entry.started;
+      if (status === 'failed' || elapsed > 60000 || (status === 'cold' && elapsed > 3000)) {
+        // The whole palace remains playable if its base already needs the
+        // memory. R1 retains its frame and gates L1 until preparation fits.
+        entry.done = true;
+        return 'ready';
+      }
+      return 'pending';
+    }
+    if (status === 'ready') {
+      // Catch variance in the actual atlas uploads before leaving the load
+      // screen. L2 is still off-screen from the palace's entrance.
+      sampleEntryMemory();
+      const { usage, budget } = zoneStreamer.report();
+      if ((budget.processMB > 0 && usage.processMB > budget.processMB) ||
+          (budget.gpuMB > 0 && usage.gpuMB > budget.gpuMB)) zoneStreamer.forceEvict('L2');
+    }
+    // If L2 does not fit or takes too long, leave it to corridor prefetch.
+    entry.done = status === 'cold' || status === 'failed' || status === 'ready' || now - entry.archiveStarted > 25000;
+    return entry.done ? 'ready' : 'pending';
+  }
   function streamZones(origin, visibleIds, preparedIds) {
     if (!zoneStreamer) return 0;
     if (zoneDistKey !== origin || !zoneDist) { zoneDistKey = origin; zoneDist = distancesFrom(origin); }
     const ctx = state.ctx;
-    zoneStreamer.attach({ renderer: ctx.renderer, scene: ctx.scene, camera: ctx.camera, groupOf: function (id) { return state.regionGroups.get(id) || null; } });
+    attachStreamer();
     const level = (zoneStreamer.sample(ctx.renderer) || {}).level || 'normal';
     const warmGroups = [];
-    (preparedIds || new Set()).forEach(function (id) { const g = id !== 'L2' && state.regionGroups.get(id); if (g) warmGroups.push(g); });
-    (visibleIds || new Set()).forEach(function (id) { const g = id !== 'L2' && state.regionGroups.get(id); if (g && warmGroups.indexOf(g) < 0) warmGroups.push(g); });
     const approach = approachRoomIds();
     const move = state.archiveMotion, portal = state.archivePortals && state.archivePortals[0];
+    const region = regionAt(move ? move.x : 0, move ? move.z : 0);
+    const inLibrary = region && region.wing === 'Library';
+    let retained;
+    if (inLibrary) retained = libraryZones;
     if (origin === 'Palace' && move && portal) {
       const dx = portal.x - move.x, dz = portal.z - move.z;
       const distance = Math.hypot(dx, dz);
       const speed = Math.hypot(move.vx, move.vz);
       const toward = distance < 0.5 || (dx * move.vx + dz * move.vz) > distance * speed * 0.65;
-      if (toward && distance <= Math.min(19, 3 + speed * 3.5)) approach.add('L2');
+      if (distance < 32) retained = libraryZones;
+      if (distance < 24 || (toward && distance <= Math.min(42, 15 + speed * 3.5))) {
+        approach.add('L1');
+        if (zoneIsReady('L1')) approach.add('L2');
+      }
     }
-    const allowBackgroundWarm = !move || Math.hypot(move.vx, move.vz) < 0.40;
+    const allowBackgroundWarm = !inLibrary && (!move || Math.hypot(move.vx, move.vz) < 0.40);
+    if (allowBackgroundWarm) {
+      const eligible = new Set([...(preparedIds || []), ...(visibleIds || [])]);
+      eligible.forEach(id => {
+        const g = !libraryZones.has(id) && state.regionGroups.get(id);
+        if (g) warmGroups.push(g);
+      });
+    }
+    if (retained && state.libraryFailures) retained.forEach(id => {
+      const failure = state.libraryFailures.get(id);
+      if (failure && failure.count === 1 && performance.now() >= failure.retryAt && zoneStreamer.status(id) === 'failed') {
+        zoneStreamer.forceEvict(id);
+        approach.add(id);
+      }
+    });
     return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds,
-      memoryLevel: level, warmGroups, approach, allowBackgroundWarm, demand: state.archiveDemand ? 'L2' : null });
+      memoryLevel: level, warmGroups, approach, retained, only: inLibrary ? libraryZones : null,
+      allowBackgroundWarm, demand: !zoneIsReady('L1') ? 'L1' : state.archiveDemand ? 'L2' : null });
   }
   // After LRU eviction a streamed room (K4 in particular) can sit complete=false
   // with its dress refs nulled. If the player is standing in it, re-issue the
@@ -3262,7 +3344,7 @@
     if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
       origin = state._dressLock.id;
     }
-    if (!origin || origin === 'L2') return;
+    if (!origin || libraryZones.has(origin)) return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
     if (c && c.complete) {
@@ -5111,6 +5193,7 @@
     libraryCamera: () => state.library && state.library.ready ? state.library.camera : null,
     archiveCamera: () => state.archive && zoneIsReady('L2') ? state.archive.camera : null,
     beforePresent,
+    prepareEntryLibrary,
     onLibraryStairs,
     restoreLibraryPose: () => { if (state.library) state.library.restoreGroundPose(); },
     groundLibraryHero: hero => { if (onLibraryStairs(hero.position)) state.library.groundHero(hero); },
