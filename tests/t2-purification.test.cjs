@@ -8,7 +8,7 @@ const layout = solveLayout(require('../data/palace-colliders.json').hall);
 const room = layout.rooms.find(region => region.id === 'T2');
 const context = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'purification-hall.js'), 'utf8'), context);
-const { pools, stairTreads, localFloor, jetPoint, waterfall, bridgeHeight } = context.window.SinPurificationHall;
+const { pools, stairTreads, localFloor, jetPoint, fountain, expected } = context.window.SinPurificationHall;
 
 test('the temple route stays on the original T2 axis with both doorways unchanged', () => {
   const { x0, x1, z0, z1, cz } = room.bbox;
@@ -22,7 +22,9 @@ test('the temple route stays on the original T2 axis with both doorways unchange
   assert.ok(pools(room).every(b => b.l>-10&&b.r<10&&(b.f<=-2.25||b.n>=2.25)));
   const treads = stairTreads();
   for(let x=-10;x<=10;x+=.25) for(const z of [-2,0,2]) assert.equal(localFloor(x,z,treads),0);
-  assert.ok(bridgeHeight>2.65);
+  assert.ok(expected.includes('T2-door-arch'));
+  assert.ok(expected.includes('T2-bull-relief'));
+  assert.ok(!expected.some(name=>/waterfall|flume|bridge/.test(name)));
 });
 
 test('both side platforms are reached over four shallow steps', () => {
@@ -36,15 +38,19 @@ test('both side platforms are reached over four shallow steps', () => {
   }
 });
 
-test('both spouts fall within the open bath volumes and the raised fall has dry headroom', () => {
+test('both lion streams arc in front of their platforms and land inside the side pools', () => {
   for(const side of [-1,1]) {
     const p = pools(room)[side<0?0:1];
-    const a = jetPoint(0,.36,1.22,side*6.90,side,1.32);
-    const b = jetPoint(1,.36,1.22,side*6.90,side,1.32);
-    assert.equal(a[1],1.22);
+    const mouth = [fountain.x, fountain.baseY+.32, side*(fountain.mount-.52)];
+    const a = jetPoint(0,...mouth,side,fountain.reach);
+    const b = jetPoint(1,...mouth,side,fountain.reach);
+    assert.deepEqual(Array.from(a), mouth);
     assert.ok(Math.abs(b[1]-p.level)<1e-6);
     assert.ok(b[0]>p.l&&b[0]<p.r&&b[2]>p.n&&b[2]<p.f);
+    for(let i=1;i<=20;i++) {
+      assert.ok(Math.abs(jetPoint(i/20,...mouth,side,fountain.reach)[2]) < Math.abs(mouth[2]));
+    }
   }
-  assert.ok(waterfall.lip>waterfall.landing);
-  assert.ok(waterfall.top>waterfall.bottom&&waterfall.bottom>waterfall.bed&&waterfall.bed>bridgeHeight);
+  assert.ok(fountain.top>fountain.baseY+fountain.height);
+  assert.ok(fountain.back>fountain.mount);
 });

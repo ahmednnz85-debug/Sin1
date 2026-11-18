@@ -10,16 +10,17 @@
     2228:'columnCarved', 2070:'bowl', 1822:'columnBlue', 1780:'columnSmooth', 1768:'linen', 1500:'jug'
   };
   const expected = ['floor', 'walls', 'roof', 'lightwell', 'pool-stone', 'water', 'lionNorth', 'lionSouth',
-    'lion-streams', 'waterfall', 'water-impact', 'rear-arch', 'bull-relief', 'alcoves', 'steps',
+    'fountain-stone', 'fountain-palmettes', 'lion-streams', 'water-impact', 'rear-arch', 'door-arch', 'bull-relief', 'alcoves', 'steps',
     'brazier', 'linen', 'smoke'].map(name => 'T2-' + name);
   const deckHeight = .686;
-  const bridgeHeight = 2.75;
-  const waterfall = { lip:6.98, top:3.85, bottom:3.025, bed:3.005, landing:6.54, halfWidth:1.67 };
+  const poolLevel = .24;
+  const fountain = { x:.36, baseY:1.01, height:1.02, mount:7.37, top:2.13, back:7.97, bed:-.59, reach:1.02 };
+  const jetLift = .07;
 
   function pools(room) {
     const { cx, cz, x0, x1, z1 } = room.bbox;
     const inner = 2.63, outer = z1-cz-.76, l = x0-cx+3.83, r = x1-cx-5.35;
-    return [-1,1].map(side => ({ l,r,n:side<0?-outer:inner,f:side<0?-inner:outer, level:.24 }));
+    return [-1,1].map(side => ({ l,r,n:side<0?-outer:inner,f:side<0?-inner:outer, level:poolLevel }));
   }
 
   function stairTreads() {
@@ -36,7 +37,7 @@
   }
 
   function jetPoint(t,x,y,z,side,span) {
-    return [x+.075*Math.sin(Math.PI*t), y+.29*t-(y-.24+.29)*t*t, z-side*span*t];
+    return [x, y+jetLift*t-(y-poolLevel+jetLift)*t*t, z-side*span*t];
   }
 
   function crop(tex, baseW, baseH, [l,t,r,b], repeat=false) {
@@ -68,7 +69,7 @@
   }
 
   function fitParts(parts,constrained) {
-    for (const key of ['sourceBasin','sourceSteps','columnBlue','columnSmooth']) {
+    for (const key of ['sourceBasin','sourceSteps','columnBlue','columnSmooth','planter']) {
       parts[key].geometry.dispose();
       delete parts[key];
     }
@@ -153,7 +154,7 @@
     localAmbient.layers.set(layer);root.add(localAmbient);
     for(const n of root.children) {
       if(n.isLight&&n!==localAmbient) n.layers.enable(layer);
-      if(n.isMesh && /^T2-(walls|upper-royal-lions|lower-glazed-band|rear-arch|bull-relief|lightwell-sky|roof-beams|pilasters|flames|brazier|lionNorth|lionSouth|fountain-pedestals|waterfall-lip|alcoves|steps|platform)$/.test(n.name)) n.layers.enable(layer);
+      if(n.isMesh && /^T2-(walls|upper-royal-lions|lower-glazed-band|rear-arch|bull-relief|lightwell-sky|roof-beams|pilasters|flames|brazier|lionNorth|lionSouth|fountain-stone|fountain-panel|fountain-underside|fountain-palmettes|amphora|fountain-edge|alcoves|steps|platform)$/.test(n.name)) n.layers.enable(layer);
     }
     const delay=constrained?196:129;
     let next=0,lastFrame=0,passes=0,drawCalls=0,cost=0;
@@ -162,7 +163,7 @@
       if((!prime&&now<next)||!camera||renderer.getRenderTarget()||renderer.getContext().isContextLost())return;
       camera.updateWorldMatrix(true,false);
       water.updateWorldMatrix(true,false);
-      centre.set(0,.24,0).applyMatrix4(water.matrixWorld);
+      centre.set(0,poolLevel,0).applyMatrix4(water.matrixWorld);
       eye.setFromMatrixPosition(camera.matrixWorld);
       if(eye.y<=centre.y+.05)return;
       orientation.extractRotation(camera.matrixWorld);
@@ -264,9 +265,8 @@
         float w1=sin(p.x*8.88-p.y*6.9+t*2.13);
         float w2=sin(p.y*12.71+p.x*2.04-t*1.7);
         float k0=splash(p,land[0]),k1=splash(p,land[1]);
-        float impact=(k0+k1) * step(local.y,1.);
-        float rear=exp(-2.7*abs(local.x-6.54))*sin(35.*local.x-7.*t)*.022*step(2.,local.y);
-        vec3 N=normalize(vec3(.008*w0+.007*w1+impact+rear,1.,.010*w2+.006*w1-impact));
+        float impact=k0+k1;
+        vec3 N=normalize(vec3(.008*w0+.007*w1+impact,1.,.010*w2+.006*w1-impact));
         float f=.17+.83*pow(1.-max(0.,dot(V,N)),4.);
         vec3 ray=reflect(-V,N);
         vec3 reflection=environment(local,ray);
@@ -275,7 +275,7 @@
         float inMirror=smoothstep(0.,.045,uvR.x)*smoothstep(0.,.045,uvR.y)*
           smoothstep(0.,.045,1.-uvR.x)*smoothstep(0.,.045,1.-uvR.y);
         vec3 image=texture2D(mirror,uvR).rgb;
-        reflection=mix(reflection,image*vec3(.75,.78,.79),reflected*inMirror*.86*step(local.y,1.));
+        reflection=mix(reflection,image*vec3(.75,.78,.79),reflected*inMirror*.86);
         float g=glint(local,ray,vec3(3.82,1.22,2.89))+glint(local,ray,vec3(3.82,1.22,-2.89))+
           glint(local,ray,vec3(-4.6,3.12,7.54))+glint(local,ray,vec3(-4.6,3.12,-7.54))+
           glint(local,ray,vec3(7.1,3.12,4.5))+glint(local,ray,vec3(7.1,3.12,-4.5));
@@ -289,49 +289,52 @@
       }
     `,{land:{value:land},mirror:sampler,waterProjection:projection,reflected:enabled});
 
-    const p=[], u=[], ix=[];
+    const vertices=[], coords=[], faces=[];
     for(const {side,start,span} of jets) {
-      const loops=5, segments=24, base=p.length/3;
-      for(let i=0;i<=segments;i++){
-        const t=i/segments, c=jetPoint(t,...start,side,span), radius=.055+.032*t;
-        for(let j=0;j<=loops;j++){
-          const theta=Math.PI*2*j/loops;
-          p.push(c[0]+Math.cos(theta)*radius,c[1]+Math.sin(theta)*radius*.27,c[2]+Math.sin(theta)*radius*.69);
-          u.push(j/loops,t);
-          if(i<segments&&j<loops){const v=base+i*(loops+1)+j;ix.push(v,v+1,v+loops+1,v+1,v+loops+2,v+loops+1);}
+      const ringSegments=12, sections=30, base=vertices.length/3;
+      for(let i=0;i<=sections;i++){
+        const t=i/sections, center=jetPoint(t,...start,side,span);
+        // A flattened cross-section oriented perpendicular to the falling
+        // stream. The fan contracts under gravity, then widens at impact.
+        const slope=jetLift-2*(start[1]-poolLevel+jetLift)*t;
+        const length=Math.hypot(span,slope);
+        const opening=Math.min(1,t/.13);
+        const width=(.077+.036*opening)*(1-.21*t+.22*t*t*t*t);
+        const depth=(.014+.022*opening)*(1-.42*t+.31*t*t*t);
+        for(let j=0;j<=ringSegments;j++){
+          const theta=Math.PI*2*j/ringSegments, offset=Math.sin(theta)*depth;
+          vertices.push(center[0]+Math.cos(theta)*width,
+            center[1]+offset*span/length,center[2]+offset*side*slope/length);
+          coords.push(j/ringSegments,t);
+          if(i<sections&&j<ringSegments){
+            const v=base+i*(ringSegments+1)+j;
+            faces.push(v,v+1,v+ringSegments+1,v+1,v+ringSegments+2,v+ringSegments+1);
+          }
         }
       }
     }
-    const flowFragment=`
-      uniform float clock; uniform float curtain;
-      varying vec3 local; varying vec3 world; varying vec2 tex;
+    add('lion-streams',geometry(vertices,coords,faces),`
+      uniform float clock;
+      varying vec3 world; varying vec2 tex;
       void main(){
-        vec2 v=tex;float col=sin(v.x*211.+sin(v.y*8.+clock)*.46);
-        float threads=.79+.21*sin(v.x*335.+.24*sin(v.y*10.-clock));
-        float flow=.73+.27*sin(v.y*39.-clock*10.+2.8*sin(v.x*41.));
-        float pulse=smoothstep(-.3,.5,col)*threads*flow;
-        float core=.54+.46*cos(v.x*31.4+sin(v.y*9.-clock*3.)*.43);
-        float density=mix(.46+core*.42,.13+.62*pulse,curtain);
-        vec3 c=mix(vec3(.24,.43,.46),vec3(.89,.93,.88),clamp(pulse+core*.22,0.,1.));
-        gl_FragColor=vec4(c,density*(.79+.20*smoothstep(.72,1.,v.y)));
+        float t=tex.y, strand=.5+.5*cos(tex.x*6.283185);
+        float twist=.19*sin(t*12.-clock*2.4)+.11*sin(t*27.-clock*6.3);
+        float streak=pow(.5+.5*sin(strand*35.+twist),5.);
+        float filaments=.5+.5*sin(strand*72.+1.1*sin(t*8.-clock*3.6));
+        float flow=.55+.45*sin(t*46.-clock*11.+strand*5.1);
+        vec3 N=normalize(cross(dFdx(world),dFdy(world)));
+        vec3 V=normalize(cameraPosition-world);
+        float fresnel=pow(1.-clamp(abs(dot(N,V)),0.,1.),2.1);
+        float shine=streak*(.49+.51*flow)+filaments*.15*flow;
+        vec3 c=mix(vec3(.17,.29,.29),vec3(.88,.94,.91),clamp(.13+shine*.82+fresnel*.43,0.,1.));
+        float alpha=(.21+shine*.36+fresnel*.28+.15*smoothstep(.91,1.,t))*smoothstep(.0,.047,t);
+        gl_FragColor=vec4(c,alpha);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }
-    `;
-    add('lion-streams',geometry(p,u,ix),flowFragment,{curtain:{value:0}},4);
+    `,{},4);
 
-    const fall=new THREE.PlaneGeometry(waterfall.halfWidth*2,1,32,12);
-    const points=fall.attributes.position, st=fall.attributes.uv;
-    for(let i=0;i<points.count;i++){
-      const t=1-st.getY(i), z=points.getX(i);
-      points.setXYZ(i,waterfall.lip-(waterfall.lip-waterfall.landing)*t+.016*Math.sin(z*27.)*t,
-        THREE.MathUtils.lerp(waterfall.top,waterfall.bottom,t),z);
-      st.setY(i,t);
-    }
-    add('waterfall',fall,flowFragment,{curtain:{value:1}},4);
-
-    const impacts=jets.map(j=>[j.end[0],j.end[1]+.004,j.end[2],.54,.54]);
-    for(let i=-4;i<=4;i++) impacts.push([waterfall.landing,waterfall.bottom+.004,i*.367,.32,.36]);
+    const impacts=jets.map(j=>[j.end[0],j.end[1]+.004,j.end[2],.57,.49]);
     const pp=[], uu=[], ii=[];
     for(const [x,y,z,w,h] of impacts){
       const n=pp.length/3;
@@ -341,19 +344,23 @@
     add('water-impact',geometry(pp,uu,ii),`
       uniform float clock; varying vec3 local; varying vec2 tex;
       void main(){
-        float r=length((tex-.5)*2.);
-        float phase=clock+.46*sin(floor(local.z*3.));
-        float foam=.41+.59*pow(max(0.,sin(tex.x*115.+sin(tex.y*90.+phase*12.))),3.);
-        float rings=pow(max(0.,cos(28.*r-6.28*phase)),12.);
-        float a=(1.-smoothstep(.10,1.,r))*(.48*rings+.49*foam*exp(-10.*r));
-        gl_FragColor=vec4(.77,.85,.80,a);
+        vec2 centered=(tex-.5)*2.;
+        float radius=length(centered);
+        float phase=clock+.46*sin(local.z);
+        float grains=sin(centered.x*103.+3.*sin(centered.y*42.+phase*9.))
+          *sin(centered.y*117.+4.*cos(centered.x*43.-phase*8.));
+        float broken=smoothstep(.03,.72,grains);
+        float waves=pow(max(0.,cos(30.*radius-7.6*phase)),12.);
+        float core=(.46+.54*broken)*(1.-smoothstep(.12,.52,radius+.035*sin(tex.y*58.)));
+        float wake=(1.-smoothstep(.25,1.,radius))*waves*(.19+.36*broken);
+        gl_FragColor=vec4(.80,.88,.84,min(.90,core*.70+wake));
         #include <colorspace_fragment>
       }
     `,{},5,THREE.AdditiveBlending);
 
     const specks=[], drops=[];
     impacts.forEach(([x,y,z,w,h],i)=>{
-      const count=y>1?8:22;
+      const count=37;
       for(let j=0;j<count;j++){
         const seed=(i*173+j*43)%97/97, a=j*2.39996;
         specks.push(x,y,z);drops.push(seed,Math.cos(a)*w,Math.sin(a)*h);
@@ -368,9 +375,9 @@
         uniform float clock; attribute vec3 drop; varying float life;
         void main(){
           life=fract(clock*(1.18+.31*drop.x)+drop.x);
-          vec3 p=position+vec3(drop.y*life*.71,(1.-life)*life*(.66+drop.x*.54),drop.z*life*.71);
+          vec3 p=position+vec3(drop.y*life*.71,(1.-life)*life*(.76+drop.x*.72),drop.z*life*.71);
           gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);
-          gl_PointSize=clamp(16./max(1.,gl_Position.w),1.,3.1);
+          gl_PointSize=clamp(19./max(1.,gl_Position.w),1.,3.1);
         }
       `,
       fragmentShader:`varying float life;void main(){
@@ -508,6 +515,8 @@
     const floorTrim=material(crop(floor,400,400,[20,4,59,395],true),0xd2bc9e,.56);
     const glaze=material(texture([11,423,286,451],true),0xcbc7bd,.65);
     const palm=material(texture([10,479,287,516],true),0xdec4a2,.58);
+    const palmette=material(texture([15,253,79,317]),0xe4d0b1,.53);
+    const gilt=material(texture([10,462,286,467],true),0xe2bc7c,.61);
     const lions=material(texture([11,10,340,97]),0xe0cbb5,.72,.022);
     const glyphs=material(texture([366,17,692,79],true),0xd9c0a3,.79,.025);
     const bull=material(texture([16,111,302,239]),0xe1cbb4,.65,.020);
@@ -594,14 +603,7 @@
         box('wall-brackets',stone,x,2.70,z-sign*.52,.46,.15,.63,.8);
         torch(x,2.77,z-sign*.62,.47);
       }
-      const lion=sign<0?'lionNorth':'lionSouth', mountZ=sign*7.075;
-      box('fountain-pedestals',palm,.36,.694,sign*7.56,1.69,1.38,.79,1.30);
-      box('fountain-pedestals',stone,.36,1.42,sign*7.54,1.80,.15,.93,1.4);
-      const matrix=prop(lion,.36,.84,mountZ,.93,sign<0?0:Math.PI);
-      const start=new THREE.Vector3(...kit[lion].mouth).applyMatrix4(matrix).toArray();
-      const jetSpan=1.32;
-      jets.push({side:sign,start,span:jetSpan,end:jetPoint(1,...start,sign,jetSpan)});
-      prop('planter',.34,1.50,sign*7.57,.70,sign<0?0:Math.PI);
+      buildFountain(sign);
       prop('plinth',3.87,0,sign*3.04,.62);
       torch(3.87,.62,sign*3.04,.47,true);
       prop('bowl',3.87,.49,sign*4.15,.24);
@@ -619,8 +621,53 @@
       }
     }
 
-    // Keep the baked openings on both faces. The rear programme sits in front
-    // of the east wall and carries a flume above the aligned, dry exit.
+    function buildFountain(side) {
+      const {x,baseY,height,mount,top,back,bed,reach}=fountain;
+      const key=side<0?'lionNorth':'lionSouth', head=kit[key];
+      const scale=height/head.size.y, depth=head.size.z*scale, width=head.size.x*scale;
+      const facing=side<0?0:Math.PI;
+      // Seat the geometry by its measured rear face. The square blue
+      // panel and sandstone block remain wholly behind the carved head.
+      const headCenter=side*(mount-depth/2);
+      const matrix=prop(key,x,baseY,headCenter,height,facing);
+      const nozzle=new THREE.Vector3(...head.mouth).applyMatrix4(matrix);
+      const start=nozzle.toArray();
+      // Begin just inside the mouth so there is no exposed end to the stream.
+      start[1]+=.021;
+      start[2]+=side*.038;
+      const panelWidth=width+.20;
+      const blockWidth=panelWidth+.45, stoneFace=mount+.034;
+      box('fountain-stone',stone,x,(top+bed)/2,side*(stoneFace+back)/2,blockWidth,top-bed,back-stoneFace,1.42);
+      box('fountain-panel',glaze,x,baseY+height*.49,side*(mount+.017),panelWidth,height*1.11,.034,1.38);
+
+      // The lower shelf meets the foot of the sculpture and stops just
+      // behind the mouth. Flow cannot enter stone anywhere along the arc.
+      const front=Math.abs(nozzle.z)+.055;
+      const shelfDepth=back-front, exposed=baseY-poolLevel;
+      const cap=.092, bodyTop=baseY-cap;
+      box('fountain-underside',glaze,x,(bodyTop+bed)/2,side*(front+back)/2,blockWidth-.11,bodyTop-bed,shelfDepth,1.4);
+      box('fountain-edge',stone,x,baseY-cap/2,side*(front+back)/2,blockWidth-.085,cap,shelfDepth,1.12);
+      const panelHeight=exposed-.108, panelY=poolLevel+panelHeight/2;
+      const panelSize=(blockWidth-.19)/2;
+      for(const edge of [-1,1]){
+        wall('fountain-palmettes',palmette,x+edge*(panelSize/2+.007),panelY,
+          side*(front-.003),panelSize-.025,panelHeight,facing);
+        wall('fountain-palmettes',palmette,x+edge*(blockWidth-.106)/2,panelY,
+          side*(front+shelfDepth*.5),shelfDepth-.07,panelHeight,edge*Math.PI/2);
+        box('fountain-edge',gilt,x+edge*(blockWidth-.122)/2,panelY,side*(front-.009),.017,panelHeight,.023,.7);
+        box('fountain-edge',gilt,x+edge*(panelWidth-.019)/2,baseY+height*.49,
+          side*(mount-.004),.019,height*1.08,.018,.78);
+      }
+      box('fountain-edge',gilt,x,baseY-.104,side*(front-.005),blockWidth-.122,.024,.023,1.0);
+      box('fountain-edge',gilt,x,baseY+height*1.037,side*(mount-.004),panelWidth,.022,.017,1.0);
+      prop('amphora',x,top,side*(stoneFace+back)/2,.63,facing);
+      block(x-blockWidth/2,x+blockWidth/2,Math.min(side*stoneFace,side*back),
+        Math.max(side*stoneFace,side*back),bed,top);
+      jets.push({side,start,span:reach,end:jetPoint(1,...start,side,reach)});
+    }
+
+    // Retain the baked portals. The east opening gets a shallow arch liner
+    // and the bull relief remains above the full-height opening.
     for(const d of doors){
       const side=d.x<cx?-1:1, x=side*(hx-.013), a=side<0?Math.PI/2:-Math.PI/2;
       const half=d.width/2+.022, sideW=hz-half;
@@ -634,9 +681,6 @@
     for(const sign of [-1,1]){
       box('platform',stone,8.37,deckHeight/2,sign*5.25,3.15,deckHeight,5.46,2.40);
       wall('platform-fascia',palm,6.794,.525,sign*5.25,5.43,.30,-Math.PI/2,1.63);
-      box('flume-abutments',stone,7.59,1.65,sign*2.80,1.49,3.3,.72,1.72);
-      box('flume-abutments',glaze,7.59,.87,sign*2.398,1.43,.72,.09,1.37);
-      block(6.83,8.35,sign*2.80-.38,sign*2.80+.38,0,3.30);
       prop('columnCarved',7.53,deckHeight,sign*4.66,1.79);
       block(7.26,7.80,sign*4.66-.27,sign*4.66+.27,deckHeight,2.70);
       prop('bowl',7.53,deckHeight+1.79,sign*4.66,.32);
@@ -644,25 +688,31 @@
       torch(7.48,deckHeight+.67,sign*7.08,.49);
     }
 
-    const platformFront = 6.21;
-    box('bridge',stone,8.09,bridgeHeight+.11,0,3.77,.22,5.06,1.80);
-    block(platformFront,9.98,-2.52,2.52,bridgeHeight,3.34);
-    box('flume-trough',dark,6.78,waterfall.bed-.055,0,1.12,.11,3.97,1.68);
-    box('flume-trough',stone,6.208,3.021,0,.124,.212,4.12,2.2);
-    for(const sign of [-1,1]){
-      box('flume-trough',stone,6.76,3.035,sign*2.0,1.19,.24,.20,1.6);
-      box('flume-rim',palm,6.156,2.90,sign*.998,.065,.192,2.04,1.9);
+    const exit=doors.find(d=>d.x>cx);
+    const half=exit.width/2, spring=exit.height-half, archX=9.70, heading=-Math.PI/2;
+    surface('door-arch',ring,rearArch(half+.23,spring,.23),archX,0,0,heading);
+    box('door-transom',stone,archX-.15,exit.height+.056,0,.32,.112,exit.width+.09,1.45);
+    for(const hand of [-1,1]){
+      wall('door-jambs',palm,archX,spring*.5,hand*(half+.115),.23,spring,heading,1,2.1);
+      const corner=new THREE.Shape();
+      corner.moveTo(0,exit.height);
+      for(let i=0;i<=22;i++){
+        const t=Math.PI*.5*i/22;
+        corner.lineTo(hand*half*Math.sin(t),spring+half*Math.cos(t));
+      }
+      corner.lineTo(hand*half,exit.height);
+      corner.closePath();
+      surface('door-spandrels',stone,new THREE.ExtrudeGeometry(corner,{
+        depth:.31,bevelEnabled:false,curveSegments:1
+      }),archX+.322,0,0,heading);
     }
-    box('waterfall-lip',stone,7.70,3.733,0,1.44,.235,3.63,1.85);
-    wall('flume-carving',palm,6.977,3.705,0,3.53,.132,-Math.PI/2,1.0);
-    box('flume-abutments',dark,8.76,3.2,0,1.88,.80,4.40,1.78);
-    wall('bull-relief',bull,9.48,5.075,0,6.39,2.87,-Math.PI/2);
+    wall('bull-relief',bull,9.48,6.26,0,3.15,1.41,heading);
     rearDesign();
 
     function rearDesign(){
       const wallX=9.31, angle=-Math.PI/2, spring=3.08;
       surface('rear-arch-masonry',stone,archMasonry(4.82,spring,.69),wallX+.324,0,0,angle);
-      const backing=new THREE.Shape(), inner=4.25, sill=3.63;
+      const backing=new THREE.Shape(), inner=4.25, sill=5.47;
       const start=Math.asin((sill-spring)/inner);
       backing.absarc(0,spring,inner,start,Math.PI-start);
       backing.closePath();
@@ -743,7 +793,7 @@
       if(/^T2-(roof|lightwell)/.test(node.name)) node.userData.ceiling=true;
     }
     leaf.side=THREE.DoubleSide;
-    const water=waterEffects(root,[...channels,{l:6.266,r:7.29,n:-1.91,f:1.91,level:waterfall.bottom}],jets,clock);
+    const water=waterEffects(root,channels,jets,clock);
     atmosphere(root,flames,smoke,clock,constrained);
 
     const glow=[];
@@ -805,5 +855,5 @@
       throw error;
     }finally{maps.forEach(t=>t.dispose());}
   }
-  window.SinPurificationHall = { build,expected,pools,stairTreads,localFloor,jetPoint,waterfall,bridgeHeight };
+  window.SinPurificationHall = { build,expected,pools,stairTreads,localFloor,jetPoint,fountain };
 })();
