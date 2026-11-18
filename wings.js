@@ -1114,11 +1114,10 @@
       // K2 columns are the real asset extracted from الاستقبال.glb (dressK2).
       // T1: old generated columns removed; full procedural sacred entrance (t1-entrance.js).
       if (r.id === 'T1' && window.SinT1Entrance) { try { window.SinT1Entrance.build(r, g, { doors: state.doors || layout.doors, colliders: state.colliders, fires: state.fires }); } catch (e) { console.warn('[T1] build failed', e); } }
-      if (r.id === 'T3') addColumns(r, g, columnPairs(r, 6, 5.0, 3.0), 0.88);
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
       if (r.id !== 'K1') {
         if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
-        if (!['K2', 'K3', 'K4', 'K5', 'T1', 'L1', 'L2', 'L4'].includes(r.id)) addTorches(r);
+        if (!['K2', 'K3', 'K4', 'K5', 'T1', 'T3', 'L1', 'L2', 'L4'].includes(r.id)) addTorches(r);
       }
     }
     vis('regions');
@@ -2583,7 +2582,8 @@
     state.doors.forEach(function (d) {
       if (!d || d._roomDoor || (d.kind === 'arch' && d.id !== 'PalaceR1')) return;
       const targets = d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] :
-        state.observatoryDoors.includes(d) ? ['L4'] : streamedTargets(d, cur).filter(id => !libraryZones.has(id));
+        state.observatoryDoors.includes(d) ? ['L4'] : state.sacredHallDoors.includes(d) ? ['T3'] :
+          streamedTargets(d, cur).filter(id => !libraryZones.has(id) && id !== 'T3');
       // Only block when approaching from outside a not-ready streamed room.
       const waiting = targets.filter(function (id) { return id !== cur && !zoneIsReady(id); });
       if (!waiting.length) return;
@@ -2674,6 +2674,12 @@
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
   function dispose() {
+    if (state.sacredHallLoad) state.sacredHallLoad.abort();
+    if (state.sacredHall) {
+      state.sacredHall.root.removeFromParent();
+      state.sacredHall.dispose();
+    }
+    state.sacredHall = state.sacredHallLoad = null;
     if (state.observatoryLoad) state.observatoryLoad.abort();
     if (state.observatory) {
       state.observatory.root.removeFromParent();
@@ -2759,6 +2765,22 @@
     state.archivePortals = ['PalaceR1', 'L1-LC2', 'LC2-L2'].map(id => state.doors.find(door => door.id === id));
     state.observatoryDoors = state.doors.filter(door => door.from === 'L4' || door.to === 'L4');
     state.observatoryApproach = state.doors.find(door => door.id === 'L1-LC4');
+    state.sacredHallDoors = state.doors.filter(d => d.from === 'T3' || d.to === 'T3');
+    const doorFor = id => state.doors.find(d => d.id === id);
+    state.sacredHallEntry = doorFor('PalaceR3');
+    const t3ViaWest = [doorFor('T2-TC23'), doorFor('TC23-T3')];
+    const t3ViaEast = [doorFor('TC34-T4'), doorFor('T3-TC34')];
+    const t3ViaNorth = [doorFor('TC5-T5'), doorFor('T3-TC5')];
+    state.sacredHallRoutes = new Map([
+      ['T1', [doorFor('T1-TC12'), doorFor('TC12-T2'), ...t3ViaWest]],
+      ['TC12', [doorFor('TC12-T2'), ...t3ViaWest]], ['T2', t3ViaWest], ['TC23', t3ViaWest.slice(1)],
+      ['T4', t3ViaEast], ['TC34', t3ViaEast.slice(1)], ['T5', t3ViaNorth], ['TC5', t3ViaNorth.slice(1)]
+    ]);
+    state.sacredHallSightLines = [
+      [['TC23', t3ViaWest[1]], ['T2', t3ViaWest[0]], ['TC12', doorFor('TC12-T2')], ['T1', doorFor('T1-TC12')]],
+      [['TC34', t3ViaEast[1]], ['T4', t3ViaEast[0]]],
+      [['TC5', t3ViaNorth[1]], ['T5', t3ViaNorth[0]]]
+    ];
     const library = state.rooms.find(room => room.id === 'L1');
     state.archiveHallExit = Object.assign({}, state.archivePortals[0], { x: library.bbox.x0 });
     const hallBounds = { x0: -hall.width / 2, x1: hall.width / 2, z0: 0, z1: hall.length };
@@ -2999,6 +3021,53 @@
     return floor && floor.material.map;
   }
 
+  function loadSacredHall(api) {
+    const controller = new AbortController();
+    state.sacredHallLoad = controller;
+    const room = state.rooms.find(r => r.id === 'T3');
+    SinSacredColumns.build(room, state.sacredHallDoors, loadRoomModel, controller.signal).then(hall => {
+      if (state.sacredHallLoad !== controller || controller.signal.aborted) { hall.dispose(); return; }
+      state.sacredHall = hall;
+      zoneStreamer.markReleasable(hall.root);
+      api.add(hall.root);
+      api.done();
+    }, error => {
+      if (state.sacredHallLoad === controller && !controller.signal.aborted) api.fail(error);
+    });
+  }
+
+  function setSacredHallCeiling(host, ready) {
+    if (!host) return;
+    const shell = host.getObjectByName('T3-ceiling');
+    if (shell) shell.visible = !ready && !state.cutaway;
+    if (state.sacredHall && ready) state.sacredHall.root.children.forEach(n => {
+      if (/^T3-(?:roof-|carved-roof|sunbeams)/.test(n.name) && !n.isLight) n.visible = !state.cutaway;
+    });
+  }
+
+  function sacredHallSight(view) {
+    if (!view || !state.sacredHallRoutes || !window.SinWingVisibility) return false;
+    const region = regionAt(view.x, view.z);
+    if (state.current === 'T3' || (region && region.id === 'T3')) return true;
+    const route = region && state.sacredHallRoutes.get(region.id);
+    return !!(route && SinWingVisibility.throughOpenings(view, route, .05));
+  }
+
+  function cullFromSacredHall(view, visible) {
+    const region = regionAt(view.x, view.z);
+    if (!region || region.id !== 'T3') return;
+    visible.clear();
+    visible.add('T3');
+    for (const line of state.sacredHallSightLines) {
+      const openings = [];
+      for (const [id, door] of line) {
+        openings.push(door);
+        if (!SinWingVisibility.throughOpenings(view, openings, .06)) break;
+        visible.add(id);
+      }
+    }
+  }
+
   function setObservatoryShell(host) {
     if (!host) return;
     const ready = zoneIsReady('L4');
@@ -3082,9 +3151,59 @@
     state.archiveDemand = sight && !zoneIsReady('L2');
     const observatory = state.regionGroups.get('L4');
     if (observatory) observatory.visible = observatorySight(view);
+    const sacredHall = state.regionGroups.get('T3');
+    if (sacredHall) {
+      sacredHall.visible = sacredHallSight(view);
+      if (sacredHall.visible && state.sacredHall && zoneIsReady('T3')) {
+        state.sacredHall.refreshWater(state.ctx.renderer, scene, camera);
+      }
+    }
   }
 
   const WING_ZONES = [
+    { id: 'T3', prefetchHops: 2, priority: -1, requireComplete: true, keepShell: true, serialPreparation: true,
+      estProcessMB: deviceProfile.constrained ? 64 : 138,
+      estGpuMB: deviceProfile.constrained ? 41 : 88,
+      estCpuMB: deviceProfile.constrained ? 23 : 50,
+      load: loadSacredHall,
+      prepareGeometry: (api, renderer) => state.sacredHall.warmup.step(renderer),
+      onReady: function (api) {
+        const origin = state.root.position;
+        state.sacredHall.cameraColliders = state.sacredHall.boxes.filter(b => !b.water).map(b => ({
+          minx: b.minx + origin.x, maxx: b.maxx + origin.x,
+          miny: b.miny + origin.y, maxy: b.maxy + origin.y,
+          minz: b.minz + origin.z, maxz: b.maxz + origin.z, _wing: true
+        }));
+        state.colliders.push(...state.sacredHall.boxes);
+        rebuildSpatial();
+        setSacredHallCeiling(api.group, true);
+        updatePassageGates();
+        const visible = api.group.visible;
+        try {
+          api.group.visible = true;
+          const hall = state.sacredHall;
+          hall.refreshWater(state.ctx.renderer, state.ctx.scene, hall.camera, true);
+        } finally {
+          api.group.visible = visible;
+        }
+        triCache.delete('T3');
+      },
+      onFailure: function (error) {
+        registerLibraryFailure('T3');
+        console.warn('[T3] Sacred Columns Hall preparation failed', error);
+      },
+      unload: function (api) {
+        if (state.sacredHallLoad) state.sacredHallLoad.abort();
+        if (state.sacredHall) {
+          state.sacredHall.disposeWater();
+          state.sacredHall.warmup.dispose();
+        }
+        state.sacredHall = state.sacredHallLoad = null;
+        state.colliders = state.colliders.filter(b => !b._sacredHall);
+        setSacredHallCeiling(api.group, false);
+        triCache.delete('T3');
+      },
+      ownsObject: node => node.name === 'T3-Sacred-Columns-Hall' },
     { id: 'L4', prefetchHops: 1, priority: -1, requireComplete: true, keepShell: true, serialPreparation: true,
       estProcessMB: deviceProfile.constrained ? 53 : 110,
       estGpuMB: deviceProfile.constrained ? 37 : 76,
@@ -3338,6 +3457,7 @@
   const retainedLibrary = new Set(['L1', 'L2']);
   const retainedObservatory = new Set(['L1', 'L4']);
   const retainedMoonPassage = new Set(['L4']);
+  const retainedSacredHall = new Set(['T3']);
   const entryLibraryOnly = new Set(['L1']);
   const entryArchiveOnly = new Set(['L2']);
   function registerLibraryFailure(id) {
@@ -3443,11 +3563,18 @@
         }
       }
     }
+    const templeEntry = state.sacredHallEntry;
+    const nearTemple = origin === 'T3' || state.sacredHallRoutes.has(origin) || origin === 'ARCH_R3' ||
+      (origin === 'Palace' && move && templeEntry && Math.hypot(templeEntry.x - move.x, templeEntry.z - move.z) < 15);
+    if (nearTemple && !inLibrary) {
+      approach.add('T3');
+      retained = retained || retainedSacredHall;
+    }
     const allowBackgroundWarm = !inLibrary && (!move || Math.hypot(move.vx, move.vz) < 0.40);
     if (allowBackgroundWarm) {
       const eligible = new Set([...(preparedIds || []), ...(visibleIds || [])]);
       eligible.forEach(id => {
-        const g = !libraryZones.has(id) && state.regionGroups.get(id);
+        const g = id !== 'T3' && !libraryZones.has(id) && state.regionGroups.get(id);
         if (g) warmGroups.push(g);
       });
     }
@@ -3458,7 +3585,7 @@
         approach.add(id);
       }
     });
-    const demand = towardObservatory && !zoneIsReady('L4') ? 'L4' :
+    const demand = nearTemple && !zoneIsReady('T3') ? 'T3' : towardObservatory && !zoneIsReady('L4') ? 'L4' :
       !zoneIsReady('L1') ? 'L1' : state.archiveDemand ? 'L2' : null;
     return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds,
       memoryLevel: level, warmGroups, approach, retained, only: inLibrary ? libraryZones : null,
@@ -3475,7 +3602,7 @@
     if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
       origin = state._dressLock.id;
     }
-    if (!origin || libraryZones.has(origin)) return;
+    if (!origin || origin === 'T3' || libraryZones.has(origin)) return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
     if (c && c.complete) {
@@ -3561,6 +3688,9 @@
       if (observatorySight(view)) planned.visible.add('L4');
       else planned.visible.delete('L4');
       cullFromObservatory(view, planned.visible);
+      if (sacredHallSight(view)) planned.visible.add('T3');
+      else planned.visible.delete('T3');
+      cullFromSacredHall(view, planned.visible);
       if (force) console.info('[palace load] cull-plan', Math.round(performance.now()-tPlan)+'ms', 'vis', planned.visible.size);
       if (isArch) planned.visible.add(id);
       meta = planned.meta;
@@ -3642,6 +3772,9 @@
     if (_trT) _trT('PalaceWings.updateRoomDoors');
     updateCulling(false);
     if (state.library && state.current === 'L1') state.library.tick(performance.now() * 0.001);
+    if (state.sacredHall && zoneIsReady('T3') && state.regionGroups.get('T3').visible) {
+      state.sacredHall.tick(performance.now() * .001);
+    }
     if (_trT) _trT('PalaceWings.updateCulling');
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
     if ((state.k2Lights && state.k2Lights.length) || (state.k3Lights && state.k3Lights.length)) {
@@ -3796,6 +3929,7 @@
         state.ceilings.concat(state.corridorCeilings || []).forEach(c => { c.visible = !state.cutaway; });
         setLibraryCeiling(state.regionGroups.get('L1'));
         setObservatoryShell(state.regionGroups.get('L4'));
+        setSacredHallCeiling(state.regionGroups.get('T3'), zoneIsReady('T3'));
       }
       if (b.dataset.act === 'bright') {
         state.fullbright = !state.fullbright;
@@ -5173,6 +5307,7 @@
     });
   }
   const STREAM_EXPECT = {
+    T3: window.SinSacredColumns ? SinSacredColumns.expected : [],
     L4: window.SinObservatory ? SinObservatory.expected : [],
     L2: window.SinRoyalArchive ? SinRoyalArchive.expected : [],
     L1: [
@@ -5333,6 +5468,7 @@
     libraryCamera: () => state.library && state.library.ready ? state.library.camera : null,
     archiveCamera: () => state.archive && zoneIsReady('L2') ? state.archive.camera : null,
     observatoryCamera: () => state.observatory && zoneIsReady('L4') ? state.observatory.camera : null,
+    sacredHallCamera: () => state.sacredHall && zoneIsReady('T3') ? state.sacredHall.camera : null,
     beforePresent,
     prepareEntryLibrary,
     onLibraryStairs,
