@@ -102,58 +102,6 @@
     root.add(rays);
   }
 
-  function geometryWarmup(root) {
-    const unique = new Set();
-    root.traverse(node => { if (node.isMesh) unique.add(node.geometry); });
-    const queue = Array.from(unique);
-    let target, scene, camera, material, mesh, nextAt = 0;
-    const centre = new THREE.Vector3();
-    function dispose() {
-      queue.length = 0;
-      if (target) target.dispose();
-      if (material) material.dispose();
-      if (scene) scene.clear();
-      target = scene = camera = material = mesh = null;
-    }
-    function step(renderer) {
-      if (!queue.length) return true;
-      if (!renderer || renderer.getContext().isContextLost()) throw new Error('Archive GPU unavailable');
-      const now = performance.now();
-      if (now < nextAt) return false;
-      nextAt = now + 15;
-      if (!target) {
-        target = new THREE.WebGLRenderTarget(8, 8, { depthBuffer: false });
-        scene = new THREE.Scene();
-        camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 5);
-        camera.position.z = 2;
-        material = new THREE.MeshBasicMaterial({ toneMapped: false });
-        mesh = new THREE.Mesh(queue[0], material);
-        scene.add(mesh);
-      }
-      const previous = renderer.getRenderTarget();
-      try {
-        renderer.setRenderTarget(target);
-        const limit = performance.now() + 2.5;
-        for (let i = 0; i < 3 && queue.length; i++) {
-          mesh.geometry = queue.shift();
-          mesh.geometry.computeBoundingSphere();
-          const bounds = mesh.geometry.boundingSphere;
-          const scale = 0.90 / Math.max(bounds.radius, 0.001);
-          mesh.scale.setScalar(scale);
-          mesh.position.copy(centre.copy(bounds.center).multiplyScalar(-scale));
-          renderer.render(scene, camera);
-          if (performance.now() > limit) break;
-        }
-      } finally {
-        renderer.setRenderTarget(previous);
-      }
-      if (queue.length) return false;
-      dispose();
-      return true;
-    }
-    return { step, dispose };
-  }
-
   function assemble(room, entrance, parts, textures) {
     const bounds = room.bbox, w = bounds.x1 - bounds.x0, d = bounds.z1 - bounds.z0, h = room.height;
     const entranceX = entrance.x - bounds.x0;
@@ -322,7 +270,7 @@
     point.set(axis - 0.57, 2.39, 1.4);
     camera.lookAt(point);
     root.add(camera);
-    const warmup = geometryWarmup(root);
+    const warmup = SinGreatLibrary.geometryWarmup(root);
     return {
       root, camera, colliders, warmup,
       dispose() { warmup.dispose(); SinGreatLibrary.disposeResources(root); }

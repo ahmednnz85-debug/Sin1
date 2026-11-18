@@ -152,6 +152,7 @@
   let preTeardownInfo = null;
   let postTeardownInfo = null;
   let warmFrame = false;
+  let libraryEntryPending = false;
   let loadStartedAt = 0;
   let loadStage = 0;
   const LOAD_STAGES = ['جاري تحميل القصر الرئيسي', 'جاري تحميل جناح الملوك', 'جاري تحميل المكتبة الكبرى', 'جاري تحميل المعبد الملكي للقمر', 'جاري تجهيز الإضاءة والخامات والمؤثرات', 'جاري تجهيز الكاميرا والموارد المشتركة', 'اكتمل تحميل القصر'];
@@ -325,6 +326,7 @@
   }
 
   function shownPercent() {
+    if (libraryEntryPending && warmFrame && state === 'REVEAL') return 99;
     if (warmFrame && hallBuilt && filesReady()) return 100;
     if (state === 'REVEAL' && warmMeshes && warmMeshes.length) {
       return Math.min(99, 92 + Math.floor((7 * warmIndex) / warmMeshes.length));
@@ -341,7 +343,8 @@
     if (pctEl) pctEl.textContent = pct + '%';
     if (statusEl) {
       if (state === 'FAILED') statusEl.textContent = 'توقف تحميل القصر الملكي';
-      else if (state === 'REVEAL') statusEl.textContent = 'جاري تجهيز الإضاءة والخامات والمؤثرات';
+      else if (state === 'REVEAL') statusEl.textContent = libraryEntryPending && warmFrame
+        ? 'جاري تجهيز جناح المكتبة' : 'جاري تجهيز الإضاءة والخامات والمؤثرات';
       else if (filesReady() && !warmFrame) statusEl.textContent = 'جاري تجهيز الكاميرا والموارد المشتركة';
       else if (pct >= 100) statusEl.textContent = LOAD_STAGES[6];
       else statusEl.textContent = LOAD_STAGES[Math.max(0, Math.min(5, loadStage))];
@@ -4569,6 +4572,7 @@
             state = 'REVEAL';
             fadeT = 0;
             warmFrame = false;
+            libraryEntryPending = !!(wingRuntime && window.PalaceWings && PalaceWings.prepareEntryLibrary);
             warmMeshes = null;
             warmScene = null;
             warmPending = false;
@@ -4706,6 +4710,17 @@
         }
         if (!warmPending) beginWarmSlice(ctx);
         return;
+      }
+      if (libraryEntryPending) {
+        const libraryPhase = PalaceWings.prepareEntryLibrary();
+        if (libraryPhase === 'failed') {
+          loadError = new Error('تعذّر تجهيز المكتبة الكبرى ضمن ذاكرة الجهاز المتاحة');
+          state = 'FAILED';
+          showFail(loadError);
+          return;
+        }
+        if (libraryPhase !== 'ready') return;
+        libraryEntryPending = false;
       }
       fadeT += dt;
       loadEl.style.opacity = '1';

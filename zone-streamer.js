@@ -157,6 +157,11 @@
     function attach(c) { ctx = c; }
 
     function group(rec) { return ctx && ctx.groupOf ? ctx.groupOf(rec.id) : null; }
+    function dressOf(g) { return g && g.children.find(child => child.userData.streamDress); }
+    function hideZone(rec, g) {
+      if (!rec.spec.keepShell) { hideObject(g); return; }
+      g.children.forEach(child => { if (child.userData.streamDress) hideObject(child); });
+    }
     function apiFor(rec) {
       return {
         id: rec.id,
@@ -307,12 +312,12 @@
         cpuMB: s.estCpuMB != null ? +s.estCpuMB : o.defaultZoneCpuMB
       };
     }
-    function wouldExceed(extra) {
+    function wouldExceed(extra, transientCpu) {
       extra = extra || { processMB: 0, gpuMB: 0, cpuMB: 0 };
       const u = usage();
       return (o.processBudgetMB > 0 && u.processMB + extra.processMB > o.processBudgetMB)
         || (o.gpuBudgetMB > 0 && u.gpuMB + extra.gpuMB > o.gpuBudgetMB)
-        || (o.cpuBudgetMB > 0 && u.cpuMB + extra.cpuMB > o.cpuBudgetMB);
+        || (o.cpuBudgetMB > 0 && (transientCpu ? 0 : u.cpuMB) + extra.cpuMB > o.cpuBudgetMB);
     }
     // Evict idle zones (farthest / least-recent first) until `incoming` would
     // fit. Grace is skipped: the budget is a hard cap, and the door stays
@@ -325,7 +330,7 @@
       const idle = [];
       zones.forEach(function (r) {
         if (r.state === 'cold') return;
-        if (r.isCurrent || r.visible) return;
+        if (r.isCurrent || r.visible || r.retained) return;
         if (!allowAdjacent && r.protected) return;
         idle.push(r);
       });
@@ -336,17 +341,17 @@
       });
       return idle;
     }
-    function evictToFit(extra) {
-      if (!wouldExceed(extra)) return true;
-      for (let pass = 0; pass < 2 && wouldExceed(extra); pass++) {
+    function evictToFit(extra, transientCpu) {
+      if (!wouldExceed(extra, transientCpu)) return true;
+      for (let pass = 0; pass < 2 && wouldExceed(extra, transientCpu); pass++) {
         const idle = evictCandidates(pass === 1);
-        for (let i = 0; i < idle.length && wouldExceed(extra); i++) {
+        for (let i = 0; i < idle.length && wouldExceed(extra, transientCpu); i++) {
           if (idle[i].state === 'cold') continue;
           evict(idle[i], 'budget');
           stats.budgetEvictions++;
         }
       }
-      return !wouldExceed(extra);
+      return !wouldExceed(extra, transientCpu);
     }
     function roomFitsAlone(rec) {
       const extra = incoming(rec);
@@ -357,7 +362,7 @@
     function evictPreparedFirst(why, includeAdjacent) {
       const list = [];
       zones.forEach(function (r) {
-        if (r.state === 'cold' || r.isCurrent || r.visible) return;
+        if (r.state === 'cold' || r.isCurrent || r.visible || r.retained) return;
         if (!includeAdjacent && r.hops != null && r.hops <= 1) return;
         list.push(r);
       });
@@ -370,7 +375,7 @@
       });
       let n = 0;
       list.forEach(function (r) {
-        if (r.state === 'cold' || r.isCurrent || r.visible) return;
+        if (r.state === 'cold' || r.isCurrent || r.visible || r.retained) return;
         evict(r, why || 'prepared-before-current');
         stats.budgetEvictions++;
         n++;
@@ -394,9 +399,17 @@
     }
     function canStart(rec) {
       if (rec.spec.requireComplete) {
+        const serial = rec.spec.serialPreparation;
+        if (serial && order.some(id => {
+          const other = zones.get(id);
+          return other !== rec && other.spec.serialPreparation &&
+            (other.state === 'loading' || other.state === 'uploading' || other.state === 'compiling');
+        })) return false;
         // An open sight line can show two dressed rooms at once. Use the
         // device's measured memory budget instead of forcibly swapping them.
-        if (evictToFit(incoming(rec))) { rec.deferredAt = 0; rec.deferred = false; return true; }
+        // For a serial preparation, the CPU sub-budget is for the new decode.
+        // Resident CPU bytes are already included in the hard process budget.
+        if (evictToFit(incoming(rec), serial)) { rec.deferredAt = 0; rec.deferred = false; return true; }
         if (!rec.deferredAt) { rec.deferredAt = now(); stats.deferred++; }
         rec.deferred = true;
         return false;
@@ -423,7 +436,7 @@
         if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
           evictPreparedFirst('prepared-before-prefetch', true);
           zones.forEach(function (r) {
-            if (r.state === 'cold' || r.isCurrent || r.id === rec.id) return;
+            if (r.state === 'cold' || r.isCurrent || r.visible || r.retained || r.id === rec.id) return;
             evict(r, 'swap-before-prefetch');
             stats.budgetEvictions++;
           });
@@ -488,6 +501,7 @@
     // deadlock the door.
     let stallBusy = false;
     function handleDeferStall(rec, t) {
+      if (rec.spec.serialPreparation) return false;
       const wait = o.deferStallMs != null ? o.deferStallMs : 3000;
       if (!rec.deferred || rec.state !== 'cold') return false;
       if (!rec.deferredAt || t - rec.deferredAt < wait) return false;
@@ -537,6 +551,11 @@
       if (rec.spec.onFailure) {
         try { rec.spec.onFailure(error); } catch (cause) { console.warn('zone failure cleanup', rec.id, cause); }
       }
+      if (rec.spec.keepShell) {
+        evict(rec, 'forced');
+        rec.state = 'failed';
+        rec.failed = error;
+      }
       note('load', rec.id + ' failed: ' + String(error));
     }
     function complete(rec) {
@@ -567,7 +586,8 @@
           rec.state = 'uploading';
           // Program-affecting material tweaks run before upload/compile.
           try { if (rec.spec.prepare) rec.spec.prepare(apiFor(rec)); } catch (e) { console.warn('zone prepare', rec.id, e); }
-          if (g) queueTextures(rec, g, rank);
+          const uploadRoot = rec.spec.keepShell ? dressOf(g) : g;
+          if (uploadRoot) queueTextures(rec, uploadRoot, rank);
         }
       }
       if (rec.spec.requireComplete && rec.failed) { failStrict(rec, rec.failed); return; }
@@ -585,7 +605,7 @@
           try {
             // Compile against the real scene so the programs match what the
             // renderer will use (lights, fog, env): no compile at reveal.
-            const content = rec.spec.requireComplete && g.children.find(child => child.userData.streamDress);
+            const content = rec.spec.requireComplete && dressOf(g);
             if (content) g.visible = false; // include content lights exactly once
             if (typeof r.compileAsync === 'function') p = r.compileAsync(content || g, ctx.camera, ctx.scene || null);
             else if (typeof r.compile === 'function') r.compile(content || g, ctx.camera, ctx.scene || null);
@@ -611,7 +631,7 @@
       // Gate: a room is never world-visible before the atomic reveal, even
       // if a mesh was added without hideUntilReady or a leftover shell
       // stayed visible after eviction. The door waits on state === 'ready'.
-      if (rec.state !== 'ready' && g) hideObject(g);
+      if (rec.state !== 'ready' && g) hideZone(rec, g);
     }
     function reveal(rec) {
       const g = group(rec);
@@ -628,7 +648,7 @@
       // one-frame current flicker must not abort an in-flight load (playthrough-4
       // first K4 was evicted mid-parse and re-dressed five times over 60 s).
       if (why !== 'forced') {
-        if (rec.visible) return 0;
+        if (rec.visible || rec.retained) return 0;
         if (rec.isCurrent) {
           try { console.info('[palace load] evict-skipped', rec.id, why, 'current'); } catch (_) {}
           return 0;
@@ -707,7 +727,7 @@
         // Shells are not in `doomed` (ownsObject is streamDress only).
         // They were revealed on the previous visit; hide them so the
         // next load cannot show an incomplete room.
-        hideObject(g);
+        hideZone(rec, g);
       }
       rec.state = 'cold'; rec.leftAt = 0; rec.done = false; rec.failed = null;
       stats.evictions++;
@@ -785,6 +805,7 @@
       }
       const distances = view.distances || new Map();
       const visible = view.visible || new Set(), prepared = view.prepared || new Set();
+      const retained = view.retained || new Set();
       const level = view.memoryLevel || memLevel || 'normal';
       const wanted = [];
       order.forEach(function (id) {
@@ -810,11 +831,13 @@
         // door can open onto a complete room. Far rooms are evicted first
         // (canStart); over-budget approach still defers rather than exceed 650.
         const prefetch = hops <= rec.spec.prefetchHops || approaching || (!tight && prepared.has(id));
-        const want = isCurrent || prefetch || (rec.spec.requireComplete && visible.has(id));
+        const want = (!view.only || view.only.has(id)) && (isCurrent || prefetch ||
+          (rec.spec.requireComplete && visible.has(id)) || (retained.has(id) && rec.state !== 'cold'));
         // hops <= 1 protects on desktop; on a 650 MB phone those neighbours
         // yield once evictForCurrent decides the current room needs space.
-        const protect = isCurrent || visible.has(id) || (!tight && hops <= 1);
+        const protect = isCurrent || visible.has(id) || retained.has(id) || (!tight && hops <= 1);
         rec.hops = hops; rec.protected = protect; rec.visible = visible.has(id); rec.isCurrent = isCurrent;
+        rec.retained = retained.has(id);
         if (isCurrent) rec._currentUntil = t + ((rec.state !== 'cold' && rec.state !== 'ready') ? 15000 : 2000);
         if (want) { rec.lastWanted = t; rec.leftAt = 0; wanted.push(rec); }
         else if (rec.state !== 'cold' && !rec.leftAt) rec.leftAt = t;
@@ -850,7 +873,7 @@
       zones.forEach(function (rec) {
         if (rec.state === 'ready') return;
         const gg = group(rec);
-        if (gg && !gg.userData.dressReady) hideObject(gg);
+        if (gg && !gg.userData.dressReady) hideZone(rec, gg);
       });
       // Eviction: never protected zones; LRU beyond cache size after the grace
       // period, at once under critical memory pressure.
@@ -920,7 +943,7 @@
       let n = 0;
       zones.forEach(function (r) {
         if (r.state === 'cold') return;
-        if (r.isCurrent || r.visible) return;
+        if (r.isCurrent || r.visible || r.retained) return;
         // Under the 650 bar, hop counts may be stale (still 0 from the
         // previous current room) and must not keep a neighbour resident
         // while the new current room starts. Evict every non-visible,
@@ -936,6 +959,7 @@
     function forceLoad(id) {
       const rec = zones.get(id);
       if (!rec) return 'unregistered';
+      if (rec.spec.requireComplete && rec.state === 'cold' && !canStart(rec)) return rec.state;
       // A region flicker (ensure-dress K2 while the harness is visiting K3)
       // must not steal a mid-load current room. Playthrough-6 evicted K3
       // 2 s into its first visit and the door waited 60 s.
@@ -953,9 +977,9 @@
       // so evictForCurrent cannot unload the room the player just entered
       // and cannot skip the room they just left (playthrough-5 peak 693).
       markCurrent(id);
-      evictForCurrent(incoming(rec));
+      if (!rec.spec.serialPreparation) evictForCurrent(incoming(rec));
       if (rec.state === 'cold') {
-        evictToFit(incoming(rec));
+        if (!rec.spec.serialPreparation) evictToFit(incoming(rec));
         rec.deferred = false;
         rec.deferredAt = 0;
         start(rec, now());
@@ -971,7 +995,11 @@
       return rec.state;
     }
     function reset() {
-      zones.forEach(r => { r.state = 'cold'; r.pending.clear(); r.leftAt = 0; r.lastWanted = 0; r.done = false; r.waiters.length = 0; });
+      zones.forEach(r => {
+        r.state = 'cold'; r.pending.clear(); r.leftAt = 0; r.lastWanted = 0;
+        r._currentUntil = 0; r.retained = r.protected = r.visible = r.isCurrent = false;
+        r.deferred = false; r.deferredAt = 0; r.done = false; r.waiters.length = 0;
+      });
       uploadQueue = []; looseUploads.clear(); releasable.clear(); warmQ.length = 0; warmBusy = false; memLevel = 'normal';
     }
     function report() {
