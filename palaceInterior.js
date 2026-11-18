@@ -740,13 +740,7 @@
       try { releaseCpuFromObject(roots[i], ctx.renderer, { upload: false, enqueue: false }); } catch (_) {}
       try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(roots[i], ctx.renderer, { upload: false }); } catch (_) {}
     }
-    try { pumpGpuUploads(ctx.renderer, 50); } catch (_) {}
-    if (tag && window.SinProcessMemory) {
-      try {
-        const pe = SinProcessMemory.estimate({ renderer: ctx.renderer, scene: ctx.scene, phase: 'REVEAL' });
-        mark('cpu drain ' + tag + ' ~proc ' + (pe && pe.processMB) + ' cpu ' + (pe && pe.cpuMB) + ' gpu ' + (pe && pe.gpuMB));
-      } catch (_) {}
-    }
+    if (tag) mark('cpu drain ' + tag);
   }
 
   function releaseCpuFromResult(result, renderer) {
@@ -4712,13 +4706,7 @@
         return;
       }
       if (libraryEntryPending) {
-        const libraryPhase = PalaceWings.prepareEntryLibrary();
-        if (libraryPhase === 'failed') {
-          loadError = new Error('تعذّر تجهيز المكتبة الكبرى ضمن ذاكرة الجهاز المتاحة');
-          state = 'FAILED';
-          showFail(loadError);
-          return;
-        }
+        const libraryPhase = PalaceWings.prepareEntryLibrary(() => drainCpuNow(ctx, 'library-budget'));
         if (libraryPhase !== 'ready') return;
         libraryEntryPending = false;
       }

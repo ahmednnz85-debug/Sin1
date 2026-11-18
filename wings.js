@@ -3241,7 +3241,7 @@
       SinProcessMemory.estimate({ renderer, scene });
     }
   }
-  function prepareEntryLibrary() {
+  function prepareEntryLibrary(reclaim) {
     if (!state.built || !zoneStreamer) return 'ready';
     if (!state.entryLibrary) {
       attachStreamer();
@@ -3263,7 +3263,19 @@
       allowBackgroundWarm: false });
     const status = zoneStreamer.status(id);
     if (!libraryReady) {
-      if (status === 'failed' || (status === 'cold' && now - entry.started > 8000)) return 'failed';
+      if (status === 'cold' && !entry.reclaimed && reclaim) {
+        entry.reclaimed = true;
+        reclaim();
+        sampleEntryMemory();
+        return 'pending';
+      }
+      const elapsed = now - entry.started;
+      if (status === 'failed' || elapsed > 60000 || (status === 'cold' && elapsed > 3000)) {
+        // The whole palace remains playable if its base already needs the
+        // memory. R1 retains its frame and gates L1 until preparation fits.
+        entry.done = true;
+        return 'ready';
+      }
       return 'pending';
     }
     // If L2 does not fit or takes too long, leave it to corridor prefetch.
