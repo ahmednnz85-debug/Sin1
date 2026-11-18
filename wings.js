@@ -747,7 +747,9 @@
     const library = state.library && state.library.ready ? state.library : null;
     const libraryFeet = library && fromY != null ? library.floor(x, z, fromY) : 0;
     const observatory = state.observatory && zoneIsReady('L4') && state.observatory;
-    const feet = (observatory && observatory.floorAt(x, z)) || libraryFeet;
+    const offerings = state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.floorAt(x, z) : 0;
+    const feet = (observatory && observatory.floorAt(x, z)) || offerings || libraryFeet;
+    if (offerings > 0 && fromY != null && offerings > fromY + .28) return true;
     if (observatory && observatory.blocks(x, z, r, feet)) return true;
     const hero = state.ctx && state.ctx.hero;
     if (library && fromY != null && hero) {
@@ -851,7 +853,6 @@
     if (r.id === 'K3') futureZone(r, parent, 'MAP TABLE', b.cx, b.cz, 7, 4);
     if (r.id === 'K4') { futureZone(r, parent, 'ROYAL CHESTS', b.cx - 3, b.cz, 3, 7); futureZone(r, parent, 'TOOLS', b.cx + 4, b.cz, 2, 6); }
     if (r.id === 'T2') futureZone(r, parent, 'PURIFICATION BASIN', b.cx, b.cz, 8, 6);
-    if (r.id === 'T5') futureZone(r, parent, 'OFFERING TOOLS', b.cx, b.cz, 6, 3);
     if (r.id === 'L3') { futureZone(r, parent, 'WRITING TABLES', b.cx - 4, b.cz, 4, 8); futureZone(r, parent, 'WRITING TABLES', b.cx + 4, b.cz, 4, 8); }
   }
   function addTorches(r) {
@@ -1128,7 +1129,8 @@
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
       if (r.id !== 'K1') {
         if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
-        if (!['K2', 'K3', 'K4', 'K5', 'T1', 'T3', 'L1', 'L2', 'L4'].includes(r.id)) addTorches(r);
+        if (!['K2', 'K3', 'K4', 'K5', 'T1', 'T3', 'L1', 'L2', 'L4'].includes(r.id) &&
+            !(r.id === 'T5' && window.SinRoyalOfferings)) addTorches(r);
       }
     }
     vis('regions');
@@ -1146,6 +1148,13 @@
       const panel = boxAt(width + .08, height + .04, .12, x, height / 2, z);
       state.archiveScreen = mesh(panel, state.darkMat, 'LC2-archive-portal-occluder', archiveCorridor);
       state.archiveScreen.castShadow = false;
+    }
+    const offeringCorridor = state.regionGroups.get('TC5');
+    if (state.offeringPortal && offeringCorridor && window.SinRoyalOfferings) {
+      const { x, z, width, height } = state.offeringPortal;
+      state.offeringScreen = mesh(boxAt(width + .08, height + .04, .16, x, height / 2, z),
+        state.darkMat, 'TC5-offerings-portal-occluder', offeringCorridor);
+      state.offeringScreen.castShadow = false;
     }
     vis('corridors');
     wingMark('wings corridors');
@@ -2606,9 +2615,9 @@
     const cur = state.current;
     state.doors.forEach(function (d) {
       if (!d || d._roomDoor || (d.kind === 'arch' && d.id !== 'PalaceR1')) return;
-      const targets = d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] :
+      const targets = d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] : d === state.offeringPortal ? ['T5'] :
         state.observatoryDoors.includes(d) ? ['L4'] : state.sacredHallDoors.includes(d) ? ['T3'] :
-          streamedTargets(d, cur).filter(id => !libraryZones.has(id) && id !== 'T3');
+          streamedTargets(d, cur).filter(id => !libraryZones.has(id) && id !== 'T3' && id !== 'T5');
       // Only block when approaching from outside a not-ready streamed room.
       const waiting = targets.filter(function (id) { return id !== cur && !zoneIsReady(id); });
       if (!waiting.length) return;
@@ -2699,6 +2708,12 @@
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
   function dispose() {
+    if (state.royalOfferingsLoad) state.royalOfferingsLoad.abort();
+    if (state.royalOfferings) {
+      state.royalOfferings.root.removeFromParent();
+      state.royalOfferings.dispose();
+    }
+    state.royalOfferings = state.royalOfferingsLoad = state.offeringScreen = null;
     if (state.sacredHallLoad) state.sacredHallLoad.abort();
     if (state.sacredHall) {
       state.sacredHall.root.removeFromParent();
@@ -2798,6 +2813,8 @@
     const t3ViaWest = [doorFor('T2-TC23'), doorFor('TC23-T3')];
     const t3ViaEast = [doorFor('TC34-T4'), doorFor('T3-TC34')];
     const t3ViaNorth = [doorFor('TC5-T5'), doorFor('T3-TC5')];
+    state.offeringPortal = t3ViaNorth[0];
+    state.offeringPassage = t3ViaNorth[1];
     state.sacredHallRoutes = new Map([
       ['T1', [doorFor('T1-TC12'), doorFor('TC12-T2'), ...t3ViaWest]],
       ['TC12', [doorFor('TC12-T2'), ...t3ViaWest]], ['T2', t3ViaWest], ['TC23', t3ViaWest.slice(1)],
@@ -3022,7 +3039,7 @@
       { processMB: 37, gpuMB: 30, cpuMB: 22, textureSize: 1024 };
   }
 
-  function loadRoomModel(url, signal) {
+  function loadRoomModel(url, signal, meshopt = false) {
     return enqueueWingLoad(async () => {
       signal.throwIfAborted();
       const response = await fetch(encodeURI(url), { signal });
@@ -3031,7 +3048,29 @@
       signal.throwIfAborted();
       await yieldWing();
       signal.throwIfAborted();
-      return new THREE.GLTFLoader().parseAsync(buffer, '');
+      const loader = new THREE.GLTFLoader();
+      if (meshopt) {
+        const decoder = await new Promise(resolve => withMeshopt(resolve));
+        signal.throwIfAborted();
+        if (!decoder) throw new Error('Meshopt decoder unavailable');
+        loader.setMeshoptDecoder(decoder);
+      }
+      return loader.parseAsync(buffer, '');
+    });
+  }
+
+  function loadRoyalOfferings(api) {
+    const room = state.rooms.find(r => r.id === 'T5');
+    const controller = new AbortController();
+    state.royalOfferingsLoad = controller;
+    SinRoyalOfferings.build(room, state.offeringPortal, loadRoomModel, controller.signal, deviceProfile.constrained).then(offerings => {
+      if (state.royalOfferingsLoad !== controller || controller.signal.aborted) { offerings.dispose(); return; }
+      state.royalOfferings = offerings;
+      zoneStreamer.markReleasable(offerings.root);
+      api.add(offerings.root);
+      api.done();
+    }, error => {
+      if (state.royalOfferingsLoad === controller && !controller.signal.aborted) api.fail(error);
     });
   }
 
@@ -3102,6 +3141,37 @@
         openings.push(door);
         if (!SinWingVisibility.throughOpenings(view, openings, .06)) break;
         visible.add(id);
+      }
+    }
+  }
+
+  function offeringSight(view) {
+    if (!view || !state.offeringPortal || !window.SinWingVisibility) return false;
+    const region = regionAt(view.x, view.z);
+    const id = region && region.id;
+    if (id === 'T5') return true;
+    const openings = id === 'TC5' ? [state.offeringPortal] :
+      id === 'T3' ? [state.offeringPassage, state.offeringPortal] : null;
+    return !!(openings && SinWingVisibility.throughOpenings(view, openings, .07));
+  }
+
+  function cullFromOfferings(view, visible) {
+    const region = regionAt(view.x, view.z);
+    if (!region || region.id !== 'T5') return;
+    visible.clear();
+    visible.add('T5');
+    if (SinWingVisibility.throughOpenings(view, [state.offeringPortal], .07)) visible.add('TC5');
+    if (SinWingVisibility.throughOpenings(view, [state.offeringPortal, state.offeringPassage], .07)) visible.add('T3');
+  }
+
+  function syncOfferingShell(group) {
+    const ready = zoneIsReady('T5');
+    if (state.offeringScreen) state.offeringScreen.visible = !ready;
+    const shell = group && group.getObjectByName('T5-ceiling');
+    if (shell) shell.visible = !ready && !state.cutaway;
+    if (state.royalOfferings) {
+      for (const node of state.royalOfferings.root.children) {
+        if (/^T5-(ceiling-|light-well-|warm-light-rays)/.test(node.name)) node.visible = !state.cutaway && ready;
       }
     }
   }
@@ -3248,6 +3318,15 @@
         state.sacredHall.refreshWater(state.ctx.renderer, scene, camera);
       }
     }
+    const offerings = state.regionGroups.get('T5');
+    if (offerings && window.SinRoyalOfferings) {
+      const seeRoom = offeringSight(view);
+      offerings.visible = seeRoom && zoneIsReady('T5');
+      if (seeRoom && regionAt(view.x, view.z)?.id === 'T5') {
+        const approach = state.regionGroups.get('TC5');
+        if (approach) approach.visible = SinWingVisibility.throughOpenings(view, [state.offeringPortal], .07);
+      }
+    }
   }
 
   const WING_ZONES = [
@@ -3294,6 +3373,42 @@
         triCache.delete('T3');
       },
       ownsObject: node => node.name === 'T3-Sacred-Columns-Hall' },
+    ...(window.SinRoyalOfferings ? [{ id: 'T5', prefetchHops: 3, priority: 0, requireComplete: true,
+      keepShell: true, serialPreparation: true,
+      estProcessMB: deviceProfile.constrained ? 54 : 120,
+      estGpuMB: deviceProfile.constrained ? 36 : 81,
+      estCpuMB: deviceProfile.constrained ? 24 : 47,
+      load: loadRoyalOfferings,
+      prepareGeometry: (api, renderer) => state.royalOfferings.warmup.step(renderer),
+      onReady: function (api) {
+        const offerings = state.royalOfferings, origin = state.root.position;
+        offerings.cameraColliders = [...offerings.boxes, ...offerings.stairBoxes].map(b => ({
+          minx: b.minx + origin.x, maxx: b.maxx + origin.x,
+          miny: b.miny + origin.y, maxy: b.maxy + origin.y,
+          minz: b.minz + origin.z, maxz: b.maxz + origin.z, _wing: true
+        }));
+        const first = state.colliders.length;
+        state.colliders.push(...offerings.boxes);
+        indexSpatialFrom(first);
+        syncOfferingShell(api.group);
+        updatePassageGates();
+        triCache.delete('T5');
+      },
+      onFailure: function (error) {
+        registerLibraryFailure('T5');
+        console.warn('[T5] Royal offerings preparation failed', error);
+      },
+      unload: function (api) {
+        if (state.royalOfferingsLoad) state.royalOfferingsLoad.abort();
+        if (state.royalOfferings) state.royalOfferings.warmup.dispose();
+        state.royalOfferings = state.royalOfferingsLoad = null;
+        state.colliders = state.colliders.filter(b => !b._royalOfferings);
+        if (state.offeringScreen) state.offeringScreen.visible = true;
+        const shell = api.group && api.group.getObjectByName('T5-ceiling');
+        if (shell) shell.visible = !state.cutaway;
+        triCache.delete('T5');
+      },
+      ownsObject: node => node.name === 'T5-Royal-Offerings' }] : []),
     { id: 'L4', prefetchHops: 1, priority: -1, requireComplete: true, keepShell: true, serialPreparation: true,
       estProcessMB: deviceProfile.constrained ? 53 : 110,
       estGpuMB: deviceProfile.constrained ? 37 : 76,
@@ -3548,7 +3663,8 @@
   const retainedLibrary = new Set(['L1', 'L2']);
   const retainedObservatory = new Set(['L1', 'L4']);
   const retainedMoonPassage = new Set(['L4']);
-  const retainedSacredHall = new Set(['T3']);
+  const retainedSacredHall = new Set(['T3', 'T5']);
+  const offeringApproaches = new Set(['T2', 'TC23', 'T3', 'TC34', 'T4', 'TC5', 'T5']);
   const entryLibraryOnly = new Set(['L1']);
   const entryArchiveOnly = new Set(['L2']);
   function registerLibraryFailure(id) {
@@ -3677,13 +3793,14 @@
       (origin === 'Palace' && move && templeEntry && Math.hypot(templeEntry.x - move.x, templeEntry.z - move.z) < 15);
     if (nearTemple && !inLibrary) {
       approach.add('T3');
+      if (zoneIsReady('T3') && offeringApproaches.has(origin)) approach.add('T5');
       retained = retained || retainedSacredHall;
     }
     const allowBackgroundWarm = !inLibrary && (!move || Math.hypot(move.vx, move.vz) < 0.40);
     if (allowBackgroundWarm) {
       const eligible = new Set([...(preparedIds || []), ...(visibleIds || [])]);
       eligible.forEach(id => {
-        const g = id !== 'T3' && !libraryZones.has(id) && state.regionGroups.get(id);
+        const g = id !== 'T3' && id !== 'T5' && !libraryZones.has(id) && state.regionGroups.get(id);
         if (g) warmGroups.push(g);
       });
     }
@@ -3695,6 +3812,7 @@
       }
     });
     const demand = nearTemple && !zoneIsReady('T3') ? 'T3' :
+      (origin === 'T3' || origin === 'TC5') && !zoneIsReady('T5') ? 'T5' :
       !zoneIsReady('L1') ? 'L1' : (state.archiveDemand || archiveNear) && !zoneIsReady('L2') ? 'L2' :
         towardObservatory && !zoneIsReady('L4') ? 'L4' : null;
     const only = inLibrary ? (towardObservatory || (visibleIds && visibleIds.has('L4')) ? libraryZones : retainedLibrary) : null;
@@ -3713,7 +3831,7 @@
     if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
       origin = state._dressLock.id;
     }
-    if (!origin || origin === 'T3' || libraryZones.has(origin)) return;
+    if (!origin || origin === 'T3' || origin === 'T5' || libraryZones.has(origin)) return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
     if (c && c.complete) {
@@ -3805,6 +3923,11 @@
         if (sacredHallSight(view)) planned.visible.add('T3');
         else planned.visible.delete('T3');
         cullFromSacredHall(view, planned.visible);
+        if (window.SinRoyalOfferings) {
+          if (offeringSight(view)) planned.visible.add('T5');
+          else planned.visible.delete('T5');
+          cullFromOfferings(view, planned.visible);
+        }
       }
       if (force) console.info('[palace load] cull-plan', Math.round(performance.now()-tPlan)+'ms', 'vis', planned.visible.size);
       if (isArch) planned.visible.add(id);
@@ -3836,7 +3959,8 @@
     if (visibleIds) {
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
-        g.visible = visibleIds.has(rr.id) && (rr.id !== 'L2' || zoneIsReady('L2'));
+        g.visible = visibleIds.has(rr.id) && (rr.id !== 'L2' || zoneIsReady('L2')) &&
+          (rr.id !== 'T5' || zoneIsReady('T5'));
       });
       // Zone streaming is the single source of truth: prefetch, budgeted
       // uploads, shader compile (shells + dress), atomic reveal, LRU eviction
@@ -3890,6 +4014,9 @@
     if (state.sacredHall && zoneIsReady('T3') && state.regionGroups.get('T3').visible) {
       state.sacredHall.tick(performance.now() * .001);
     }
+    if (state.royalOfferings && zoneIsReady('T5') && state.regionGroups.get('T5').visible) {
+      state.royalOfferings.tick(performance.now() * .001);
+    }
     if (_trT) _trT('PalaceWings.updateCulling');
     if (state.torchFireMats) { const t = performance.now() * 0.001; state.torchFireMats.forEach(m => { m.uniforms.uTime.value = t; }); }
     if ((state.k2Lights && state.k2Lights.length) || (state.k3Lights && state.k3Lights.length)) {
@@ -3904,6 +4031,10 @@
   }
   function floorAt(x, z, fromY) {
     if (!contains(x, z)) return null;
+    if (state.royalOfferings && zoneIsReady('T5')) {
+      const step = state.royalOfferings.floorAt(x, z);
+      if (step > 0) return step;
+    }
     if (state.sacredHall && zoneIsReady('T3')) {
       const bottom = state.sacredHall.channelFloorAt(x, z);
       if (bottom !== null) return bottom;
@@ -3928,6 +4059,12 @@
     if (K5 && pointInPoly(x, z, K5.poly)) return k5DaisHeight(K5.bbox, x, z);
     return 0;
   }
+  function onOfferingSteps(position) {
+    if (!state.royalOfferings || !zoneIsReady('T5')) return false;
+    const origin = state.root.position;
+    return state.royalOfferings.floorAt(position.x - origin.x, position.z - origin.z) > 0;
+  }
+
   function onLibraryStairs(position) {
     if (!state.library || !state.library.ready) return false;
     const origin = state.root.position;
@@ -4049,6 +4186,7 @@
         setLibraryCeiling(state.regionGroups.get('L1'));
         setObservatoryShell(state.regionGroups.get('L4'));
         setSacredHallCeiling(state.regionGroups.get('T3'), zoneIsReady('T3'));
+        if (window.SinRoyalOfferings) syncOfferingShell(state.regionGroups.get('T5'));
       }
       if (b.dataset.act === 'bright') {
         state.fullbright = !state.fullbright;
@@ -5427,6 +5565,7 @@
   }
   const STREAM_EXPECT = {
     T3: window.SinSacredColumns ? SinSacredColumns.expected : [],
+    ...(window.SinRoyalOfferings ? { T5: SinRoyalOfferings.expected } : {}),
     L4: window.SinObservatory ? SinObservatory.expected : [],
     L2: window.SinRoyalArchive ? SinRoyalArchive.expected : [],
     L1: [
@@ -5588,9 +5727,10 @@
     archiveCamera: () => state.archive && zoneIsReady('L2') ? state.archive.camera : null,
     observatoryCamera: () => state.observatory && zoneIsReady('L4') ? state.observatory.camera : null,
     sacredHallCamera: () => state.sacredHall && zoneIsReady('T3') ? state.sacredHall.camera : null,
+    offeringsCamera: () => state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.camera : null,
     beforePresent,
     prepareEntryLibrary,
-    onLibraryStairs,
+    onLibraryStairs, onOfferingSteps,
     restoreLibraryPose: () => { if (state.library) state.library.restoreGroundPose(); },
     groundLibraryHero: hero => { if (onLibraryStairs(hero.position)) state.library.groundHero(hero); },
     shortestPath,
