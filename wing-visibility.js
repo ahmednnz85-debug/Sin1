@@ -95,6 +95,34 @@
     return side === 3;
   }
 
+  // Intersect the horizontal sight angles of every aperture, including the
+  // front and back of the jamb. Doors must share a ray, not just be visible
+  // independently somewhere inside the camera's wedge.
+  function throughOpenings(cam, doors, margin = 0) {
+    let lo = -cam.halfFov - margin, hi = cam.halfFov + margin;
+    for (const door of doors) {
+      const alongX = door.axis === 'x';
+      const lateral = alongX ? cam.z - door.z : cam.x - door.x;
+      const normal = alongX ? cam.x - door.x : cam.z - door.z;
+      const depth = (door.thickness || 1) / 2;
+      const half = door.width / 2;
+      if (Math.abs(normal) <= depth + 0.04 && Math.abs(lateral) < half) continue;
+      const angle = (x, z) => Math.atan2(cam.dirX * z - cam.dirZ * x, cam.dirX * x + cam.dirZ * z);
+      for (const face of [-depth, depth]) {
+        const dx = door.x - cam.x + (alongX ? face : 0);
+        const dz = door.z - cam.z + (alongX ? 0 : face);
+        if (Math.abs(alongX ? dx : dz) < 0.04 && Math.abs(lateral) < half) continue;
+        const a = angle(dx - (alongX ? 0 : half), dz - (alongX ? half : 0));
+        const b = angle(dx + (alongX ? 0 : half), dz + (alongX ? half : 0));
+        if (Math.abs(a - b) > Math.PI) return false;
+        lo = Math.max(lo, Math.min(a, b));
+        hi = Math.min(hi, Math.max(a, b));
+        if (lo > hi) return false;
+      }
+    }
+    return true;
+  }
+
   function createPlanner(options) {
     const opt = Object.assign({}, DEFAULTS, options || {});
     const lastSeen = new Map();   // id -> time last inside view
@@ -182,7 +210,7 @@
     return { plan, reset, options: opt };
   }
 
-  const api = { createPlanner, inWedge, hops, nearestDistance, portalBox, DEFAULTS };
+  const api = { createPlanner, inWedge, throughOpenings, hops, nearestDistance, portalBox, DEFAULTS };
   root.SinWingVisibility = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

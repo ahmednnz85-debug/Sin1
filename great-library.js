@@ -209,7 +209,7 @@
     return texture;
   }
 
-  function builder(group) {
+  function builder(group, prefix = 'L1-') {
     const surfaces = new Map(), instances = new Map();
     const transform = new THREE.Object3D();
     function matrix(x, y, z, angle, sx = 1, sy = 1, sz = 1) {
@@ -258,7 +258,7 @@
         g.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3));
         g.setAttribute('uv', new THREE.Float32BufferAttribute(t, 2));
         const mesh = new THREE.Mesh(g, material);
-        mesh.name = 'L1-' + name;
+        mesh.name = prefix + name;
         mesh.receiveShadow = true;
         mesh.castShadow = !material.transparent && material.name !== 'L1 sandstone ornament atlas' && name !== 'floor';
         group.add(mesh);
@@ -275,7 +275,7 @@
           mesh.instanceMatrix.needsUpdate = true;
           mesh.computeBoundingSphere();
         }
-        mesh.name = 'L1-' + name;
+        mesh.name = prefix + name;
         mesh.receiveShadow = true;
         mesh.castShadow = name !== 'floor-medallion' && name !== 'lanterns';
         group.add(mesh);
@@ -1106,7 +1106,7 @@
     textures.forEach(texture => texture.dispose());
   }
 
-  function setLibraryExposure(root) {
+  function setLibraryExposure(root, multiplier = 0.63) {
     const materials = new Set();
     root.traverse(node => {
       if (node.material && node.material.isMeshStandardMaterial) materials.add(node.material);
@@ -1119,9 +1119,9 @@
       material.onBeforeCompile = function (shader, renderer) {
         compile.call(this, shader, renderer);
         shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>',
-          'outgoingLight *= 0.63;\n#include <opaque_fragment>');
+          'outgoingLight *= ' + multiplier.toFixed(3) + ';\n#include <opaque_fragment>');
       };
-      material.customProgramCacheKey = () => key + ':L1-exposure';
+      material.customProgramCacheKey = () => key + ':room-exposure:' + multiplier;
     });
   }
 
@@ -1242,5 +1242,5 @@
     };
   }
 
-  window.SinGreatLibrary = { build };
+  window.SinGreatLibrary = { build, split, builder, disposeResources, setLibraryExposure };
 })();

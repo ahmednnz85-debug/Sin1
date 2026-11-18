@@ -1099,7 +1099,7 @@
     state.ceilings = [];
     for (const r of state.regions) {
       const g = new THREE.Group(); g.name = 'wing-region-' + r.id; state.root.add(g); state.regionGroups.set(r.id, g);
-      if (r.ceiling !== false) {
+      if (r.ceiling !== false && r.id !== 'L2') {
         let poly = solid(r.poly);
         if (r.id === 'L4') poly = difference(poly, solid(polyCircle(r.bbox.cx, r.bbox.cz, 2.5, 32)));
         const ceiling = mesh(extrudeSolids(poly, r.height, r.height + 0.25), state.wallMat, r.id + '-ceiling', g);
@@ -1119,7 +1119,7 @@
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
       if (r.id !== 'K1') {
         if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
-        if (!['K2', 'K3', 'K4', 'K5', 'T1', 'L1'].includes(r.id)) addTorches(r);
+        if (!['K2', 'K3', 'K4', 'K5', 'T1', 'L1', 'L2'].includes(r.id)) addTorches(r);
       }
     }
     vis('regions');
@@ -2531,17 +2531,25 @@
   // For a door whose other side is a short corridor (K1-KC12 → KC12 → K2),
   // we wait for the first streamed room one hop past the corridor.
   const ZONE_DOOR_ABANDON_MS = 60000;
-  function streamedZoneIds() { return WING_ZONES.map(function (z) { return z.id; }); }
+  const streamedTargetCache = new WeakMap();
   function streamedTargets(d, fromId) {
     const cur = fromId || state.current;
     if (!d) return [];
     const other = d.to === cur ? d.from : (d.from === cur ? d.to : d.to);
-    const set = new Set(streamedZoneIds());
-    if (set.has(other)) return [other];
+    let choices = streamedTargetCache.get(d);
+    if (!choices) { choices = new Map(); streamedTargetCache.set(d, choices); }
+    if (choices.has(other)) return choices.get(other);
+    const set = new Set(WING_ZONES.map(z => z.id));
+    if (set.has(other)) {
+      const direct = [other];
+      choices.set(other, direct);
+      return direct;
+    }
     const dist = distancesFrom(other);
     const found = [];
     dist.forEach(function (h, id) { if (set.has(id) && h <= 1) found.push(id); });
     found.sort(function (a, b) { return dist.get(a) - dist.get(b); });
+    choices.set(other, found);
     return found;
   }
   function zoneIsReady(id) {
@@ -2575,7 +2583,8 @@
     const cur = state.current;
     state.doors.forEach(function (d) {
       if (!d || d._roomDoor || d.kind === 'arch') return;
-      const targets = streamedTargets(d, cur);
+      const targets = d.id === 'LC2-L2' ? (cur === 'L2' ? [] : ['L2']) :
+        streamedTargets(d, cur).filter(id => id !== 'L2');
       // Only block when approaching from outside a not-ready streamed room.
       const waiting = targets.filter(function (id) { return id !== cur && !zoneIsReady(id); });
       if (!waiting.length) return;
@@ -2666,6 +2675,14 @@
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
   function dispose() {
+    if (state.archiveLoad) state.archiveLoad.abort();
+    if (state.archive) {
+      state.archive.root.removeFromParent();
+      state.archive.dispose();
+    }
+    state.archive = state.archiveLoad = state.archiveMotion = null;
+    state.archiveDemand = false;
+    if (state.archiveUI) { state.archiveUI.panel.remove(); state.archiveUI = null; }
     if (state.library) {
       state.library.root.removeFromParent();
       state.library.dispose();
@@ -2685,6 +2702,7 @@
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null; state.k5Dress = null;
     state.k1FloorY = 0; state.k1ModelMetrics = null; state.k1ModelColliderCount = 0; state.gpuResidency = null; state.renderBudget = null;
     dressedRooms.clear(); zoneDone.clear(); dressFailures.length = 0; state.deferredDress.clear(); state._streamSets = null; zoneDistKey = ''; zoneDist = null;
+    regionDistances.clear();
     if (zoneStreamer) zoneStreamer.reset();
   }
   function wingMark(msg) {
@@ -2730,6 +2748,11 @@
     try { console.info('[palace load] wings-layout-to-bake'); } catch (_) {}
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
     state.regions = state.rooms.concat(state.connectors); state.links = layout.links; state.sealed = layout.sealed; state.back = layout.back;
+    state.archivePortals = ['PalaceR1', 'L1-LC2', 'LC2-L2'].map(id => state.doors.find(door => door.id === id));
+    const library = state.rooms.find(room => room.id === 'L1');
+    state.archiveHallExit = Object.assign({}, state.archivePortals[0], { x: library.bbox.x0 });
+    const hallBounds = { x0: -hall.width / 2, x1: hall.width / 2, z0: 0, z1: hall.length };
+    state.planRegions = state.regions.concat({ id: 'Palace', bbox: hallBounds });
     // Prefer the build-time bake (data/palace-colliders.json): Clipper K1-diff and
     // the 0.5 m collider grid are identical to a live compute (see palace-collider-bake test)
     // and cost a JSON parse instead of minutes on the main thread.
@@ -2807,9 +2830,12 @@
     state.links.forEach(([a, b]) => { if (!map.has(a)) map.set(a, []); if (!map.has(b)) map.set(b, []); map.get(a).push(b); map.get(b).push(a); });
     return map;
   }
+  const regionDistances = new Map();
   function distancesFrom(id) {
+    if (regionDistances.has(id)) return regionDistances.get(id);
     const adj = adjacency(), dist = new Map([[id, 0]]), q = [id];
     while (q.length) { const a = q.shift(); for (const b of adj.get(a) || []) if (!dist.has(b)) { dist.set(b, dist.get(a) + 1); q.push(b); } }
+    regionDistances.set(id, dist);
     return dist;
   }
   function groupTriangleCount(g) {
@@ -2853,17 +2879,18 @@
       }
     });
   }
-  let camDir = null;
-  function cameraView(rootX, rootZ) {
-    const cam = state.ctx && state.ctx.camera;
+  let camDir = null, camPosition = null;
+  function cameraView(rootX, rootZ, cam = state.ctx && state.ctx.camera) {
     if (!cam || !cam.getWorldDirection) return null;
     if (!camDir) camDir = new THREE.Vector3();
+    if (!camPosition) camPosition = new THREE.Vector3();
     cam.getWorldDirection(camDir);
     let dx = camDir.x, dz = camDir.z; const len = Math.hypot(dx, dz);
     if (len < 1e-4) { dx = 0; dz = 1; } else { dx /= len; dz /= len; }
     const vfov = (cam.fov || 60) * Math.PI / 180, aspect = cam.aspect || 1;
     const halfFov = Math.atan(Math.tan(vfov / 2) * aspect);
-    return { x: cam.position.x - rootX, z: cam.position.z - rootZ, dirX: dx, dirZ: dz, halfFov };
+    const p = cam.parent && !cam.parent.isScene ? cam.getWorldPosition(camPosition) : cam.position;
+    return { x: p.x - rootX, z: p.z - rootZ, dirX: dx, dirZ: dz, halfFov };
   }
   // Streamed dress content (K2–K4 props) is owned by the zone streamer:
   // prepared before the player arrives, revealed atomically, evicted LRU with
@@ -2907,7 +2934,132 @@
       });
     }
   }
+  function loadArchive(api) {
+    const room = state.rooms.find(r => r.id === 'L2');
+    const entrance = state.archivePortals[2];
+    const controller = new AbortController();
+    state.archiveLoad = controller;
+    const loader = new THREE.GLTFLoader();
+    function loadModel(url, signal) {
+      return enqueueWingLoad(async () => {
+        signal.throwIfAborted();
+        const path = encodeURI(url);
+        const response = await fetch(path, { signal });
+        if (!response.ok) throw new Error(response.status + ' ' + url);
+        const buffer = await response.arrayBuffer();
+        signal.throwIfAborted();
+        await yieldWing();
+        return loader.parseAsync(buffer, '');
+      });
+    }
+    SinRoyalArchive.build(room, entrance, loadModel, controller.signal).then(archive => {
+      if (state.archiveLoad !== controller || controller.signal.aborted) { archive.dispose(); return; }
+      state.archive = archive;
+      zoneStreamer.markReleasable(archive.root);
+      api.add(archive.root);
+      api.done();
+    }, error => {
+      if (state.archiveLoad !== controller || controller.signal.aborted) return;
+      api.fail(error);
+    });
+  }
+
+  function archiveSight(view) {
+    if (!view || !state.archivePortals || !window.SinWingVisibility) return false;
+    const [hall, first, last] = state.archivePortals;
+    const inside = regionAt(view.x, view.z);
+    const id = inside && inside.id;
+    if (id === 'L2') return true;
+    const heroInside = state.current === 'L2';
+    const openings = id === 'L1' ? [first, last] :
+      (id === 'LC2' ? [last] : id === 'ARCH_R1' ? [state.archiveHallExit, first, last] :
+        !id ? [hall, state.archiveHallExit, first, last] : null);
+    return heroInside || !!(openings && SinWingVisibility.throughOpenings(view, openings, 0.035));
+  }
+
+  function archiveExitReach(view) {
+    if (!state.archivePortals || !view || !window.SinWingVisibility) return null;
+    const room = regionAt(view.x, view.z);
+    if (!room || room.id !== 'L2') return null;
+    const [, first, last] = state.archivePortals;
+    if (!SinWingVisibility.throughOpenings(view, [last], 0.08)) return 0;
+    return SinWingVisibility.throughOpenings(view, [last, first], 0.08) ? 2 : 1;
+  }
+
+  function beforePresent(scene, camera) {
+    if (!state.root || !state.built || !state.ctx || scene !== state.ctx.scene || !zoneStreamer) return;
+    const view = cameraView(state.root.position.x, state.root.position.z, camera);
+    const sight = archiveSight(view);
+    const reach = archiveExitReach(view);
+    const group = state.regionGroups.get('L2');
+    if (group) group.visible = sight;
+    const corridor = state.regionGroups.get('LC2');
+    if (corridor && sight && (state.current !== 'L2' || reach > 0)) corridor.visible = true;
+    if (reach === 2) {
+      const library = state.regionGroups.get('L1');
+      if (library) library.visible = true;
+    }
+    const waiting = sight && !zoneIsReady('L2');
+    state.archiveDemand = waiting;
+    if (!waiting && !state.archiveUI) return;
+    if (!state.archiveUI) {
+      const panel = document.createElement('div');
+      panel.id = 'l2-streaming';
+      panel.dir = 'rtl';
+      panel.setAttribute('role', 'status');
+      panel.style.cssText = 'position:fixed;inset:0;z-index:180;display:grid;place-content:center;text-align:center;gap:14px;background:#17100b;color:#f3dcad;font:600 17px system-ui;pointer-events:none';
+      const text = document.createElement('div');
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.textContent = 'إعادة المحاولة';
+      retry.style.pointerEvents = 'auto';
+      retry.onclick = () => { zoneStreamer.forceEvict('L2'); };
+      panel.append(text, retry);
+      document.body.append(panel);
+      state.archiveUI = { panel, text, retry };
+    }
+    const ui = state.archiveUI, status = zoneStreamer.status('L2');
+    const failed = status === 'failed';
+    if (ui.waiting !== waiting || ui.status !== status) {
+      ui.status = status;
+      ui.waiting = waiting;
+      ui.panel.style.display = waiting ? 'grid' : 'none';
+      ui.text.textContent = failed ? 'تعذّر تجهيز الأرشيف الملكي' : 'جارٍ تجهيز الأرشيف الملكي';
+      ui.retry.hidden = !failed;
+    }
+  }
+
   const WING_ZONES = [
+    { id: 'L2', prefetchHops: 2, priority: -1, requireComplete: true,
+      estProcessMB: deviceProfile.constrained ? 90 : 225,
+      estGpuMB: deviceProfile.constrained ? 61 : 145,
+      estCpuMB: deviceProfile.constrained ? 29 : 80,
+      load: loadArchive,
+      prepareGeometry: (api, renderer) => state.archive.warmup.step(renderer),
+      onFailure: function (error) {
+        if (state.archiveLoad) state.archiveLoad.abort();
+        if (state.archive) state.archive.warmup.dispose();
+        console.warn('[L2] Archive preparation failed', error);
+      },
+      onReady: function () {
+        const origin = state.root.position;
+        state.archive.cameraColliders = state.archive.colliders.map(box => ({
+          minx: box.minx + origin.x, maxx: box.maxx + origin.x,
+          miny: box.miny + origin.y, maxy: box.maxy + origin.y,
+          minz: box.minz + origin.z, maxz: box.maxz + origin.z, _wing: true
+        }));
+        state.colliders.push(...state.archive.colliders);
+        rebuildSpatial();
+        triCache.delete('L2');
+      },
+      unload: function () {
+        if (state.archiveLoad) state.archiveLoad.abort();
+        if (state.archive) state.archive.warmup.dispose();
+        state.archive = state.archiveLoad = null;
+        state.colliders = state.colliders.filter(box => !box._archive);
+        triCache.delete('L2');
+      },
+      ownsObject: node => node.name === 'L2-Royal-Archive' },
     { id: 'L1', prefetchHops: 3, priority: 0,
       load: loadLibrary,
       onReady: function (api) {
@@ -2972,10 +3124,10 @@
     if (!zoneStreamer) return null;
     const userReady = spec.onReady, userPrepare = spec.prepare;
     return zoneStreamer.register(Object.assign({}, spec, {
-      prepare: function (api) { zonePrepare(api); if (userPrepare) userPrepare(api); },
+      prepare: function (api) { if (!spec.requireComplete) zonePrepare(api); if (userPrepare) userPrepare(api); },
       onReady: function (api) {
         dressedRooms.add(spec.id);
-        if (api.group && zoneStreamer) zoneStreamer.enqueueWarm(api.group);
+        if (api.group && zoneStreamer && !spec.requireComplete) zoneStreamer.enqueueWarm(api.group);
         if (userReady) userReady(api);
       },
       unload: function (api) {
@@ -3084,9 +3236,20 @@
     zoneStreamer.attach({ renderer: ctx.renderer, scene: ctx.scene, camera: ctx.camera, groupOf: function (id) { return state.regionGroups.get(id) || null; } });
     const level = (zoneStreamer.sample(ctx.renderer) || {}).level || 'normal';
     const warmGroups = [];
-    (preparedIds || new Set()).forEach(function (id) { const g = state.regionGroups.get(id); if (g) warmGroups.push(g); });
-    (visibleIds || new Set()).forEach(function (id) { const g = state.regionGroups.get(id); if (g && warmGroups.indexOf(g) < 0) warmGroups.push(g); });
-    return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds, memoryLevel: level, warmGroups: warmGroups, approach: approachRoomIds() });
+    (preparedIds || new Set()).forEach(function (id) { const g = id !== 'L2' && state.regionGroups.get(id); if (g) warmGroups.push(g); });
+    (visibleIds || new Set()).forEach(function (id) { const g = id !== 'L2' && state.regionGroups.get(id); if (g && warmGroups.indexOf(g) < 0) warmGroups.push(g); });
+    const approach = approachRoomIds();
+    const move = state.archiveMotion, portal = state.archivePortals && state.archivePortals[0];
+    if (origin === 'Palace' && move && portal) {
+      const dx = portal.x - move.x, dz = portal.z - move.z;
+      const distance = Math.hypot(dx, dz);
+      const speed = Math.hypot(move.vx, move.vz);
+      const toward = distance < 0.5 || (dx * move.vx + dz * move.vz) > distance * speed * 0.65;
+      if (toward && distance <= Math.min(19, 3 + speed * 3.5)) approach.add('L2');
+    }
+    const allowBackgroundWarm = !move || Math.hypot(move.vx, move.vz) < 0.40;
+    return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds,
+      memoryLevel: level, warmGroups, approach, allowBackgroundWarm, demand: state.archiveDemand ? 'L2' : null });
   }
   // After LRU eviction a streamed room (K4 in particular) can sit complete=false
   // with its dress refs nulled. If the player is standing in it, re-issue the
@@ -3099,7 +3262,7 @@
     if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
       origin = state._dressLock.id;
     }
-    if (!origin) return;
+    if (!origin || origin === 'L2') return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
     if (c && c.complete) {
@@ -3160,21 +3323,29 @@
     if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
       origin = state._dressLock.id;
     }
-    try { console.info('[palace load] cull-enter'); } catch (_) {}
+    if (force) console.info('[palace load] cull-enter');
     const view = cameraView(state.root.position.x, state.root.position.z);
     let visibleIds, preparedIds, meta = null;
     if (visibilityPlanner && view) {
       // Camera-driven: what the camera can see (through open portals) is drawn,
       // what it could see after a turn stays prepared.
       const tPlan = performance.now();
-      const hall = state.hall || {};
-      const hw = hall.width || 14, hl = hall.length || 30;
-      const hallReg = { id: 'Palace', bbox: { x0: -hw / 2, x1: hw / 2, z0: 0, z1: hl, cx: 0, cz: hl / 2 } };
-      const planRegions = (state.regions || []).some(function (r) { return r.id === 'Palace'; })
-        ? state.regions
-        : (state.regions || []).concat([hallReg]);
+      const planRegions = state.planRegions;
       const planned = visibilityPlanner.plan(planRegions, state.links, origin, view, performance.now() / 1000);
-      try { console.info('[palace load] cull-plan', Math.round(performance.now()-tPlan)+'ms', 'vis', planned.visible.size); } catch (_) {}
+      const archiveReach = archiveExitReach(view);
+      if (archiveReach === 0 || archiveReach === 1) {
+        planned.visible.clear();
+        if (archiveReach === 1) planned.visible.add('LC2');
+      }
+      if (archiveSight(view)) {
+        planned.visible.add('L2');
+        if (id !== 'L2') planned.visible.add('LC2');
+        if (archiveReach === 2) {
+          planned.visible.add('LC2');
+          planned.visible.add('L1');
+        }
+      } else planned.visible.delete('L2');
+      if (force) console.info('[palace load] cull-plan', Math.round(performance.now()-tPlan)+'ms', 'vis', planned.visible.size);
       if (isArch) planned.visible.add(id);
       meta = planned.meta;
       const candidates = [];
@@ -3221,14 +3392,14 @@
       // Streaming begins at DONE, after the load screen is gone. Rooms
       // still use hideUntilReady, so nothing pops in front of the player.
       if (palacePhase === 'SETUP' || palacePhase === 'REVEAL' || palacePhase === 'FADING_IN' || window.__sinStreamHold) {
-        try { console.info('[palace load] cull-stream-deferred', palacePhase || 'hold', window.__sinStreamHold ? 'hold' : ''); } catch (_) {}
+        if (force) console.info('[palace load] cull-stream-deferred', palacePhase || 'hold');
         return;
       }
       {
         const tS = performance.now();
         streamZones(origin, visibleIds, preparedIds);
         ensureCurrentDress(origin);
-        try { console.info('[palace load] cull-stream', Math.round(performance.now()-tS)+'ms'); } catch (_) {}
+        if (force) console.info('[palace load] cull-stream', Math.round(performance.now()-tS)+'ms');
       }
       const zr = zoneStreamer ? zoneStreamer.report() : null;
       state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: zr ? zr.warmPending : 0, memory: zr ? zr.memory : null, dressFailures: dressFailures.slice(-8), zones: zr };
@@ -3243,6 +3414,13 @@
   function tick(dt) {
     const _trT = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     if (!state.built) return;
+    const hero = state.ctx.hero.position, root = state.root.position;
+    const x = hero.x - root.x, z = hero.z - root.z;
+    const motion = state.archiveMotion || (state.archiveMotion = { x, z, vx: 0, vz: 0 });
+    const sec = Math.max(0.001, dt || 0.016);
+    motion.vx += (Math.min(8, Math.max(-8, (x - motion.x) / sec)) - motion.vx) * 0.35;
+    motion.vz += (Math.min(8, Math.max(-8, (z - motion.z) / sec)) - motion.vz) * 0.35;
+    motion.x = x; motion.z = z;
     if (_trT) _trT('PalaceWings.tick-enter');
     updateRoomDoors(Math.max(.001, Math.min(.05, Number(dt) || .016)));
     if (_trT) _trT('PalaceWings.updateRoomDoors');
@@ -4774,6 +4952,7 @@
     });
   }
   const STREAM_EXPECT = {
+    L2: window.SinRoyalArchive ? SinRoyalArchive.expected : [],
     L1: [
       'L1-floor-medallion', 'L1-ceiling-zodiac', 'L1-skylight',
       'L1-open-arch-L1-LC4', 'L1-open-arch-L1-LC2', 'L1-open-arch-L1-LC3',
@@ -4930,6 +5109,8 @@
     build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
     teleport, overview, runTests, formatReport, cameraTour, current, metrics, corridorReport: () => state.corridorReport, corridorWallFill: () => state.corridorWallFill || 0,
     libraryCamera: () => state.library && state.library.ready ? state.library.camera : null,
+    archiveCamera: () => state.archive && zoneIsReady('L2') ? state.archive.camera : null,
+    beforePresent,
     onLibraryStairs,
     restoreLibraryPose: () => { if (state.library) state.library.restoreGroundPose(); },
     groundLibraryHero: hero => { if (onLibraryStairs(hero.position)) state.library.groundHero(hero); },

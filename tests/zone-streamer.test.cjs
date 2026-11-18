@@ -607,3 +607,73 @@ test('prefetch will not stack a second dress room under a 650 MB budget', () => 
   assert.ok(loaded.K3 === k3Before && s.status('K3') === 'cold',
     'K3 must stay cold while K2 is resident, status=' + s.status('K3') + ' loaded=' + loaded.K3);
 });
+
+test('strict room waits for texture upload, geometry warmup and shader compilation', async () => {
+  const scene = obj('scene'), group = obj('L2'); scene.add(group);
+  const R = renderer(), s = Z.create();
+  const t = tex();
+  let steps = 0, finishCompile;
+  R.compileAsync = () => new Promise(resolve => { finishCompile = resolve; });
+  s.register({
+    id: 'L2', requireComplete: true,
+    load(api) { api.add(mesh('archive', t)); api.done(); },
+    prepareGeometry() { assert.equal(R.uploads, 1); return ++steps >= 2; }
+  });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: () => group });
+  const view = { current: 'L1', distances: new Map([['L2', 1]]) };
+  for (let i = 0; i < 10 && !finishCompile; i++) {
+    s.update(view);
+    await tick();
+    assert.equal(group.children[0].visible, false);
+  }
+  assert.equal(s.status('L2'), 'compiling');
+  finishCompile(); await tick(); s.update(view);
+  assert.equal(s.status('L2'), 'ready');
+  assert.equal(group.children[0].visible, true);
+});
+
+test('strict archive stays hidden on GPU error and can be retried', async () => {
+  const scene = obj('scene'), group = obj('L2'); scene.add(group);
+  const R = renderer(), s = Z.create();
+  const original = R.initTexture.bind(R);
+  R.initTexture = () => { throw new Error('upload failed'); };
+  s.register({
+    id: 'L2', requireComplete: true, load(api) { api.add(mesh('archive', tex())); api.done(); }
+  });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: () => group });
+  const view = { current: 'L1', distances: new Map([['L2', 1]]) };
+  for (let i = 0; i < 6; i++) { s.update(view); await tick(); }
+  assert.equal(s.status('L2'), 'failed');
+  assert.equal(group.children[0].visible, false);
+  assert.equal(s.forceEvict('L2'), 1);
+  R.initTexture = original;
+  for (let i = 0; i < 6; i++) { s.update(view); await tick(); }
+  assert.equal(s.status('L2'), 'ready');
+});
+
+test('the archive can coexist with a visible library within a 650 MB budget', async () => {
+  const scene = obj('scene'), groups = { L1: obj('L1'), L2: obj('L2') };
+  Object.values(groups).forEach(g => scene.add(g));
+  const R = renderer();
+  const s = Z.create({ processBudgetMB: 650, estimate: () => ({ processMB: 549 }) });
+  const shared = tex();
+  const content = mesh('library', shared);
+  s.register({ id: 'L1', load(api) { api.add(content); api.done(); } });
+  s.register({ id: 'L2', requireComplete: true, estProcessMB: 65, load(api) {
+    api.add(mesh('archive', shared));
+    const clone = mesh('shared-gallery', shared);
+    clone.geometry = content.geometry;
+    clone.material = content.material;
+    api.add(clone); api.done();
+  } });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: id => groups[id] });
+  const initial = { current: 'L1', distances: new Map([['L1', 0]]) };
+  for (let i = 0; i < 5; i++) { s.update(initial); await tick(); }
+  const view = { current: 'L1', distances: new Map([['L1', 0], ['L2', 2]]), visible: new Set(['L1', 'L2']) };
+  for (let i = 0; i < 10; i++) { s.update(view); await tick(); }
+  assert.equal(s.status('L1'), 'ready');
+  assert.equal(s.status('L2'), 'ready');
+  s.forceEvict('L2');
+  assert.equal(shared.disposed, 0);
+  assert.equal(content.geometry.d, undefined);
+});

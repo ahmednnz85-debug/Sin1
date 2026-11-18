@@ -141,6 +141,7 @@
     const stats = { uploads: 0, uploadMs: 0, maxFrameUploadMs: 0, compiles: 0, reveals: 0, evictions: 0, texturesDisposed: 0, cpuReleased: 0, deferred: 0, budgetEvictions: 0, deferStalls: 0, lastDefer: null, lastStall: null };
     let ctx = null;                        // { renderer, scene, camera, groupOf(id) }
     let uploadQueue = [];                  // { tex, zone, rank }
+    const looseUploads = new Set();
 
     function note(kind, msg) { try { if (o.log) o.log(kind, msg); } catch (_) {} }
 
@@ -225,14 +226,26 @@
       texturesOf(obj).forEach(function (t) {
         capOne(t);
         if (renderer && uploaded(renderer, t)) { tryReleaseCpu(t); return; }
-        if (!t.image) return;
-        if (rec) rec.pending.add(t);
+        if (!t.image) {
+          if (rec && rec.spec.requireComplete) rec.failed = new Error('Missing pixels for ' + (t.name || 'zone texture'));
+          return;
+        }
+        const pending = rec ? rec.pending : looseUploads;
+        if (pending.has(t)) return;
+        pending.add(t);
         uploadQueue.push({ tex: t, zone: rec, rank: rank || 0 });
       });
     }
     function pumpUploads() {
       const renderer = ctx && ctx.renderer;
-      if (!renderer || typeof renderer.initTexture !== 'function') { uploadQueue.length = 0; zones.forEach(r => r.pending.clear()); return; }
+      if (!renderer || typeof renderer.initTexture !== 'function') {
+        uploadQueue.length = 0; looseUploads.clear();
+        zones.forEach(r => {
+          if (r.spec.requireComplete && r.pending.size) r.failed = new Error('Texture upload unavailable');
+          r.pending.clear();
+        });
+        return;
+      }
       if (!uploadQueue.length) return;
       uploadQueue.sort((a, b) => a.rank - b.rank);
       const t0 = now(); let n = 0;
@@ -242,7 +255,12 @@
         const t = job.tex;
         try { capOne(t); } catch (_) {}
         try { if (t.image && !uploaded(renderer, t)) { renderer.initTexture(t); n++; stats.uploads++; } } catch (_) {}
-        if (job.zone) job.zone.pending.delete(t);
+        if (job.zone) {
+          job.zone.pending.delete(t);
+          if (job.zone.spec.requireComplete && !uploaded(renderer, t)) {
+            job.zone.failed = new Error('GPU upload failed for ' + (t.name || 'zone texture'));
+          }
+        } else looseUploads.delete(t);
         tryReleaseCpu(t);
       }
       const dt = now() - t0; stats.uploadMs += dt; if (dt > stats.maxFrameUploadMs) stats.maxFrameUploadMs = dt;
@@ -375,6 +393,14 @@
       return evictToFit(extra);
     }
     function canStart(rec) {
+      if (rec.spec.requireComplete) {
+        // An open sight line can show two dressed rooms at once. Use the
+        // device's measured memory budget instead of forcibly swapping them.
+        if (evictToFit(incoming(rec))) { rec.deferredAt = 0; rec.deferred = false; return true; }
+        if (!rec.deferredAt) { rec.deferredAt = now(); stats.deferred++; }
+        rec.deferred = true;
+        return false;
+      }
       const extra = incoming(rec);
       if (rec.isCurrent) {
         evictForCurrent(extra);
@@ -485,7 +511,7 @@
         // Only the CURRENT room may be force-admitted after a stall.
         // Force-admitting a prefetch via roomFitsAlone stacked K2+K3 to 658
         // because the leftover current room was ignored.
-        if (roomFitsAlone(rec) && rec.stallAttempts >= 2 && rec.isCurrent) {
+        if (!rec.spec.requireComplete && roomFitsAlone(rec) && rec.stallAttempts >= 2 && rec.isCurrent) {
           note('load', rec.id + ' admitted after defer-stall (room fits the device budget alone)');
           rec.deferred = false;
           rec.deferredAt = 0;
@@ -502,13 +528,26 @@
       note('load', rec.id + ' stream start');
       try { rec.spec.load(apiFor(rec)); } catch (e) { rec.failed = e; rec.done = true; console.warn('zone load failed', rec.id, e); }
     }
+    function failStrict(rec, error) {
+      rec.failed = error;
+      rec.state = 'failed';
+      rec._currentUntil = 0;
+      uploadQueue = uploadQueue.filter(job => job.zone !== rec);
+      rec.pending.clear();
+      if (rec.spec.onFailure) {
+        try { rec.spec.onFailure(error); } catch (cause) { console.warn('zone failure cleanup', rec.id, cause); }
+      }
+      note('load', rec.id + ' failed: ' + String(error));
+    }
     function complete(rec) {
       if (rec.done) return true;
       try { if (rec.spec.isComplete && rec.spec.isComplete()) return true; } catch (_) {}
       return false;
     }
     function step(rec, t, rank) {
+      if (rec.state === 'failed') return;
       const g = group(rec);
+      if (rec.spec.requireComplete && rec.failed) { failStrict(rec, rec.failed); return; }
       if (rec.state === 'loading') {
         const elapsed = t - rec.startedAt;
         const done = complete(rec);
@@ -519,6 +558,10 @@
         // on a phone the 6.8 MB K2 table often arrives after that, which was
         // the visible pop-in. Only complete, fail(), or a long abandon reveal.
         const abandon = elapsed > abandonAt;
+        if (rec.spec.requireComplete && !done && abandon) {
+          failStrict(rec, new Error('Room preparation timed out'));
+          return;
+        }
         if (done || failed || abandon) {
           if (!done) note('load', rec.id + (failed ? ' failed' : ' abandoned') + ' after ' + Math.round(elapsed) + ' ms — revealing what is present');
           rec.state = 'uploading';
@@ -527,22 +570,42 @@
           if (g) queueTextures(rec, g, rank);
         }
       }
+      if (rec.spec.requireComplete && rec.failed) { failStrict(rec, rec.failed); return; }
       if (rec.state === 'uploading' && rec.pending.size === 0) {
+        if (rec.spec.prepareGeometry) {
+          try {
+            if (!rec.spec.prepareGeometry(apiFor(rec), ctx && ctx.renderer)) return;
+          } catch (error) { failStrict(rec, error); return; }
+        }
         rec.state = 'compiling';
         const r = ctx && ctx.renderer;
         let p = null;
         if (g && r && ctx.camera) {
+          const was = g.visible;
           try {
             // Compile against the real scene so the programs match what the
             // renderer will use (lights, fog, env): no compile at reveal.
-            if (typeof r.compileAsync === 'function') p = r.compileAsync(g, ctx.camera, ctx.scene || null);
-            else if (typeof r.compile === 'function') r.compile(g, ctx.camera);
+            const content = rec.spec.requireComplete && g.children.find(child => child.userData.streamDress);
+            if (content) g.visible = false; // include content lights exactly once
+            if (typeof r.compileAsync === 'function') p = r.compileAsync(content || g, ctx.camera, ctx.scene || null);
+            else if (typeof r.compile === 'function') r.compile(content || g, ctx.camera, ctx.scene || null);
             stats.compiles++;
-          } catch (_) { p = null; }
+          } catch (error) {
+            if (rec.spec.requireComplete) { failStrict(rec, error); return; }
+            p = null;
+          } finally {
+            g.visible = was;
+          }
         }
         const fin = function () { if (rec.state === 'compiling') rec.compileDone = true; };
         rec.compileDone = false;
-        if (p && typeof p.then === 'function') p.then(fin, fin); else fin();
+        if (p && typeof p.then === 'function') {
+          const attempt = rec.startedAt;
+          p.then(() => { if (rec.startedAt === attempt) fin(); }, error => {
+            if (rec.startedAt !== attempt || rec.state !== 'compiling') return;
+            if (rec.spec.requireComplete) failStrict(rec, error); else fin();
+          });
+        } else fin();
       }
       if (rec.state === 'compiling' && rec.compileDone) reveal(rec);
       // Gate: a room is never world-visible before the atomic reveal, even
@@ -565,6 +628,7 @@
       // one-frame current flicker must not abort an in-flight load (playthrough-4
       // first K4 was evicted mid-parse and re-dressed five times over 60 s).
       if (why !== 'forced') {
+        if (rec.visible) return 0;
         if (rec.isCurrent) {
           try { console.info('[palace load] evict-skipped', rec.id, why, 'current'); } catch (_) {}
           return 0;
@@ -577,21 +641,28 @@
       const g = group(rec);
       const own = rec.spec.ownsObject || function (ch) { return !!(ch.userData && ch.userData.streamDress); };
       const doomed = g ? g.children.filter(own) : [];
-      const keep = new Set();
+      const keep = new Set(), keptGeometries = new Set(), keptMaterials = new Set();
+      const geometries = new Set(), materials = new Set(), textures = new Set();
       // Textures still used by anything else stay (shared templates).
       if (g && ctx && ctx.scene) {
         const doomedSet = new Set(doomed);
         ctx.scene.traverse(function (x) {
           for (let n = x; n; n = n.parent) if (doomedSet.has(n)) return;
-          materialsOf(x).forEach(m => TEX_KEYS.forEach(k => { if (m && m[k]) keep.add(m[k]); }));
+          if (x.geometry) keptGeometries.add(x.geometry);
+          materialsOf(x).forEach(m => {
+            if (!m) return;
+            keptMaterials.add(m);
+            TEX_KEYS.forEach(k => { if (m[k]) keep.add(m[k]); });
+          });
         });
       }
       doomed.forEach(function (ch) {
         g.remove(ch);
         ch.traverse(function (x) {
-          if (x.geometry && x.geometry.dispose) x.geometry.dispose();
+          if (x.isInstancedMesh && x.dispose) x.dispose();
+          if (x.geometry && !keptGeometries.has(x.geometry)) geometries.add(x.geometry);
           materialsOf(x).forEach(function (m) {
-            if (!m || (m.userData && m.userData.palaceShared)) return;
+            if (!m || keptMaterials.has(m) || (m.userData && m.userData.palaceShared)) return;
             TEX_KEYS.forEach(function (k) {
               const t = m[k];
               // Every unshared texture this zone owned is released on the GPU.
@@ -600,24 +671,45 @@
               // phone textures), so repeated leave/return accumulated GPU
               // memory until Safari killed the tab.
               if (t && !keep.has(t) && !(t.userData && t.userData.palaceShared)) {
-                try { t.dispose(); stats.texturesDisposed++; } catch (_) {}
+                textures.add(t);
               }
             });
-            if (typeof m.dispose === 'function') m.dispose();
+            materials.add(m);
           });
         });
       });
-      uploadQueue = uploadQueue.filter(j => j.zone !== rec);
+      geometries.forEach(g => { if (g.dispose) g.dispose(); });
+      materials.forEach(m => { if (m.dispose) m.dispose(); });
+      const keptSources = new Set(Array.from(keep, t => t.source));
+      textures.forEach(t => {
+        const pending = releasable.get(t.source);
+        if (pending) {
+          pending.delete(t);
+          if (!pending.size) {
+            if (!keptSources.has(t.source) && t.image && typeof t.image.close === 'function') t.image.close();
+            releasable.delete(t.source);
+          }
+        }
+        t.dispose();
+        stats.texturesDisposed++;
+      });
+      uploadQueue = uploadQueue.filter(j => {
+        if (textures.has(j.tex)) { looseUploads.delete(j.tex); return false; }
+        return j.zone !== rec;
+      });
       rec.pending.clear();
       try { if (rec.spec.unload) rec.spec.unload(apiFor(rec)); } catch (e) { console.warn('zone unload', rec.id, e); }
       if (g) {
+        forgetWarm(g);
+        const queueIndex = warmQ.indexOf(g);
+        if (queueIndex >= 0) warmQ.splice(queueIndex, 1);
         g.userData.dressReady = false;
         // Shells are not in `doomed` (ownsObject is streamDress only).
         // They were revealed on the previous visit; hide them so the
         // next load cannot show an incomplete room.
         hideObject(g);
       }
-      rec.state = 'cold'; rec.leftAt = 0; rec.done = false;
+      rec.state = 'cold'; rec.leftAt = 0; rec.done = false; rec.failed = null;
       stats.evictions++;
       note('unload', rec.id + ' evicted (' + why + ', ' + doomed.length + ' objects)');
       try { console.info('[palace load] evict', rec.id, why, doomed.length); } catch (_) {}
@@ -718,7 +810,7 @@
         // door can open onto a complete room. Far rooms are evicted first
         // (canStart); over-budget approach still defers rather than exceed 650.
         const prefetch = hops <= rec.spec.prefetchHops || approaching || (!tight && prepared.has(id));
-        const want = isCurrent || prefetch;
+        const want = isCurrent || prefetch || (rec.spec.requireComplete && visible.has(id));
         // hops <= 1 protects on desktop; on a 650 MB phone those neighbours
         // yield once evictForCurrent decides the current room needs space.
         const protect = isCurrent || visible.has(id) || (!tight && hops <= 1);
@@ -728,7 +820,9 @@
         else if (rec.state !== 'cold' && !rec.leftAt) rec.leftAt = t;
       });
       // Nearest / visible first. Lower rank = more urgent.
-      wanted.sort((a, b) => (a.hops - b.hops) || ((visible.has(b.id) ? 1 : 0) - (visible.has(a.id) ? 1 : 0)) || (a.spec.priority - b.spec.priority));
+      const demand = view.demand;
+      wanted.sort((a, b) => Number(b.id === demand) - Number(a.id === demand) ||
+        (a.hops - b.hops) || (Number(visible.has(b.id)) - Number(visible.has(a.id))) || (a.spec.priority - b.spec.priority));
       let loading = 0;
       zones.forEach(r => { if (r.state === 'loading') loading++; });
       wanted.forEach(function (rec, i) {
@@ -771,7 +865,8 @@
       idle.forEach(function (rec, i) {
         const overCache = idle.length - i > cache;
         const far = rec.hops == null || rec.hops > 1;
-        if (level === 'critical' || tight || (overCache && t - rec.leftAt >= o.graceMs)) {
+        const keepWarm = rec.spec.requireComplete && t - rec.leftAt < o.graceMs;
+        if (level === 'critical' || (!keepWarm && (tight || (overCache && t - rec.leftAt >= o.graceMs)))) {
           evict(rec, level === 'critical' ? 'critical memory' : (tight ? (far ? 'non-adjacent' : 'prepared-before-current') : 'lru'));
           evicted++;
         }
@@ -780,7 +875,7 @@
       sweepReleasable();
       // Compile shells of prepared / visible groups (off-screen, one at a time).
       (view.warmGroups || []).forEach(enqueueWarm);
-      pumpWarm();
+      if (view.allowBackgroundWarm !== false) pumpWarm();
       return evicted;
     }
 
@@ -816,7 +911,7 @@
           // protect that room from eviction when the player has already
           // moved (playthrough-5: K2 stayed visible=true through K3/K4).
           // update() will re-flag anything actually in the new frustum.
-          r.visible = false;
+          if (!r.spec.requireComplete) r.visible = false;
         }
       });
     }
@@ -877,7 +972,7 @@
     }
     function reset() {
       zones.forEach(r => { r.state = 'cold'; r.pending.clear(); r.leftAt = 0; r.lastWanted = 0; r.done = false; r.waiters.length = 0; });
-      uploadQueue = []; releasable.clear(); warmQ.length = 0; warmBusy = false; memLevel = 'normal';
+      uploadQueue = []; looseUploads.clear(); releasable.clear(); warmQ.length = 0; warmBusy = false; memLevel = 'normal';
     }
     function report() {
       const u = usage();

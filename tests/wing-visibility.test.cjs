@@ -133,3 +133,18 @@ test('a large side-wing room is not drawn just because its AABB clips a long sig
   assert.equal(loose.visible.has('W'), false, 'visible=' + Array.from(loose.visible));
   assert.equal(loose.prepared.has('W'), false);
 });
+
+test('archive sight requires one ray through both jambs at full corridor distance', () => {
+  const { throughOpenings } = require('../wing-visibility');
+  const openings = [
+    { axis: 'z', x: 35, z: -4, width: 4.5, thickness: 1 },
+    { axis: 'z', x: 35, z: -10, width: 4.5, thickness: 1 }
+  ];
+  const view = { x: 35, z: 22, dirX: 0, dirZ: -1, halfFov: 0.61 };
+  assert.equal(throughOpenings(view, openings), true);
+  assert.equal(throughOpenings({ ...view, x: 42, z: -1 }, openings), false,
+    'individual doors fit the view, but the opposite jamb blocks their shared ray');
+  assert.equal(throughOpenings({ ...view, z: -4.15 }, openings), true,
+    'the camera can pass through the first jamb without flickering');
+  assert.equal(throughOpenings({ ...view, dirZ: 1 }, openings), false);
+});
