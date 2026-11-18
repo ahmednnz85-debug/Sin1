@@ -10,7 +10,7 @@
   };
   const expected = ['axis-stone','lamassu-pier','column-stone','column-royal','channel-coping','channel-bed','water',
     'gate-frame-main','gate-frame-side','sacred-mural','roof-coffers','roof-light-wells','sunbeams',
-    'brazier-wide','flames'].map(name => 'T3-' + name);
+    'brazier-plinths','brazier-wide','flames'].map(name => 'T3-' + name);
 
   const muralAtlas = { w:975,h:650, kings:[786,54,963,218],
     bull:[461,17,641,244], guardian:[673,19,761,242], palms:[12,271,388,355],
@@ -27,22 +27,37 @@
 
   const shaftPositions = [-17.15,-10.75,-4.30,4.30,10.75,17.15];
   const shaftRow = 8.82;
+  const pierPositions = [-20.15,20.15];
+  const pierRow = 10.40;
+  const shaftFoot = {width:1.14, depth:1.39, z:shaftRow-2.09};
+  const pierFoot = {width:1.26, depth:1.46, z:pierRow-1.66};
+  const mountTop = .208;
+
+  function shaftFootX(x) {
+    return Math.abs(x)>6 ? x-Math.sign(x)*.54 : x;
+  }
 
   function channelLayout(room) {
     const {cx,cz,x1,z1}=room.bbox;
     const end=x1-cx-1.27, start=3.20, inner=2.94;
     const bay=Math.min(z1-cz-1.87,10.06), atPlinth=shaftRow-1.71;
-    const plinths=shaftPositions.map(x=>[x-1.79,x+1.79]);
+    const banks=shaftPositions.flatMap(x=>{
+      const mount=shaftFootX(x);
+      return [
+        {l:x-1.79,r:x+1.79,edge:atPlinth},
+        {l:mount-shaftFoot.width/2,r:mount+shaftFoot.width/2,edge:shaftFoot.z-shaftFoot.depth/2}
+      ];
+    });
     // Retain stone at the square lamassu piers and join their ends to
     // the adjacent plinths. The middle bays extend between the shafts.
-    plinths.push([-end,-18.35],[18.35,end]);
+    banks.push({l:-end,r:-18.35,edge:atPlinth},{l:18.35,r:end,edge:atPlinth});
     const channels=[];
     for(const [l,r] of [[-end,-start],[start,end]]) for(const side of [-1,1]){
-      const breaks=[l,...new Set(plinths.flat().filter(x=>x>l&&x<r)),r].sort((a,b)=>a-b);
+      const breaks=[l,...new Set(banks.flatMap(bank=>[bank.l,bank.r]).filter(x=>x>l&&x<r)),r].sort((a,b)=>a-b);
       const tiles=[];
       for(let i=1;i<breaks.length;i++){
         const left=breaks[i-1],right=breaks[i],x=(left+right)/2;
-        const outer=plinths.some(([a,b])=>x>=a&&x<=b)?atPlinth:bay;
+        const outer=banks.reduce((edge,bank)=>x>=bank.l&&x<=bank.r?Math.min(edge,bank.edge):edge,bay);
         const prev=tiles.at(-1);
         if(prev&&prev.outer===outer)prev.r=right;
         else tiles.push({l:left,r:right,outer});
@@ -431,7 +446,7 @@
       prop(name,name,x,.223,z,width,height,depth,z>0?Math.PI:0,true);
       prop('plinth','pillar-plinth',x,-.117,z,3.32,.34,3.36,0,true);
     }
-    for(const x of [-20.15,20.15])for(const z of [-10.40,10.40]){
+    for(const x of pierPositions)for(const z of [-pierRow,pierRow]){
       const yaw=x>0?Math.PI:0;
       prop('lamassu-pier','lamassu-pier',x,floorLevel,z,2.44,h-.39,2.35,yaw,true);
     }
@@ -559,24 +574,26 @@
       box('roof-visible-light',diffuser,s.x,top+.047,s.z,s.w+.27,.09,s.d+.27,.7);
     }
 
-    function brazier(source,x,z,size,ground,flameWidth,flameHeight,key=false) {
+    function mountBrazier(source,x,side,foot,size,flameWidth,flameHeight,key=false) {
+      // The stone footing meets the parent plinth and shares its dry
+      // foundation. The model is seated on the footing cap, off the walkways.
+      const z=side*foot.z;
+      box('brazier-plinths',stone,x,-.006,z,foot.width,.212,foot.depth,1.4);
+      box('brazier-plinths',stone,x,(mountTop+.10)/2,z,foot.width*.96,mountTop-.10,foot.depth*.96,1.4);
+      solid(x-foot.width/2,x+foot.width/2,-.112,mountTop,z-foot.depth/2,z+foot.depth/2);
       const p=parts[source], scale=size/p.size.y;
-      prop(source,source,x,ground,z,p.size.x*scale,size,p.size.z*scale,0,true);
-      sources.push({x,z,y:ground+size*p.flameBase-.035,width:flameWidth,height:flameHeight,key});
+      prop(source,source,x,mountTop,z,p.size.x*scale,size,p.size.z*scale,0,true);
+      sources.push({x,z,y:mountTop+size*p.flameBase-.035,width:flameWidth,height:flameHeight,key});
     }
     for(const side of [-1,1]){
-      // The two monumental pairs stand on the dry inner kerb beside the end columns.
-      brazier('brazier-wide',shaftPositions[0]+1.45,side*2.15,1.98,.043,1.23,.91,true);
-      brazier('brazier-wide',shaftPositions.at(-1)-1.45,side*2.15,1.78,.043,1.07,.85,true);
-      for(const x of [-2.34,2.34]){
-        brazier('brazier-wide',x,side*5.70,1.43,side>0?.039:floorLevel,.80,.82);
+      for(const x of pierPositions){
+        mountBrazier('brazier-wide',x,side,pierFoot,1.98,1.23,.91);
       }
-      // Lights on the outer banks reflect across the open bays between plinths.
-      for(const x of [-13.05,13.05]){
-        brazier('brazier-tall',x,side*10.94,1.64,floorLevel,.83,.96);
-      }
-      for(const x of [-7.25,7.25]){
-        brazier('brazier-low',x,side*10.90,1.30,floorLevel,.69,.77);
+      for(const x of shaftPositions){
+        const bank=shaftFootX(x), distance=Math.abs(x);
+        if(distance>14) mountBrazier('brazier-wide',bank,side,shaftFoot,1.72,1.05,.89,true);
+        else if(distance>6) mountBrazier('brazier-tall',bank,side,shaftFoot,1.63,.84,.90);
+        else mountBrazier('brazier-low',bank,side,shaftFoot,1.29,.70,.77);
       }
     }
 

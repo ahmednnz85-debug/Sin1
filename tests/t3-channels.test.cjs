@@ -23,7 +23,7 @@ test('the recessed T3 channels preserve the original axis, side crossing and dry
     assert.ok(channel.tiles.some(t => t.f - t.n > 7), 'a bay reaches between columns');
   }
   for (const { l, r, n, f } of tiles) {
-    assert.ok(f - n > 4);
+    assert.ok(f - n > 3, 'water continues past the column footings');
     assert.ok(r <= -3.2 || l >= 3.2, 'the route to T5 stays dry');
     assert.ok(f <= -2.94 || n >= 2.94, 'the T2–T4 axis stays dry');
     assert.ok(n > -10.15 && f < 10.15, 'the outer walk stays dry');
@@ -47,6 +47,12 @@ test('a Temple floor cut using the room channels removes support from the water 
     assert.equal(architecture.pointInSolids(cx + (l + r) / 2, cz + (n + f) / 2, dryFloor), false);
   }
   assert.equal(architecture.pointInSolids(cx - 13.95, cz + 8.82, dryFloor), false, 'water occupies the bay');
+  for (const baseX of [-16.61, -10.21, -4.30, 4.30, 10.21, 16.61]) {
+    for (const side of [-1, 1]) {
+      assert.equal(architecture.pointInSolids(cx + baseX, cz + side * 6.73, dryFloor), true, 'torch footing joins the column plinth');
+      assert.equal(architecture.pointInSolids(cx + baseX, cz + side * 5.90, dryFloor), false, 'the canal wraps around the footing');
+    }
+  }
   for (const position of [[cx - 17, cz], [cx + 17, cz], [cx, cz + 10],
     [cx - 17.15, cz + 8.82], [cx - 10.75, cz - 8.82], [cx - 13.95, cz + 11]]) {
     assert.equal(architecture.pointInSolids(...position, dryFloor), true);
