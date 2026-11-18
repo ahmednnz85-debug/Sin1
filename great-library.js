@@ -50,8 +50,8 @@
     // Weld only for the connectivity search. Keep all original UV seams and normals.
     for (let i = 0; i < positions.count; i++) {
       parents[i] = i;
-      const key = [positions.getX(i), positions.getY(i), positions.getZ(i)]
-        .map(n => Math.round(n * 100000)).join(',');
+      const key = Math.round(positions.getX(i) * 100000) + ',' +
+        Math.round(positions.getY(i) * 100000) + ',' + Math.round(positions.getZ(i) * 100000);
       if (vertices.has(key)) join(i, vertices.get(key));
       else vertices.set(key, i);
     }
@@ -62,32 +62,46 @@
     const components = new Map();
     for (let i = 0; i < indices.length; i += 3) {
       const id = root(indices[i]);
-      if (!components.has(id)) components.set(id, []);
-      components.get(id).push(indices[i], indices[i + 1], indices[i + 2]);
+      const component = components.get(id);
+      if (component) component.length += 3;
+      else components.set(id, { length: 3, offset: 0 });
     }
-    components.forEach(faces => {
+    components.forEach(component => { component.faces = new Uint32Array(component.length); });
+    for (let i = 0; i < indices.length; i += 3) {
+      const component = components.get(root(indices[i]));
+      component.faces[component.offset++] = indices[i];
+      component.faces[component.offset++] = indices[i + 1];
+      component.faces[component.offset++] = indices[i + 2];
+    }
+    const remap = new Int32Array(positions.count).fill(-1);
+    components.forEach(({ faces }) => {
       // The source collections have no semantic names. Triangle counts identify
       // the twelve inspected components and make an asset revision fail clearly.
       const name = names[faces.length / 3];
       if (!name || parts[name]) throw new Error('Unexpected Great Library mesh component');
-      const vertices = new Map(), original = [], compact = [];
-      faces.forEach(i => {
-        if (!vertices.has(i)) {
-          vertices.set(i, original.length);
-          original.push(i);
+      // A source vertex belongs to only one connected island. Reuse the
+      // remap buffer and keep the heavy splits off the JS object heap.
+      const original = new Uint32Array(Math.min(faces.length, positions.count));
+      let count = 0;
+      for (let f = 0; f < faces.length; f++) {
+        const i = faces[f];
+        if (remap[i] < 0) {
+          remap[i] = count;
+          original[count++] = i;
         }
-        compact.push(vertices.get(i));
-      });
+        faces[f] = remap[i];
+      }
       const part = new THREE.BufferGeometry();
       ['position', 'normal', 'uv'].forEach(key => {
         const attr = geometry.attributes[key];
-        const values = new Float32Array(original.length * attr.itemSize);
-        original.forEach((i, j) => {
+        const values = new Float32Array(count * attr.itemSize);
+        for (let j = 0; j < count; j++) {
+          const i = original[j];
           for (let k = 0; k < attr.itemSize; k++) values[j * attr.itemSize + k] = attr.getComponent(i, k);
-        });
+        }
         part.setAttribute(key, new THREE.BufferAttribute(values, attr.itemSize));
       });
-      part.setIndex(compact);
+      part.setIndex(new THREE.BufferAttribute(count <= 65536 ? new Uint16Array(faces) : faces, 1));
       parts[name] = { geometry: part, material: source.material };
     });
     if (Object.keys(parts).length !== Object.keys(names).length) throw new Error('Incomplete Great Library asset collection');
@@ -209,7 +223,7 @@
     return texture;
   }
 
-  function builder(group, prefix = 'L1-') {
+  function builder(group, prefix = 'L1-', spatialBookcases = false) {
     const surfaces = new Map(), instances = new Map();
     const transform = new THREE.Object3D();
     function matrix(x, y, z, angle, sx = 1, sy = 1, sz = 1) {
@@ -238,8 +252,12 @@
     function asset(name, part, host, x, y, z, w, h, d, angle = 0) {
       const m = matrix(x, y, z, angle, w / part.size.x, h / part.size.y, d / part.size.z).clone();
       if (host) m.premultiply(host);
-      if (!instances.has(name)) instances.set(name, { part, matrices: [] });
-      instances.get(name).matrices.push(m);
+      // Keep shared meshes and materials, but let the frustum omit complete
+      // cabinets behind the camera instead of drawing all four walls.
+      const partition = spatialBookcases && (name === 'bookcases' || name === 'upper-bookcases');
+      const key = partition ? name + ':' + Math.floor(m.elements[12] / 10) + ':' + Math.floor(m.elements[14] / 8) : name;
+      if (!instances.has(key)) instances.set(key, { name, part, matrices: [] });
+      instances.get(key).matrices.push(m);
       return m;
     }
     function flush() {
@@ -263,7 +281,7 @@
         mesh.castShadow = !material.transparent && material.name !== 'L1 sandstone ornament atlas' && name !== 'floor';
         group.add(mesh);
       });
-      instances.forEach(({ part, matrices }, name) => {
+      instances.forEach(({ name, part, matrices }) => {
         let mesh;
         if (matrices.length === 1) {
           mesh = new THREE.Mesh(part.geometry, part.material);
@@ -1150,6 +1168,11 @@
     new Set(Object.values(parts).map(part => part.material)).forEach(material => {
       material.color.multiplyScalar(0.70);
       material.envMapIntensity = 0.68;
+      if (constrained && window.SinDevice) {
+        SinDevice.capTexture(material.normalMap, 512);
+        SinDevice.capTexture(material.metalnessMap, 384);
+        SinDevice.capTexture(material.roughnessMap, 384);
+      }
     });
     const root = new THREE.Group();
     root.name = 'L1-Grand-Library';
@@ -1163,7 +1186,7 @@
         _wing: true, _library: true
       });
     }
-    const draw = builder(root);
+    const draw = builder(root, 'L1-', true);
     const { box, asset } = draw;
     const centre = width / 2;
     box('floor', materials.floor, null, length / 2, floorY - 0.10, centre,

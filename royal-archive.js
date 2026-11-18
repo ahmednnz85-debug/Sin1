@@ -19,6 +19,8 @@
     }],
     ['assets/رفوف الارشيف.glb', { 31778: 'shelfA', 26582: 'shelfB', 19353: 'shelfC' }]
   ];
+  const mobileModels = ['archive-furniture.glb', 'archive-ornaments.glb', 'archive-shelves.glb'];
+  const mobileModelsDirectory = 'ارضيات وسقوف/optimized/library/';
   const images = [
     'assets/حجر الارشيف.JPG', 'assets/سقف الارشيف.JPG', 'assets/سجاد الارضية.jpg'
   ];
@@ -277,16 +279,24 @@
     };
   }
 
-  async function build(room, entrance, loadModel, signal) {
+  async function build(room, entrance, loadModel, signal, textureSize) {
     const parts = {}, textures = [];
     const waitTurn = () => new Promise(resolve => setTimeout(resolve, 0));
     try {
-      for (const [url, names] of models) {
+      for (const [index, [url, names]] of models.entries()) {
         signal.throwIfAborted();
-        const model = await loadModel(url, signal);
+        const model = await loadModel(textureSize ? mobileModelsDirectory + mobileModels[index] : url, signal);
         try {
           signal.throwIfAborted();
-          Object.assign(parts, SinGreatLibrary.split(model, names));
+          const batch = SinGreatLibrary.split(model, names);
+          if (textureSize === 512 && window.SinDevice) {
+            const material = Object.values(batch)[0].material;
+            SinDevice.capTexture(material.map, 512);
+            SinDevice.capTexture(material.normalMap, 256);
+            SinDevice.capTexture(material.metalnessMap, 192);
+            SinDevice.capTexture(material.roughnessMap, 192);
+          }
+          Object.assign(parts, batch);
         } catch (error) {
           SinGreatLibrary.disposeResources(model.scene);
           throw error;
@@ -296,7 +306,9 @@
       const loader = new THREE.TextureLoader();
       for (const url of images) {
         signal.throwIfAborted();
-        textures.push(await loader.loadAsync(encodeURI(url)));
+        const texture = await loader.loadAsync(encodeURI(url));
+        if (textureSize && window.SinDevice) SinDevice.capTexture(texture, textureSize);
+        textures.push(texture);
       }
       signal.throwIfAborted();
       normalizedParts(parts);

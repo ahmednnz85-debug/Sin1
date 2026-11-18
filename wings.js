@@ -1137,6 +1137,16 @@
     vis('specials');
     await yieldWing();
     await dressCorridors();
+    const archiveOpening = state.archivePortals[2];
+    const archiveCorridor = state.regionGroups.get('LC2');
+    if (archiveOpening && archiveCorridor) {
+      const { x, z, width, height } = archiveOpening;
+      // The far archive portal remains occluded until all of L2 can be
+      // drawn. This is inside LC2, beyond the permanently open L1 arch.
+      const panel = boxAt(width + .08, height + .04, .12, x, height / 2, z);
+      state.archiveScreen = mesh(panel, state.darkMat, 'LC2-archive-portal-occluder', archiveCorridor);
+      state.archiveScreen.castShadow = false;
+    }
     vis('corridors');
     wingMark('wings corridors');
     try { console.info('[palace load] visuals-post-corridors fires', state.fires.length); } catch (_) {}
@@ -2384,13 +2394,17 @@
       // Table may still be loading; the zone streamer reveals once columns+table+chandelier are set.
     });
   }
-  function rebuildSpatial() {
-    state.spatial.clear();
-    state.colliders.forEach((b, i) => {
+  function indexSpatialFrom(start) {
+    for (let i = start; i < state.colliders.length; i++) {
+      const b = state.colliders[i];
       for (let x = Math.floor(b.minx); x <= Math.floor(b.maxx); x++) for (let z = Math.floor(b.minz); z <= Math.floor(b.maxz); z++) {
         const k = x + ',' + z; let a = state.spatial.get(k); if (!a) state.spatial.set(k, a = []); a.push(i);
       }
-    });
+    }
+  }
+  function rebuildSpatial() {
+    state.spatial.clear();
+    indexSpatialFrom(0);
   }
 
   // Room-only Babylonian doors. Uses the supplied باب الاجنحة.glb unchanged.
@@ -2704,6 +2718,8 @@
     }
     state.archive = state.archiveLoad = state.archiveMotion = null;
     state.archiveDemand = false;
+    state.archiveBudgetSampleAt = 0;
+    state.archiveScreen = state.librarySightRoutes = null;
     state.entryLibrary = null;
     state.libraryFailures = null;
     if (state.libraryWarmup) state.libraryWarmup.dispose();
@@ -2794,6 +2810,7 @@
     ];
     const library = state.rooms.find(room => room.id === 'L1');
     state.archiveHallExit = Object.assign({}, state.archivePortals[0], { x: library.bbox.x0 });
+    state.librarySightRoutes = makeLibrarySightRoutes();
     const hallBounds = { x0: -hall.width / 2, x1: hall.width / 2, z0: 0, z1: hall.length };
     state.planRegions = state.regions.concat({ id: 'Palace', bbox: hallBounds });
     // Prefer the build-time bake (data/palace-colliders.json): Clipper K1-diff and
@@ -2983,7 +3000,9 @@
     const entrance = state.archivePortals[2];
     const controller = new AbortController();
     state.archiveLoad = controller;
-    SinRoyalArchive.build(room, entrance, loadRoomModel, controller.signal).then(archive => {
+    const usage = window.SinProcessMemory && SinProcessMemory.last();
+    const profile = archiveProfile(usage || {});
+    SinRoyalArchive.build(room, entrance, loadRoomModel, controller.signal, profile.textureSize).then(archive => {
       if (state.archiveLoad !== controller || controller.signal.aborted) { archive.dispose(); return; }
       state.archive = archive;
       zoneStreamer.markReleasable(archive.root);
@@ -2993,6 +3012,14 @@
       if (state.archiveLoad !== controller || controller.signal.aborted) return;
       api.fail(error);
     });
+  }
+
+  function archiveProfile(usage) {
+    if (!deviceProfile.constrained) return { processMB: 225, gpuMB: 145, cpuMB: 80, textureSize: 0 };
+    const tight = usage.processMB > deviceProfile.processBudgetMB - 40 ||
+      usage.gpuMB > deviceProfile.gpuBudgetMB - 35;
+    return tight ? { processMB: 19, gpuMB: 14, cpuMB: 15, textureSize: 512 } :
+      { processMB: 37, gpuMB: 30, cpuMB: 22, textureSize: 1024 };
   }
 
   function loadRoomModel(url, signal) {
@@ -3146,20 +3173,72 @@
     return SinWingVisibility.throughOpenings(view, [last, first], 0.08) ? 2 : 1;
   }
 
+  function makeLibrarySightRoutes() {
+    const [, archiveEntry, archiveExit] = state.archivePortals;
+    const scribeEntry = state.doors.find(d => d.id === 'L1-LC3');
+    const scribeExit = state.doors.find(d => d.id === 'LC3-L3');
+    const links = [
+      ['L1', 'ARCH_R1', state.archiveHallExit],
+      ['L1', 'LC2', archiveEntry], ['LC2', 'L2', archiveExit],
+      ['L1', 'LC3', scribeEntry], ['LC3', 'L3', scribeExit],
+      ['L1', 'LC4', state.observatoryApproach], ['LC4', 'L4', state.observatoryDoors[0]]
+    ];
+    const routes = new Map();
+    for (const origin of ['L1', 'LC2', 'L2', 'LC3', 'L3']) {
+      const paths = new Map([[origin, []]]);
+      const queue = [origin];
+      for (const from of queue) {
+        for (const [a, b, opening] of links) {
+          const to = a === from ? b : b === from ? a : null;
+          if (!to || !opening || paths.has(to)) continue;
+          paths.set(to, [...paths.get(from), opening]);
+          queue.push(to);
+        }
+      }
+      routes.set(origin, paths);
+    }
+    return routes;
+  }
+
+  function libraryPortalView(view) {
+    if (!view || !state.librarySightRoutes || !window.SinWingVisibility) return null;
+    const region = regionAt(view.x, view.z);
+    const paths = region && state.librarySightRoutes.get(region.id);
+    if (!paths) return null;
+    const visible = new Set();
+    for (const [id, openings] of paths) {
+      if (!openings.length || SinWingVisibility.throughOpenings(view, openings, .06)) visible.add(id);
+    }
+    return visible;
+  }
+
+  function syncArchiveScreen() {
+    const ready = zoneIsReady('L2');
+    if (state.archiveScreen) state.archiveScreen.visible = !ready;
+    return ready;
+  }
+
   function beforePresent(scene, camera) {
     if (!state.root || !state.built || !state.ctx || scene !== state.ctx.scene || !zoneStreamer) return;
     const view = cameraView(state.root.position.x, state.root.position.z, camera);
-    const sight = archiveSight(view);
+    const libraryView = libraryPortalView(view);
+    const archiveReady = syncArchiveScreen();
+    const sight = libraryView ? libraryView.has('L2') : archiveSight(view);
     const reach = archiveExitReach(view);
     const group = state.regionGroups.get('L2');
-    if (group) group.visible = sight;
+    if (libraryView) {
+      state.regionGroups.forEach((node, id) => {
+        node.visible = libraryView.has(id) && (id !== 'L2' || archiveReady);
+      });
+    }
+    if (group) group.visible = sight && archiveReady;
     const corridor = state.regionGroups.get('LC2');
     if (corridor && sight && (state.current !== 'L2' || reach > 0)) corridor.visible = true;
     if (reach === 2) {
       const library = state.regionGroups.get('L1');
       if (library) library.visible = true;
     }
-    state.archiveDemand = sight && !zoneIsReady('L2');
+    state.archiveDemand = sight && !archiveReady;
     const observatory = state.regionGroups.get('L4');
     if (observatory) observatory.visible = observatorySight(view);
     const sacredHall = state.regionGroups.get('T3');
@@ -3249,9 +3328,7 @@
       },
       ownsObject: node => node.name === 'L4-Babylonian-Observatory' },
     { id: 'L2', prefetchHops: 2, priority: -1, requireComplete: true, keepShell: true, serialPreparation: true,
-      estProcessMB: deviceProfile.constrained ? 90 : 225,
-      estGpuMB: deviceProfile.constrained ? 61 : 145,
-      estCpuMB: deviceProfile.constrained ? 29 : 80,
+      estimateIncoming: archiveProfile,
       load: loadArchive,
       prepareGeometry: (api, renderer) => state.archive.warmup.step(renderer),
       onFailure: function (error) {
@@ -3267,11 +3344,14 @@
           miny: box.miny + origin.y, maxy: box.maxy + origin.y,
           minz: box.minz + origin.z, maxz: box.maxz + origin.z, _wing: true
         }));
+        const first = state.colliders.length;
         state.colliders.push(...state.archive.colliders);
-        rebuildSpatial();
+        indexSpatialFrom(first);
         triCache.delete('L2');
         const ceiling = state.regionGroups.get('L2').getObjectByName('L2-ceiling');
         if (ceiling) ceiling.visible = false;
+        syncArchiveScreen();
+        updatePassageGates();
       },
       unload: function (api) {
         if (state.archiveLoad) state.archiveLoad.abort();
@@ -3523,6 +3603,12 @@
       }
       return 'pending';
     }
+    if (status === 'cold' && !entry.archiveReclaimed && reclaim) {
+      entry.archiveReclaimed = true;
+      reclaim();
+      sampleEntryMemory();
+      return 'pending';
+    }
     if (status === 'ready') {
       // Catch variance in the actual atlas uploads before leaving the load
       // screen. L2 is still off-screen from the palace's entrance.
@@ -3532,7 +3618,9 @@
           (budget.gpuMB > 0 && usage.gpuMB > budget.gpuMB)) zoneStreamer.forceEvict('L2');
     }
     // If L2 does not fit or takes too long, leave it to corridor prefetch.
-    entry.done = status === 'cold' || status === 'failed' || status === 'ready' || now - entry.archiveStarted > 25000;
+    entry.done = status === 'failed' || status === 'ready' ||
+      (status === 'cold' && now - entry.archiveStarted > 2500) || now - entry.archiveStarted > 55000;
+    if (entry.done) entry.keepReadyUntil = now + 45000;
     return entry.done ? 'ready' : 'pending';
   }
   function streamZones(origin, visibleIds, preparedIds) {
@@ -3546,18 +3634,29 @@
     const move = state.archiveMotion, portal = state.archivePortals && state.archivePortals[0];
     const region = regionAt(move ? move.x : 0, move ? move.z : 0);
     const inLibrary = region && region.wing === 'Library';
+    const archiveNear = origin === 'L2' || origin === 'LC2';
+    if (archiveNear && !zoneIsReady('L2') && !state.archiveLoad) {
+      const now = performance.now();
+      if (!state.archiveBudgetSampleAt || now > state.archiveBudgetSampleAt + 1500) {
+        state.archiveBudgetSampleAt = now;
+        sampleEntryMemory();
+      }
+    }
     let retained;
     if (inLibrary) retained = retainedLibrary;
+    if (inLibrary && !zoneIsReady('L2')) approach.add('L2');
     let towardObservatory = false;
     if (move && state.observatoryApproach) {
       const d = state.observatoryApproach;
       const distance = Math.hypot(move.x - d.x, move.z - d.z);
+      const lateral = Math.abs(move.z - d.z);
       const atMoonEnd = origin === 'MP2' && Math.abs(move.x - state.observatoryDoors[1].x) < 31;
       towardObservatory = origin === 'L4' || origin === 'LC4' || atMoonEnd ||
-        (origin === 'L1' && (distance < 13 || (distance < 28 && move.vx > .55)));
+        (origin === 'L1' && ((distance < 11 && lateral < 5) || (distance < 24 && lateral < 7 && move.vx > .7)));
       if (towardObservatory) {
         approach.add('L4');
-        retained = atMoonEnd ? retainedMoonPassage : retainedObservatory;
+        if (atMoonEnd) retained = retainedMoonPassage;
+        else if (origin === 'L4' || origin === 'LC4') retained = retainedObservatory;
       }
     }
     if (origin === 'Palace' && move && portal) {
@@ -3565,12 +3664,11 @@
       const distance = Math.hypot(dx, dz);
       const speed = Math.hypot(move.vx, move.vz);
       const toward = distance < 0.5 || (dx * move.vx + dz * move.vz) > distance * speed * 0.65;
-      if (distance < 32) retained = retainedLibrary;
+      if (distance < 32 || (state.entryLibrary && performance.now() < state.entryLibrary.keepReadyUntil)) retained = retainedLibrary;
       if (distance < 24 || (toward && distance <= Math.min(42, 15 + speed * 3.5))) {
         approach.add('L1');
         if (zoneIsReady('L1')) {
           approach.add('L2');
-          if (distance < 20 || toward) approach.add('L4');
         }
       }
     }
@@ -3596,10 +3694,12 @@
         approach.add(id);
       }
     });
-    const demand = nearTemple && !zoneIsReady('T3') ? 'T3' : towardObservatory && !zoneIsReady('L4') ? 'L4' :
-      !zoneIsReady('L1') ? 'L1' : state.archiveDemand ? 'L2' : null;
+    const demand = nearTemple && !zoneIsReady('T3') ? 'T3' :
+      !zoneIsReady('L1') ? 'L1' : (state.archiveDemand || archiveNear) && !zoneIsReady('L2') ? 'L2' :
+        towardObservatory && !zoneIsReady('L4') ? 'L4' : null;
+    const only = inLibrary ? (towardObservatory || (visibleIds && visibleIds.has('L4')) ? libraryZones : retainedLibrary) : null;
     return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds,
-      memoryLevel: level, warmGroups, approach, retained, only: inLibrary ? libraryZones : null,
+      memoryLevel: level, warmGroups, approach, retained, only,
       allowBackgroundWarm, demand });
   }
   // After LRU eviction a streamed room (K4 in particular) can sit complete=false
@@ -3682,33 +3782,37 @@
       // what it could see after a turn stays prepared.
       const tPlan = performance.now();
       const planRegions = state.planRegions;
-      const planned = visibilityPlanner.plan(planRegions, state.links, origin, view, performance.now() / 1000);
-      const archiveReach = archiveExitReach(view);
-      if (archiveReach === 0 || archiveReach === 1) {
-        planned.visible.clear();
-        if (archiveReach === 1) planned.visible.add('LC2');
-      }
-      if (archiveSight(view)) {
-        planned.visible.add('L2');
-        if (id !== 'L2') planned.visible.add('LC2');
-        if (archiveReach === 2) {
-          planned.visible.add('LC2');
-          planned.visible.add('L1');
+      const libraryView = libraryPortalView(view);
+      const planned = libraryView ? { visible: libraryView, prepared: libraryView, meta: null } :
+        visibilityPlanner.plan(planRegions, state.links, origin, view, performance.now() / 1000);
+      if (!libraryView) {
+        const archiveReach = archiveExitReach(view);
+        if (archiveReach === 0 || archiveReach === 1) {
+          planned.visible.clear();
+          if (archiveReach === 1) planned.visible.add('LC2');
         }
-      } else planned.visible.delete('L2');
-      if (observatorySight(view)) planned.visible.add('L4');
-      else planned.visible.delete('L4');
-      cullFromObservatory(view, planned.visible);
-      if (sacredHallSight(view)) planned.visible.add('T3');
-      else planned.visible.delete('T3');
-      cullFromSacredHall(view, planned.visible);
+        if (archiveSight(view)) {
+          planned.visible.add('L2');
+          if (id !== 'L2') planned.visible.add('LC2');
+          if (archiveReach === 2) {
+            planned.visible.add('LC2');
+            planned.visible.add('L1');
+          }
+        } else planned.visible.delete('L2');
+        if (observatorySight(view)) planned.visible.add('L4');
+        else planned.visible.delete('L4');
+        cullFromObservatory(view, planned.visible);
+        if (sacredHallSight(view)) planned.visible.add('T3');
+        else planned.visible.delete('T3');
+        cullFromSacredHall(view, planned.visible);
+      }
       if (force) console.info('[palace load] cull-plan', Math.round(performance.now()-tPlan)+'ms', 'vis', planned.visible.size);
       if (isArch) planned.visible.add(id);
       meta = planned.meta;
       const candidates = [];
       planned.visible.forEach(rid => {
         const g = state.regionGroups.get(rid); if (!g) return;
-        const m = meta.get(rid) || { hops: 9, distance: 0 };
+        const m = meta && meta.get(rid) || { hops: 9, distance: 0 };
         const current = rid === id || rid === origin;
         candidates.push({ id: rid, current, priority: current ? 0 : m.hops <= 1 ? 1 : 2, distance: m.distance, triangles: cachedTriangles(rid, g, false) });
       });
@@ -3732,7 +3836,7 @@
     if (visibleIds) {
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
-        g.visible = visibleIds.has(rr.id);
+        g.visible = visibleIds.has(rr.id) && (rr.id !== 'L2' || zoneIsReady('L2'));
       });
       // Zone streaming is the single source of truth: prefetch, budgeted
       // uploads, shader compile (shells + dress), atomic reveal, LRU eviction

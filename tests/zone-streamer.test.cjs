@@ -714,3 +714,26 @@ test('palace entry prepares L1 first and leaves L2 cold when its memory would ex
   assert.equal(s.status('L2'), 'ready');
   assert.equal(groups.L1.children[0], library);
 });
+
+test('a deferred strict room can choose a smaller incoming budget when memory frees up', async () => {
+  const scene = obj('scene'), group = obj('archive');
+  scene.add(group);
+  let processMB = 639;
+  const s = Z.create({ processBudgetMB: 650, estimate: () => ({ processMB }) });
+  const content = mesh('archive', tex());
+  s.register({ id: 'L2', requireComplete: true, serialPreparation: true,
+    estimateIncoming: current => ({
+      processMB: current.processMB > 610 ? 19 : 37, gpuMB: 14, cpuMB: 15
+    }),
+    load(api) { api.add(content); api.done(); }
+  });
+  s.attach({ renderer: renderer(), scene, camera: {}, groupOf: () => group });
+  const view = { current: 'LC2', approach: new Set(['L2']) };
+  s.update(view);
+  assert.equal(s.status('L2'), 'cold');
+  assert.equal(s.report().zones.L2.deferred, true);
+  processMB = 628;
+  for (let i = 0; i < 6; i++) { s.update(view); await tick(); }
+  assert.equal(s.status('L2'), 'ready');
+  assert.equal(content.visible, true);
+});
