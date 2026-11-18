@@ -4951,10 +4951,13 @@
     const loy = Math.min(py, ey) - r, hiy = Math.max(py, ey) + r;
     const loz = Math.min(pz, ez) - r, hiz = Math.max(pz, ez) + r;
     let best = len;
-    const library = wingRuntime && window.PalaceWings && PalaceWings.state.library;
+    const wings = wingRuntime && window.PalaceWings && PalaceWings.state;
+    const library = wings && wings.library;
     const libraryBoxes = (library && library.cameraColliders) || noCameraColliders;
-    for (let i = 0; i < colliders.length + libraryBoxes.length; i++) {
-      const b = i < colliders.length ? colliders[i] : libraryBoxes[i - colliders.length];
+    const archiveBoxes = (wings && wings.archive && wings.archive.cameraColliders) || noCameraColliders;
+    const staticCount = colliders.length, libraryCount = staticCount + libraryBoxes.length;
+    for (let i = 0; i < libraryCount + archiveBoxes.length; i++) {
+      const b = i < staticCount ? colliders[i] : (i < libraryCount ? libraryBoxes[i - staticCount] : archiveBoxes[i - libraryCount]);
       if (b.maxx < lox || b.minx > hix || b.maxy < loy || b.miny > hiy || b.maxz < loz || b.minz > hiz) continue;
       if (isProp(b) !== !!props) continue;
       let box = padBox(b, r);

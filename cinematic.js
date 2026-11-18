@@ -392,14 +392,19 @@
     gl = R.getContext();
     if (R.capabilities.isWebGL2) tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');
     R.render = function (s, c) {
+      const isMain = !R.getRenderTarget() && c && c.isPerspectiveCamera;
       try {
         if (typeof window !== 'undefined') {
           window.__R = R;
-          if (c && c.isCamera) window.__C = c;
-          if (s && s.isScene) window.__S = s;
+          if (isMain) {
+            window.__C = c;
+            if (s && s.isScene) window.__S = s;
+          }
         }
       } catch (_) {}
-      const isMain = !R.getRenderTarget() && c && c.isPerspectiveCamera;
+      if (isMain && ctx.interior() && window.PalaceWings && PalaceWings.beforePresent) {
+        PalaceWings.beforePresent(s, c);
+      }
       // Instance-level wrap shadows prototype hooks, so outdoor-perf must
       // run here or LODs/culling never apply on a real device.
       if (isMain) {
@@ -444,7 +449,7 @@
                 const rows = Array.isArray(zs.zones) ? zs.zones : Object.keys(zs.zones).map(function (k) { return zs.zones[k]; });
                 for (let i = 0; i < rows.length; i++) {
                   const st = rows[i] && (rows[i].state || rows[i].status);
-                  if (st && st !== 'ready' && st !== 'cold' && st !== 'evicted' && st !== 'unregistered') { busy = true; break; }
+                  if (st && !['ready', 'cold', 'evicted', 'unregistered', 'failed'].includes(st)) { busy = true; break; }
                 }
               }
             } catch (_) {}
