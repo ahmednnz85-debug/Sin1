@@ -636,9 +636,9 @@
     try {
       const deviceMax = (window.SinDevice && SinDevice.detect && SinDevice.detect().maxTextureSize) || 0;
       // These shared palace atlases stay resident while the wings stream.
-      // A 4K RGBA atlas costs ~85 MiB with mipmaps. Keep the resident core
-      // at 2K or the lower device cap so an adjacent room can fit as well.
-      const max = Math.min(deviceMax, 2048);
+      // A 4K RGBA atlas costs ~85 MiB with mipmaps. Bound the resident core
+      // separately from the room models and the display resolution.
+      const max = Math.min(deviceMax, 1536);
       if (max && window.SinDevice && SinDevice.capTexture) SinDevice.capTexture(t, max);
     } catch (_) {}
   }

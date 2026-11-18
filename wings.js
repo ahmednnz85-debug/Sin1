@@ -3278,6 +3278,14 @@
       }
       return 'pending';
     }
+    if (status === 'ready') {
+      // Catch variance in the actual atlas uploads before leaving the load
+      // screen. L2 is still off-screen from the palace's entrance.
+      sampleEntryMemory();
+      const { usage, budget } = zoneStreamer.report();
+      if ((budget.processMB > 0 && usage.processMB > budget.processMB) ||
+          (budget.gpuMB > 0 && usage.gpuMB > budget.gpuMB)) zoneStreamer.forceEvict('L2');
+    }
     // If L2 does not fit or takes too long, leave it to corridor prefetch.
     entry.done = status === 'cold' || status === 'failed' || status === 'ready' || now - entry.archiveStarted > 25000;
     return entry.done ? 'ready' : 'pending';
