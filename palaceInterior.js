@@ -4962,9 +4962,12 @@
     const library = wings && wings.library;
     const libraryBoxes = (library && library.cameraColliders) || noCameraColliders;
     const archiveBoxes = (wings && wings.archive && wings.archive.cameraColliders) || noCameraColliders;
+    const observatoryBoxes = (wings && wings.observatory && wings.observatory.cameraColliders) || noCameraColliders;
     const staticCount = colliders.length, libraryCount = staticCount + libraryBoxes.length;
-    for (let i = 0; i < libraryCount + archiveBoxes.length; i++) {
-      const b = i < staticCount ? colliders[i] : (i < libraryCount ? libraryBoxes[i - staticCount] : archiveBoxes[i - libraryCount]);
+    const archiveCount = libraryCount + archiveBoxes.length;
+    for (let i = 0; i < archiveCount + observatoryBoxes.length; i++) {
+      const b = i < staticCount ? colliders[i] : i < libraryCount ? libraryBoxes[i - staticCount] :
+        i < archiveCount ? archiveBoxes[i - libraryCount] : observatoryBoxes[i - archiveCount];
       if (b.maxx < lox || b.minx > hix || b.maxy < loy || b.miny > hiy || b.maxz < loz || b.minz > hiz) continue;
       if (isProp(b) !== !!props) continue;
       let box = padBox(b, r);

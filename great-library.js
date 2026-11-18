@@ -1088,7 +1088,7 @@
     return { dustMaterial, sun };
   }
 
-  function disposeResources(group) {
+  function disposeResources(group, keepTexture) {
     const textures = new Set(), materials = new Set(), geometries = new Set();
     group.traverse(node => {
       if (node.isLight && node.shadow) node.shadow.dispose();
@@ -1103,7 +1103,7 @@
       material.dispose();
     });
     geometries.forEach(geometry => geometry.dispose());
-    textures.forEach(texture => texture.dispose());
+    textures.forEach(texture => { if (texture !== keepTexture) texture.dispose(); });
   }
 
   function setLibraryExposure(root, multiplier = 0.63) {
