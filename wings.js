@@ -747,8 +747,10 @@
     const library = state.library && state.library.ready ? state.library : null;
     const libraryFeet = library && fromY != null ? library.floor(x, z, fromY) : 0;
     const observatory = state.observatory && zoneIsReady('L4') && state.observatory;
+    const sanctuary = state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.floorAt(x, z) : 0;
+    if (sanctuary > 0 && fromY != null && sanctuary > fromY + .33) return true;
     const offerings = state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.floorAt(x, z) : 0;
-    const feet = (observatory && observatory.floorAt(x, z)) || offerings || libraryFeet;
+    const feet = (observatory && observatory.floorAt(x, z)) || offerings || sanctuary || libraryFeet;
     if (offerings > 0 && fromY != null && offerings > fromY + .28) return true;
     if (observatory && observatory.blocks(x, z, r, feet)) return true;
     const hero = state.ctx && state.ctx.hero;
@@ -821,7 +823,7 @@
   function addSpecials() {
     const stone = state.wallMat, dark = state.darkMat;
     const T4 = state.rooms.find(r => r.id === 'T4'), tg = state.regionGroups.get('T4');
-    if (T4 && tg) {
+    if (T4 && tg && !window.SinLunarSanctuary) {
       const geos = [];
       for (let i = 0; i < 5; i++) geos.push(boxAt(1.24, (i + 1) * 0.3, 10, T4.bbox.x1 - 13.8 + i * 1.2, (i + 1) * 0.15, T4.bbox.cz));
       geos.push(boxAt(8, 1.5, 12, T4.bbox.x1 - 4, 0.75, T4.bbox.cz));
@@ -1130,7 +1132,7 @@
       if (r.id !== 'K1') {
         if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
         if (!['K2', 'K3', 'K4', 'K5', 'T1', 'T3', 'L1', 'L2', 'L4'].includes(r.id) &&
-            !(r.id === 'T5' && window.SinRoyalOfferings)) addTorches(r);
+            !(r.id === 'T5' && window.SinRoyalOfferings) && !(r.id === 'T4' && window.SinLunarSanctuary)) addTorches(r);
       }
     }
     vis('regions');
@@ -1155,6 +1157,15 @@
       state.offeringScreen = mesh(boxAt(width + .08, height + .04, .16, x, height / 2, z),
         state.darkMat, 'TC5-offerings-portal-occluder', offeringCorridor);
       state.offeringScreen.castShadow = false;
+    }
+    if (window.SinLunarSanctuary) {
+      state.sanctuaryScreens = state.sanctuaryDoors.map(d => {
+        const outside = state.regionGroups.get(d.from === 'T4' ? d.to : d.from);
+        const width = d.width + .08;
+        const [w, depth] = d.axis === 'x' ? [.16, width] : [width, .16];
+        return mesh(boxAt(w, d.height + .04, depth, d.x, d.height / 2, d.z),
+          state.darkMat, d.id + '-sanctuary-portal-occluder', outside);
+      });
     }
     vis('corridors');
     wingMark('wings corridors');
@@ -2616,8 +2627,9 @@
     state.doors.forEach(function (d) {
       if (!d || d._roomDoor || (d.kind === 'arch' && d.id !== 'PalaceR1')) return;
       const targets = d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] : d === state.offeringPortal ? ['T5'] :
+        window.SinLunarSanctuary && state.sanctuaryDoors.includes(d) ? ['T4'] :
         state.observatoryDoors.includes(d) ? ['L4'] : state.sacredHallDoors.includes(d) ? ['T3'] :
-          streamedTargets(d, cur).filter(id => !libraryZones.has(id) && id !== 'T3' && id !== 'T5');
+          streamedTargets(d, cur).filter(id => !libraryZones.has(id) && id !== 'T3' && id !== 'T5' && id !== 'T4');
       // Only block when approaching from outside a not-ready streamed room.
       const waiting = targets.filter(function (id) { return id !== cur && !zoneIsReady(id); });
       if (!waiting.length) return;
@@ -2708,6 +2720,12 @@
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
   function dispose() {
+    if (state.lunarSanctuaryLoad) state.lunarSanctuaryLoad.abort();
+    if (state.lunarSanctuary) {
+      state.lunarSanctuary.root.removeFromParent();
+      state.lunarSanctuary.dispose();
+    }
+    state.lunarSanctuary = state.lunarSanctuaryLoad = state.sanctuaryScreens = null;
     if (state.royalOfferingsLoad) state.royalOfferingsLoad.abort();
     if (state.royalOfferings) {
       state.royalOfferings.root.removeFromParent();
@@ -2813,6 +2831,19 @@
     const t3ViaWest = [doorFor('T2-TC23'), doorFor('TC23-T3')];
     const t3ViaEast = [doorFor('TC34-T4'), doorFor('T3-TC34')];
     const t3ViaNorth = [doorFor('TC5-T5'), doorFor('T3-TC5')];
+    const lunarExit = doorFor('T4-MP1');
+    state.sanctuaryDoors = [t3ViaEast[0], lunarExit];
+    state.sanctuaryFrameSet = new Set();
+    state.sanctuarySightLines = [
+      [['TC34', t3ViaEast[0]], ['T3', t3ViaEast[1]], ['TC23', t3ViaWest[1]], ['T2', t3ViaWest[0]]],
+      [['MP1', lunarExit]]
+    ];
+    state.sanctuaryRoutes = new Map([
+      ['T2', [...t3ViaWest, t3ViaEast[1], t3ViaEast[0]]],
+      ['TC23', [t3ViaWest[1], t3ViaEast[1], t3ViaEast[0]]],
+      ['T3', [t3ViaEast[1], t3ViaEast[0]]],
+      ['TC34', [t3ViaEast[0]]], ['MP1', [lunarExit]]
+    ]);
     state.offeringPortal = t3ViaNorth[0];
     state.offeringPassage = t3ViaNorth[1];
     state.sacredHallRoutes = new Map([
@@ -3059,6 +3090,21 @@
     });
   }
 
+  function loadLunarSanctuary(api) {
+    const room = state.rooms.find(r => r.id === 'T4');
+    const controller = new AbortController();
+    state.lunarSanctuaryLoad = controller;
+    SinLunarSanctuary.build(room, state.sanctuaryDoors, loadRoomModel, controller.signal, deviceProfile.constrained).then(sanctuary => {
+      if (state.lunarSanctuaryLoad !== controller || controller.signal.aborted) { sanctuary.dispose(); return; }
+      state.lunarSanctuary = sanctuary;
+      zoneStreamer.markReleasable(sanctuary.root);
+      api.add(sanctuary.root);
+      api.done();
+    }, error => {
+      if (state.lunarSanctuaryLoad === controller && !controller.signal.aborted) api.fail(error);
+    });
+  }
+
   function loadRoyalOfferings(api) {
     const room = state.rooms.find(r => r.id === 'T5');
     const controller = new AbortController();
@@ -3141,6 +3187,38 @@
         openings.push(door);
         if (!SinWingVisibility.throughOpenings(view, openings, .06)) break;
         visible.add(id);
+      }
+    }
+  }
+
+  function sanctuarySight(view) {
+    if (!view || !window.SinWingVisibility) return false;
+    const id = regionAt(view.x, view.z)?.id;
+    if (id === 'T4' || state.current === 'T4') return true;
+    const openings = state.sanctuaryRoutes.get(id);
+    return !!(openings && SinWingVisibility.throughOpenings(view, openings, .07));
+  }
+
+  function sanctuaryExits(view, visible) {
+    visible.clear();
+    visible.add('T4');
+    for (const line of state.sanctuarySightLines) {
+      const openings = [];
+      for (const [id, door] of line) {
+        openings.push(door);
+        if (!SinWingVisibility.throughOpenings(view, openings, .07)) break;
+        visible.add(id);
+      }
+    }
+  }
+
+  function syncSanctuaryShell(group, ready) {
+    for (const screen of state.sanctuaryScreens || []) screen.visible = !ready;
+    const shell = group && group.getObjectByName('T4-ceiling');
+    if (shell) shell.visible = !ready && !state.cutaway;
+    if (state.lunarSanctuary) {
+      for (const node of state.lunarSanctuary.root.children) {
+        if (node.userData.ceiling) node.visible = ready && !state.cutaway;
       }
     }
   }
@@ -3318,6 +3396,15 @@
         state.sacredHall.refreshWater(state.ctx.renderer, scene, camera);
       }
     }
+    if (window.SinLunarSanctuary) {
+      const group = state.regionGroups.get('T4');
+      const seeRoom = sanctuarySight(view);
+      group.visible = seeRoom && zoneIsReady('T4');
+      if (seeRoom && regionAt(view.x, view.z)?.id === 'T4') {
+        sanctuaryExits(view, state.sanctuaryFrameSet);
+        for (const id of ['TC34', 'MP1']) state.regionGroups.get(id).visible = state.sanctuaryFrameSet.has(id);
+      }
+    }
     const offerings = state.regionGroups.get('T5');
     if (offerings && window.SinRoyalOfferings) {
       const seeRoom = offeringSight(view);
@@ -3373,6 +3460,40 @@
         triCache.delete('T3');
       },
       ownsObject: node => node.name === 'T3-Sacred-Columns-Hall' },
+    ...(window.SinLunarSanctuary ? [{ id: 'T4', prefetchHops: 3, priority: -1, requireComplete: true,
+      keepShell: true, serialPreparation: true,
+      estProcessMB: deviceProfile.constrained ? 45 : 115,
+      estGpuMB: deviceProfile.constrained ? 25 : 82,
+      estCpuMB: deviceProfile.constrained ? 20 : 42,
+      load: loadLunarSanctuary,
+      prepareGeometry: (api, renderer) => state.lunarSanctuary.warmup.step(renderer),
+      onReady: function (api) {
+        const sanctuary = state.lunarSanctuary, origin = state.root.position;
+        sanctuary.cameraColliders = [...sanctuary.boxes, ...sanctuary.stairBoxes].map(b => ({
+          minx:b.minx+origin.x, maxx:b.maxx+origin.x, miny:b.miny+origin.y,
+          maxy:b.maxy+origin.y, minz:b.minz+origin.z, maxz:b.maxz+origin.z, _wing:true
+        }));
+        const first = state.colliders.length;
+        state.colliders.push(...sanctuary.boxes);
+        indexSpatialFrom(first);
+        syncSanctuaryShell(api.group, true);
+        updatePassageGates();
+        triCache.delete('T4');
+      },
+      onFailure: function (error) {
+        registerLibraryFailure('T4');
+        console.warn('[T4] Lunar sanctuary preparation failed', error);
+      },
+      unload: function (api) {
+        if (state.lunarSanctuaryLoad) state.lunarSanctuaryLoad.abort();
+        if (state.lunarSanctuary) state.lunarSanctuary.warmup.dispose();
+        state.lunarSanctuary = state.lunarSanctuaryLoad = null;
+        state.colliders = state.colliders.filter(b => !b._lunarSanctuary);
+        rebuildSpatial();
+        syncSanctuaryShell(api.group, false);
+        triCache.delete('T4');
+      },
+      ownsObject: node => node.name === 'T4-Lunar-Sanctuary' }] : []),
     ...(window.SinRoyalOfferings ? [{ id: 'T5', prefetchHops: 3, priority: 0, requireComplete: true,
       keepShell: true, serialPreparation: true,
       estProcessMB: deviceProfile.constrained ? 54 : 120,
@@ -3664,6 +3785,8 @@
   const retainedObservatory = new Set(['L1', 'L4']);
   const retainedMoonPassage = new Set(['L4']);
   const retainedSacredHall = new Set(['T3', 'T5']);
+  const retainedSanctuary = new Set(['T3', 'T4']);
+  const retainedTemple = new Set(['T3', 'T4', 'T5']);
   const offeringApproaches = new Set(['T2', 'TC23', 'T3', 'TC34', 'T4', 'TC5', 'T5']);
   const entryLibraryOnly = new Set(['L1']);
   const entryArchiveOnly = new Set(['L2']);
@@ -3796,11 +3919,21 @@
       if (zoneIsReady('T3') && offeringApproaches.has(origin)) approach.add('T5');
       retained = retained || retainedSacredHall;
     }
+    const sanctuarySide = state.sanctuaryDoors[1];
+    const atMoonSanctuary = origin === 'MP1' && move && sanctuarySide && Math.abs(move.z - sanctuarySide.z) < 21;
+    const atSanctuary = origin === 'T4' || origin === 'TC34' || atMoonSanctuary;
+    const templeApproach = origin === 'T3' || origin === 'TC23' || origin === 'T2';
+    const towardSanctuary = window.SinLunarSanctuary && !inLibrary && (atSanctuary || templeApproach);
+    if (towardSanctuary) {
+      if (atSanctuary || zoneIsReady('T3')) approach.add('T4');
+      if (atSanctuary) retained = retainedSanctuary;
+      else if (level === 'normal') retained = retainedTemple;
+    }
     const allowBackgroundWarm = !inLibrary && (!move || Math.hypot(move.vx, move.vz) < 0.40);
     if (allowBackgroundWarm) {
       const eligible = new Set([...(preparedIds || []), ...(visibleIds || [])]);
       eligible.forEach(id => {
-        const g = id !== 'T3' && id !== 'T5' && !libraryZones.has(id) && state.regionGroups.get(id);
+        const g = id !== 'T3' && id !== 'T4' && id !== 'T5' && !libraryZones.has(id) && state.regionGroups.get(id);
         if (g) warmGroups.push(g);
       });
     }
@@ -3811,7 +3944,8 @@
         approach.add(id);
       }
     });
-    const demand = nearTemple && !zoneIsReady('T3') ? 'T3' :
+    const demand = towardSanctuary && atSanctuary && !zoneIsReady('T4') ? 'T4' :
+      nearTemple && !zoneIsReady('T3') ? 'T3' :
       (origin === 'T3' || origin === 'TC5') && !zoneIsReady('T5') ? 'T5' :
       !zoneIsReady('L1') ? 'L1' : (state.archiveDemand || archiveNear) && !zoneIsReady('L2') ? 'L2' :
         towardObservatory && !zoneIsReady('L4') ? 'L4' : null;
@@ -3831,7 +3965,7 @@
     if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
       origin = state._dressLock.id;
     }
-    if (!origin || origin === 'T3' || origin === 'T5' || libraryZones.has(origin)) return;
+    if (!origin || origin === 'T3' || origin === 'T4' || origin === 'T5' || libraryZones.has(origin)) return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
     if (c && c.complete) {
@@ -3923,6 +4057,11 @@
         if (sacredHallSight(view)) planned.visible.add('T3');
         else planned.visible.delete('T3');
         cullFromSacredHall(view, planned.visible);
+        if (window.SinLunarSanctuary) {
+          if (sanctuarySight(view)) planned.visible.add('T4');
+          else planned.visible.delete('T4');
+          if (regionAt(view.x, view.z)?.id === 'T4') sanctuaryExits(view, planned.visible);
+        }
         if (window.SinRoyalOfferings) {
           if (offeringSight(view)) planned.visible.add('T5');
           else planned.visible.delete('T5');
@@ -3960,7 +4099,7 @@
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
         g.visible = visibleIds.has(rr.id) && (rr.id !== 'L2' || zoneIsReady('L2')) &&
-          (rr.id !== 'T5' || zoneIsReady('T5'));
+          (rr.id !== 'T5' || zoneIsReady('T5')) && (rr.id !== 'T4' || zoneIsReady('T4'));
       });
       // Zone streaming is the single source of truth: prefetch, budgeted
       // uploads, shader compile (shells + dress), atomic reveal, LRU eviction
@@ -4014,6 +4153,9 @@
     if (state.sacredHall && zoneIsReady('T3') && state.regionGroups.get('T3').visible) {
       state.sacredHall.tick(performance.now() * .001);
     }
+    if (state.lunarSanctuary && zoneIsReady('T4') && state.regionGroups.get('T4').visible) {
+      state.lunarSanctuary.tick(performance.now() * .001);
+    }
     if (state.royalOfferings && zoneIsReady('T5') && state.regionGroups.get('T5').visible) {
       state.royalOfferings.tick(performance.now() * .001);
     }
@@ -4050,7 +4192,10 @@
     const K1 = state.rooms.find(r => r.id === 'K1');
     if (K1 && pointInPoly(x, z, K1.poly)) return state.k1FloorY;
     const T4 = state.rooms.find(r => r.id === 'T4');
-    if (T4 && pointInPoly(x, z, T4.poly)) {
+    if (window.SinLunarSanctuary) {
+      const step = state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.floorAt(x, z) : 0;
+      if (step > 0) return step;
+    } else if (T4 && pointInPoly(x, z, T4.poly)) {
       const start = T4.bbox.x1 - 14.4, end = T4.bbox.x1 - 8.4;
       if (x >= T4.bbox.x1 - 8.4) return 1.5;
       if (x > start) return Math.min(1.5, (x - start) / (end - start) * 1.5);
@@ -4186,6 +4331,7 @@
         setLibraryCeiling(state.regionGroups.get('L1'));
         setObservatoryShell(state.regionGroups.get('L4'));
         setSacredHallCeiling(state.regionGroups.get('T3'), zoneIsReady('T3'));
+        if (window.SinLunarSanctuary) syncSanctuaryShell(state.regionGroups.get('T4'), zoneIsReady('T4'));
         if (window.SinRoyalOfferings) syncOfferingShell(state.regionGroups.get('T5'));
       }
       if (b.dataset.act === 'bright') {
@@ -5565,6 +5711,7 @@
   }
   const STREAM_EXPECT = {
     T3: window.SinSacredColumns ? SinSacredColumns.expected : [],
+    ...(window.SinLunarSanctuary ? { T4: SinLunarSanctuary.expected } : {}),
     ...(window.SinRoyalOfferings ? { T5: SinRoyalOfferings.expected } : {}),
     L4: window.SinObservatory ? SinObservatory.expected : [],
     L2: window.SinRoyalArchive ? SinRoyalArchive.expected : [],
@@ -5727,6 +5874,7 @@
     archiveCamera: () => state.archive && zoneIsReady('L2') ? state.archive.camera : null,
     observatoryCamera: () => state.observatory && zoneIsReady('L4') ? state.observatory.camera : null,
     sacredHallCamera: () => state.sacredHall && zoneIsReady('T3') ? state.sacredHall.camera : null,
+    sanctuaryCamera: () => state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.camera : null,
     offeringsCamera: () => state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.camera : null,
     beforePresent,
     prepareEntryLibrary,

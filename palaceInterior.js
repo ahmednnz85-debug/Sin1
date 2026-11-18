@@ -4964,15 +4964,18 @@
     const archiveBoxes = (wings && wings.archive && wings.archive.cameraColliders) || noCameraColliders;
     const observatoryBoxes = (wings && wings.observatory && wings.observatory.cameraColliders) || noCameraColliders;
     const sacredHallBoxes = (wings && wings.sacredHall && wings.sacredHall.cameraColliders) || noCameraColliders;
+    const sanctuaryBoxes = (wings && wings.lunarSanctuary && wings.lunarSanctuary.cameraColliders) || noCameraColliders;
     const offeringsBoxes = (wings && wings.royalOfferings && wings.royalOfferings.cameraColliders) || noCameraColliders;
     const staticCount = colliders.length, libraryCount = staticCount + libraryBoxes.length;
     const archiveCount = libraryCount + archiveBoxes.length;
     const observatoryCount = archiveCount + observatoryBoxes.length;
     const sacredHallCount = observatoryCount + sacredHallBoxes.length;
-    for (let i = 0; i < sacredHallCount + offeringsBoxes.length; i++) {
+    const offeringsCount = sacredHallCount + offeringsBoxes.length;
+    for (let i = 0; i < offeringsCount + sanctuaryBoxes.length; i++) {
       const b = i < staticCount ? colliders[i] : i < libraryCount ? libraryBoxes[i - staticCount] :
         i < archiveCount ? archiveBoxes[i - libraryCount] : i < observatoryCount ? observatoryBoxes[i - archiveCount] :
-        i < sacredHallCount ? sacredHallBoxes[i - observatoryCount] : offeringsBoxes[i - sacredHallCount];
+        i < sacredHallCount ? sacredHallBoxes[i - observatoryCount] :
+        i < offeringsCount ? offeringsBoxes[i - sacredHallCount] : sanctuaryBoxes[i - offeringsCount];
       if (b.maxx < lox || b.minx > hix || b.maxy < loy || b.miny > hiy || b.maxz < loz || b.minz > hiz) continue;
       if (isProp(b) !== !!props) continue;
       let box = padBox(b, r);
