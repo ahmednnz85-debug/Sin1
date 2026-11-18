@@ -306,6 +306,7 @@
     }
     function incoming(rec) {
       const s = (rec && rec.spec) || {};
+      if (s.estimateIncoming) return s.estimateIncoming(usage());
       return {
         processMB: s.estProcessMB != null ? +s.estProcessMB : o.defaultZoneProcessMB,
         gpuMB: s.estGpuMB != null ? +s.estGpuMB : o.defaultZoneGpuMB,
