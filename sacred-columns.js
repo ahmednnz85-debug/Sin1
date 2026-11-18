@@ -8,7 +8,7 @@
     3862:'paving-module', 2822:'basin', 1878:'royal-beam', 1688:'brazier-wide', 1556:'wide-steps',
     1510:'pillar-plinth', 1080:'brazier-tall', 849:'brazier-low', 660:'narrow-steps', 476:'glazed-rail'
   };
-  const expected = ['axis-stone','lamassu-pier','column-stone','column-royal','basin','water',
+  const expected = ['axis-stone','lamassu-pier','column-stone','column-royal','channel-coping','channel-bed','water',
     'gate-frame-main','gate-frame-side','sacred-mural','roof-coffers','roof-light-wells','sunbeams',
     'brazier-wide','flames'].map(name => 'T3-' + name);
 
@@ -20,8 +20,48 @@
     inscriptions:[206,121,295,144] };
   const floorAtlas = { w:650,h:650, tiles:[122,81,526,568], blue:[22,73,115,348] };
   const floorLevel = .026;
+  const waterLevel = -.178;
+  const channelBottom = -.93;
+  const liningInset = .012;
   const reflectionLayer = 31;
 
+  const shaftPositions = [-17.15,-10.75,-4.30,4.30,10.75,17.15];
+  const shaftRow = 8.82;
+
+  function channelLayout(room) {
+    const {cx,cz,x1,z1}=room.bbox;
+    const end=x1-cx-1.27, start=3.20, inner=2.94;
+    const bay=Math.min(z1-cz-1.87,10.06), atPlinth=shaftRow-1.71;
+    const plinths=shaftPositions.map(x=>[x-1.79,x+1.79]);
+    // Retain stone at the square lamassu piers and join their ends to
+    // the adjacent plinths. The middle bays extend between the shafts.
+    plinths.push([-end,-18.35],[18.35,end]);
+    const channels=[];
+    for(const [l,r] of [[-end,-start],[start,end]]) for(const side of [-1,1]){
+      const breaks=[l,...new Set(plinths.flat().filter(x=>x>l&&x<r)),r].sort((a,b)=>a-b);
+      const tiles=[];
+      for(let i=1;i<breaks.length;i++){
+        const left=breaks[i-1],right=breaks[i],x=(left+right)/2;
+        const outer=plinths.some(([a,b])=>x>=a&&x<=b)?atPlinth:bay;
+        const prev=tiles.at(-1);
+        if(prev&&prev.outer===outer)prev.r=right;
+        else tiles.push({l:left,r:right,outer});
+      }
+      const outline=[[l,side*inner],[r,side*inner]];
+      for(const section of tiles.slice().reverse()){
+        outline.push([section.r,side*section.outer],[section.l,side*section.outer]);
+      }
+      channels.push({
+        outline,side,l,r,inner,bay,
+        tiles:tiles.map(t=>({l:t.l,r:t.r,n:side<0?-t.outer:inner,f:side<0?-inner:t.outer}))
+      });
+    }
+    return channels;
+  }
+
+  function supportInside(tiles,x,z) {
+    return tiles.some(c=>x>=c.l && x<=c.r && z>=c.n && z<=c.f);
+  }
   function uvRect(atlas, r, u, v) {
     return [(r[0]+u*(r[2]-r[0]))/atlas.w, 1-(r[3]-v*(r[3]-r[1]))/atlas.h];
   }
@@ -81,23 +121,34 @@
       part.material.metalness=.83;
     });
     const basin=parts.basin, s=basin.size;
-    // The embedded water and sandstone are one connected indexed mesh.
-    // Remove the measured blue planar patch only; the sloped wet perimeter
-    // and every face of the authored carved, geometrical rim remain.
-    removeFaces(basin,(x,y,z)=>Math.abs(x/s.x)<.419&&Math.abs(z/s.z)<.413&&y/s.y>.448&&y/s.y<.513);
-    for(const [name,band] of [['brazier-wide',.793],['brazier-tall',.82],['brazier-low',.70]]) {
+    // Extract just one of the carved upper banks from the fused source.
+    // Repeating this strip follows the actual shoreline without placing
+    // the original raised vessel or drawing seams across adjoining bays.
+    removeFaces(basin,(x,y,z)=>y/s.y<.773 || z/s.z<.395);
+    const lip=basin.geometry.boundingBox.clone(), p=lip.getCenter(new THREE.Vector3());
+    basin.size=lip.getSize(new THREE.Vector3());
+    const offset=new THREE.Vector3(-p.x,-lip.min.y,-p.z);
+    basin.geometry.translate(offset.x,offset.y,offset.z);
+    basin.geometry.boundingBox=lip.translate(offset);
+    basin.geometry.boundingSphere=lip.getBoundingSphere(new THREE.Sphere());
+    const brazierMaterial=parts['brazier-wide'].material.clone();
+    brazierMaterial.color.multiplyScalar(.69);
+    for(const [name,band] of [['brazier-wide',.748],['brazier-tall',.820],['brazier-low',.70]]) {
       const p=parts[name];
       removeFaces(p,(x,y)=>y/p.size.y>band);
+      p.material=brazierMaterial;
       p.flameBase=band;
     }
   }
 
   function wetSurface(pools, time) {
     const positions=[],uv=[],indices=[];
-    for(const {x,z,w,d,level} of pools) {
-      const dx=w/2-.38,dz=d/2-.35,i=positions.length/3;
-      positions.push(x-dx,level,z-dz,x-dx,level,z+dz,x+dx,level,z-dz,x+dx,level,z+dz);
-      uv.push(0,0,0,1,1,0,1,1);
+    for(const channel of pools) for(const {l,r,n,f} of channel.tiles) {
+      const i=positions.length/3;
+      positions.push(l,waterLevel,n,l,waterLevel,f,r,waterLevel,n,r,waterLevel,f);
+      const u=x=>(x-channel.l)/(channel.r-channel.l);
+      const v=z=>Math.min(1,Math.max(0,Math.abs(z)-channel.inner+.03));
+      uv.push(u(l),v(n),u(l),v(f),u(r),v(n),u(r),v(f));
       indices.push(i,i+1,i+2,i+2,i+1,i+3);
     }
     const reflection={value:null}, textureMatrix={value:new THREE.Matrix4()};
@@ -126,15 +177,17 @@
           vec3 normal=normalize(vec3(.006*a,1.,.008*(.55*b+.45*c)));
           float fresnel=pow(1.-clamp(dot(view,normal),0.,1.),3.6);
           vec2 projected=reflected.xy/max(.001,reflected.w);
-          vec2 ruv=projected+vec2(a+.28*b,.54*b+.46*c)*vec2(.00105,.00153);
+          vec2 ruv=projected+vec2(a+.36*b,.54*b+.46*c)*vec2(.00175,.00138);
           float reveal=smoothstep(.0,.045,ruv.x)*smoothstep(.0,.045,ruv.y)
             *smoothstep(.0,.045,1.-ruv.x)*smoothstep(.0,.045,1.-ruv.y);
-          vec3 mirror=texture2D(reflection,ruv).rgb*.60+
-            (texture2D(reflection,ruv+vec2(.0019,.0012)).rgb+
-            texture2D(reflection,ruv-vec2(.0019,.0012)).rgb)*.20;
+          vec2 streak=vec2(.0008,.0036);
+          vec3 mirror=texture2D(reflection,ruv).rgb*.64+
+            (texture2D(reflection,ruv+streak).rgb+texture2D(reflection,ruv-streak).rgb)*.18;
           vec3 deep=mix(vec3(.0025,.006,.012),vec3(.012,.026,.040),fresnel);
           vec3 lit=deep+mirror*vec3(.70,.80,.87)*(.32+.53*fresnel)*reveal;
-          float edge=min(min(edgeUV.x,1.-edgeUV.x),min(edgeUV.y,1.-edgeUV.y));
+          float ember=smoothstep(.31,.78,mirror.r)*smoothstep(.12,.38,mirror.r-mirror.b);
+          lit+=mirror*vec3(.83,.55,.24)*ember*reveal*(.75+.25*fresnel);
+          float edge=min(min(edgeUV.x,1.-edgeUV.x),edgeUV.y);
           lit*=mix(.61,1.,smoothstep(0.,.045,edge));
           gl_FragColor=vec4(lit,.981);
           #include <tonemapping_fragment>
@@ -157,14 +210,14 @@
     const eye=up.clone(), look=up.clone(), rotation=new THREE.Matrix4(), clip=new THREE.Plane();
     const coeff=new THREE.Vector4(), q=new THREE.Vector4(), vp=new THREE.Matrix4(), frustum=new THREE.Frustum();
     const bias=new THREE.Matrix4().set(.5,0,0,.5, 0,.5,0,.5, 0,0,.5,.5, 0,0,0,1);
-    let nextFrame=0,lastDraws=0,passes=0;
+    let nextFrame=0,lastDraws=0,passes=0,renderCost=2,interval=cadence;
 
     function refresh(renderer, scene, camera, prime=false) {
       const now=performance.now();
       if(!camera || renderer.getRenderTarget() || renderer.getContext().isContextLost() || (!prime&&now<nextFrame))return;
       camera.updateWorldMatrix(true,false);
       water.updateWorldMatrix(true,false);
-      centre.set(0,pools[0].level,0).applyMatrix4(water.matrixWorld);
+      centre.set(0,waterLevel,0).applyMatrix4(water.matrixWorld);
       eye.setFromMatrixPosition(camera.matrixWorld);
       if(eye.y<=centre.y+.05)return;
       if(!prime){
@@ -209,6 +262,12 @@
         reflection.value=target.texture;
         passes++;
         lastDraws=renderer.info.render.calls;
+        // Back off while the reflected pass is expensive. Its target and
+        // materials remain resident, including through quality changes.
+        const done=performance.now();
+        renderCost+=.20*(Math.min(done-now,42)-renderCost);
+        interval=Math.max(cadence,Math.min(235,renderCost*6));
+        nextFrame=done+interval;
       } finally {
         renderer.setRenderTarget(previous);
         renderer.xr.enabled=useXr;
@@ -218,14 +277,14 @@
     }
 
     return {water,refresh,dispose(){target.dispose();},
-      report(){return {resolution,cadence,passes,lastDraws};}};
+      report(){return {resolution,minimumIntervalMs:cadence,intervalMs:interval,passes,lastDraws};}};
   }
 
   function flames(sources,time) {
     const vert=[],uv=[],ind=[];
-    for(const [x,z,y] of sources) for(const angle of [0,Math.PI/2]) {
-      const c=Math.cos(angle)*.29,s=Math.sin(angle)*.29,i=vert.length/3;
-      vert.push(x-c,y,z-s,x+c,y,z+s,x-c,y+.61,z-s,x+c,y+.61,z+s);
+    for(const {x,z,y,width,height} of sources) for(const angle of [0,Math.PI/2]) {
+      const c=Math.cos(angle)*width/2,s=Math.sin(angle)*width/2,i=vert.length/3;
+      vert.push(x-c,y,z-s,x+c,y,z+s,x-c,y+height,z-s,x+c,y+height,z+s);
       uv.push(0,0,1,0,0,1,1,1);ind.push(i,i+1,i+2,i+1,i+3,i+2);
     }
     const m=new THREE.ShaderMaterial({uniforms:{time},side:THREE.DoubleSide,transparent:true,
@@ -234,13 +293,15 @@
         void main(){v=uv; phase=position.x*.94+position.z*.61; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
       fragmentShader:`uniform float time; varying vec2 v; varying float phase;
         void main(){
-          float h=v.y; float swing=sin(h*7.+time*3.6+phase)*.13*h;
+          float h=v.y; float swing=sin(h*7.+time*3.6+phase)*.16*h;
           float x=abs(v.x-.5-swing); float w=(1.-h)*(.190+.092*sin(3.1*h));
           float taper=smoothstep(0.,.14,h)*(1.-smoothstep(.82,1.,h));
           float f=(1.-smoothstep(w*.46,w+.085,x))*taper;
+          float tongue=abs(v.x-.5+.22*h+sin(time*4.8+phase+h*9.)*.11*h);
+          f=max(f,(1.-smoothstep(.055,.17,tongue))*taper*(1.-smoothstep(.39,.86,h))*.87);
           float core=(1.-smoothstep(w*.10,w*.63,x))*(1.-smoothstep(.11,.79,h));
           float flutter=.88+.12*sin(time*5.3+phase*3.1+h*8.);
-          gl_FragColor=vec4(mix(vec3(1.0,.245,.021),vec3(1.,.9,.38),core),f*flutter*.92);
+          gl_FragColor=vec4(mix(vec3(1.0,.29,.027),vec3(1.,.92,.50),core),f*flutter*.83);
         }`
     });
     const mesh=new THREE.Mesh(indexedGeometry(vert,uv,ind),m);
@@ -291,12 +352,13 @@
     roofStone.emissiveIntensity=.37;
     const diffuser=new THREE.MeshBasicMaterial({color:0xffd4a1,toneMapped:false});
     const draw=SinGreatLibrary.builder(root,'T3-');
-    const boxes=[],pools=[],sources=[];
+    const boxes=[],pools=channelLayout(room),sources=[];
+    const wetTiles=pools.flatMap(channel=>channel.tiles);
     const time={value:0};
     function put(name,mat,g,x,y,z,a=0){draw.surface(name,mat,g,null,x,y,z,a);}
     function box(name,mat,x,y,z,width,height,depth,tile=3.0){draw.box(name,mat,null,x,y,z,width,height,depth,tile);}
-    function solid(minx,maxx,miny,maxy,minz,maxz,water=false) {
-      boxes.push({minx:cx+minx,maxx:cx+maxx,miny,maxy,minz:cz+minz,maxz:cz+maxz,_wing:true,_sacredHall:true,water});
+    function solid(minx,maxx,miny,maxy,minz,maxz) {
+      boxes.push({minx:cx+minx,maxx:cx+maxx,miny,maxy,minz:cz+minz,maxz:cz+maxz,_wing:true,_sacredHall:true});
     }
     function prop(name,source,x,y,z,width,height,depth,yaw=0,blocking=false) {
       const p=parts[source];
@@ -313,8 +375,19 @@
       put(name,mat,g,x,y,z,angle);
     }
 
-    // Keep the world floor continuous. Slabs and basin skirts sit on it.
-    plane('side-paving',stone,0,floorLevel,0,w,d,w/4.8,d/5.94);
+    // The foundation has the same four holes. The visible paving shares
+    // world-anchored UVs across every dry tile, including the T5 crossing.
+    const xs=[-hx,...new Set(wetTiles.flatMap(p=>[p.l,p.r])),hx].sort((a,b)=>a-b);
+    const zs=[-hz,...new Set(wetTiles.flatMap(p=>[p.n,p.f])),hz].sort((a,b)=>a-b);
+    for(let i=1;i<xs.length;i++)for(let j=1;j<zs.length;j++){
+      const l=xs[i-1],r=xs[i],n=zs[j-1],f=zs[j];
+      const x=(l+r)/2,z=(n+f)/2;
+      if(supportInside(wetTiles,x,z))continue;
+      const g=new THREE.PlaneGeometry(r-l,f-n).rotateX(-Math.PI/2);
+      const coords=g.attributes.position,uv=g.attributes.uv;
+      for(let k=0;k<uv.count;k++)uv.setXY(k,(coords.getX(k)+x)/4.8,-(coords.getZ(k)+z)/5.94);
+      put('side-paving',stone,g,x,floorLevel,z);
+    }
     const axisWidth=5.60;
     for(let i=0;i<4;i++) prop('axis-foundation','paving-module',-hx+w/8+i*w/4,-.28,0,w/4,.307,axisWidth);
     plane('axis-stone',axisStone,0,.043,0,w,axisWidth,w/5.90,1);
@@ -323,30 +396,36 @@
     }
     plane('offering-crossing',stone,0,.039,(hz+axisWidth/2)/2,5.7,hz-axisWidth/2,1.12,1.60);
 
-    const basinWidth=17.58,basinDepth=5.34;
-    const basin=parts.basin, rim=basin.geometry.attributes.position;
-    // Retain the original small rim width when the central body is
-    // extended. A uniformly stretched square wastes metres at each end.
-    function extend(value,rawSize,size,border){
-      const u=value/rawSize+.5, lo=.098, hi=1-lo, edge=border/size;
-      const v=u<lo?u*edge/lo:u>hi?1-(1-u)*edge/lo:edge+(u-lo)*(1-2*edge)/(hi-lo);
-      return (v-.5)*rawSize;
+    const lining=standard(rock,0x968071,.92,.02), bed=standard(paving,0x6f6859,.93,.012);
+    for(const {l,r,n,f} of wetTiles) {
+      const x=(l+r)/2,z=(n+f)/2,w=r-l,d=f-n;
+      plane('channel-bed',bed,x,channelBottom,z,w+.001,d+.001,w/4.8,d/5.94);
     }
-    for(let i=0;i<rim.count;i++)rim.setXYZ(i,extend(rim.getX(i),basin.size.x,basinWidth,.34),
-      rim.getY(i),extend(rim.getZ(i),basin.size.z,basinDepth,.31));
+    const basin=parts.basin;
     basin.material=basin.material.clone();
     basin.material.color.setHex(0xbba183);
     basin.material.roughness=.82;
-    for(const x of [-11.98,11.98])for(const z of [-5.62,5.62]){
-      const width=basinWidth,depth=basinDepth,body=.233,bottom=-.101;
-      prop('basin','basin',x,bottom,z,width,body,depth);
-      pools.push({x,z,w:width,d:depth,level:bottom+body*.575});
-      solid(x-width/2+.035,x+width/2-.035,0,.145,z-depth/2+.035,z+depth/2-.035,true);
+    const height=floorLevel-channelBottom, y=(floorLevel+channelBottom)/2;
+    for(const {outline,side} of pools) for(let i=0;i<outline.length;i++){
+      const a=outline[i],b=outline[(i+1)%outline.length],dx=b[0]-a[0],dz=b[1]-a[1];
+      const length=Math.hypot(dx,dz);
+      if(length<.002)continue;
+      const inwardX=-side*dz/length,inwardZ=side*dx/length;
+      const x=(a[0]+b[0])/2,z=(a[1]+b[1])/2;
+      const yaw=Math.atan2(-dz,dx);
+      // The wet face projects just past the foundation's cut edge.
+      box('channel-lining',lining,x-inwardX*(.08-liningInset),y,z-inwardZ*(.08-liningInset),
+        Math.abs(dx)>.001?length+.15:.16,height,Math.abs(dz)>.001?length+.15:.16,2.1);
+      const copies=Math.ceil(length/2.85),span=length/copies;
+      for(let index=0;index<copies;index++){
+        const u=(index+.5)/copies;
+        prop('channel-coping','basin',a[0]+dx*u-inwardX*.073,floorLevel-.016,
+          a[1]+dz*u-inwardZ*.073,span,.020,.164,yaw+(side>0?Math.PI:0));
+      }
     }
 
-    // Column grids leave 5.6 m on the main axis, 7.8 m at the transverse
-    // crossing, and two continuous walks behind the basins.
-    for(const x of [-17.15,-10.75,-4.30,4.30,10.75,17.15])for(const z of [-8.82,8.82]){
+    // The central path and the side crossing stay clear of the originals.
+    for(const x of shaftPositions)for(const z of [-shaftRow,shaftRow]){
       const name=Math.abs(x)>10?'column-royal':'column-stone', p=parts[name];
       const height=h-.60, width=2.95, depth=width*p.size.z/p.size.x;
       prop(name,name,x,.223,z,width,height,depth,z>0?Math.PI:0,true);
@@ -480,14 +559,26 @@
       box('roof-visible-light',diffuser,s.x,top+.047,s.z,s.w+.27,.09,s.d+.27,.7);
     }
 
-    function brazier(source,x,z,height) {
-      const p=parts[source], y=floorLevel, scale=height/p.size.y;
-      prop(source,source,x,y,z,p.size.x*scale,height,p.size.z*scale,0,true);
-      sources.push([x,z,y+height*p.flameBase-.065]);
+    function brazier(source,x,z,size,ground,flameWidth,flameHeight,key=false) {
+      const p=parts[source], scale=size/p.size.y;
+      prop(source,source,x,ground,z,p.size.x*scale,size,p.size.z*scale,0,true);
+      sources.push({x,z,y:ground+size*p.flameBase-.035,width:flameWidth,height:flameHeight,key});
     }
-    for(const x of [-19.75,-3.1,3.1,19.75])for(const z of [-2.67,2.67]) brazier('brazier-wide',x,z,1.34);
-    for(const x of [-14.85,14.85])for(const z of [-10.52,10.52]) brazier('brazier-tall',x,z,1.24);
-    for(const z of [-9.7,9.7]) for(const x of [-5.8,5.8]) brazier('brazier-low',x,z,.92);
+    for(const side of [-1,1]){
+      // The two monumental pairs stand on the dry inner kerb beside the end columns.
+      brazier('brazier-wide',shaftPositions[0]+1.45,side*2.15,1.98,.043,1.23,.91,true);
+      brazier('brazier-wide',shaftPositions.at(-1)-1.45,side*2.15,1.78,.043,1.07,.85,true);
+      for(const x of [-2.34,2.34]){
+        brazier('brazier-wide',x,side*5.70,1.43,side>0?.039:floorLevel,.80,.82);
+      }
+      // Lights on the outer banks reflect across the open bays between plinths.
+      for(const x of [-13.05,13.05]){
+        brazier('brazier-tall',x,side*10.94,1.64,floorLevel,.83,.96);
+      }
+      for(const x of [-7.25,7.25]){
+        brazier('brazier-low',x,side*10.90,1.30,floorLevel,.69,.77);
+      }
+    }
 
     draw.flush();
     const shaft=new THREE.BufferGeometry();
@@ -514,9 +605,11 @@
     second.userData.physicalFalloff=true;
     root.add(second,second.target);
     const local=[];
-    for(const [x,z,y] of [sources[0],sources[3],sources[5],sources[6]]){
-      const l=new THREE.PointLight(0xffa54d,11.5,7.4,-2);
-      l.position.set(x,y+.23,z);
+    const brazierIntensity=11.5;
+    for(const {x,z,y,key} of sources){
+      if(!key)continue;
+      const l=new THREE.PointLight(0xffa54d,brazierIntensity,7.4,-2);
+      l.position.set(x,y+.52,z);
       l.userData.physicalFalloff=true;
       root.add(l);
       local.push(l);
@@ -545,7 +638,16 @@
     return {
       root,camera,boxes,warmup,
       refreshWater:poolReflection.refresh, reflectionReport:poolReflection.report, disposeWater:poolReflection.dispose,
-      tick(t){time.value=t;local.forEach((light,i)=>{light.intensity=11.5*(.96+.04*Math.sin(t*3.70+i*1.92));});},
+      channelFloorAt(x,z){return supportInside(wetTiles,x-cx,z-cz)?channelBottom:null;},
+      blocksDrop(x,z,r,feet){
+        if((feet??0)<waterLevel-.23)return false;
+        x-=cx;z-=cz;
+        return wetTiles.some(c=>{
+          const dx=x-Math.min(c.r,Math.max(c.l,x)),dz=z-Math.min(c.f,Math.max(c.n,z));
+          return dx*dx+dz*dz<r*r;
+        });
+      },
+      tick(t){time.value=t;local.forEach((light,i)=>{light.intensity=brazierIntensity*(.96+.04*Math.sin(t*3.70+i*1.92));});},
       dispose(){poolReflection.dispose();warmup.dispose();SinGreatLibrary.disposeResources(root);}
     };
   }
@@ -575,5 +677,5 @@
     }
   }
 
-  window.SinSacredColumns={build,expected};
+  window.SinSacredColumns={build,expected,channelLayout};
 })();

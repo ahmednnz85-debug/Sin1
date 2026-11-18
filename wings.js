@@ -743,6 +743,7 @@
   }
   function capsuleBlocked(x, z, radius, fromY) {
     const r = radius == null ? 0.32 : radius;
+    if (state.sacredHall && zoneIsReady('T3') && state.sacredHall.blocksDrop(x, z, r, fromY)) return true;
     const library = state.library && state.library.ready ? state.library : null;
     const libraryFeet = library && fromY != null ? library.floor(x, z, fromY) : 0;
     const observatory = state.observatory && zoneIsReady('L4') && state.observatory;
@@ -1066,6 +1067,14 @@
       Library: gridMaterial(0x756b7e, 0.94, 0x19151d), Shared: gridMaterial(0x746653, 0.94, 0x19150f)
     };
     state.floorMeshes = []; state.floorWingSolids = [];
+    const sacredRoom = window.SinSacredColumns && state.rooms.find(r => r.id === 'T3');
+    let sacredChannelCuts = [];
+    if (sacredRoom) {
+      const { cx, cz } = sacredRoom.bbox;
+      for (const { l, r, n, f } of SinSacredColumns.channelLayout(sacredRoom).flatMap(channel => channel.tiles)) {
+        sacredChannelCuts = union(sacredChannelCuts, solid(polyRect(cx + l, cz + n, r - l, f - n)));
+      }
+    }
     let claimedFloor = [];
     ['Kings', 'Temple', 'Library', 'Shared'].forEach((wing, wi) => {
       let wingFloor = [];
@@ -1076,8 +1085,10 @@
       });
       wingFloor = difference(wingFloor, claimedFloor);
       claimedFloor = union(claimedFloor, wingFloor);
-      state.floorWingSolids.push({ wing, solids: wingFloor });
+      state.floorWingSolids.push({ wing,
+        solids: wing === 'Temple' && sacredChannelCuts.length ? difference(wingFloor, sacredChannelCuts) : wingFloor });
       let skirt = offset(wingFloor, 0.3);
+      if (wing === 'Temple' && sacredChannelCuts.length) skirt = difference(skirt, sacredChannelCuts);
       if (wing === 'Kings') {
         const k2 = state.regions.find(r => r.id === 'K2');
         if (k2) {
@@ -3169,7 +3180,7 @@
       prepareGeometry: (api, renderer) => state.sacredHall.warmup.step(renderer),
       onReady: function (api) {
         const origin = state.root.position;
-        state.sacredHall.cameraColliders = state.sacredHall.boxes.filter(b => !b.water).map(b => ({
+        state.sacredHall.cameraColliders = state.sacredHall.boxes.map(b => ({
           minx: b.minx + origin.x, maxx: b.maxx + origin.x,
           miny: b.miny + origin.y, maxy: b.maxy + origin.y,
           minz: b.minz + origin.z, maxz: b.maxz + origin.z, _wing: true
@@ -3789,6 +3800,10 @@
   }
   function floorAt(x, z, fromY) {
     if (!contains(x, z)) return null;
+    if (state.sacredHall && zoneIsReady('T3')) {
+      const bottom = state.sacredHall.channelFloorAt(x, z);
+      if (bottom !== null) return bottom;
+    }
     if (state.observatory && zoneIsReady('L4')) {
       const step = state.observatory.floorAt(x, z);
       if (step > 0) return step;
