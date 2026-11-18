@@ -747,12 +747,14 @@
     const library = state.library && state.library.ready ? state.library : null;
     const libraryFeet = library && fromY != null ? library.floor(x, z, fromY) : 0;
     const observatory = state.observatory && zoneIsReady('L4') && state.observatory;
+    const entrance = state.sacredEntrance && zoneIsReady('T1') ? state.sacredEntrance.floorAt(x,z) : 0;
+    if (entrance > 0 && fromY != null && entrance > fromY + SinT1Entrance.maxStep) return true;
     const purification = state.purificationHall && zoneIsReady('T2') ? state.purificationHall.floorAt(x, z) : 0;
     if (purification > 0 && fromY != null && purification > fromY + .25) return true;
     const sanctuary = state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.floorAt(x, z) : 0;
     if (sanctuary > 0 && fromY != null && sanctuary > fromY + .33) return true;
     const offerings = state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.floorAt(x, z) : 0;
-    const feet = (observatory && observatory.floorAt(x, z)) || offerings || sanctuary || purification || libraryFeet;
+    const feet = (observatory && observatory.floorAt(x, z)) || offerings || sanctuary || purification || entrance || libraryFeet;
     if (offerings > 0 && fromY != null && offerings > fromY + .28) return true;
     if (observatory && observatory.blocks(x, z, r, feet)) return true;
     const hero = state.ctx && state.ctx.hero;
@@ -1135,8 +1137,6 @@
       }
       if (r.id === 'K1') { /* procedural geometry removed for GLB model */ loadK1Model(r, g); }
       // K2 columns are the real asset extracted from الاستقبال.glb (dressK2).
-      // T1: old generated columns removed; full procedural sacred entrance (t1-entrance.js).
-      if (r.id === 'T1' && window.SinT1Entrance) { try { window.SinT1Entrance.build(r, g, { doors: state.doors || layout.doors, colliders: state.colliders, fires: state.fires }); } catch (e) { console.warn('[T1] build failed', e); } }
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
       if (r.id !== 'K1') {
         if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
@@ -1166,6 +1166,16 @@
       state.offeringScreen = mesh(boxAt(width + .08, height + .04, .16, x, height / 2, z),
         state.darkMat, 'TC5-offerings-portal-occluder', offeringCorridor);
       state.offeringScreen.castShadow = false;
+    }
+    if (window.SinT1Entrance) {
+      state.entranceScreens = state.entranceDoors.map(d => {
+        const outside = d.kind === 'arch' ? 'ARCH_R3' : (d.from === 'T1' ? d.to : d.from);
+        const corridor = state.regionGroups.get(outside);
+        const width = d.width + .07, h = d.height + .05;
+        const [w, depth] = d.axis==='x' ? [.17,width] : [width,.17];
+        return mesh(boxAt(w,h,depth,d.x,h*.5,d.z),state.darkMat,
+          d.id+'-entrance-portal-occluder',corridor);
+      });
     }
     if (window.SinPurificationHall) {
       state.purificationScreens = state.purificationDoors.map(d => {
@@ -2641,12 +2651,14 @@
     if (!zoneStreamer || !state.doors || !state.current) return;
     const cur = state.current;
     state.doors.forEach(function (d) {
-      if (!d || d._roomDoor || (d.kind === 'arch' && d.id !== 'PalaceR1')) return;
-      const targets = d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] : d === state.offeringPortal ? ['T5'] :
+      if (!d || d._roomDoor) return;
+      const entranceDoor = window.SinT1Entrance && state.entranceDoors.includes(d);
+      if (d.kind === 'arch' && d.id !== 'PalaceR1' && !entranceDoor) return;
+      const targets = entranceDoor ? ['T1'] : d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] : d === state.offeringPortal ? ['T5'] :
         window.SinPurificationHall && state.purificationDoors.includes(d) ? ['T2'] :
         window.SinLunarSanctuary && state.sanctuaryDoors.includes(d) ? ['T4'] :
         state.observatoryDoors.includes(d) ? ['L4'] : state.sacredHallDoors.includes(d) ? ['T3'] :
-          streamedTargets(d, cur).filter(id => !libraryZones.has(id) && id !== 'T2' && id !== 'T3' && id !== 'T5' && id !== 'T4');
+          streamedTargets(d, cur).filter(id => !libraryZones.has(id) && id !== 'T1' && id !== 'T2' && id !== 'T3' && id !== 'T5' && id !== 'T4');
       // Only block when approaching from outside a not-ready streamed room.
       const waiting = targets.filter(function (id) { return id !== cur && !zoneIsReady(id); });
       if (!waiting.length) return;
@@ -2737,6 +2749,12 @@
   function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
 
   function dispose() {
+    if (state.entranceLoad) state.entranceLoad.abort();
+    if (state.sacredEntrance) {
+      state.sacredEntrance.root.removeFromParent();
+      state.sacredEntrance.dispose();
+    }
+    state.sacredEntrance = state.entranceLoad = state.entranceScreens = null;
     if (state.purificationLoad) state.purificationLoad.abort();
     if (state.purificationHall) {
       state.purificationHall.root.removeFromParent();
@@ -2851,11 +2869,17 @@
     state.sacredHallDoors = state.doors.filter(d => d.from === 'T3' || d.to === 'T3');
     const doorFor = id => state.doors.find(d => d.id === id);
     state.sacredHallEntry = doorFor('PalaceR3');
+    const eastEntrance = doorFor('T1-TC12'), southEntrance = doorFor('T1-TR1');
+    state.entranceDoors = [state.sacredHallEntry, eastEntrance, southEntrance];
+    state.entranceRoutes = new Map([
+      ['ARCH_R3',[state.sacredHallEntry]],
+      ['TC12',[eastEntrance]],['T2',[doorFor('TC12-T2'),eastEntrance]],['TR1',[southEntrance]]
+    ]);
     const t3ViaWest = [doorFor('T2-TC23'), doorFor('TC23-T3')];
     const purgeWest = [doorFor('TC12-T2'), doorFor('T1-TC12')];
     state.purificationDoors = [purgeWest[0], t3ViaWest[0]];
     state.purificationRoutes = new Map([
-      ['T1', [purgeWest[1], purgeWest[0]]], ['TC12', [purgeWest[0]]],
+      ['ARCH_R3', [purgeWest[1], purgeWest[0]]], ['T1', [purgeWest[1], purgeWest[0]]], ['TC12', [purgeWest[0]]],
       ['T3', [...t3ViaWest].reverse()], ['TC23', [t3ViaWest[0]]]
     ]);
     const t3ViaEast = [doorFor('TC34-T4'), doorFor('T3-TC34')];
@@ -3119,6 +3143,21 @@
     });
   }
 
+  function loadSacredEntrance(api) {
+    const room = state.rooms.find(r => r.id === 'T1');
+    const controller = new AbortController();
+    state.entranceLoad = controller;
+    SinT1Entrance.build(room,state.entranceDoors,loadRoomModel,controller.signal,deviceProfile.constrained).then(entrance=>{
+      if (controller.signal.aborted || state.entranceLoad !== controller) { entrance.dispose(); return; }
+      state.sacredEntrance=entrance;
+      zoneStreamer.markReleasable(entrance.root);
+      api.add(entrance.root);
+      api.done();
+    },error=>{
+      if (!controller.signal.aborted && state.entranceLoad===controller) api.fail(error);
+    });
+  }
+
   function loadPurification(api) {
     const room = state.rooms.find(r => r.id === 'T2');
     const controller = new AbortController();
@@ -3232,6 +3271,28 @@
         if (!SinWingVisibility.throughOpenings(view, openings, .06)) break;
         visible.add(id);
       }
+    }
+  }
+
+  function entranceSight(view) {
+    if (!view || !window.SinWingVisibility) return false;
+    const id=regionAt(view.x,view.z)?.id;
+    if (id==='T1' || state.current==='T1') return true;
+    if (id==='ARCH_R3' && view.x>=state.sacredHallEntry.x) {
+      const gate=state.sacredHallEntry;
+      return view.dirX>-.15 && Math.abs(view.z-gate.z)<gate.width*.5+.74;
+    }
+    const route=id ? state.entranceRoutes.get(id) :
+      view.x<state.sacredHallEntry.x && view.x>0 ? [state.sacredHallEntry] : null;
+    return !!(route && SinWingVisibility.throughOpenings(view,route,.07));
+  }
+
+  function syncEntranceShell(group,ready) {
+    for (const screen of state.entranceScreens || []) screen.visible=!ready;
+    const ceiling=group && group.getObjectByName('T1-ceiling');
+    if (ceiling) ceiling.visible=!ready && !state.cutaway;
+    if (state.sacredEntrance) for (const node of state.sacredEntrance.root.children) {
+      if (node.userData.ceiling) node.visible=ready && !state.cutaway;
     }
   }
 
@@ -3450,6 +3511,17 @@
       if (library) library.visible = true;
     }
     state.archiveDemand = sight && !archiveReady;
+    if (window.SinT1Entrance) {
+      const seeEntrance=entranceSight(view)&&zoneIsReady('T1');
+      state.regionGroups.get('T1').visible=seeEntrance;
+      const viewer=seeEntrance && regionAt(view.x,view.z)?.id;
+      if (viewer==='T1' || viewer==='ARCH_R3') {
+        for (const door of state.entranceDoors) {
+          if (door.from!=='T1') continue;
+          state.regionGroups.get(door.to).visible=SinWingVisibility.throughOpenings(view,[door],.07);
+        }
+      }
+    }
     if (window.SinPurificationHall) {
       const group = state.regionGroups.get('T2');
       group.visible = purificationSight(view) && zoneIsReady('T2');
@@ -3485,6 +3557,37 @@
   }
 
   const WING_ZONES = [
+    ...(window.SinT1Entrance ? [{ id:'T1', prefetchHops:1, priority:-3, requireComplete:true, keepShell:true,
+      serialPreparation:true, estProcessMB:deviceProfile.constrained?40:98,
+      estGpuMB:deviceProfile.constrained?25:75, estCpuMB:deviceProfile.constrained?18:30,
+      load:loadSacredEntrance,
+      prepareGeometry: (api,renderer)=>state.sacredEntrance.warmup.step(renderer),
+      onReady(api) {
+        const entrance=state.sacredEntrance, o=state.root.position;
+        entrance.cameraColliders=[...entrance.collision,...entrance.stairBoxes].map(b=>({
+          minx:b.minx+o.x,maxx:b.maxx+o.x,miny:b.miny+o.y,maxy:b.maxy+o.y,minz:b.minz+o.z,maxz:b.maxz+o.z,_wing:true
+        }));
+        const first=state.colliders.length;
+        state.colliders.push(...entrance.collision);
+        indexSpatialFrom(first);
+        syncEntranceShell(api.group,true);
+        updatePassageGates();
+        triCache.delete('T1');
+      },
+      onFailure(error) {
+        registerLibraryFailure('T1');
+        console.warn('[T1] Sacred Entrance preparation failed',error);
+      },
+      unload(api) {
+        if (state.entranceLoad) state.entranceLoad.abort();
+        if (state.sacredEntrance) state.sacredEntrance.warmup.dispose();
+        state.entranceLoad=state.sacredEntrance=null;
+        state.colliders=state.colliders.filter(b=>!b._entrance);
+        rebuildSpatial();
+        syncEntranceShell(api.group,false);
+        triCache.delete('T1');
+      },
+      ownsObject:node=>node.name==='T1-Sacred-Entrance' }] : []),
     ...(window.SinPurificationHall ? [{ id: 'T2', prefetchHops: 2, priority: -2, requireComplete: true,
       keepShell: true, serialPreparation: true,
       estProcessMB: deviceProfile.constrained ? 43 : 105,
@@ -3898,6 +4001,8 @@
   const retainedMoonPassage = new Set(['L4']);
   const retainedSacredHall = new Set(['T3', 'T5']);
   const retainedPurification = new Set(['T2', 'T3']);
+  const retainedEntrance = new Set(['T1','T2']);
+  const retainedTempleApproach = new Set(['T1', ...retainedPurification]);
   const retainedSanctuary = new Set(['T3', 'T4']);
   const retainedTemple = new Set(['T3', 'T4', 'T5']);
   const offeringApproaches = new Set(['T2', 'TC23', 'T3', 'TC34', 'T4', 'TC5', 'T5']);
@@ -4052,11 +4157,22 @@
       if (purgeEntry || level === 'normal') retained = retainedPurification;
       else if (!retained) retained = retainedPurification;
     }
+    const templeVestibule = origin==='ARCH_R3' || origin==='T1' || origin==='TC12' || origin==='TR1';
+    const templeFromPalace = origin==='Palace' && move && templeEntry &&
+      Math.hypot(templeEntry.x-move.x,templeEntry.z-move.z)<19;
+    const purificationEntry = state.purificationDoors[0];
+    const templeReturn = origin==='T2' && move &&
+      Math.hypot(purificationEntry.x-move.x,purificationEntry.z-move.z)<12;
+    const entranceNear = window.SinT1Entrance && (templeVestibule || templeFromPalace || templeReturn);
+    if (entranceNear) {
+      approach.add('T1');
+      retained=templeReturn ? retainedTempleApproach : retainedEntrance;
+    }
     const allowBackgroundWarm = !inLibrary && (!move || Math.hypot(move.vx, move.vz) < 0.40);
     if (allowBackgroundWarm) {
       const eligible = new Set([...(preparedIds || []), ...(visibleIds || [])]);
       eligible.forEach(id => {
-        const g = id !== 'T2' && id !== 'T3' && id !== 'T4' && id !== 'T5' && !libraryZones.has(id) && state.regionGroups.get(id);
+        const g = id !== 'T1' && id !== 'T2' && id !== 'T3' && id !== 'T4' && id !== 'T5' && !libraryZones.has(id) && state.regionGroups.get(id);
         if (g) warmGroups.push(g);
       });
     }
@@ -4067,7 +4183,8 @@
         approach.add(id);
       }
     });
-    const demand = purgeNear && purgeEntry && !zoneIsReady('T2') ? 'T2' :
+    const demand = entranceNear && !zoneIsReady('T1') ? 'T1' :
+      purgeNear && purgeEntry && !zoneIsReady('T2') ? 'T2' :
       towardSanctuary && atSanctuary && !zoneIsReady('T4') ? 'T4' :
       nearTemple && !zoneIsReady('T3') ? 'T3' :
       (origin === 'T3' || origin === 'TC5') && !zoneIsReady('T5') ? 'T5' :
@@ -4089,7 +4206,7 @@
     if (state._dressLock && state._dressLock.id && (typeof performance !== 'undefined' ? performance.now() : Date.now()) < state._dressLock.until) {
       origin = state._dressLock.id;
     }
-    if (!origin || origin === 'T2' || origin === 'T3' || origin === 'T4' || origin === 'T5' || libraryZones.has(origin)) return;
+    if (!origin || origin === 'T1' || origin === 'T2' || origin === 'T3' || origin === 'T4' || origin === 'T5' || libraryZones.has(origin)) return;
     let c = null;
     try { c = roomCompleteness(origin); } catch (_) { c = null; }
     if (c && c.complete) {
@@ -4181,6 +4298,10 @@
         if (sacredHallSight(view)) planned.visible.add('T3');
         else planned.visible.delete('T3');
         cullFromSacredHall(view, planned.visible);
+        if (window.SinT1Entrance) {
+          if (entranceSight(view)) planned.visible.add('T1');
+          else planned.visible.delete('T1');
+        }
         if (window.SinPurificationHall) {
           if (purificationSight(view)) planned.visible.add('T2');
           else planned.visible.delete('T2');
@@ -4227,7 +4348,7 @@
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
         g.visible = visibleIds.has(rr.id) && (rr.id !== 'L2' || zoneIsReady('L2')) &&
-          (rr.id !== 'T5' || zoneIsReady('T5')) && (rr.id !== 'T4' || zoneIsReady('T4')) && (rr.id !== 'T2' || zoneIsReady('T2'));
+          (rr.id !== 'T5' || zoneIsReady('T5')) && (rr.id !== 'T4' || zoneIsReady('T4')) && (rr.id !== 'T2' || zoneIsReady('T2')) && (rr.id !== 'T1' || zoneIsReady('T1'));
       });
       // Zone streaming is the single source of truth: prefetch, budgeted
       // uploads, shader compile (shells + dress), atomic reveal, LRU eviction
@@ -4281,6 +4402,9 @@
     if (state.sacredHall && zoneIsReady('T3') && state.regionGroups.get('T3').visible) {
       state.sacredHall.tick(performance.now() * .001);
     }
+    if (state.sacredEntrance && zoneIsReady('T1') && state.regionGroups.get('T1').visible) {
+      state.sacredEntrance.update(performance.now()*.001);
+    }
     if (state.purificationHall && zoneIsReady('T2') && state.regionGroups.get('T2').visible) {
       state.purificationHall.tick(performance.now() * .001);
     }
@@ -4303,7 +4427,11 @@
     if (state.debug && state.ui && performance.now() - state.minimapAt > 120) { state.minimapAt = performance.now(); drawMinimap(); }
   }
   function floorAt(x, z, fromY) {
-    if (!contains(x, z)) return null;
+    if (!contains(x,z)) return null;
+    if (state.sacredEntrance && zoneIsReady('T1')) {
+      const y=state.sacredEntrance.floorAt(x,z);
+      if (y>0) return y;
+    }
     if (state.purificationHall && zoneIsReady('T2')) {
       const step = state.purificationHall.floorAt(x, z);
       if (step > 0) return step;
@@ -4338,6 +4466,11 @@
     const K5 = state.rooms.find(r => r.id === 'K5');
     if (K5 && pointInPoly(x, z, K5.poly)) return k5DaisHeight(K5.bbox, x, z);
     return 0;
+  }
+  function onEntranceSteps(position) {
+    if (!state.sacredEntrance || !zoneIsReady('T1')) return false;
+    const origin = state.root.position;
+    return state.sacredEntrance.floorAt(position.x - origin.x, position.z - origin.z) > 0;
   }
   function onOfferingSteps(position) {
     if (!state.royalOfferings || !zoneIsReady('T5')) return false;
@@ -4466,6 +4599,7 @@
         setLibraryCeiling(state.regionGroups.get('L1'));
         setObservatoryShell(state.regionGroups.get('L4'));
         setSacredHallCeiling(state.regionGroups.get('T3'), zoneIsReady('T3'));
+        if (window.SinT1Entrance) syncEntranceShell(state.regionGroups.get('T1'),zoneIsReady('T1'));
         if (window.SinPurificationHall) syncPurificationShell(state.regionGroups.get('T2'), zoneIsReady('T2'));
         if (window.SinLunarSanctuary) syncSanctuaryShell(state.regionGroups.get('T4'), zoneIsReady('T4'));
         if (window.SinRoyalOfferings) syncOfferingShell(state.regionGroups.get('T5'));
@@ -5846,6 +5980,7 @@
     });
   }
   const STREAM_EXPECT = {
+    ...(window.SinT1Entrance ? { T1: SinT1Entrance.expected } : {}),
     ...(window.SinPurificationHall ? { T2: SinPurificationHall.expected } : {}),
     T3: window.SinSacredColumns ? SinSacredColumns.expected : [],
     ...(window.SinLunarSanctuary ? { T4: SinLunarSanctuary.expected } : {}),
@@ -6011,12 +6146,13 @@
     archiveCamera: () => state.archive && zoneIsReady('L2') ? state.archive.camera : null,
     observatoryCamera: () => state.observatory && zoneIsReady('L4') ? state.observatory.camera : null,
     sacredHallCamera: () => state.sacredHall && zoneIsReady('T3') ? state.sacredHall.camera : null,
+    sacredEntranceCamera: () => state.sacredEntrance && zoneIsReady('T1') ? state.sacredEntrance.camera : null,
     purificationCamera: () => state.purificationHall && zoneIsReady('T2') ? state.purificationHall.camera : null,
     sanctuaryCamera: () => state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.camera : null,
     offeringsCamera: () => state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.camera : null,
     beforePresent,
     prepareEntryLibrary,
-    onLibraryStairs, onOfferingSteps,
+    onLibraryStairs, onOfferingSteps, onEntranceSteps,
     restoreLibraryPose: () => { if (state.library) state.library.restoreGroundPose(); },
     groundLibraryHero: hero => { if (onLibraryStairs(hero.position)) state.library.groundHero(hero); },
     shortestPath,

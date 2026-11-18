@@ -4964,6 +4964,7 @@
     const archiveBoxes = (wings && wings.archive && wings.archive.cameraColliders) || noCameraColliders;
     const observatoryBoxes = (wings && wings.observatory && wings.observatory.cameraColliders) || noCameraColliders;
     const sacredHallBoxes = (wings && wings.sacredHall && wings.sacredHall.cameraColliders) || noCameraColliders;
+    const entranceBoxes = (wings && wings.sacredEntrance && wings.sacredEntrance.cameraColliders) || noCameraColliders;
     const purificationBoxes = (wings && wings.purificationHall && wings.purificationHall.cameraColliders) || noCameraColliders;
     const sanctuaryBoxes = (wings && wings.lunarSanctuary && wings.lunarSanctuary.cameraColliders) || noCameraColliders;
     const offeringsBoxes = (wings && wings.royalOfferings && wings.royalOfferings.cameraColliders) || noCameraColliders;
@@ -4973,12 +4974,14 @@
     const sacredHallCount = observatoryCount + sacredHallBoxes.length;
     const offeringsCount = sacredHallCount + offeringsBoxes.length;
     const sanctuaryCount = offeringsCount + sanctuaryBoxes.length;
-    for (let i = 0; i < sanctuaryCount + purificationBoxes.length; i++) {
+    const purificationCount = sanctuaryCount + purificationBoxes.length;
+    for (let i = 0; i < purificationCount + entranceBoxes.length; i++) {
       const b = i < staticCount ? colliders[i] : i < libraryCount ? libraryBoxes[i - staticCount] :
         i < archiveCount ? archiveBoxes[i - libraryCount] : i < observatoryCount ? observatoryBoxes[i - archiveCount] :
         i < sacredHallCount ? sacredHallBoxes[i - observatoryCount] :
         i < offeringsCount ? offeringsBoxes[i - sacredHallCount] :
-        i < sanctuaryCount ? sanctuaryBoxes[i - offeringsCount] : purificationBoxes[i - sanctuaryCount];
+        i < sanctuaryCount ? sanctuaryBoxes[i - offeringsCount] :
+        i < purificationCount ? purificationBoxes[i - sanctuaryCount] : entranceBoxes[i - purificationCount];
       if (b.maxx < lox || b.minx > hix || b.maxy < loy || b.miny > hiy || b.maxz < loz || b.minz > hiz) continue;
       if (isProp(b) !== !!props) continue;
       let box = padBox(b, r);

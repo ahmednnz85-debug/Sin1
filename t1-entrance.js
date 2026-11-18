@@ -1,544 +1,548 @@
-/* Curse of Babylon — T1 "Sacred Entrance" (Temple wing).
-   Fully procedural interior built from the reference image of the moon-god
-   entrance hall: colonnade, upper galleries, clerestory windows, glazed
-   relief walls (robed figures, vessels, crescents, rosette and cuneiform
-   friezes), torch sconces, smoking braziers, crescent floor mosaic and the
-   grand arched lamassu portal.
-   Each family of parts has its own material, allowing the finished room to be
-   painted without changing its geometry or the materials' surface properties:
-     SinT1Entrance.setColor('wallTile', 0x23408f)
-     SinT1Entrance.setTexture('floor', texture)
-     SinT1Entrance.materials  -> { key: MeshStandardMaterial }
-   Geometry stays strictly inside the existing T1 footprint and leaves every
-   doorway of the room open. */
+/* Sacred entrance on the existing T1 footprint. Local +X leads to T2. */
 (function () {
   'use strict';
-  const PALETTE = {             // fallback colors remain available beneath atlas maps
-    wallStone:  0x8a8a8a, wallTile:  0x7a7a7a, frieze:  0x9a9a9a, relief:  0xb0b0b0,
-    column:     0x949494, capital:   0xa4a4a4, base:    0x7e7e7e,
-    floor:      0x4a4a4a, floorJoint:0x3a3a3a, mosaic:  0x6e6e6e, mosaicMoon: 0xc8c8c8, inlay: 0xa8a8a8,
-    portal:     0x9c9c9c, doorFrame: 0x9c9c9c, door: 0x6a6a6a, doorRelief: 0xbababa,
-    gallery:    0x888888, ceiling:   0x5e5e5e, beam:    0x707070,
-    window:     0xd8dde4, metal:     0x5a5a5a, brazier: 0x8e8e8e, flame: 0xffffff
-  };
-  const api = { materials: {}, groups: {}, root: null, textureLoadStatus: {} };
-  const textureCache = Object.create(null);
-  const TEXTURE_ROOT = 'assets/textures/rooms/T1/maps/';
-  const TEXTURE_DEFS = [
-    { slot: 'wallTile', file: 't1_wall_tile.webp', tile: [2.2, 1.45] },
-    { slot: 'relief', file: 't1_relief.webp', tile: [0.42, 0.42] },
-    { slot: 'frieze', file: 't1_frieze.webp', tile: [2.8, 0.42] },
-    { slot: 'column', file: 't1_column.webp', tile: [2.55, 0.9] },
-    { slot: 'wallStone', file: 't1_column.webp', tile: [2.55, 0.9] },
-    { slot: 'capital', file: 't1_capital.webp', tile: [1.5, 0.9] },
-    { slot: 'base', file: 't1_column_base.webp', tile: [2.1, 0.58] },
-    { slot: 'floor', file: 't1_floor.webp', tile: [1.5, 1.5] },
-    { slot: 'mosaic', file: 't1_mosaic.webp', tile: [0.42, 0.42] },
-    { slot: 'mosaicMoon', file: 't1_mosaic_moon.webp', tile: [0.3, 0.3] },
-    { slot: 'inlay', file: 't1_inlay.webp', tile: [0.18, 1.6] },
-    { slot: 'door', file: 't1_door.webp', tile: [0.85, 0.42] },
-    { slot: 'doorRelief', file: 't1_door_relief.webp', tile: [2.0, 0.34] },
-    { slot: 'doorFrame', file: 't1_door_frame.webp', tile: [0.28, 1.45] },
-    { slot: 'portal', file: 't1_portal.webp', tile: [0.3, 1.4] },
-    { slot: 'gallery', file: 't1_gallery.webp', tile: [2.2, 0.58] },
-    { slot: 'beam', file: 't1_beam.webp', tile: [2.1, 0.52] },
-    { slot: 'ceiling', file: 't1_ceiling.webp', tile: [0.9, 0.9] },
-    { slot: 'window', file: 't1_window.webp', tile: [0.9, 1.25] },
-    { slot: 'brazier', file: 't1_brazier.webp', tile: [1.4, 0.38] },
-    { slot: 'metal', file: 't1_metal.webp', tile: [0.95, 0.65] }
+
+  const assets = [
+    'assets/اثاث المدخل المقدس.glb', 'assets/نقوش وحجر المدخل .JPG',
+    'assets/ارضية الحرم المقدس.JPG', 'assets/سقف الحرم المقدم.JPG'
   ];
-  const MATERIAL_ALIAS = { columnBase: 'base' };
-  function materialKey(key) { return MATERIAL_ALIAS[key] || key; }
-
-  function mat(key) {
-    if (api.materials[key]) return api.materials[key];
-    const glow = key === 'window' || key === 'flame';
-    const finish = {
-      floor: [0.4, 0.02], wallTile: [0.78, 0.03], mosaic: [0.42, 0.05], mosaicMoon: [0.42, 0.05],
-      metal: [0.38, 0.58], brazier: [0.52, 0.3], capital: [0.62, 0.16], frieze: [0.66, 0.14],
-      inlay: [0.56, 0.25], door: [0.7, 0.03], doorRelief: [0.62, 0.16], doorFrame: [0.76, 0.04],
-      portal: [0.78, 0.03], beam: [0.74, 0.02], window: [0.38, 0.04]
-    }[key] || [0.84, 0.02];
-    const m = new THREE.MeshStandardMaterial({
-      color: PALETTE[key], roughness: finish[0], metalness: finish[1],
-      emissive: glow ? PALETTE[key] : 0x000000, emissiveIntensity: key === 'window' ? 0.55 : (key === 'flame' ? 1.4 : 0)
-    });
-    m.name = 'T1-mat-' + key; api.materials[key] = m; return m;
-  }
-  api.setColor = function (key, hex) { const m = api.materials[materialKey(key)]; if (m) { m.color.set(hex); m.needsUpdate = true; } return !!m; };
-  api.setTexture = function (key, tex) { const m = api.materials[materialKey(key)]; if (m) { m.map = tex || null; m.needsUpdate = true; } return !!m; };
-  api.setEmissive = function (key, hex, k) { const m = api.materials[key]; if (m) { m.emissive.set(hex); if (k != null) m.emissiveIntensity = k; } return !!m; };
-  api.keys = function () { return Object.keys(PALETTE); };
-  api.textureKeys = function () { return TEXTURE_DEFS.map(x => x.slot); };
-  api.getTextureLoadStatus = function () { return Object.assign({}, api.textureLoadStatus); };
-
-  function loadAtlasTextures() {
-    if (typeof THREE.TextureLoader !== 'function') return;
-    TEXTURE_DEFS.forEach(function (def) {
-      const material = api.materials[materialKey(def.slot)];
-      if (!material) { api.textureLoadStatus[def.slot] = 'material-missing'; return; }
-      const url = TEXTURE_ROOT + def.file;
-      let texture = textureCache[url];
-      if (!texture) {
-        api.textureLoadStatus[def.slot] = 'loading';
-        texture = new THREE.TextureLoader().load(encodeURI(url), function (loaded) {
-          loaded.wrapS = loaded.wrapT = THREE.MirroredRepeatWrapping;
-          loaded.minFilter = THREE.LinearMipmapLinearFilter;
-          loaded.magFilter = THREE.LinearFilter;
-          loaded.generateMipmaps = true;
-          loaded.encoding = THREE.sRGBEncoding;
-          loaded.anisotropy = 4;
-          loaded.userData = loaded.userData || {};
-          loaded.userData.palaceShared = true;
-          loaded.userData.t1AtlasMap = def.file;
-          loaded.needsUpdate = true;
-          textureCache[url] = loaded;
-          TEXTURE_DEFS.filter(peer => peer.file === def.file).forEach(function (peer) {
-            api.setTexture(peer.slot, loaded);
-            api.setColor(peer.slot, 0xffffff);
-            api.textureLoadStatus[peer.slot] = 'loaded';
-          });
-        }, undefined, function (error) {
-          delete textureCache[url];
-          TEXTURE_DEFS.filter(peer => peer.file === def.file).forEach(peer => { api.textureLoadStatus[peer.slot] = 'error'; });
-          try { console.warn('[T1] texture failed:', def.file, error); } catch (_) {}
-        });
-        texture.wrapS = texture.wrapT = THREE.MirroredRepeatWrapping;
-        texture.minFilter = THREE.LinearMipmapLinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        texture.encoding = THREE.sRGBEncoding;
-        texture.anisotropy = 4;
-        texture.userData = texture.userData || {};
-        texture.userData.palaceShared = true;
-        textureCache[url] = texture;
-      } else {
-        api.textureLoadStatus[def.slot] = texture.image ? 'loaded-cached' : 'loading-cached';
-      }
-      api.setTexture(def.slot, texture);
-      api.setColor(def.slot, 0xffffff);
-    });
+  const names = {
+    17788:'vessels',11203:'lamassu',10290:'source-stairs',9885:'column-and-torch',7426:'source-frame',
+    5054:'column',4890:'plinth',3628:'pedestal',2428:'blocks',1256:'capital'
+  };
+  const expected = ['floor','aisle-inlay','stairs','walls','emblem','portal-band','lamassu','columns',
+    'side-niche','floor-brazier','hanging-bowl','chains','casting','flames','smoke','ceiling','lightwell','sunbeams']
+    .map(name => 'T1-'+name);
+  const rise=.168, halfStair=2.29;
+  const treads = [
+    [2.56,3.06,1], [3.06,3.56,2], [3.56,4.06,3], [4.06,5.78,4],
+    [5.78,6.34,3], [6.34,6.90,2], [6.90,7.46,1]
+  ];
+  const maxStep= rise+.105;
+  function stairFloor(x,z) {
+    if (Math.abs(z)>halfStair) return 0;
+    const step=treads.find(([a,b])=>x>=a&&x<b);
+    return step ? step[2]*rise : 0;
   }
 
-  // Royal Babylonian finish: setColor changes only material color, preserving
-  // the existing roughness, metalness, emissive settings, and any texture maps.
-  function paintRoyalT1() {
-    api.setColor('wallTile', 0x23408F);
-    api.setColor('relief', 0xA88A61);
-    api.setColor('frieze', 0xB58A42);
-    api.setColor('column', 0x888477);
-    api.setColor('capital', 0xB28A48);
-    api.setColor('floor', 0x242A35);
-    api.setColor('mosaic', 0x193A79);
-    api.setColor('mosaicMoon', 0xD7B45C);
-    api.setColor('inlay', 0xA17B39);
-    api.setColor('door', 0x38291D);
-    api.setColor('doorRelief', 0xC09A50);
-    api.setColor('doorFrame', 0x8B7658);
-    api.setColor('portal', 0x8B7658);
-    api.setColor('gallery', 0x243A60);
-    api.setColor('beam', 0x403020);
-    api.setColor('ceiling', 0x18263D);
-    api.setColor('window', 0x78B5D9);
-    api.setColor('brazier', 0x87572F);
-    api.setColor('metal', 0xC09A50);
-
-    // Complementary structural slots not listed in the 18-color brief.
-    api.setColor('wallStone', 0x888477);
-    api.setColor('base', 0x888477);
-    api.setColor('floorJoint', 0x242A35);
-  }
-
-  /* ---- geometry buckets: merged per material => few draw calls ---------- */
-  function repeatUvs(g, key, type, sx, sy, sz) {
-    const def = TEXTURE_DEFS.find(x => materialKey(x.slot) === key);
-    if (!def || !g.attributes.position || !g.attributes.uv) return;
-    const uv = g.attributes.uv, p = g.attributes.position, tileX = def.tile[0], tileY = def.tile[1];
-    const scale = [Math.abs(sx || 1), Math.abs(sy || 1), Math.abs(sz || 1)];
-    if (type === 'BoxGeometry' && p.count % 6 === 0) {
-      for (let start = 0; start < p.count; start += 6) {
-        const axisScore = function (axis, channel) {
-          let mp = 0, mu = 0;
-          for (let i = start; i < start + 6; i++) { mp += p.getComponent(i, axis); mu += uv.getComponent(i, channel); }
-          mp /= 6; mu /= 6;
-          let cov = 0, vp = 0, vu = 0, lo = Infinity, hi = -Infinity;
-          for (let i = start; i < start + 6; i++) {
-            const dp = p.getComponent(i, axis) - mp, du = uv.getComponent(i, channel) - mu;
-            cov += dp * du; vp += dp * dp; vu += du * du;
-            lo = Math.min(lo, p.getComponent(i, axis)); hi = Math.max(hi, p.getComponent(i, axis));
-          }
-          return { axis: axis, score: vp && vu ? Math.abs(cov) / Math.sqrt(vp * vu) : 0, extent: hi - lo };
-        };
-        const best = [0, 1].map(channel => [0, 1, 2].map(axis => axisScore(axis, channel)).sort((a, b) => b.score - a.score)[0]);
-        if (best[0].axis === best[1].axis) {
-          const alternatives = [0, 1, 2].filter(axis => axis !== best[0].axis).map(axis => axisScore(axis, 1)).sort((a, b) => b.score - a.score);
-          if (alternatives.length) best[1] = alternatives[0];
+  // Trim only the inspected part of the atlas mesh, keeping its original
+  // normals and material UVs. Clip the top plane of the vessel externally
+  // so every face of the plant/fixed flame is removed below the new liner.
+  function cut(source, belongs, top=1) {
+    const g=source.geometry, pos=g.attributes.position, tex=g.attributes.uv, normal=g.attributes.normal;
+    g.computeBoundingBox();
+    const origin=g.boundingBox.min, size=g.boundingBox.getSize(new THREE.Vector3());
+    const out=[], normals=[], uv=[], index=g.index.array, limit=origin.y+top*size.y;
+    function vertex(i){
+      return [pos.getX(i),pos.getY(i),pos.getZ(i),normal.getX(i),normal.getY(i),normal.getZ(i),tex.getX(i),tex.getY(i)];
+    }
+    for(let i=0;i<index.length;i+=3){
+      const triangle=[vertex(index[i]),vertex(index[i+1]),vertex(index[i+2])];
+      const x=(triangle.reduce((s,v)=>s+v[0],0)/3-origin.x)/size.x;
+      const y=(triangle.reduce((s,v)=>s+v[1],0)/3-origin.y)/size.y;
+      const z=(triangle.reduce((s,v)=>s+v[2],0)/3-origin.z)/size.z;
+      if(!belongs(x,y,z)) continue;
+      const poly=[];
+      for(let e=0;e<3;e++){
+        const a=triangle[e], b=triangle[(e+1)%3];
+        const low=a[1]<=limit, next=b[1]<=limit;
+        if(low) poly.push(a);
+        if(low!==next){
+          const t=(limit-a[1])/(b[1]-a[1]);
+          poly.push(a.map((v,k)=>v+(b[k]-v)*t));
         }
-        const uRepeat = best[0].extent * scale[best[0].axis] / tileX;
-        const vRepeat = best[1].extent * scale[best[1].axis] / tileY;
-        for (let i = start; i < start + 6; i++) { uv.setX(i, uv.getX(i) * uRepeat); uv.setY(i, uv.getY(i) * vRepeat); }
       }
-    } else if (type === 'CylinderGeometry' || type === 'LatheGeometry') {
+      for(let p=1;p+1<poly.length;p++) for(const v of [poly[0],poly[p],poly[p+1]]){
+        out.push(v[0],v[1],v[2]);normals.push(v[3],v[4],v[5]);uv.push(v[6],v[7]);
+      }
+    }
+    if(!out.length) throw new Error('Sacred entrance accessory slice was empty');
+    const result=geometry(out,uv);
+    result.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+    return {geometry:result,material:source.material};
+  }
+
+  function geometry(positions,uv,indices) {
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+    g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+    if(indices) g.setIndex(indices);
+    return g;
+  }
+
+  function prepare(parts,constrained) {
+    const hanging=parts['column-and-torch'];
+    // Its bowl is low and offset from the shaft. At the shared edge keep
+    // only the portion towards the bowl's measured depth. Form new chains
+    // separately to avoid bringing any shaft faces along.
+    parts.hanging=cut(hanging,(x,y,z)=>{
+      const bowl=x>.53||(y>.218&&x>.359&&z>.52);
+      const centre=Math.hypot((x-.74)/.27,(z-.56)/.43)<.72;
+      return bowl&&(y<.247||!centre);
+    },.286);
+    const vessels=parts.vessels;
+    parts.brazier=cut(vessels,(x,y,z)=>{
+      const centre=Math.hypot((x-.20)/.20,(z-.466)/.27)<.78;
+      return x<.46&&(y<.382||!centre);
+    },.510);
+    parts.urn=cut(vessels,x=>x>.47,.555);
+    for(const key of ['vessels','column-and-torch','source-stairs','source-frame','blocks','capital']){
+      parts[key].geometry.dispose();
+      delete parts[key];
+    }
+    for(const part of Object.values(parts)){
+      const g=part.geometry;
       g.computeBoundingBox();
-      const b = g.boundingBox, diameter = (b.max.x - b.min.x) * scale[0] + (b.max.z - b.min.z) * scale[2];
-      const circumference = Math.PI * diameter / 2;
-      const height = (b.max.y - b.min.y) * scale[1];
-      for (let i = 0; i < uv.count; i++) { uv.setX(i, uv.getX(i) * circumference / tileX); uv.setY(i, uv.getY(i) * height / tileY); }
-    } else {
-      g.computeBoundingBox();
-      const b = g.boundingBox;
-      const width = (b.max.x - b.min.x) * scale[0], height = (b.max.y - b.min.y) * scale[1];
-      for (let i = 0; i < uv.count; i++) { uv.setX(i, uv.getX(i) * width / tileX); uv.setY(i, uv.getY(i) * height / tileY); }
+      const bounds=g.boundingBox;
+      part.size=bounds.getSize(new THREE.Vector3());
+      const c=bounds.getCenter(new THREE.Vector3());
+      g.translate(-c.x,-bounds.min.y,-c.z);
+      g.computeBoundingSphere();
     }
-    uv.needsUpdate = true;
+    const m=parts.column.material;
+    m.roughness=.95;
+    m.metalness=.57;
+    m.normalScale.set(.71,.71);
+    for(const texture of new Set([m.map,m.roughnessMap,m.metalnessMap,m.normalMap])){
+      if(!texture) continue;
+      if(constrained&&window.SinDevice) SinDevice.capTexture(texture,1024);
+      texture.anisotropy=4;
+    }
   }
-  function Buckets() { this.parts = {}; }
-  Buckets.prototype.add = function (key, geo, x, y, z, ry, rx, rz, sx, sy, sz) {
-    const m4 = new THREE.Matrix4();
-    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0, 'YXZ'));
-    m4.compose(new THREE.Vector3(x || 0, y || 0, z || 0), q, new THREE.Vector3(sx || 1, sy || 1, sz || 1));
-    const type = geo.type;
-    const g = geo.index ? geo.toNonIndexed() : geo.clone();
-    if (geo.index) geo.dispose();
-    repeatUvs(g, key, type, sx, sy, sz);
-    g.applyMatrix4(m4);
-    (this.parts[key] || (this.parts[key] = [])).push(g);
-  };
-  function merge(list) {
-    let n = 0; list.forEach(g => { n += g.attributes.position.count; });
-    const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2);
-    let o = 0;
-    list.forEach(g => {
-      const c = g.attributes.position.count;
-      pos.set(g.attributes.position.array, o * 3);
-      if (g.attributes.normal) nor.set(g.attributes.normal.array, o * 3);
-      if (g.attributes.uv) uv.set(g.attributes.uv.array, o * 2);
-      o += c; g.dispose();
-    });
-    const out = new THREE.BufferGeometry();
-    out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-    out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    out.computeBoundingBox(); out.computeBoundingSphere();
-    return out;
-  }
-  Buckets.prototype.flush = function (parent) {
-    Object.keys(this.parts).forEach(key => {
-      const m = new THREE.Mesh(merge(this.parts[key]), mat(key));
-      m.name = 'T1-' + key; m.castShadow = false; m.receiveShadow = true;
-      m.userData.t1Part = key; parent.add(m); api.groups[key] = m;
-    });
-    this.parts = {};
-  };
 
-  const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-  const cyl = (rt, rb, h, s) => new THREE.CylinderGeometry(rt, rb, h, s || 16);
-  const lathe = (pts, s) => new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), s || 20);
-  function crescentShape(R, r, off) {
-    const s = new THREE.Shape(); s.absarc(0, 0, R, 0, Math.PI * 2, false);
-    const h = new THREE.Path(); h.absarc(off, off * 0.35, r, 0, Math.PI * 2, true); s.holes.push(h); return s;
+  function crop(src,width,height,[l,t,r,b],repeat=false) {
+    const img=src.image, sx=img.width/width, sy=img.height/height;
+    const c=document.createElement('canvas');
+    c.width=Math.round((r-l)*sx);c.height=Math.round((b-t)*sy);
+    c.getContext('2d').drawImage(img,l*sx,t*sy,(r-l)*sx,(b-t)*sy,0,0,c.width,c.height);
+    const tex=new THREE.CanvasTexture(c);
+    tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=4;
+    if(repeat) tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+    return tex;
   }
-  const crescent = (R, r, off, depth) => new THREE.ExtrudeGeometry(crescentShape(R, r, off), { depth: depth, bevelEnabled: false, curveSegments: 24 });
 
-  /* ---- wall frame: a wall is described in local coords (u along, v up) ---
-     side: 'N' (z0, faces +z), 'S' (z1, faces -z), 'W' (x0, faces +x), 'E' (x1, faces -x) */
-  function wallFrame(b, side) {
-    if (side === 'N') return { len: b.x1 - b.x0, at: (u, v, d) => [b.x0 + u, v, b.z0 + d], ry: 0 };
-    if (side === 'S') return { len: b.x1 - b.x0, at: (u, v, d) => [b.x1 - u, v, b.z1 - d], ry: Math.PI };
-    if (side === 'W') return { len: b.z1 - b.z0, at: (u, v, d) => [b.x0 + d, v, b.z1 - u], ry: Math.PI / 2 };
-    return { len: b.z1 - b.z0, at: (u, v, d) => [b.x1 - d, v, b.z0 + u], ry: -Math.PI / 2 };
+  function sheet(w,h,u=1,v=1) {
+    const g=new THREE.PlaneGeometry(w,h),uv=g.attributes.uv;
+    for(let i=0;i<uv.count;i++) uv.setXY(i,uv.getX(i)*u,uv.getY(i)*v);
+    return g;
   }
-  function put(B, F, key, geo, u, v, d, extraRy, rx, rz, sx, sy, sz) {
-    const p = F.at(u, v, d); B.add(key, geo, p[0], p[1], p[2], F.ry + (extraRy || 0), rx, rz, sx, sy, sz);
-  }
-  // openings (doorways) on a wall in local u
-  function openingsFor(b, side, doors) {
-    const out = [];
-    doors.forEach(d => {
-      const onX = d.axis === 'x';
-      if (onX && (side === 'W' || side === 'E')) {
-        const wx = side === 'W' ? b.x0 : b.x1;
-        if (Math.abs(d.x - wx) > 4 || d.z < b.z0 - 0.5 || d.z > b.z1 + 0.5) return;
-        const u = side === 'W' ? b.z1 - d.z : d.z - b.z0;
-        out.push({ u0: u - d.width / 2 - 0.15, u1: u + d.width / 2 + 0.15, h: d.height, w: d.width, u: u, door: d });
-      } else if (!onX && (side === 'N' || side === 'S')) {
-        const wz = side === 'N' ? b.z0 : b.z1;
-        if (Math.abs(d.z - wz) > 1.6 || d.x < b.x0 - 0.5 || d.x > b.x1 + 0.5) return;
-        const u = side === 'N' ? d.x - b.x0 : b.x1 - d.x;
-        out.push({ u0: u - d.width / 2 - 0.15, u1: u + d.width / 2 + 0.15, h: d.height, w: d.width, u: u, door: d });
+
+  function archBand(radius,sill,thickness) {
+    const vertices=[],uv=[],tri=[];
+    for(let i=0;i<=48;i++){
+      const a=Math.PI*i/48;
+      for(const r of [radius-thickness,radius]){
+        const x=r*Math.cos(a), y=r*Math.sin(a);
+        vertices.push(x,sill+y,0);uv.push(.5+.486*x/radius,.02+.96*y/radius);
       }
-    });
-    return out;
-  }
-  // free spans of a wall between openings (and a margin at corners)
-  function spans(len, ops, margin) {
-    const s = []; let a = margin;
-    ops.slice().sort((p, q) => p.u0 - q.u0).forEach(o => { if (o.u0 - a > 0.3) s.push([a, o.u0]); a = Math.max(a, o.u1); });
-    if (len - margin - a > 0.3) s.push([a, len - margin]);
-    return s;
-  }
-
-  /* ---- relief motifs (built facing +local depth) ------------------------- */
-  function robedFigure(B, F, u, y, d, scale, facing, offering) {
-    const s = scale, f = facing; // f = +1 faces +u, -1 faces -u
-    put(B, F, 'relief', box(0.55 * s, 1.55 * s, 0.07), u, y + 0.78 * s, d);                       // robe
-    put(B, F, 'relief', box(0.7 * s, 0.12 * s, 0.075), u, y + 0.08 * s, d);                       // hem fringe
-    put(B, F, 'relief', box(0.42 * s, 0.38 * s, 0.08), u, y + 1.62 * s, d);                       // shoulders
-    put(B, F, 'relief', cyl(0.13 * s, 0.13 * s, 0.07, 14), u + 0.02 * f * s, y + 1.98 * s, d + 0.035, 0, Math.PI / 2); // head
-    put(B, F, 'relief', box(0.2 * s, 0.28 * s, 0.075), u, y + 2.24 * s, d);                       // tall crown
-    put(B, F, 'relief', box(0.16 * s, 0.22 * s, 0.072), u + 0.14 * f * s, y + 1.8 * s, d);        // beard
-    put(B, F, 'relief', box(0.5 * s, 0.1 * s, 0.085), u + 0.28 * f * s, y + 1.38 * s, d, 0, 0, 0.5 * f); // raised arm
-    if (offering) put(B, F, 'relief', cyl(0.14 * s, 0.07 * s, 0.14 * s, 12), u + 0.5 * f * s, y + 1.6 * s, d + 0.04, 0, Math.PI / 2); // bowl
-    put(B, F, 'relief', box(0.08 * s, 0.9 * s, 0.072), u - 0.18 * f * s, y + 0.75 * s, d);        // robe fold
-  }
-  function vessel(B, F, u, y, d, s) {
-    put(B, F, 'relief', box(0.4 * s, 0.75 * s, 0.07), u, y + 0.5 * s, d);
-    put(B, F, 'relief', box(0.55 * s, 0.25 * s, 0.075), u, y + 0.55 * s, d);
-    put(B, F, 'relief', box(0.22 * s, 0.25 * s, 0.07), u, y + 1.0 * s, d);
-    put(B, F, 'relief', box(0.4 * s, 0.08 * s, 0.075), u, y + 1.13 * s, d);
-    put(B, F, 'relief', box(0.3 * s, 0.1 * s, 0.07), u, y + 0.06 * s, d);
-    for (let i = -1; i <= 1; i++) put(B, F, 'relief', cyl(0.06 * s, 0.06 * s, 0.06, 8), u + i * 0.13 * s, y + 1.24 * s, d + 0.03, 0, Math.PI / 2); // fruit
-  }
-  function reliefCrescent(B, F, u, y, d, R) {
-    put(B, F, 'relief', crescent(R, R * 0.82, R * 0.32, 0.05), u, y, d);
-  }
-  function rosetteBand(B, F, u0, u1, y, d, step) {
-    put(B, F, 'frieze', box(u1 - u0, 0.42, 0.1), (u0 + u1) / 2, y, d);
-    put(B, F, 'relief', box(u1 - u0, 0.04, 0.13), (u0 + u1) / 2, y + 0.19, d);
-    put(B, F, 'relief', box(u1 - u0, 0.04, 0.13), (u0 + u1) / 2, y - 0.19, d);
-    for (let u = u0 + step / 2; u < u1 - 0.1; u += step) {
-      put(B, F, 'relief', cyl(0.13, 0.13, 0.05, 12), u, y, d + 0.06, 0, Math.PI / 2);
-      put(B, F, 'frieze', cyl(0.05, 0.05, 0.06, 8), u, y, d + 0.08, 0, Math.PI / 2);
+      if(i<48){const k=i*2;tri.push(k,k+1,k+2,k+1,k+3,k+2);}
     }
+    const g=geometry(vertices,uv,tri);g.computeVertexNormals();
+    return g;
   }
-  function cuneiformBand(B, F, u0, u1, y, d, rows) {
-    put(B, F, 'frieze', box(u1 - u0, 0.16 * rows + 0.08, 0.09), (u0 + u1) / 2, y, d);
-    let seed = Math.floor((u0 + y) * 97) % 233;
-    for (let r = 0; r < rows; r++) for (let u = u0 + 0.1; u < u1 - 0.1; u += 0.13) {
-      seed = (seed * 9301 + 49297) % 233280;
-      if (seed % 5 === 0) continue;
-      const tall = (seed % 3 === 0);
-      put(B, F, 'relief', box(tall ? 0.03 : 0.07, tall ? 0.09 : 0.03, 0.03), u, y + (r - (rows - 1) / 2) * 0.16, d + 0.05, 0, 0, (seed % 7 === 0) ? 0.6 : 0);
+
+  function arched(radius,bottom,spring) {
+    const path=new THREE.Shape();
+    path.moveTo(radius,bottom);path.lineTo(radius,spring);
+    path.absarc(0,spring,radius,0,Math.PI);
+    path.lineTo(-radius,bottom);path.closePath();
+    return path;
+  }
+
+  function solid(shape,depth) {
+    const g=new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:false,curveSegments:22});
+    const p=g.attributes.position, uv=g.attributes.uv, n=g.attributes.normal;
+    for(let i=0;i<p.count;i++){
+      const s=Math.abs(n.getX(i))>.55;
+      uv.setXY(i,(s?p.getZ(i):p.getX(i))/2.45,p.getY(i)/2.45);
     }
-  }
-  function tileCourse(B, F, u0, u1, y0, y1, d) {
-    // glazed brick wall face: large panel + raised brick courses
-    put(B, F, 'wallTile', box(u1 - u0, y1 - y0, 0.06), (u0 + u1) / 2, (y0 + y1) / 2, d);
-    for (let y = y0 + 0.33; y < y1 - 0.05; y += 0.33) put(B, F, 'wallStone', box(u1 - u0, 0.02, 0.075), (u0 + u1) / 2, y, d);
-  }
-  function lamassu(B, key, F, u, y, d, s, facing) {
-    const f = facing;
-    put(B, F, key, box(0.9 * s, 0.45 * s, 0.07), u, y + 0.55 * s, d);                         // body
-    for (let i = 0; i < 4; i++) put(B, F, key, box(0.09 * s, 0.4 * s, 0.07), u + (-0.35 + i * 0.23) * s, y + 0.2 * s, d); // legs
-    put(B, F, key, box(0.22 * s, 0.3 * s, 0.075), u + 0.5 * f * s, y + 0.9 * s, d);            // human head
-    put(B, F, key, box(0.26 * s, 0.12 * s, 0.08), u + 0.5 * f * s, y + 1.1 * s, d);            // horned crown
-    for (let i = 0; i < 4; i++) put(B, F, key, box(0.75 * s, 0.07 * s, 0.08), u - 0.05 * f * s, y + (0.82 + i * 0.12) * s, d, 0, 0, (0.55 - i * 0.06) * f); // wing feathers
-    put(B, F, key, box(0.08 * s, 0.25 * s, 0.07), u - 0.5 * f * s, y + 0.5 * s, d, 0, 0, -0.4 * f); // tail
+    return g;
   }
 
-  /* ---- free-standing elements --------------------------------------------- */
-  function column(B, x, z, h, r) {
-    B.add('base', box(r * 3.0, 0.35, r * 3.0), x, 0.175, z);
-    B.add('base', box(r * 2.6, 0.2, r * 2.6), x, 0.45, z);
-    B.add('base', cyl(r * 1.25, r * 1.3, 0.3, 24), x, 0.7, z);
-    const shaftH = h - 2.25;
-    B.add('column', cyl(r * 0.94, r, shaftH, 24), x, 0.85 + shaftH / 2, z);
-    // carved bands (cuneiform / guilloche rings) like the reference
-    [1.2, 1.55, h * 0.48, h * 0.53].forEach(y => B.add('capital', cyl(r * 1.04, r * 1.04, 0.12, 24), x, y, z));
-    for (let y = 1.75; y < 3.2; y += 0.28) B.add('relief', cyl(r * 1.02, r * 1.02, 0.08, 24), x, y, z);
-    // lotus-leaf base collar
-    for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; B.add('relief', box(0.14, 0.55, 0.06), x + Math.cos(a) * r * 1.02, 1.12, z + Math.sin(a) * r * 1.02, -a + Math.PI / 2); }
-    // palm / volute capital
-    const cy = 0.85 + shaftH;
-    B.add('capital', lathe([[r * 0.95, 0], [r * 1.1, 0.25], [r * 1.45, 0.6], [r * 1.7, 0.95], [r * 1.75, 1.05], [0, 1.05]], 24), x, cy, z);
-    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; B.add('relief', box(0.12, 0.8, 0.05), x + Math.cos(a) * r * 1.4, cy + 0.6, z + Math.sin(a) * r * 1.4, -a + Math.PI / 2, 0, 0); }
-    B.add('capital', box(r * 3.6, 0.25, r * 3.6), x, cy + 1.18, z);
-    B.add('capital', box(r * 3.9, 0.15, r * 3.9), x, cy + 1.375, z);
-  }
-  function brazier(B, x, z) {
-    B.add('brazier', lathe([[0.42, 0], [0.38, 0.1], [0.18, 0.2], [0.14, 0.55], [0.2, 0.62], [0.55, 0.72], [0.62, 0.9], [0.6, 0.95], [0.5, 0.92], [0.0, 0.82]], 24), x, 0, z);
-    B.add('relief', cyl(0.63, 0.63, 0.06, 24), x, 0.88, z);
-    B.add('metal', cyl(0.48, 0.48, 0.05, 20), x, 0.86, z); // coals bed
-  }
-  function sconce(B, x, y, z, ry) {
-    const dx = Math.sin(ry), dz = Math.cos(ry);
-    B.add('metal', box(0.12, 0.5, 0.06), x, y - 0.1, z);
-    B.add('metal', cyl(0.035, 0.035, 0.45, 8), x + dx * 0.2, y + 0.05, z + dz * 0.2, ry, 0.9);
-    B.add('metal', lathe([[0.06, 0], [0.16, 0.18], [0.17, 0.22], [0, 0.18]], 14), x + dx * 0.38, y + 0.2, z + dz * 0.38);
-    B.add('flame', new THREE.ConeGeometry(0.09, 0.32, 8), x + dx * 0.38, y + 0.5, z + dz * 0.38);
+  function effects(root,emitters,clock,low) {
+    const vertex=`
+      varying vec2 tex; varying vec3 local;
+      void main(){tex=uv;local=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}
+    `;
+    function add(name,g,fragment,order,blend){
+      const m=new THREE.Mesh(g,new THREE.ShaderMaterial({uniforms:{clock},
+        vertexShader:vertex,fragmentShader:fragment,side:THREE.DoubleSide,transparent:true,
+        depthWrite:false,blending:blend}));
+      m.name='T1-'+name;m.renderOrder=order;root.add(m);
+      return m;
+    }
+    function cards(sources){
+      const p=[],uv=[],tri=[];
+      for(const [x,y,z,w,h] of sources) for(const angle of [.32,1.88]){
+        const i=p.length/3,a=Math.cos(angle)*w/2,b=Math.sin(angle)*w/2;
+        p.push(x-a,y,z-b,x+a,y,z+b,x-a,y+h,z-b,x+a,y+h,z+b);
+        uv.push(0,0,1,0,0,1,1,1);tri.push(i,i+1,i+2,i+1,i+3,i+2);
+      }
+      return geometry(p,uv,tri);
+    }
+    add('flames',cards(emitters.map(e=>[...e.slice(0,3),e[3],e[4]])),`
+      uniform float clock; varying vec2 tex; varying vec3 local;
+      void main(){
+        float y=tex.y,t=clock+local.x*.94+local.z*.65;
+        float x=abs(tex.x-.5+.14*sin(t*5.4+y*9.)*y);
+        float width=pow(max(0.,1.-y),.8)*.33;
+        float flicker=.59+.41*sin(19.*y-6.6*t+9.*tex.x);
+        float a=(1.-smoothstep(.22*width,width+.05,x))*smoothstep(0.,.07,y)*(1.-smoothstep(.52,1.,y));
+        float core=(1.-smoothstep(.16*width,.70*width,x))*(1.-smoothstep(.23,.75,y));
+        gl_FragColor=vec4(mix(vec3(.85,.14,.006),vec3(1.,.84,.37),core),a*(.69+.22*flicker));
+        #include <colorspace_fragment>
+      }
+    `,5,THREE.AdditiveBlending);
+    add('smoke',cards(emitters.map(([x,y,z,w,h])=>[x,y+h*.53,z,w*1.7,h*2.8])),`
+      uniform float clock; varying vec2 tex; varying vec3 local;
+      float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+      float noise(vec2 p){
+        vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+        return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);
+      }
+      void main(){
+        float y=tex.y,t=clock*.47+local.z*.38;
+        float bend=(.10*sin(12.*y-t)+.048*sin(24.*y-t*1.39))*smoothstep(.05,.78,y);
+        float radius=mix(.029,.39,y);
+        vec2 p=vec2((tex.x-bend)*8.5,10.*y-t);
+        float n=noise(p)*.72+noise(p*2.17+2.)*.28;
+        float a=(1.-smoothstep(.19*radius,radius,abs(tex.x-.5-bend)))*
+          smoothstep(.29,.77,n)*smoothstep(0.,.12,y)*(1.-smoothstep(.39,1.,y));
+        gl_FragColor=vec4(.65,.58,.51,a*.51);
+        #include <colorspace_fragment>
+      }
+    `,6,THREE.NormalBlending);
+    const rayPos=[],rayUV=[],rayInd=[];
+    for(const z of low?[-.92,0,.92]:[-1.36,-.71,0,.71,1.36]){
+      const i=rayPos.length/3;
+      rayPos.push(-.3,8.37,z-.15,.06,8.37,z+.17,3.12,.69,z*1.77-.74,4.44,.69,z*1.77+.77);
+      rayUV.push(0,1,1,1,0,0,1,0);rayInd.push(i,i+1,i+2,i+1,i+3,i+2);
+    }
+    add('sunbeams',geometry(rayPos,rayUV,rayInd),`
+      varying vec2 tex;
+      void main(){
+        float a=pow(max(0.,sin(tex.x*3.141593)),2.0);
+        gl_FragColor=vec4(.84,.67,.43,a*.27*smoothstep(.06,.86,tex.y));
+      }
+    `,3,THREE.AdditiveBlending).userData.ceiling=true;
   }
 
-  /* ---- build --------------------------------------------------------------- */
-  api.build = function (r, parent, ctx) {
-    const b = r.bbox, H = r.height, doors = (ctx.doors || []).filter(d => d.from === r.id || d.to === r.id);
-    const root = new THREE.Group(); root.name = 'T1-sacred-entrance'; parent.add(root); api.root = root;
-    const B = new Buckets();
-    const W = b.x1 - b.x0, D = b.z1 - b.z0;
-    const galleryY = Math.min(5.2, H - 2.6), galleryDepth = 1.9;
+  function assemble(room,doors,kit,maps,low,root) {
+    const {cx,cz}=room.bbox, h=room.height;
+    const [atlas,floor,roof]=maps;
+    const tex=(r,repeat)=>crop(atlas,828,552,r,repeat);
+    const pbr=(map,color,roughness,metalness=.03,bump=0)=>new THREE.MeshStandardMaterial({
+      map,color,roughness,metalness,bumpMap:!low&&bump?map:null,bumpScale:bump
+    });
+    const stone=pbr(tex([488,9,641,179],true),0xddcfbb,.81,.03,.033);
+    const cave=pbr(stone.map,0x947b64,.88);
+    const blue=pbr(tex([493,192,657,314],true),0xbdc2cb,.65,.045,.017);
+    const gold=pbr(tex([487,450,599,538],true),0xe1bb77,.54,.17,.021);
+    const cuneiform=pbr(tex([5,258,470,319],true),0xdac4a7,.79,.02,.022);
+    const star=pbr(tex([4,386,470,414],true),0xf3dab0,.63,.10);
+    const palms=pbr(tex([5,420,470,466],true),0xe3c6a0,.61,.075);
+    const rosette=pbr(tex([5,200,473,245],true),0xe1c6a2,.66,.075);
+    const arch=pbr(tex([473,322,666,432]),0xeacda4,.65,.085);
+    arch.side=THREE.DoubleSide;
+    function isolatedGold(rect) {
+      const map=tex(rect), canvas=map.image, ctx=canvas.getContext('2d');
+      const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);
+      for(let i=0;i<pixels.data.length;i+=4) {
+        const gain=Math.max(pixels.data[i],pixels.data[i+1],pixels.data[i+2]);
+        pixels.data[i+3]=Math.max(0,Math.min(255,(gain-22)*8));
+      }
+      ctx.putImageData(pixels,0,0);map.needsUpdate=true;
+      const mat=pbr(map,0xeed5a8,.58,.12);
+      mat.alphaTest=.35;
+      return mat;
+    }
+    const moon=isolatedGold([709,330,765,380]), stars=isolatedGold([667,330,703,373]);
+    const floorMap=pbr(crop(floor,400,400,[77,2,323,397],true),0xf4dcc5,.46,.04,.023);
+    const trim=pbr(crop(floor,400,400,[20,4,59,395],true),0xedc79b,.59);
+    const skylightTrim=pbr(crop(roof,700,394,[212,27,489,54],true),0xc5b09a,.68);
+    const sky=new THREE.MeshBasicMaterial({color:0xffe1ab,toneMapped:false});
+    const chain=new THREE.MeshStandardMaterial({color:0x684027,roughness:.75,metalness:.36});
+    const liner=new THREE.MeshStandardMaterial({color:0x332217,roughness:.82,metalness:.19,side:THREE.DoubleSide});
+    const leaf=new THREE.MeshStandardMaterial({color:0x5a5726,roughness:.73,side:THREE.DoubleSide});
+    const draw=SinGreatLibrary.builder(root,'T1-');
+    const box=(key,mat,x,y,z,w,dY,d,tile)=>draw.box(key,mat,null,x,y,z,w,dY,d,tile);
+    const place=(key,mat,g,x,y,z,yaw=0)=>draw.surface(key,mat,g,null,x,y,z,yaw);
+    const plate=(key,mat,x,y,z,w,h,yaw,u=1,v=1)=>place(key,mat,sheet(w,h,u,v),x,y,z,yaw);
+    const horizontal=(key,mat,x,y,z,w,d,u=1,v=1,up=true)=>place(key,mat,
+      sheet(w,d,u,v).rotateX(up?-Math.PI/2:Math.PI/2),x,y,z);
+    const collision=[], stairBoxes=[], emitters=[], clock={value:0};
+    function obstacle(x0,x1,z0,z1,miny,maxy){
+      collision.push({minx:cx+x0,maxx:cx+x1,minz:cz+z0,maxz:cz+z1,miny,maxy,_wing:true,_entrance:true});
+    }
+    function prop(name,part,x,y,z,height,yaw=0,slender=1){
+      const s=height/part.size.y;
+      const w=part.size.x*s*slender,d=part.size.z*s*slender;
+      draw.asset(name,part,null,x,y,z,w,height,d,yaw);
+      return [w,d];
+    }
 
-    /* floor: polished dark slabs, central gold-line axis, crescent mosaic */
-    B.add('floor', box(W, 0.04, D), b.cx, 0.02, b.cz);
-    for (let x = b.x0 + 1.5; x < b.x1; x += 1.5) B.add('floorJoint', box(0.03, 0.045, D), x, 0.022, b.cz);
-    for (let z = b.z0 + 1.5; z < b.z1; z += 1.5) B.add('floorJoint', box(W, 0.045, 0.03), b.cx, 0.022, z);
-    const mR = Math.min(2.6, D * 0.22);
-    B.add('inlay', box(W - 0.4, 0.05, 0.05), b.cx, 0.03, b.cz - 0.08); B.add('inlay', box(W - 0.4, 0.05, 0.05), b.cx, 0.03, b.cz + 0.08);
-    B.add('mosaic', box(mR * 2.9, 0.05, mR * 2.4), b.cx, 0.03, b.cz);                                            // rug field
-    B.add('inlay', box(mR * 2.9 + 0.1, 0.055, 0.06), b.cx, 0.032, b.cz - mR * 1.2); B.add('inlay', box(mR * 2.9 + 0.1, 0.055, 0.06), b.cx, 0.032, b.cz + mR * 1.2);
-    B.add('inlay', box(0.06, 0.055, mR * 2.4), b.cx - mR * 1.45, 0.032, b.cz); B.add('inlay', box(0.06, 0.055, mR * 2.4), b.cx + mR * 1.45, 0.032, b.cz);
-    B.add('inlay', new THREE.RingGeometry(mR * 0.98, mR * 1.06, 64), b.cx, 0.058, b.cz, 0, -Math.PI / 2);
-    B.add('inlay', new THREE.RingGeometry(mR * 0.86, mR * 0.9, 64), b.cx, 0.058, b.cz, 0, -Math.PI / 2);
-    B.add('mosaic', new THREE.CircleGeometry(mR * 0.86, 64), b.cx, 0.056, b.cz, 0, -Math.PI / 2);
-    B.add('mosaicMoon', crescent(mR * 0.62, mR * 0.5, mR * 0.22, 0.012), b.cx, 0.06, b.cz, -Math.PI / 2, -Math.PI / 2);
-    for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; B.add('inlay', new THREE.CircleGeometry(0.06, 5), b.cx + Math.cos(a) * mR * 0.78, 0.059, b.cz + Math.sin(a) * mR * 0.78, 0, -Math.PI / 2); }
-    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; B.add('inlay', box(0.5, 0.055, 0.06), b.cx + Math.cos(a) * mR * 1.35, 0.033, b.cz + Math.sin(a) * mR * 1.1, -a); }
+    horizontal('floor',floorMap,0,.011,0,16,12,16/5.9,12/3.75);
+    for(const side of [-1,1]){
+      for(const [lo,hi] of [[-7.96,-3.90],[-3.90,-.28],[-.28,2.55]]){
+        const g=sheet(.65,hi-lo,1,(hi-lo)/3.45).rotateX(-Math.PI/2).rotateY(Math.PI/2);
+        place('aisle-inlay',trim,g,(hi+lo)/2,.016,side*1.67);
+      }
+      for(const z of [1.305,2.035]){
+        horizontal('aisle-border',gold,-2.71,.016,side*z,10.48,.036,3.8,1);
+      }
+    }
+    for(const [a,b,i] of treads){
+      const y=rise*i;
+      box('stairs',stone,(a+b)/2,y/2,0,b-a,y,halfStair*2,1.72);
+      stairBoxes.push({minx:cx+a,maxx:cx+b,minz:cz-halfStair,maxz:cz+halfStair,miny:0,maxy:y,_wing:true});
+    }
 
-    /* walls: tiled relief walls on every face, leaving doorways open */
-    ['N', 'S', 'W', 'E'].forEach(side => {
-      const F = wallFrame(b, side), ops = openingsFor(b, side, doors);
-      const sp = spans(F.len, ops, 0.05);
-      const longWall = side === 'N' || side === 'S';
-      sp.forEach(([u0, u1]) => {
-        // stone dado
-        put(B, F, 'wallStone', box(u1 - u0, 0.9, 0.16), (u0 + u1) / 2, 0.45, 0.08);
-        put(B, F, 'frieze', box(u1 - u0, 0.08, 0.2), (u0 + u1) / 2, 0.92, 0.1);
-        rosetteBand(B, F, u0, u1, 1.25, 0.06, 0.55);
-        tileCourse(B, F, u0, u1, 1.48, galleryY - 0.75, 0.03);
-        cuneiformBand(B, F, u0, u1, galleryY - 0.5, 0.06, 2);
-        // upper register (above gallery): tiles + frieze + crenellation
-        tileCourse(B, F, u0, u1, galleryY + 0.2, H - 0.9, 0.03);
-        rosetteBand(B, F, u0, u1, H - 0.65, 0.06, 0.6);
-        for (let u = u0 + 0.2; u < u1 - 0.2; u += 0.5) put(B, F, 'frieze', box(0.28, 0.3, 0.1), u, H - 0.28, 0.06); // stepped merlons
-        // figural scene in each span wide enough
-        const w = u1 - u0;
-        if (w > 2.2) {
-          const n = Math.max(1, Math.floor(w / 3.4));
-          for (let i = 0; i < n; i++) {
-            const c = u0 + w * (i + 0.5) / n, f = i % 2 ? -1 : 1;
-            robedFigure(B, F, c - 0.55 * f, 1.62, 0.09, 1.05, f, true);
-            if (w / n > 2.8) robedFigure(B, F, c + 0.95 * f, 1.62, 0.09, 1.0, -f, false);
-            vessel(B, F, c + 0.25 * f, 1.62, 0.09, 0.95);
-            reliefCrescent(B, F, c - 0.1 * f, galleryY - 1.3, 0.09, 0.32);
+    // Face the existing shell; explicitly leave all three real openings.
+    for(const side of [-1,1]){
+      const doorway=side<0?doors.find(d=>d.kind==='arch'):doors.find(d=>d.axis==='x'&&d.x>cx);
+      const gap=doorway.width*.5+.015,x=side*7.988,yaw=side<0?Math.PI/2:-Math.PI/2;
+      for(const flank of [-1,1])
+        plate('walls',stone,x,h/2,flank*(gap+6)/2,6-gap,h,yaw,(6-gap)/2.5,h/2.44);
+      if(doorway.height<h)
+        plate('walls',stone,x,(h+doorway.height)*.5,0,gap*2,h-doorway.height,yaw,1.83,.8);
+    }
+    const realSide=doors.find(d=>d.axis==='z');
+    const sideOpening=realSide.width/2+.014;
+    for(const side of [-1,1]){
+      const z=side*5.982,yaw=side<0?0:Math.PI;
+      const runs=side<0?[[-8,-1.26],[1.26,8]]:[[-8,-sideOpening],[sideOpening,8]];
+      for(const [a,b] of runs){
+        const x=(a+b)/2,w=b-a;
+        plate('walls',stone,x,h/2,z,w,h,yaw,w/2.7,h/2.44);
+        plate('dados',palms,x,.69,z-side*.025,w,1.27,yaw,w/3.9);
+        plate('glyphs',cuneiform,x,4.69,z-side*.023,w,1.01,yaw,w/5.5);
+        plate('wall-crown',rosette,x,7.34,z-side*.026,w,.41,yaw,w/3.4);
+      }
+      if(side>0){
+        const header=h-realSide.height;
+        box('side-door-stone',stone,0,realSide.height+header*.5,5.916,realSide.width+.09,header,.25,2.35);
+        plate('wall-crown',rosette,0,7.34,5.765,realSide.width+.08,.41,yaw,1.4);
+        const radius=realSide.width/2,sill=realSide.height-radius;
+        const surround=new THREE.Shape();
+        surround.moveTo(-sideOpening,sill);surround.lineTo(-radius,sill);
+        surround.absarc(0,sill,radius,Math.PI,0,true);
+        surround.lineTo(sideOpening,sill);surround.lineTo(sideOpening,realSide.height+.03);
+        surround.lineTo(-sideOpening,realSide.height+.03);surround.closePath();
+        place('side-door-stone',stone,solid(surround,.32),0,0,6.268,yaw);
+        place('side-door-frame',arch,archBand(radius+.21,sill,.21),0,0,5.938,yaw);
+      }else{
+        const opening=arched(1.02,.68,3.22);
+        const panel=new THREE.Shape();
+        panel.moveTo(-1.27,0);panel.lineTo(1.27,0);panel.lineTo(1.27,h);panel.lineTo(-1.27,h);panel.closePath();
+        panel.holes.push(opening);
+        place('side-niche',stone,solid(panel,.34),0,0,-5.99);
+        const backing=new THREE.ShapeGeometry(opening,22);
+        place('niche-back',cave,backing,0,0,-5.971);
+        place('side-niche',arch,archBand(1.13,3.22,.18),0,0,-5.631);
+        box('niche-sill',stone,0,.55,-5.72,2.35,.28,.56,1.43);
+        addPalm(0,.69,-5.57,.63);
+        obstacle(-1.16,1.16,-6.01,-5.41,0,.70);
+      }
+    }
+
+    const gateX=5.58, heading=-Math.PI/2;
+    const spring=4.80, outer=3.18;
+    const opening=arched(2.28,.67,3.37);
+    const silhouette=arched(3.20,.56,spring);
+    silhouette.holes.push(opening);
+    place('portal-stone',stone,solid(silhouette,.40),gateX+.39,0,0,heading);
+    const wallInlay=new THREE.Shape();
+    wallInlay.moveTo(-3.50,5.24);wallInlay.lineTo(3.50,5.24);
+    wallInlay.lineTo(3.50,8.02);wallInlay.lineTo(-3.50,8.02);wallInlay.closePath();
+    const archClearance=new THREE.Path(),clearanceAngle=Math.asin((5.25-spring)/outer);
+    archClearance.absarc(0,spring,outer,clearanceAngle,Math.PI-clearanceAngle);
+    archClearance.closePath();wallInlay.holes.push(archClearance);
+    const blueSurround=new THREE.ShapeGeometry(wallInlay,36);
+    const surroundPosition=blueSurround.attributes.position,surroundUV=blueSurround.attributes.uv;
+    for(let i=0;i<surroundPosition.count;i++) surroundUV.setXY(i,surroundPosition.getX(i)/1.65,surroundPosition.getY(i)/1.65);
+    box('portal-header',stone,gateX+.19,7.56,0,.38,1.49,7.06,2.20);
+    place('portal-header-glaze',blue,blueSurround,gateX+.001,0,0,heading);
+    // Cut the blue tympanum horizontally above the passage. The contour
+    // follows the same radius used by the monumental moulding.
+    const tympanum=new THREE.Shape(), angle=Math.asin((5.70-spring)/2.98);
+    tympanum.absarc(0,spring,2.98,angle,Math.PI-angle);tympanum.closePath();
+    const lunette=new THREE.ShapeGeometry(tympanum,28), p=lunette.attributes.position, uv=lunette.attributes.uv;
+    for(let i=0;i<p.count;i++) uv.setXY(i,p.getX(i)/1.65,p.getY(i)/1.65);
+    place('portal-glaze',blue,lunette,gateX-.028,0,0,heading);
+    place('portal-band',arch,archBand(outer,spring,.40),gateX-.053,0,0,heading);
+    place('portal-inner-arch',arch,archBand(2.44,3.37,.16),gateX-.043,0,0,heading);
+    plate('emblem',moon,gateX-.063,6.73,0,1.46,1.30,heading);
+    for(const side of [-1,1]) plate('emblem',stars,gateX-.063,6.29,side*1.45,.49,.54,heading);
+    plate('portal-stars',star,gateX-.064,5.69,0,4.43,.28,heading,1.27);
+    for(const sign of [-1,1]){
+      box('portal-piers',blue,gateX+.02,2.75,sign*2.85,.45,4.16,.74,1.32);
+      box('portal-piers',gold,gateX-.21,2.12,sign*2.37,.22,2.90,.24,1.24);
+      box('portal-piers',gold,gateX-.18,3.51,sign*2.38,.31,.36,.37,.77);
+      obstacle(gateX-.26,gateX+.23,sign*2.83-.46,sign*2.83+.46,.49,5.5);
+    }
+    // Rear niches have an extruded ring and a recessed stone back. Their
+    // platform and backstop lie outside both the stair and the side exit.
+    for(const side of [-1,1]){
+      const z=side*4.80,nicheX=6.77,profile=arched(.78,.79,2.39);
+      const wall=new THREE.Shape();
+      wall.moveTo(-1.17,.12);wall.lineTo(1.17,.12);wall.lineTo(1.17,5.23);wall.lineTo(-1.17,5.23);wall.closePath();
+      wall.holes.push(profile);
+      place('rear-niche',stone,solid(wall,.41),nicheX+.41,0,z,heading);
+      place('niche-back',cave,new THREE.ShapeGeometry(profile,20),nicheX+.36,0,z,heading);
+      place('rear-niche',arch,archBand(.89,2.39,.14),nicheX-.016,0,z,heading);
+      box('niche-sill',blue,nicheX+.03,.50,z,.98,.59,1.94,1.63);
+      plate('niche-carving',palms,nicheX-.47,.524,z,1.91,.49,heading,.67);
+      plate('niche-scripts',cuneiform,nicheX-.034,3.72,z,2.15,.74,heading,.57);
+      addPalm(nicheX+.13,.795,z,.52);
+      obstacle(nicheX-.49,nicheX+.52,z-1.0,z+1.0,0,.84);
+    }
+
+    function addPalm(x,y,z,height){
+      prop('urn',kit.urn,x,y,z,height);
+      const p=[],uv=[],tri=[],top=y+height;
+      for(let n=0;n<10;n++){
+        const az=n*2.39996, bx=Math.cos(az),bz=Math.sin(az),len=.48+(n%4)*.12;
+        for(let j=0;j<8;j++){
+          const a=(j+1)/8,d=len*a,cy=top+.83*a-.21*a*a,px=x+bx*d,pz=z+bz*d;
+          const leafLength=(1-a)*.21+.033;
+          for(const side of [-1,1]){
+            const i=p.length/3;
+            p.push(px,cy,pz,px+bx*.18-bz*side*leafLength*.59,cy+.14,pz+bz*.18+bx*side*leafLength*.59,
+              px+bx*.09-bz*side*leafLength,cy+.059,pz+bz*.09+bx*side*leafLength);
+            uv.push(0,0,.5,1,1,0);tri.push(i,i+1,i+2);
           }
         }
-        if (longWall) {
-          // clerestory windows above the gallery (glowing, paintable)
-          for (let u = u0 + 1.4; u < u1 - 1.0; u += 3.2) {
-            put(B, F, 'window', box(0.7, 1.5, 0.05), u, galleryY + 1.35, 0.05);
-            put(B, F, 'window', new THREE.CircleGeometry(0.35, 16, 0, Math.PI), u, galleryY + 2.1, 0.08);
-            put(B, F, 'wallStone', box(0.95, 0.12, 0.18), u, galleryY + 0.55, 0.09);
-            put(B, F, 'wallStone', box(0.12, 1.6, 0.16), u - 0.45, galleryY + 1.35, 0.08);
-            put(B, F, 'wallStone', box(0.12, 1.6, 0.16), u + 0.45, galleryY + 1.35, 0.08);
-          }
+      }
+      const g=geometry(p,uv,tri);g.computeVertexNormals();
+      place('niche-palms',leaf,g,0,0,0);
+    }
+
+    for(const side of [-1,1]){
+      for(const [x,z,height] of [[-1.43,3.83,7.98],[5.06,3.66,7.94]]){
+        const [w,d]=prop('columns',kit.column,x,.017,side*z,height,0,.56);
+        obstacle(x-w*.5,x+w*.5,side*z-d*.5,side*z+d*.5,.016,height);
+        box('column-pad',stone,x,height+.198,side*z,w+.17,.36,d+.19,1.40);
+      }
+      const x=-3.08,z=side*5.41;
+      const [w,d]=prop('lamassu',kit.lamassu,x,.80,z,2.95,side<0?0:Math.PI);
+      box('guardian-stone',stone,x,.40,z,w+.28,.80,d+.20,1.68);
+      plate('guardian-inlay',palms,x,.471,z-side*(d*.5+.111),w+.20,.56,side<0?0:Math.PI,.81);
+      obstacle(x-(w+.31)/2,x+(w+.31)/2,z-(d+.24)/2,z+(d+.24)/2,0,3.77);
+      prop('ornament-block',kit.plinth,4.41,0,side*5.04,.59);
+      prop('carved-block',kit.pedestal,-2.63,0,side*5.32,.51);
+      const floorX=2.80,floorZ=side*3.12;
+      const [fw,fd]=prop('floor-brazier',kit.brazier,floorX,.013,floorZ,1.19);
+      bowlInset(floorX,1.204,floorZ,fw,fd);
+      obstacle(floorX-fw*.47,floorX+fw*.47,floorZ-fd*.47,floorZ+fd*.47,0,1.21);
+      emitters.push([floorX,1.192,floorZ,.69,.78]);
+      for(const [px,pz,base] of [[-3.96,4.43,4.05],[2.38,4.60,4.22]]){
+        const z=side*pz, size=prop('hanging-bowl',kit.hanging,px,base,z,.40);
+        bowlInset(px,base+.398,z,...size);
+        emitters.push([px,base+.39,z,.59,.69]);
+        suspend(px,base+.38,z,size[0]*.45,size[1]*.45);
+      }
+    }
+
+    function bowlInset(x,y,z,w,d){
+      const g=new THREE.LatheGeometry([
+        new THREE.Vector2(.015,-.19),new THREE.Vector2(.18,-.18),new THREE.Vector2(.33,-.11),
+        new THREE.Vector2(.43,-.045),new THREE.Vector2(.49,0)
+      ],20);
+      g.scale(w,1,d);
+      place('casting',liner,g,x,y,z);
+    }
+
+    function suspend(x,y,z,rx,rz){
+      const cap=h-.44;
+      for(let i=0;i<3;i++){
+        const theta=i*Math.PI*2/3+Math.PI*.38, dx=Math.cos(theta)*rx,dz=Math.sin(theta)*rz;
+        const segments=low?13:19;
+        for(let j=0;j<=segments;j++){
+          const t=j/segments, s=1-.96*t;
+          const link=new THREE.TorusGeometry(.042,.010,4,7).scale(.70,1.52,.81);
+          link.rotateY(theta+(j%2)*Math.PI*.5);
+          place('chains',chain,link,x+dx*s,y+(cap-y)*t,z+dz*s);
         }
-        // pilasters at span ends
-        [u0 + 0.25, u1 - 0.25].forEach(u => { put(B, F, 'wallStone', box(0.5, H, 0.3), u, H / 2, 0.15); for (let y = 0.7; y < H; y += 0.6) put(B, F, 'wallStone', box(0.56, 0.05, 0.34), u, y, 0.17); });
-      });
-      // portal framing around each doorway
-      ops.forEach(o => {
-        const hh = Math.min(o.h, H - 1.4), half = o.w / 2;
-        const grand = side === 'E';
-        const jw = grand ? 0.55 : 0.4;
-        [-1, 1].forEach(s => {
-          put(B, F, 'portal', box(jw, hh, 0.45), o.u + s * (half + jw / 2), hh / 2, 0.22);
-          // engaged colonnettes
-          put(B, F, 'column', cyl(0.14, 0.15, hh - 0.4, 14), o.u + s * (half + jw + 0.12), 0.2 + (hh - 0.4) / 2, 0.22);
-          put(B, F, 'capital', box(0.4, 0.2, 0.4), o.u + s * (half + jw + 0.12), hh - 0.1, 0.22);
-          put(B, F, 'base', box(0.4, 0.25, 0.4), o.u + s * (half + jw + 0.12), 0.125, 0.22);
-          for (let y = 0.6; y < hh - 0.3; y += 0.45) put(B, F, 'relief', box(jw * 0.6, 0.18, 0.05), o.u + s * (half + jw / 2), y, 0.46);
-        });
-        put(B, F, 'portal', box(o.w + jw * 2 + 0.6, 0.35, 0.5), o.u, hh + 0.17, 0.25);
-        if (grand) {
-          // arched tympanum above the doorway: crescent + facing lamassu
-          const top = hh + 0.35, archR = half + jw, avail = H - 1.0 - top;
-          const ar = Math.min(archR, avail);
-          if (ar > 0.6) {
-            put(B, F, 'doorFrame', new THREE.RingGeometry(ar - 0.35, ar, 32, 1, 0, Math.PI), o.u, top, 0.47);
-            put(B, F, 'relief', new THREE.RingGeometry(ar - 0.45, ar - 0.38, 32, 1, 0, Math.PI), o.u, top, 0.48);
-            put(B, F, 'wallTile', new THREE.CircleGeometry(ar - 0.35, 32, 0, Math.PI), o.u, top, 0.44);
-            put(B, F, 'doorRelief', crescent(ar * 0.36, ar * 0.29, ar * 0.13, 0.05), o.u, top + ar * 0.42, 0.45);
-            put(B, F, 'doorRelief', cyl(0.18, 0.18, 0.06, 20), o.u, top + ar - 0.17, 0.5, 0, Math.PI / 2);
-            lamassu(B, 'doorRelief', F, o.u - ar * 0.55, top + 0.05, 0.46, ar * 0.33, 1);
-            lamassu(B, 'doorRelief', F, o.u + ar * 0.55, top + 0.05, 0.46, ar * 0.33, -1);
-          }
-          // outer rectangular frame with relief panels (griffins) to the ceiling band
-          const fw = o.w + jw * 2 + 1.6;
-          put(B, F, 'portal', box(0.3, H - 0.9, 0.35), o.u - fw / 2, (H - 0.9) / 2, 0.18);
-          put(B, F, 'portal', box(0.3, H - 0.9, 0.35), o.u + fw / 2, (H - 0.9) / 2, 0.18);
-          put(B, F, 'portal', box(fw + 0.3, 0.3, 0.35), o.u, H - 1.05, 0.18);
-          cuneiformBand(B, F, o.u - fw / 2 + 0.2, o.u + fw / 2 - 0.2, H - 1.4, 0.38, 1);
-          // great bronze door leaves swung open against the wall (passage stays clear)
-          const leafW = half, leafH = hh - 0.1;
-          [-1, 1].forEach(s => {
-            const hingeU = o.u + s * half;
-                        // open 90° into the room, flat against the jamb face
-            const ru = F.ry + s * Math.PI / 2;
-            const cu = F.at(hingeU, 0, 0.55 + leafW / 2);
-            B.add('door', box(leafW, leafH, 0.12), cu[0], leafH / 2 + 0.05, cu[2], ru);
-            // panels and lamassu reliefs on the leaf (both faces)
-            [-1, 1].forEach(face => {
-              const off = face * 0.07;
-              const nx = Math.sin(ru) * off, nz = Math.cos(ru) * off;
-              for (let row = 0; row < 3; row++) {
-                const y = 0.9 + row * (leafH - 1.2) / 2;
-                B.add('doorRelief', box(leafW * 0.8, 0.06, 0.02), cu[0] + nx, y - 0.65, cu[2] + nz, ru);
-              }
-              B.add('doorRelief', cyl(0.12, 0.12, 0.04, 16), cu[0] + nx * 1.3, leafH * 0.45, cu[2] + nz * 1.3, ru, Math.PI / 2);
-            });
-          });
-        }
-      });
-    });
+        // A dark slender core makes the run continuous in reduced resolution.
+        const a=new THREE.Vector3(x+dx,y,z+dz), b=new THREE.Vector3(x+dx*.04,cap,z+dz*.04);
+        const delta=b.clone().sub(a), g=new THREE.CylinderGeometry(.008,.008,delta.length(),5);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize()));
+        const c=a.lerp(b,.5);
+        place('chains',chain,g,c.x,c.y,c.z);
+      }
+    }
 
-    /* colonnade along the long walls + upper gallery on top of it */
-    const nCols = 3, colR = 0.42, zIn = galleryDepth + 0.1;
-    const xs = []; for (let i = 0; i < nCols; i++) xs.push(b.x0 + 2.6 + (W - 5.2) * i / (nCols - 1));
-    const colH = galleryY;
-    [b.z0 + zIn, b.z1 - zIn].forEach((z, side) => {
-      // avoid a doorway on the long wall: shift columns away from door centre
-      xs.forEach(x => {
-        column(B, x, z, colH, colR);
-        ctx.colliders.push({ minx: x - colR * 1.1, maxx: x + colR * 1.1, miny: 0, maxy: H, minz: z - colR * 1.1, maxz: z + colR * 1.1, _wing: true });
-        // torch sconce on the inner face of each column
-        const dir = side === 0 ? 0 : Math.PI;
-        sconce(B, x, 2.4, z + (side === 0 ? colR + 0.05 : -colR - 0.05), dir);
-        ctx.fires.push({ x: x, y: 2.95, z: z + (side === 0 ? colR + 0.43 : -colR - 0.43), intensity: 0.8, seed: ctx.fires.length * 0.731 + 0.4, t1: true });
-      });
-      // gallery slab, beams, parapet with balusters
-      const wz = side === 0 ? b.z0 : b.z1, sgn = side === 0 ? 1 : -1;
-      const gz = wz + sgn * (zIn + 0.5) / 2;
-      B.add('gallery', box(W - 0.1, 0.4, zIn + 0.5), b.cx, galleryY + 0.2, gz);
-      B.add('beam', box(W - 0.1, 0.3, 0.6), b.cx, galleryY - 0.15, z);
-      cuneiformBandWorld(B, b.x0 + 0.1, b.x1 - 0.1, galleryY + 0.2, wz + sgn * (zIn + 0.53), sgn);
-      const pz = wz + sgn * (zIn + 0.45);
-      B.add('gallery', box(W - 0.1, 0.12, 0.3), b.cx, galleryY + 1.05, pz);
-      B.add('gallery', box(W - 0.1, 0.18, 0.28), b.cx, galleryY + 0.48, pz);
-      for (let x = b.x0 + 0.4; x < b.x1 - 0.2; x += 0.45) B.add('gallery', cyl(0.06, 0.08, 0.5, 8), x, galleryY + 0.75, pz);
-      for (let x = b.x0 + 0.6; x < b.x1; x += 1.6) B.add('beam', box(0.25, 0.25, zIn), x, galleryY - 0.12, wz + sgn * zIn / 2);
-    });
+    const ceiling=h-.12,l=-3.95,r=2.65,n=-1.62,f=1.62;
+    for(const [a,b,c,d] of [[-8,l,-6,6],[r,8,-6,6],[l,r,-6,n],[l,r,f,6]])
+      horizontal('ceiling',stone,(a+b)/2,ceiling,(c+d)/2,b-a,d-c,(b-a)/2.6,(d-c)/2.6,false);
+    for(const z of [-4.43,-2.14,2.14,4.43]){
+      box('ceiling-beams',stone,0,8.16,z,16,.42,.55,2.42);
+      box('ceil-frieze',skylightTrim,0,7.944,z,16,.047,.47,4.82);
+    }
+    for(const x of [-7.34,l-.32,r+.29,5.45,7.61])
+      box('ceiling-beams',stone,x,8.17,0,.55,.40,12,2.24);
+    for(const z of [n-.12,f+.12]) box('lightwell',stone,(l+r)/2,8.87,z,r-l+.26,.98,.29,2.26);
+    for(const x of [l-.13,r+.13]) box('lightwell',stone,x,8.87,0,.27,.98,f-n+.34,2.26);
+    horizontal('ceiling-sky',sky,(l+r)/2,9.26,0,r-l+.15,f-n+.23,1,1,false);
+    for(let i=0;i<8;i++) box('lightwell',stone,l+(i+.45)*(r-l)/8,9.01,0,.115,.17,f-n+.08,1.0);
+    for(let i=0;i<5;i++) box('lightwell',stone,(l+r)/2,9.02,n+(i+.5)*(f-n)/5,r-l+.09,.135,.082,1.0);
+    for(const x of [-3.79,-2.07,-.80,.48]){
+      const g=new THREE.BoxGeometry(.081,.13,.64).rotateY(.58);
+      place('lightwell',stone,g,x,9.01,-.28);
+    }
 
-    /* braziers with smoke-spot fires, beside the central columns */
-    [[b.cx - 1.6, b.z0 + zIn + 1.4], [b.cx - 1.6, b.z1 - zIn - 1.4]].forEach(p => {
-      brazier(B, p[0], p[1]);
-      ctx.colliders.push({ minx: p[0] - 0.6, maxx: p[0] + 0.6, miny: 0, maxy: 1, minz: p[1] - 0.6, maxz: p[1] + 0.6, _wing: true });
-      ctx.fires.push({ x: p[0], y: 1.1, z: p[1], intensity: 0.65, seed: ctx.fires.length * 0.731 + 0.4, t1: true });
-    });
-
-    /* coffered ceiling: deep beams + recessed panels with rosettes */
-    for (let x = b.x0 + 2; x < b.x1 - 0.5; x += 2) B.add('beam', box(0.35, 0.45, D - 0.1), x, H - 0.225, b.cz);
-    for (let z = b.z0 + 2; z < b.z1 - 0.5; z += 2) B.add('beam', box(W - 0.1, 0.4, 0.3), b.cx, H - 0.2, z);
-    B.add('ceiling', box(W - 0.05, 0.05, D - 0.05), b.cx, H - 0.03, b.cz);
-    for (let x = b.x0 + 1; x < b.x1; x += 2) for (let z = b.z0 + 1; z < b.z1; z += 2) B.add('relief', cyl(0.22, 0.22, 0.06, 12), x, H - 0.08, z);
-
-    B.flush(root);
-    paintRoyalT1();
-    loadAtlasTextures();
-    try { console.info('[T1] sacred entrance built:', root.children.length, 'material groups'); } catch (_) {}
-    return root;
-  };
-  function cuneiformBandWorld(B, x0, x1, y, z, sgn) {
-    // front fascia of the gallery slab facing the hall
-    B.add('frieze', box(x1 - x0, 0.32, 0.06), (x0 + x1) / 2, y, z);
-    for (let x = x0 + 0.25; x < x1 - 0.1; x += 0.5) B.add('relief', cyl(0.08, 0.08, 0.04, 10), x, y, z + sgn * 0.04, 0, Math.PI / 2);
+    draw.flush();
+    for(const n of root.children){
+      n.castShadow=false;
+      if(/^T1-(ceiling|ceil-|lightwell)/.test(n.name)) n.userData.ceiling=true;
+    }
+    effects(root,emitters,clock,low);
+    function light(color,intensity,distance,x,y,z){
+      const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);
+      l.userData.physicalFalloff=true;root.add(l);
+      return l;
+    }
+    light(0xffe2bd,37,14,-.33,7.31,0);
+    const fire=[];
+    for(const sign of [-1,1]){
+      fire.push(light(0xff9b4b,12,5.4,2.87,1.94,sign*3.41));
+      fire.push(light(0xffab63,13,6.1,-3.84,4.30,sign*4.62));
+      light(0xffcd80,10,4.8,5.91,2.32,sign*4.91);
+    }
+    SinGreatLibrary.setLibraryExposure(root,.32);
+    const camera=new THREE.PerspectiveCamera(60,16/9,.10,105);
+    camera.name='T1-presentation';camera.position.set(-9.25,1.79,0);camera.lookAt(5.65,3.25,0);root.add(camera);
+    const warmup=SinGreatLibrary.geometryWarmup(root);
+    return {
+      root,camera,collision,stairBoxes,warmup,
+      floorAt(x,z){return stairFloor(x-cx,z-cz);},
+      update(time){
+        clock.value=time;fire.forEach((l,i)=>{l.intensity=(i%2===0?12:13)*(.97+.03*Math.sin(time*4.3+i*2.14));});
+      },
+      dispose(){warmup.dispose();SinGreatLibrary.disposeResources(root);}
+    };
   }
 
-  window.SinT1Entrance = api;
+  async function build(room,doors,load,signal,constrained) {
+    const root=new THREE.Group(), maps=[];
+    root.name='T1-Sacred-Entrance';root.position.set(room.bbox.cx,0,room.bbox.cz);
+    let model,parts;
+    try{
+      model=await load(assets[0],signal);signal.throwIfAborted();
+      parts=SinGreatLibrary.split(model,names);model=null;
+      prepare(parts,constrained);
+      const loader=new THREE.TextureLoader();
+      for(const url of assets.slice(1)){
+        signal.throwIfAborted();maps.push(await loader.loadAsync(encodeURI(url)));
+      }
+      signal.throwIfAborted();
+      return assemble(room,doors,parts,maps,constrained,root);
+    }catch(error){
+      if(parts) Object.values(parts).forEach(part=>root.add(new THREE.Mesh(part.geometry,part.material)));
+      else if(model)root.add(model.scene);
+      SinGreatLibrary.disposeResources(root);throw error;
+    }finally{maps.forEach(t=>t.dispose());}
+  }
+
+  window.SinT1Entrance={build,expected,assets,maxStep,stairFloor,treads,halfStair};
 })();
