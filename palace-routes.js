@@ -53,7 +53,7 @@
       }
       return result;
     }
-    function nextRoom(origin,moving,streamed,estimate) {
+    function nextRoom(origin,moving,streamed,estimate,ready=()=>false) {
       if(!moving)return null;
       const speed=Math.hypot(moving.vx,moving.vz);
       if(speed<.18)return null;
@@ -70,13 +70,12 @@
           // first real connected opening when movement points toward it.
           if(candidate.path.length===1&&alignment<.28)continue;
           const dist=candidate.dist+length;
-          const target=byId.get(to),isRoom=target.kind==='room';
-          if(streamed.has(to)){
-            const lead=Math.max(14,Math.min(47,6.5+speed*estimate(to)));
+          if(streamed.has(to)&&!ready(to)){
+            const lead=Math.max(16,Math.min(56,8.5+speed*(estimate(to)+1.1)));
             if(dist>lead)continue;
             const score=dist+(1-alignment)*5;
             if(!best||score<best.score)best={id:to,distance:dist,score,first:candidate.path[1]||to};
-          }else if(!isRoom&&candidate.path.length<5&&dist<47){
+          }else if(candidate.path.length<6&&dist<56){
             queue.push({id:to,dist,x:portal.x,z:portal.z,path:[...candidate.path,to],alignment});
           }
         }

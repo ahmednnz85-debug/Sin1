@@ -2516,7 +2516,12 @@
   }
   function fitWingDoor(gltf, d, host) {
     const model = gltf.scene; model.name = 'BabylonianWingDoor-' + d.id;
-    model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = true; } });
+    const collisionProxies=[];
+    model.traverse(o => {
+      if(!o.isMesh)return;
+      if(o.userData.collision===true)collisionProxies.push(o);
+      else { o.castShadow=true; o.receiveShadow=true; o.frustumCulled=true; }
+    });
     model.rotation.y = d.axis === 'x' ? Math.PI * .5 : 0; model.updateMatrixWorld(true);
     const raw = new THREE.Box3().setFromObject(model), rs = raw.getSize(new THREE.Vector3());
     const span = d.axis === 'x' ? rs.z : rs.x;
@@ -2546,6 +2551,10 @@
       const c1 = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
       oa.time = 0; om.update(0); model.updateMatrixWorld(true);
       const n = d.axis === 'x' ? c1.x - c0.x : c1.z - c0.z; d.swingSign = n < 0 ? -1 : 1; }
+    // Keep the authored fitting and swing measurements. The game uses its
+    // own doorBox for collision, so these fully transparent boxes need no GL
+    // programs or draw calls when they enter the camera frustum.
+    for(const proxy of collisionProxies)proxy.removeFromParent();
     d.model = model; d.openMixer = om; d.openAction = oa; d.openClip = openClip; d.closeMixer = cm; d.closeAction = ca; d.closeClip = closeClip; d.progress = 0; d.target = 0; d.state = 'Closed'; d.autoCloseTimer = 0; d.crossed = false; d.approachSide = 0; d.autoRearm = true; model.userData.roomDoor = d.id;
     rebuildDoorColliders();
   }
@@ -2836,6 +2845,7 @@
     }
     state.archive = state.archiveLoad = state.archiveMotion = null;
     state.routes=state.nextStreamRoom=state.recentStreamRoom=state.lastStreamOrigin=null;
+    state.approachedStreamRoom=null;
     state.archiveDemand = false;
     state.archiveBudgetSampleAt = 0;
     state.archiveScreen = state.librarySightRoutes = null;
@@ -3616,7 +3626,7 @@
     const group = state.regionGroups.get('L2');
     if (libraryView) {
       state.regionGroups.forEach((node, id) => {
-        node.visible = libraryView.has(id) && (id !== 'L2' || archiveReady) && (id !== 'L3' || zoneIsReady('L3'));
+        node.visible = libraryView.has(id) && zoneIsReady(id);
       });
     }
     if (group) group.visible = sight && archiveReady;
@@ -3629,7 +3639,7 @@
     if (corridor && sight && (state.current !== 'L2' || reach > 0)) corridor.visible = true;
     if (reach === 2) {
       const library = state.regionGroups.get('L1');
-      if (library) library.visible = true;
+      if (library) library.visible = zoneIsReady('L1');
     }
     state.archiveDemand = sight && !archiveReady;
     if (window.SinT1Entrance) {
@@ -3649,10 +3659,10 @@
       if (group.visible && state.purificationHall) state.purificationHall.refreshWater(state.ctx.renderer, scene, camera);
     }
     const observatory = state.regionGroups.get('L4');
-    if (observatory) observatory.visible = observatorySight(view);
+    if (observatory) observatory.visible = observatorySight(view) && zoneIsReady('L4');
     const sacredHall = state.regionGroups.get('T3');
     if (sacredHall) {
-      sacredHall.visible = sacredHallSight(view);
+      sacredHall.visible = sacredHallSight(view) && zoneIsReady('T3');
       if (sacredHall.visible && state.sacredHall && zoneIsReady('T3')) {
         state.sacredHall.refreshWater(state.ctx.renderer, scene, camera);
       }
@@ -4167,17 +4177,28 @@
     const move=state.archiveMotion;
     const readyTime=id=>zoneStreamer.leadTime(id);
     const next=state.routes.nextRoom(origin,move,streamedRooms,readyTime);
+    const upcoming=next && zoneIsReady(next.id) &&
+      state.routes.nextRoom(origin,move,streamedRooms,readyTime,zoneIsReady);
     const nearby=state.routes.nearRoom(origin,move,streamedRooms,()=>false);
     const demand=state.templeDoors?.waiting()||state.libraryDoors?.waiting()||
       (nearby&&!zoneIsReady(nearby)?nearby:null);
     const approach=new Set();
     if(next) approach.add(next.id);
+    if(upcoming)approach.add(upcoming.id);
     if(nearby) approach.add(nearby);
     if(demand) approach.add(demand);
-    state.nextStreamRoom = demand || next?.id || null;
+    state.nextStreamRoom = demand || upcoming?.id || next?.id || null;
 
     const retained=new Set([...(state.templeDoors?.retainZones()||[]),...(state.libraryDoors?.retainZones()||[])]);
+    if(upcoming)retained.add(next.id);
     const now=performance.now();
+    // A short stop to push the first door must not evict the room being
+    // prepared beyond its corridor. Only an actual approach can set this.
+    if(state.nextStreamRoom && state.nextStreamRoom!==origin){
+      state.approachedStreamRoom={id:state.nextStreamRoom,until:now+7500};
+    }
+    const approached=state.approachedStreamRoom;
+    if(approached && now<approached.until && zoneDist.get(approached.id)<=4)retained.add(approached.id);
     if(state.lastStreamOrigin!==origin){
       if(streamedRooms.has(state.lastStreamOrigin))state.recentStreamRoom={id:state.lastStreamOrigin,until:now+11000};
       state.lastStreamOrigin=origin;
@@ -4344,8 +4365,7 @@
     if (visibleIds) {
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
-        g.visible = visibleIds.has(rr.id) && (rr.id !== 'L2' || zoneIsReady('L2')) && (rr.id!=='L3'||zoneIsReady('L3')) && (rr.id!=='K5'||zoneIsReady('K5')) &&
-          (rr.id !== 'T5' || zoneIsReady('T5')) && (rr.id !== 'T4' || zoneIsReady('T4')) && (rr.id !== 'T2' || zoneIsReady('T2')) && (rr.id !== 'T1' || zoneIsReady('T1'));
+        g.visible = visibleIds.has(rr.id) && zoneIsReady(rr.id);
       });
       // Zone streaming is the single source of truth: prefetch, budgeted
       // uploads, shader compile (shells + dress), atomic reveal, LRU eviction

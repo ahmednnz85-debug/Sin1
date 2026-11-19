@@ -40,3 +40,15 @@ test('a cold room has explicit readiness demand only near its portal mouth', () 
   assert.equal(network.nearRoom('Passage', { x: 7, z: 2.2 }, rooms, () => false), null);
   assert.equal(network.nearRoom('Passage', { x: 2, z: 0 }, rooms, () => false), null);
 });
+
+test('a prepared room can lead to a second room before the first threshold is crossed', () => {
+  const archive = area('Archive', 18, 28, -4, 4, 'room');
+  const c = door('archive-door', 'Study', 'Archive', 18, 0);
+  const route = create([hall, corridor, study, archive], [
+    ['Hall', 'Passage', a.id], ['Passage', 'Study', b.id], ['Study', 'Archive', c.id]
+  ], [a, b, c]);
+  const motion = { x: -6, z: 0, vx: 5, vz: 0 };
+  const zones = new Set(['Study', 'Archive']);
+  assert.equal(route.nextRoom('Hall', motion, zones, () => 4).id, 'Study');
+  assert.equal(route.nextRoom('Hall', motion, zones, () => 4, id => id === 'Study').id, 'Archive');
+});
