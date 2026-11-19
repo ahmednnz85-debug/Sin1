@@ -145,7 +145,7 @@
     const rearZ = hall.length + 5;
     const REAR = addCon(rectRegion('REAR', 'Shared', 'Rear Gallery', -28, rearZ, back + 44, 6, 7, 'gallery'));
     const K5 = addRoom(rectRegion('K5', 'Kings', ROOM_NAMES.K5, -28, rearZ + 12, 22, 16, 6));
-    const KC2 = addCon(rectRegion('KC2', 'Kings', 'Kings L corridor', KC1x - 3, K5.bbox.z1 + 1, K5.bbox.cx - KC1x + 3, 6, 6, 'corridor'));
+    const KC2 = addCon(rectRegion('KC2', 'Kings', 'Kings L corridor', KC1x - 3, K5.bbox.z1 + 1, K5.bbox.cx - KC1x + 6, 6, 6, 'corridor'));
     const KC1 = addCon(rectRegion('KC1', 'Kings', 'Kings L corridor', KC1x - 3, K2.bbox.z1 + 1, 6, KC2.bbox.z1 - K2.bbox.z1 - 1, 6, 'corridor'));
     door('K2-KC1', 'K2', 'KC1', KC1x, K2.bbox.z1 + 0.5, 'z');
     links.push(['KC1', 'KC2', 'KC1-KC2']);

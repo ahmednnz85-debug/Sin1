@@ -4966,6 +4966,8 @@
     const sacredHallBoxes = (wings && wings.sacredHall && wings.sacredHall.cameraColliders) || noCameraColliders;
     const entranceBoxes = (wings && wings.sacredEntrance && wings.sacredEntrance.cameraColliders) || noCameraColliders;
     const templeDoors = wings?.templeDoors?.cameraBoxes || noCameraColliders;
+    const studyBoxes=wings?.study?.cameraColliders||noCameraColliders;
+    const kingBoxes=wings?.k5Dress?.cameraColliders||noCameraColliders;
     const purificationBoxes = (wings && wings.purificationHall && wings.purificationHall.cameraColliders) || noCameraColliders;
     const sanctuaryBoxes = (wings && wings.lunarSanctuary && wings.lunarSanctuary.cameraColliders) || noCameraColliders;
     const offeringsBoxes = (wings && wings.royalOfferings && wings.royalOfferings.cameraColliders) || noCameraColliders;
@@ -4977,14 +4979,16 @@
     const sanctuaryCount = offeringsCount + sanctuaryBoxes.length;
     const purificationCount = sanctuaryCount + purificationBoxes.length;
     const entranceCount = purificationCount + entranceBoxes.length;
-    for (let i = 0; i < entranceCount + templeDoors.length; i++) {
+    const templeDoorCount=entranceCount+templeDoors.length,studyCount=templeDoorCount+studyBoxes.length;
+    for (let i = 0; i < studyCount+kingBoxes.length; i++) {
       const b = i < staticCount ? colliders[i] : i < libraryCount ? libraryBoxes[i - staticCount] :
         i < archiveCount ? archiveBoxes[i - libraryCount] : i < observatoryCount ? observatoryBoxes[i - archiveCount] :
         i < sacredHallCount ? sacredHallBoxes[i - observatoryCount] :
         i < offeringsCount ? offeringsBoxes[i - sacredHallCount] :
         i < sanctuaryCount ? sanctuaryBoxes[i - offeringsCount] :
         i < purificationCount ? purificationBoxes[i - sanctuaryCount] :
-        i < entranceCount ? entranceBoxes[i - purificationCount] : templeDoors[i - entranceCount];
+        i < entranceCount ? entranceBoxes[i - purificationCount] :
+        i < templeDoorCount ? templeDoors[i-entranceCount] : i < studyCount ? studyBoxes[i-templeDoorCount] : kingBoxes[i-studyCount];
       if (b.maxx < lox || b.minx > hix || b.maxy < loy || b.miny > hiy || b.maxz < loz || b.minz > hiz) continue;
       if (isProp(b) !== !!props) continue;
       let box = padBox(b, r);

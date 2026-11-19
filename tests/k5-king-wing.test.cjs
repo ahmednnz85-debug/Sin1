@@ -1,40 +1,64 @@
 const test = require('node:test');
-const assert = require('node:assert');
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const { solveLayout } = require('../wing-architecture');
+const { hall } = require('../data/palace-colliders.json');
 const root = path.join(__dirname, '..');
 const wings = fs.readFileSync(path.join(root, 'wings.js'), 'utf8');
+const architecture = fs.readFileSync(path.join(root, 'palace-private-rooms.js'), 'utf8');
+const environment = { window: {} };
+vm.runInNewContext(architecture, environment);
+const { aperture, studyExpected } = environment.window.SinPrivateRooms;
 const decode = s => s.replace(/\\u([0-9A-Fa-f]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+const { rooms, doors, connectors } = solveLayout(hall);
 
-test('K5 uses the supplied king-wing assets and edited woman mural texture', () => {
-  for (const key of ['k5Floor', 'k5Ceiling', 'k5WallKing', 'k5WallWoman', 'k5Bed', 'k5Steps', 'k5Furniture', 'k5Chandelier']) {
+test('private rooms use the uploaded atlases and original furniture files', () => {
+  for (const key of ['k5Bed', 'k5Steps', 'k5Furniture', 'k5Chandelier']) {
     const m = wings.match(new RegExp(key + ": '([^']+)'"));
-    assert.ok(m, key + ' declared');
-    assert.ok(fs.existsSync(path.join(root, decode(m[1]))), key + ' file exists: ' + decode(m[1]));
+    assert.ok(m && fs.existsSync(path.join(root, decode(m[1]))), key);
+  }
+  for (const key of ['study', 'studyAtlas', 'studyRoof', 'kingAtlas', 'kingRoof', 'curtain', 'sky',
+    'throneColumn', 'throneAtlas']) {
+    const m = architecture.match(new RegExp(key + ":'([^']+)'"));
+    assert.ok(m && fs.existsSync(path.join(root, m[1])), key);
   }
 });
 
-test("K5 keeps the woman's original flat mural frame and uses its edited image texture", () => {
-  assert.match(wings, /k5WallWoman: 'assets\/k5-woman-balcony-mural-red\.png'/);
-  assert.match(wings, /addWall\(east, WING_FILES\.k5WallWoman, 1, 'K5-woman-mural-wall'\)/);
-  assert.doesNotMatch(wings, /function addK5Balcony/);
+test('the study and balcony stay on the east wall, away from the existing routes', () => {
+  for (const [id, expected] of [['L3', ['LC3-L3']], ['K5', ['KC2-K5', 'K5-KC5R']]]) {
+    const room = rooms.find(r => r.id === id), opening = aperture(room);
+    assert.equal(opening.x, room.bbox.x1);
+    assert.ok(opening.z - opening.half > room.bbox.z0);
+    assert.ok(opening.z + opening.half < room.bbox.z1);
+    assert.ok(opening.bottom > 0 && opening.top < room.height);
+    const attached = doors.filter(d => d.from === id || d.to === id);
+    assert.deepEqual(attached.map(d => d.id), expected);
+    assert.ok(attached.every(d => d.axis === 'z'));
+  }
+  assert.match(architecture, /spans\.map\(u=>archHole/);
+  assert.match(architecture, /ExtrudeGeometry\(shape/);
+  assert.match(architecture, /K5-blood-sky-panorama/);
+  assert.match(architecture, /place\('lattice'/);
 });
 
-test('K5 is a streamed zone expecting bed, steps and the cut furniture', () => {
-  const block = wings.slice(wings.indexOf('    K5: [\n      \'K5-king-floor\''));
-  for (const n of ['K5-king-bed', 'K5-bed-steps', 'K5-woman-mural-wall', 'K5-king-ceiling', 'K5-throne', 'K5-sphinx', 'K5-majlis-chandelier']) assert.ok(block.includes("'" + n + "'"), n);
-  assert.match(wings, /\{ id: 'K5', prefetchHops/);
+test('the treasury corridor covers the full original width of the K5 door', () => {
+  const door = doors.find(d => d.id === 'KC2-K5');
+  const { bbox } = connectors.find(c => c.id === 'KC2');
+  assert.ok(bbox.x0 <= door.x - door.width / 2);
+  assert.ok(bbox.x1 >= door.x + door.width / 2);
 });
 
-test('K5 bed is enlarged and uses the dedicated council chandelier with procedural fire', () => {
-  assert.match(wings, /k5PlaceModel\(dress, bed, 'K5-king-bed', D\.cx, D\.cz, D\.h - 0\.08, 0, 3\.65, 3\.75, 4\.65/);
-  assert.match(wings, /loadK5Chandelier\(dress/);
+test('the streamer gates both rooms and retains K5 furniture and the balcony', () => {
+  const block = wings.slice(wings.indexOf("    K5: [\n      'K5-king-floor'"));
+  for (const name of ['K5-king-bed', 'K5-bed-steps', 'K5-king-ceiling', 'K5-throne', 'K5-sphinx',
+    'K5-majlis-chandelier', 'K5-balcony-arches', 'K5-balcony-curtain', 'K5-blood-sky-panorama',
+    'K5-balcony-spandrel', 'K5-balcony-arch-inlay', 'K5-balcony-balusters', 'K5-balcony-seats']) {
+    assert.ok(block.includes("'" + name + "'"), name);
+  }
+  assert.ok(studyExpected.includes('L3-desk') && studyExpected.includes('L3-window-jamb'));
+  assert.match(wings, /d===state\.studyDoor \? \['L3'\]/);
+  assert.match(wings, /load:dressK5,prepareGeometry/);
   assert.match(wings, /addK2ChandelierFire\(dress\.host, cups\)/);
-});
-
-test('K5 wall seams are closed at short runs, corners, ceiling and floor', () => {
-  assert.match(wings, /k3WallQuads\(segs, b, h, \{ minSpan: 0\.02, endOverlap: 0\.08, bottomOverlap: 0\.18, topOverlap: 0\.18 \}\)/);
-  assert.match(wings, /const minSpan = opts\.minSpan == null \? 1\.2 : opts\.minSpan/);
-  assert.match(wings, /const s0 = r\.s0 - endOverlap, s1 = r\.s1 \+ endOverlap/);
-  assert.match(wings, /const y0 = r\.door \? Math\.min\(r\.door\.height, h\) : -bottomOverlap, y1 = h \+ topOverlap/);
 });

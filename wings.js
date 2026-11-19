@@ -118,10 +118,6 @@
     k3Table: 'assets/طاولة الخرائط.glb',
     k3Furniture: 'assets/اثاث_الخرائط.glb',
     // K5 king private wing: only the supplied repository artwork and models.
-    k5Floor: 'assets/\u0627\u0631\u0636\u064A\u0629 \u0627\u0644\u0645\u0644\u0643.JPG',
-    k5Ceiling: 'assets/\u0633\u0642\u0641 \u0627\u0644\u0645\u0644\u0643.JPG',
-    k5WallKing: 'assets/\u062C\u062F\u0627\u0631\u064A\u0629 \u0627\u0644\u0645\u0644\u0643.JPG',
-    k5WallWoman: 'assets/k5-woman-balcony-mural-red.png',
     k5Bed: 'assets/\u0633\u0631\u064A\u0631 \u0627\u0644\u0645\u0644\u0643.glb',
     k5Steps: 'assets/\u062F\u0631\u062C \u0627\u0644\u0633\u0631\u064A\u0631.glb',
     k5Furniture: 'assets/\u0627\u062B\u0627\u062B \u0627\u0644\u062E\u0632\u0627\u0646\u0629 2.glb',
@@ -477,7 +473,7 @@
     const rearZ = hall.length + 5;
     const REAR = addCon(rectRegion('REAR', 'Shared', 'Rear Gallery', -28, rearZ, back + 44, 6, 7, 'gallery'));
     const K5 = addRoom(rectRegion('K5', 'Kings', ROOM_NAMES.K5, -28, rearZ + 12, 22, 16, 6));
-    const KC2 = addCon(rectRegion('KC2', 'Kings', 'Kings L corridor', KC1x - 3, K5.bbox.z1 + 1, K5.bbox.cx - KC1x + 3, 6, 6, 'corridor'));
+    const KC2 = addCon(rectRegion('KC2', 'Kings', 'Kings L corridor', KC1x - 3, K5.bbox.z1 + 1, K5.bbox.cx - KC1x + 6, 6, 6, 'corridor'));
     const KC1 = addCon(rectRegion('KC1', 'Kings', 'Kings L corridor', KC1x - 3, K2.bbox.z1 + 1, 6, KC2.bbox.z1 - K2.bbox.z1 - 1, 6, 'corridor'));
     door('K2-KC1', 'K2', 'KC1', KC1x, K2.bbox.z1 + 0.5, 'z');
     links.push(['KC1', 'KC2', 'KC1-KC2']);
@@ -741,6 +737,20 @@
       for (const i of a) if (!seen.has(i)) { seen.add(i); out.push(state.colliders[i]); }
     }
     return out;
+  }
+  function cutCollider(box, cut) {
+    const middle={...box}, pieces=[];
+    for(const axis of ['x','y','z'])if(box['min'+axis]>=cut['max'+axis]||box['max'+axis]<=cut['min'+axis])return [box];
+    for(const axis of ['x','y','z']){
+      const lo='min'+axis,hi='max'+axis;
+      if(middle[lo]<cut[lo]){
+        pieces.push({...middle,[hi]:cut[lo]});middle[lo]=cut[lo];
+      }
+      if(middle[hi]>cut[hi]){
+        pieces.push({...middle,[lo]:cut[hi]});middle[hi]=cut[hi];
+      }
+    }
+    return pieces;
   }
   function capsuleBlocked(x, z, radius, fromY) {
     const r = radius == null ? 0.32 : radius;
@@ -1065,6 +1075,9 @@
     // colliders still use baseWall + addK1Colliders.
     const k1v = state.rooms.find(r => r.id === 'K1'), pl3v = state.doors.find(d => d.id === 'PalaceL3');
     if (k1v && pl3v) visualWall = difference(visualWall, solid(polyRect(k1v.bbox.x0, k1v.bbox.z0, pl3v.x - k1v.bbox.x0 + 0.05, k1v.bbox.z1 - k1v.bbox.z0)));
+    for (const opening of state.privateApertures || []) {
+      visualWall = difference(visualWall, solid(polyRect(opening.x-.15,opening.z-opening.half,1.55,opening.half*2)));
+    }
     state.visualWallSolid = visualWall;
     vis('wall-diff');
     await yieldWing();
@@ -1143,8 +1156,8 @@
       // K2 columns are the real asset extracted from الاستقبال.glb (dressK2).
       // K2 and K3 keep their own dressings, so the procedural torch brackets stay out.
       if (r.id !== 'K1') {
-        if (r.id !== 'K4' && r.id !== 'K5') addFutureZones(r, g);
-        if (!['K2', 'K3', 'K4', 'K5', 'T1', 'T3', 'L1', 'L2', 'L4'].includes(r.id) &&
+        if (r.id !== 'K4' && r.id !== 'K5' && !(r.id==='L3' && window.SinPrivateRooms)) addFutureZones(r, g);
+        if (!['K2', 'K3', 'K4', 'K5', 'T1', 'T3', 'L1', 'L2', 'L4', 'L3', 'K5'].includes(r.id) &&
             !(r.id === 'T5' && window.SinRoyalOfferings) && !(r.id === 'T4' && window.SinLunarSanctuary) && !(r.id === 'T2' && window.SinPurificationHall)) addTorches(r);
       }
     }
@@ -1163,6 +1176,18 @@
       const panel = boxAt(width + .08, height + .04, .12, x, height / 2, z);
       state.archiveScreen = mesh(panel, state.darkMat, 'LC2-archive-portal-occluder', archiveCorridor);
       state.archiveScreen.castShadow = false;
+    }
+    if (state.studyDoor) {
+      const d=state.studyDoor;
+      state.studyScreen=mesh(boxAt(d.width+.03,d.height,.09,d.x,d.height/2,d.z),
+        state.darkMat,'L3-pending-study',state.regionGroups.get('LC3'));
+      state.studyScreen.castShadow=false;
+    }
+    state.kingScreens=[];
+    if(window.SinPrivateRooms)for(const d of state.doors.filter(d=>d.from==='K5'||d.to==='K5')){
+      const corridor=state.regionGroups.get(d.from==='K5'?d.to:d.from);
+      const screen=mesh(boxAt(d.width+.04,d.height,.09,d.x,d.height/2,d.z),state.darkMat,d.id+'-pending-apartments',corridor);
+      state.kingScreens.push(screen);
     }
     const offeringCorridor = state.regionGroups.get('TC5');
     if (state.offeringPortal && !state.templeDoorIds?.has(state.offeringPortal.id) && offeringCorridor && window.SinRoyalOfferings) {
@@ -2660,7 +2685,7 @@
       if (!d || d._roomDoor || state.templeDoorIds?.has(d.id)) return;
       const entranceDoor = window.SinT1Entrance && state.entranceDoors.includes(d);
       if (d.kind === 'arch' && d.id !== 'PalaceR1' && !entranceDoor) return;
-      const targets = entranceDoor ? ['T1'] : d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] : d === state.offeringPortal ? ['T5'] :
+      const targets = entranceDoor ? ['T1'] : d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] : d===state.studyDoor ? ['L3'] : d === state.offeringPortal ? ['T5'] :
         window.SinPurificationHall && state.purificationDoors.includes(d) ? ['T2'] :
         window.SinLunarSanctuary && state.sanctuaryDoors.includes(d) ? ['T4'] :
         state.observatoryDoors.includes(d) ? ['L4'] : state.sacredHallDoors.includes(d) ? ['T3'] :
@@ -2761,6 +2786,9 @@
   }
 
   function dispose() {
+    state.studyLoad?.abort();state.study?.warmup.dispose();state.studyLoad=state.study=null;
+    state.k5Dress?.controller?.abort();state.k5Dress?.warmup?.dispose();
+    state.studyDoor=state.studyScreen=null;state.privateApertures=[];
     state.templeDoors?.dispose();
     state.templeDoors=state.templeDoorIds=null;
     if (state.entranceLoad) state.entranceLoad.abort();
@@ -2888,6 +2916,8 @@
     state.sacredHallEntry = doorFor('PalaceR3');
     const eastEntrance = doorFor('T1-TC12'), southEntrance = doorFor('T1-TR1');
     state.entranceDoors = [state.sacredHallEntry, eastEntrance, southEntrance];
+    state.studyDoor = window.SinPrivateRooms ? doorFor('LC3-L3') : null;
+    state.privateApertures = window.SinPrivateRooms ? state.rooms.filter(r=>r.id==='L3'||r.id==='K5').map(r=>SinPrivateRooms.aperture(r)) : [];
     state.entranceRoutes = new Map([
       ['ARCH_R3',[state.sacredHallEntry]],
       ['TC12',[eastEntrance]],['T2',[doorFor('TC12-T2'),eastEntrance]],['TR1',[southEntrance]]
@@ -2969,6 +2999,17 @@
       await yieldWing();
       await makeColliders(state.baseWall, state.caps);
       wingMark('wings colliders'); phase('colliders'); await yieldWing();
+    }
+    for(const opening of state.privateApertures){
+      const cut={minx:opening.x-.36,maxx:opening.x+1.50,miny:opening.bottom,maxy:opening.top,
+        minz:opening.z-opening.half,maxz:opening.z+opening.half};
+      state.colliders=state.colliders.flatMap(box=>cutCollider(box,cut));
+    }
+    if(window.SinPrivateRooms)for(const d of state.doors.filter(d=>d.from==='K5'||d.to==='K5')){
+      // Grid padding can intrude into the rebuilt corridor mouth. Keep the
+      // whole original doorway clear using the actual jamb coordinates.
+      const cut={minx:d.x-d.width/2,maxx:d.x+d.width/2,miny:0,maxy:d.height,minz:d.z-.96,maxz:d.z+.96};
+      state.colliders=state.colliders.flatMap(box=>cutCollider(box,cut));
     }
     const templeLintels=await buildVisuals(layout);
     wingMark('wings visuals'); phase('visuals'); await yieldWing();
@@ -3168,6 +3209,31 @@
       }
       return loader.parseAsync(buffer, '');
     });
+  }
+
+  function privateCameraColliders(boxes) {
+    const o=state.root.position;
+    return boxes.map(b=>({minx:b.minx+o.x,maxx:b.maxx+o.x,miny:b.miny+o.y,maxy:b.maxy+o.y,
+      minz:b.minz+o.z,maxz:b.maxz+o.z,_wing:true}));
+  }
+  function syncPrivateCeiling(group,id,ready) {
+    const fallback=group?.getObjectByName(id+'-ceiling');
+    if(fallback)fallback.visible=!ready&&!state.cutaway;
+    const room=id==='L3'?state.study:state.k5Dress?.architecture;
+    room?.root.traverse(node=>{if(node.userData.ceiling)node.visible=ready&&!state.cutaway;});
+  }
+  function loadStudy(api) {
+    const room=state.rooms.find(r=>r.id==='L3'), controller=new AbortController();
+    state.studyLoad=controller;
+    SinPrivateRooms.study(room,[state.studyDoor],loadRoomModel,controller.signal,deviceProfile.constrained).then(study=>{
+      if(controller.signal.aborted||state.studyLoad!==controller){study.dispose();return;}
+      state.study=study;
+      const o=state.root.position;
+      study.lightOrigin.set(o.x+room.bbox.cx,o.y,o.z+room.bbox.cz);
+      zoneStreamer.markReleasable(study.root);
+      api.add(study.root);
+      api.done();
+    },error=>{if(state.studyLoad===controller&&!controller.signal.aborted)api.fail(error);});
   }
 
   function loadSacredEntrance(api) {
@@ -3531,10 +3597,15 @@
     const group = state.regionGroups.get('L2');
     if (libraryView) {
       state.regionGroups.forEach((node, id) => {
-        node.visible = libraryView.has(id) && (id !== 'L2' || archiveReady);
+        node.visible = libraryView.has(id) && (id !== 'L2' || archiveReady) && (id !== 'L3' || zoneIsReady('L3'));
       });
     }
     if (group) group.visible = sight && archiveReady;
+    if(state.studyScreen)state.studyScreen.visible=!zoneIsReady('L3');
+    const royal=state.regionGroups.get('K5');
+    if(royal && !zoneIsReady('K5'))royal.visible=false;
+    for(const screen of state.kingScreens||[])screen.visible=!zoneIsReady('K5');
+
     const corridor = state.regionGroups.get('LC2');
     if (corridor && sight && (state.current !== 'L2' || reach > 0)) corridor.visible = true;
     if (reach === 2) {
@@ -3812,6 +3883,20 @@
         triCache.delete('L4');
       },
       ownsObject: node => node.name === 'L4-Babylonian-Observatory' },
+    ...(window.SinPrivateRooms?[{id:'L3',prefetchHops:2,priority:-1.4,requireComplete:true,keepShell:true,serialPreparation:true,
+      estProcessMB:deviceProfile.constrained?34:65,estGpuMB:deviceProfile.constrained?24:43,estCpuMB:deviceProfile.constrained?15:26,
+      load:loadStudy,prepareGeometry:(api,r)=>state.study.warmup.step(r),
+      onReady(api){
+        state.study.cameraColliders=privateCameraColliders(state.study.boxes);
+        state.colliders.push(...state.study.boxes);rebuildSpatial();
+        syncPrivateCeiling(api.group,'L3',true);updatePassageGates();triCache.delete('L3');
+      },
+      onFailure(error){registerLibraryFailure('L3');console.warn('[L3] Study preparation failed',error);},
+      unload(api){
+        state.studyLoad?.abort();state.study?.warmup.dispose();state.studyLoad=state.study=null;
+        state.colliders=state.colliders.filter(b=>!b._studyProp);
+        syncPrivateCeiling(api.group,'L3',false);triCache.delete('L3');
+      },ownsObject:node=>node.name==='L3-Scribes-Study'}]:[]),
     { id: 'L2', prefetchHops: 2, priority: -1, requireComplete: true, keepShell: true, serialPreparation: true,
       estimateIncoming: archiveProfile,
       load: loadArchive,
@@ -3909,11 +3994,22 @@
       isComplete: function () { return roomCompleteness('K4').complete; },
       unload: function (api) { state.k4Dress = null; state.colliders = state.colliders.filter(function (c) { return !c._k4Prop; }); if (api.group) api.group.userData.k4Dressed = false; },
       ownsObject: streamedName('K4') },
-    { id: 'K5', prefetchHops: deviceProfile.prefetchHops, priority: 3,
-      load: function () { dressK5(); },
-      isComplete: function () { return roomCompleteness('K5').complete; },
-      unload: function (api) { state.k5Dress = null; state.colliders = state.colliders.filter(function (c) { return !c._k5Prop; }); if (api.group) api.group.userData.k5Dressed = false; },
-      ownsObject: streamedName('K5') }
+    ...(window.SinPrivateRooms?[{id:'K5',prefetchHops:deviceProfile.prefetchHops,priority:3,
+      requireComplete:true,keepShell:true,serialPreparation:true,
+      estProcessMB:48,estGpuMB:34,estCpuMB:24,
+      load:dressK5,prepareGeometry:(api,renderer)=>state.k5Dress.warmup.step(renderer),
+      onReady(api){
+        state.k5Dress.cameraColliders=privateCameraColliders(state.colliders.filter(b=>b._k5Prop));
+        syncPrivateCeiling(api.group,'K5',true);
+        rebuildSpatial();updatePassageGates();triCache.delete('K5');
+      },
+      onFailure(error){registerLibraryFailure('K5');console.warn('[K5] Apartments preparation failed',error);},
+      unload(api){
+        state.k5Dress?.controller.abort();state.k5Dress?.warmup?.dispose();
+        state.k5Dress=null;state.colliders=state.colliders.filter(b=>!b._k5Prop);
+        if(api.group)api.group.userData.k5Dressed=false;
+        syncPrivateCeiling(api.group,'K5',false);triCache.delete('K5');
+      },ownsObject:node=>node.name==='K5-Apartment-Dress'}]:[])
   ];
   function zonePrepare(api) {
     // Material fixes that change the shader program must happen BEFORE the
@@ -4029,7 +4125,7 @@
     if (bestId) set.add(bestId);
     return set;
   }
-  const libraryZones = new Set(['L1', 'L2', 'L4']);
+  const libraryZones = new Set(['L1','L2','L4',...(window.SinPrivateRooms?['L3']:[])]);
   const retainedLibrary = new Set(['L1', 'L2']);
   const retainedObservatory = new Set(['L1', 'L4']);
   const retainedMoonPassage = new Set(['L4']);
@@ -4135,7 +4231,18 @@
     }
     let retained;
     if (inLibrary) retained = retainedLibrary;
-    if (inLibrary && !zoneIsReady('L2')) approach.add('L2');
+    const studyEntry=state.doors.find(d=>d.id==='L1-LC3');
+    const towardStudy=!!state.studyDoor&&(origin==='LC3'||origin==='L3'||
+      (origin==='L1'&&move&&studyEntry&&Math.hypot(move.x-studyEntry.x,move.z-studyEntry.z)<24&&
+        (Math.abs(move.x-studyEntry.x)<4.6||move.vz<-.25)));
+    if(towardStudy){
+      approach.add('L3');
+      retained=new Set(['L1','L3']);
+    } else if (inLibrary && !zoneIsReady('L2')) approach.add('L2');
+    if(['KC2','K5','KC5R'].includes(origin)) {
+      approach.add('K5');
+      retained=new Set([...(retained||[]),'K5']);
+    }
     let towardObservatory = false;
     if (move && state.observatoryApproach) {
       const d = state.observatoryApproach;
@@ -4223,14 +4330,14 @@
       for (const id of doorZones) approach.add(id);
       retained=new Set([...(retained||[]),...doorZones]);
     }
-    const demand = templeDemand || (entranceNear && !zoneIsReady('T1') ? 'T1' :
+    const demand = templeDemand || (towardStudy&&!zoneIsReady('L3')?'L3':entranceNear && !zoneIsReady('T1') ? 'T1' :
       purgeNear && purgeEntry && !zoneIsReady('T2') ? 'T2' :
       towardSanctuary && atSanctuary && !zoneIsReady('T4') ? 'T4' :
       nearTemple && !zoneIsReady('T3') ? 'T3' :
       (origin === 'T3' || origin === 'TC5') && !zoneIsReady('T5') ? 'T5' :
       !zoneIsReady('L1') ? 'L1' : (state.archiveDemand || archiveNear) && !zoneIsReady('L2') ? 'L2' :
         towardObservatory && !zoneIsReady('L4') ? 'L4' : null);
-    const only = inLibrary ? (towardObservatory || (visibleIds && visibleIds.has('L4')) ? libraryZones : retainedLibrary) : null;
+    const only = inLibrary ? (towardObservatory || towardStudy || (visibleIds && visibleIds.has('L4')) ? libraryZones : retainedLibrary) : null;
     return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds,
       memoryLevel: level, warmGroups, approach, retained, only,
       allowBackgroundWarm, demand });
@@ -4387,7 +4494,7 @@
     if (visibleIds) {
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
-        g.visible = visibleIds.has(rr.id) && (rr.id !== 'L2' || zoneIsReady('L2')) &&
+        g.visible = visibleIds.has(rr.id) && (rr.id !== 'L2' || zoneIsReady('L2')) && (rr.id!=='L3'||zoneIsReady('L3')) && (rr.id!=='K5'||zoneIsReady('K5')) &&
           (rr.id !== 'T5' || zoneIsReady('T5')) && (rr.id !== 'T4' || zoneIsReady('T4')) && (rr.id !== 'T2' || zoneIsReady('T2')) && (rr.id !== 'T1' || zoneIsReady('T1'));
       });
       // Zone streaming is the single source of truth: prefetch, budgeted
@@ -4439,6 +4546,7 @@
     if (_trT) _trT('PalaceWings.updateRoomDoors');
     updateCulling(false);
     if (state.library && state.current === 'L1') state.library.tick(performance.now() * 0.001);
+    if(state.study&&zoneIsReady('L3')&&state.regionGroups.get('L3')?.visible)state.study.tick(performance.now()*.001);
     if (state.sacredHall && zoneIsReady('T3') && state.regionGroups.get('T3').visible) {
       state.sacredHall.tick(performance.now() * .001);
     }
@@ -5822,18 +5930,6 @@
     });
     return by;
   }
-  function k5WallMaterial(url, repeatU) {
-    let map = corridorTexture(url);
-    if (repeatU !== 1) map = map.clone();
-    map.wrapS = THREE.RepeatWrapping; map.wrapT = THREE.ClampToEdgeWrapping;
-    map.repeat.set(repeatU, 1); map.needsUpdate = true;
-    const m = new THREE.MeshStandardMaterial({
-      map: map, roughness: 0.7, metalness: 0.06,
-      emissive: new THREE.Color(0x1a140c), emissiveIntensity: 0.12
-    });
-    state.materials.push(m);
-    return m;
-  }
   // Facing f: the object's front points to (sin f, 0, cos f).
   function k5Collider(x, z, sx, sz, rot, y0, y1) {
     const c = Math.abs(Math.cos(rot)), sn = Math.abs(Math.sin(rot));
@@ -5885,11 +5981,11 @@
     put('vase', b.x0 + 0.9, b.z1 - 0.9, 3 * P / 4, 1.3);
     put('vase', b.x1 - 0.9, b.z0 + 0.9, -P / 4, 1.3);
     put('vase', b.x1 - 0.9, b.z1 - 0.9, -3 * P / 4, 1.3);
-    // East side, in front of the arched woman mural: crowned statues and the
-    // lion throne looking back across the room toward the bed.
+    // Crowned statues frame the balcony. Keep the lion throne in its side
+    // bay, so its tall back does not mask the arches or the sitting group.
     put('statue', b.x1 - 1.0, b.cz - 5.4, -P / 2, 2.8);
     put('statue', b.x1 - 1.0, b.cz + 5.4, -P / 2, 2.8);
-    put('throne', b.x1 - 3.2, b.cz, -P / 2, 1.9);
+    put('throne', b.cx + 4.35, b.cz + 6.32, -2 * P / 3, 1.9);
     // Hanging lamp over the middle of the room.
     // The chandelier is loaded separately from the dedicated المجلس GLB.
     dress.furniture = true;
@@ -5917,7 +6013,7 @@
       if (state.k5Dress !== dress || !gltf) { if (!gltf) dress.errors.push('chandelier failed'); onDone(); return; }
       const model = gltf.scene; model.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
-      const targetH = 2.25, scale = targetH / Math.max(1e-4, size.y), seat = dress.height - 0.10;
+      const targetH = 2.25, scale = targetH / Math.max(1e-4, size.y), seat = dress.height - 0.30;
       model.scale.setScalar(scale);
       model.position.set(dress.bbox.cx - c.x * scale, seat - box.max.y * scale, dress.bbox.cz - c.z * scale);
       model.name = 'K5-majlis-chandelier';
@@ -5931,93 +6027,46 @@
       dress.chandelier = true; onDone();
     });
   }
-  function dressK5() {
-    const r = state.rooms.find(function (q) { return q.id === 'K5'; }), g = state.regionGroups.get('K5');
-    if (!r || !g) return;
-    if (state.k5Dress && state.k5Dress.host === g && (state.k5Dress.loading || findNamed(g, 'K5-king-floor').length)) return;
-    const b = r.bbox, h = r.height, w = b.x1 - b.x0, d = b.z1 - b.z0;
-    const dress = state.k5Dress = { host: g, bbox: b, height: h, errors: [], loading: true, floor: false, walls: false, ceiling: false, bed: false, steps: false, furniture: false };
-
-    // ارضية الملك repeated as whole tiles across the floor (about 4 m each).
-    const floorMap = corridorTexture(WING_FILES.k5Floor);
-    floorMap.wrapS = floorMap.wrapT = THREE.RepeatWrapping;
-    floorMap.repeat.set(Math.max(1, Math.round(w / 4)), Math.max(1, Math.round(d / 4)));
-    const floorMat = new THREE.MeshStandardMaterial({ map: floorMap, roughness: 0.32, metalness: 0.04, emissive: new THREE.Color(0x0c0a10), emissiveIntensity: 0.06 });
-    state.materials.push(floorMat);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
-    floor.name = 'K5-king-floor';
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.set(b.cx, 0.018, b.cz);
-    floor.receiveShadow = true; floor.renderOrder = 2;
-    g.add(floor); hideUntilReady(floor);
-    if (state.floorMeshes) state.floorMeshes.push(floor);
-    dress.floor = true;
-
-    // Preserve the woman's mural frame and colors; only the view through its arches changes.
-    const area = solid(r.poly);
-    const freeArea = difference(area, state.baseWall);
-    const runs = corridorWallRuns(intersection(state.baseWall, offset(area, 1.6)), freeArea);
-    state.doors.filter(function (door) { return door.kind !== 'arch' && door.openPoly && (door.from === 'K5' || door.to === 'K5'); }).forEach(function (door) {
-      const op = solid(door.openPoly);
-      corridorWallRuns(op, difference(freeArea, op)).forEach(function (seg) { seg.door = door; runs.push(seg); });
-    });
-    const west = [], east = [], sides = [];
-    runs.forEach(function (seg) { (seg.nx < -0.5 ? west : seg.nx > 0.5 ? east : sides).push(seg); });
-    const addWall = function (segs, url, rep, name) {
-      const geo = k3WallQuads(segs, b, h, { minSpan: 0.02, endOverlap: 0.08, bottomOverlap: 0.18, topOverlap: 0.18 });
-      if (geo.attributes.position.count) hideUntilReady(mesh(geo, k5WallMaterial(url, rep), name, g)); else geo.dispose();
-    };
-    addWall(west, WING_FILES.k5WallKing, 1, 'K5-king-mural-walls-west');
-    addWall(sides, WING_FILES.k5WallKing, 2, 'K5-king-mural-walls-sides');
-    addWall(east, WING_FILES.k5WallWoman, 1, 'K5-woman-mural-wall');
-    dress.walls = true;
-
-    const ceilingMat = new THREE.MeshStandardMaterial({
-      map: k3ClampedMap(WING_FILES.k5Ceiling), color: 0xf0e2c4, roughness: 0.8, metalness: 0.02,
-      side: THREE.DoubleSide, emissive: new THREE.Color(0x0e0c18), emissiveIntensity: 0.1
-    });
-    state.materials.push(ceilingMat);
-    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(w, d), ceilingMat);
-    ceiling.name = 'K5-king-ceiling';
-    ceiling.rotation.x = -Math.PI / 2;
-    ceiling.position.set(b.cx, h - 0.045, b.cz);
-    ceiling.userData.ceiling = true;
-    ceiling.visible = !state.cutaway;
-    g.add(ceiling); hideUntilReady(ceiling);
-    state.ceilings.push(ceiling);
-    dress.ceiling = true;
-
-    const D = k5Dais(b);
-    const alive = function () { return state.k5Dress === dress && dress.host === g; };
-    const done = function () {
-      dress.loading = false;
-      if (dress.errors.length) console.warn('K5 dress', dress.errors);
-      if (g.userData) g.userData.k5Dressed = true;
-      rebuildSpatial();
-      if (state.root) state.root.updateMatrixWorld(true);
-      markDressReady('K5');
-    };
-    // Sequential loads so two Draco parses never overlap on mobile.
-    k3LoadGLB(WING_FILES.k5Steps, function (steps) {
-      if (!alive()) return;
-      if (steps) { k5PlaceModel(dress, steps, 'K5-bed-steps', D.cx, D.cz, 0, 0, D.r * 2, D.h, D.r * 2, false); dress.steps = true; }
-      else dress.errors.push('steps failed');
-      k3LoadGLB(WING_FILES.k5Bed, function (bed) {
-        if (!alive()) return;
-        // Center the bed on the steps and overlap the top by 8 cm so mesh tolerances
-        // cannot expose a black hairline between their contact surfaces.
-        if (bed) { k5PlaceModel(dress, bed, 'K5-king-bed', D.cx, D.cz, D.h - 0.08, 0, 3.65, 3.75, 4.65, true); dress.bed = true; }
-        else dress.errors.push('bed failed');
-        k3LoadGLB(WING_FILES.k5Furniture, function (kit) {
-          if (!alive()) return;
-          if (kit) {
-            const by = k5Classify(k3SplitFurniture(kit.scene));
-            k5PlaceFurniture(dress, by);
-          } else dress.errors.push('furniture failed');
-          loadK5Chandelier(dress, function () { done(); });
-        });
-      });
-    });
+  async function dressK5(api) {
+    if(!api)return; // The zone streamer owns this room's atomic preparation.
+    const room=state.rooms.find(r=>r.id==='K5'), shell=api.group;
+    if(!room||!shell){api.fail(Error('K5 room shell is missing'));return;}
+    const controller=new AbortController(), signal=controller.signal;
+    const host=new THREE.Group();host.name='K5-Apartment-Dress';
+    const dress=state.k5Dress={host,bbox:room.bbox,height:room.height,errors:[],loading:true,controller};
+    const alive=()=>state.k5Dress===dress&&!signal.aborted;
+    const kit=url=>new Promise((resolve,reject)=>k3LoadGLB(url,gltf=>{
+      if(!alive()){
+        if(gltf)SinGreatLibrary.disposeResources(gltf.scene);
+        reject(Error('K5 preparation interrupted'));
+      }else if(gltf)resolve(gltf);else reject(Error('K5 missing model: '+url));
+    }));
+    try{
+      const doors=state.doors.filter(d=>d.from==='K5'||d.to==='K5');
+      const architecture=await SinPrivateRooms.king(room,doors,loadRoomModel,signal,deviceProfile.constrained);
+      if(!alive()){architecture.dispose();return;}
+      dress.architecture=architecture;
+      architecture.warmup.dispose();
+      host.add(architecture.root);
+      api.add(host);
+      state.colliders.push(...architecture.boxes);
+      const D=k5Dais(room.bbox);
+      const steps=await kit(WING_FILES.k5Steps);
+      k5PlaceModel(dress,steps,'K5-bed-steps',D.cx,D.cz,0,0,D.r*2,D.h,D.r*2,false);
+      const bed=await kit(WING_FILES.k5Bed);
+      k5PlaceModel(dress,bed,'K5-king-bed',D.cx,D.cz,D.h-.08,0,3.65,3.75,4.65,true);
+      const props=await kit(WING_FILES.k5Furniture);
+      k5PlaceFurniture(dress,k5Classify(k3SplitFurniture(props.scene)));
+      await new Promise(done=>loadK5Chandelier(dress,done));
+      if(!alive())return;
+      if(dress.errors.length)throw Error(dress.errors.join(', '));
+      SinGreatLibrary.setLibraryExposure(host,.35);
+      zoneStreamer.markReleasable(host);
+      dress.warmup=SinGreatLibrary.geometryWarmup(host);
+      dress.loading=false;
+      shell.userData.k5Dressed=true;
+      api.done();
+    }catch(error){if(alive())api.fail(error);}
   }
   const STREAM_EXPECT = {
     ...(window.SinT1Entrance ? { T1: SinT1Entrance.expected } : {}),
@@ -6027,6 +6076,7 @@
     ...(window.SinRoyalOfferings ? { T5: SinRoyalOfferings.expected } : {}),
     L4: window.SinObservatory ? SinObservatory.expected : [],
     L2: window.SinRoyalArchive ? SinRoyalArchive.expected : [],
+    L3: window.SinPrivateRooms ? SinPrivateRooms.studyExpected : [],
     L1: [
       'L1-floor-medallion', 'L1-ceiling-zodiac', 'L1-skylight',
       'L1-open-arch-L1-LC4', 'L1-open-arch-L1-LC2', 'L1-open-arch-L1-LC3',
@@ -6055,10 +6105,12 @@
       'K4-candelabra', 'K4-lionSphinx'
     ],
     K5: [
-      'K5-king-floor', 'K5-king-mural-walls', 'K5-woman-mural-wall', 'K5-king-ceiling',
+      'K5-king-floor', 'K5-king-mural-walls', 'K5-king-ceiling',
       'K5-bed-steps', 'K5-king-bed', 'K5-majlis-chandelier',
       'K5-sphinx', 'K5-brazier', 'K5-vase', 'K5-statue', 'K5-throne',
-      'K5-banner', 'K5-winged-disc'
+      'K5-banner', 'K5-winged-disc', 'K5-balcony-arches', 'K5-balcony-spandrel',
+      'K5-balcony-arch-inlay', 'K5-balcony-balusters', 'K5-balcony-seats', 'K5-balcony-table',
+      'K5-balcony-curtain', 'K5-blood-sky-panorama', 'K5-royal-rug'
     ]
   };
   const STREAM_EXPECT_MIN = { K5: { 'K5-sphinx': 2, 'K5-brazier': 2, 'K5-vase': 4, 'K5-statue': 2, 'K5-banner': 2 }, K4: { 'K4-column': 2, 'K4-banner': 2, 'K4-palmPot': 3, 'K4-brazier': 2, 'K4-goldChest': 4, 'K4-vase': 4, 'K4-shelfCabinet': 2 } };
