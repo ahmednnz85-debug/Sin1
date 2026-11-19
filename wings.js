@@ -152,7 +152,7 @@
     if (entryAssets.has(WING_DOOR_FILE) && !list.some(function (a) { return a.url === WING_DOOR_FILE; })) {
       list.push({ url: WING_DOOR_FILE, kind: 'glb' });
     }
-    if (window.SinTempleDoors) list.push({url:SinTempleDoors.asset,kind:'draco',required:true});
+    if (window.SinTempleDoors) for(const url of [SinTempleDoors.asset,SinTempleDoors.libraryAsset])list.push({url,kind:'draco',required:true});
     return list.filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
   }
   function provideAsset(url, value) { if (url && value) preloaded.set(url, value); }
@@ -1047,7 +1047,7 @@
     state.materials.push(state.darkMat, state.sealMat);
     vis('materials');
     const tCaps = performance.now();
-    const capGeos=[], templeLintels=[];
+    const capGeos=[], templeLintels=[], libraryLintels=[];
     (state.caps || []).forEach(function (c, i) {
       const t1 = performance.now();
       // L1's large arch rises past the corridor's flat ceiling. Set the
@@ -1058,7 +1058,7 @@
       if (dt > 16) {
         try { console.info('[palace load] visuals-slow-cap', i, c.door && c.door.id, Math.round(dt) + 'ms'); } catch (_) {}
       }
-      const target=state.templeDoorIds.has(c.door.id)?templeLintels:capGeos;
+      const target=state.templeDoorIds.has(c.door.id)?templeLintels:state.libraryDoorIds?.has(c.door.id)?libraryLintels:capGeos;
       target.push(g);
     });
     vis('caps ' + Math.round(performance.now() - tCaps) + 'ms n=' + capGeos.length);
@@ -1169,7 +1169,7 @@
     await dressCorridors();
     const archiveOpening = state.archivePortals[2];
     const archiveCorridor = state.regionGroups.get('LC2');
-    if (archiveOpening && archiveCorridor) {
+    if (archiveOpening && archiveCorridor && !state.libraryDoorIds?.has(archiveOpening.id)) {
       const { x, z, width, height } = archiveOpening;
       // The far archive portal remains occluded until all of L2 can be
       // drawn. This is inside LC2, beyond the permanently open L1 arch.
@@ -1177,7 +1177,7 @@
       state.archiveScreen = mesh(panel, state.darkMat, 'LC2-archive-portal-occluder', archiveCorridor);
       state.archiveScreen.castShadow = false;
     }
-    if (state.studyDoor) {
+    if (state.studyDoor && !state.libraryDoorIds?.has(state.studyDoor.id)) {
       const d=state.studyDoor;
       state.studyScreen=mesh(boxAt(d.width+.03,d.height,.09,d.x,d.height/2,d.z),
         state.darkMat,'L3-pending-study',state.regionGroups.get('LC3'));
@@ -1242,7 +1242,7 @@
     const tMx = performance.now();
     state.root.updateMatrixWorld(true);
     try { console.info('[palace load] visuals-matrix', Math.round(performance.now() - tMx) + 'ms'); } catch (_) {}
-    return templeLintels.length ? mergeGeometries(templeLintels) : null;
+    return {Temple:templeLintels.length?mergeGeometries(templeLintels):null,Library:libraryLintels.length?mergeGeometries(libraryLintels):null};
   }
   /* ---------------------------------------------------------------------------
      Corridor dressing: every corridor/gallery region of the Kings, Library and
@@ -2511,7 +2511,7 @@
       const box = doorBox(d, d._colliderBox || (d._colliderBox = { _door: true, _doorRef: d }));
       boxes[w++] = box;
     });
-    for (const b of state.templeDoors?.localBoxes || []) boxes[w++] = b;
+    for(const runtime of [state.templeDoors,state.libraryDoors])if(runtime)for(const b of runtime.localBoxes)boxes[w++]=b;
     boxes.length = w;
   }
   function fitWingDoor(gltf, d, host) {
@@ -2682,7 +2682,7 @@
     if (!zoneStreamer || !state.doors || !state.current) return;
     const cur = state.current;
     state.doors.forEach(function (d) {
-      if (!d || d._roomDoor || state.templeDoorIds?.has(d.id)) return;
+      if (!d || d._roomDoor || state.templeDoorIds?.has(d.id) || state.libraryDoorIds?.has(d.id)) return;
       const entranceDoor = window.SinT1Entrance && state.entranceDoors.includes(d);
       if (d.kind === 'arch' && d.id !== 'PalaceR1' && !entranceDoor) return;
       const targets = entranceDoor ? ['T1'] : d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] : d===state.studyDoor ? ['L3'] : d === state.offeringPortal ? ['T5'] :
@@ -2760,12 +2760,13 @@
       }
     });
     state.templeDoors?.tick(dt,state.archiveMotion);
+    state.libraryDoors?.tick(dt,state.archiveMotion);
     rebuildDoorColliders();
     updatePassageGates();
   }
   function canInteract() { return false; }
   function doorLocked() {
-    if (state.templeDoors?.locked()) return true;
+    if(state.templeDoors?.locked()||state.libraryDoors?.locked())return true;
     // Freeze the hero only for the door they are actually opening or standing in.
     // A far door auto-closing after eviction (zone no longer ready) must not pin
     // the player in another room — that looked like a hang while standing or walking
@@ -2782,14 +2783,15 @@
   function doorReport() {
     const royal=state.doors.filter(d=>d._roomDoor).map(d=>({id:d.id,room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from,
       state:d.state||'pending',progress:+(d.progress||0).toFixed(3),loaded:!!d.model,collision:d.state!=='Open'}));
-    return royal.concat(state.templeDoors?.report()||[]);
+    return royal.concat(state.templeDoors?.report()||[],state.libraryDoors?.report()||[]);
   }
 
   function dispose() {
     state.studyLoad?.abort();state.study?.warmup.dispose();state.studyLoad=state.study=null;
     state.k5Dress?.controller?.abort();state.k5Dress?.warmup?.dispose();
     state.studyDoor=state.studyScreen=null;state.privateApertures=[];
-    state.templeDoors?.dispose();
+    state.templeDoors?.dispose();state.libraryDoors?.dispose();
+    state.libraryDoors=state.libraryDoorIds=null;
     state.templeDoors=state.templeDoorIds=null;
     if (state.entranceLoad) state.entranceLoad.abort();
     if (state.sacredEntrance) {
@@ -2908,6 +2910,8 @@
     const templePlan = window.SinTempleDoors?.plan(state.doors,state.regions);
     const templeOpenings = templePlan?.openings || [];
     state.templeDoorIds = new Set(templeOpenings.map(row=>row.portal.id));
+    const libraryPlan=window.SinTempleDoors?.plan(state.doors,state.regions,'Library');
+    state.libraryDoorIds=new Set(libraryPlan?.openings.map(row=>row.portal.id)||[]);
     state.archivePortals = ['PalaceR1', 'L1-LC2', 'LC2-L2'].map(id => state.doors.find(door => door.id === id));
     state.observatoryDoors = state.doors.filter(door => door.from === 'L4' || door.to === 'L4');
     state.observatoryApproach = state.doors.find(door => door.id === 'L1-LC4');
@@ -3011,15 +3015,21 @@
       const cut={minx:d.x-d.width/2,maxx:d.x+d.width/2,miny:0,maxy:d.height,minz:d.z-.96,maxz:d.z+.96};
       state.colliders=state.colliders.flatMap(box=>cutCollider(box,cut));
     }
-    const templeLintels=await buildVisuals(layout);
+    const doorLintels=await buildVisuals(layout);
     wingMark('wings visuals'); phase('visuals'); await yieldWing();
-    if (templeOpenings.length) {
-      const template=preloaded.get(SinTempleDoors.asset);
-      if (!template?.scene) throw new Error('Temple door asset was not prepared during palace loading');
-      state.templeDoors=SinTempleDoors.mount(template,templeOpenings,{
-        root:state.root,hero:ctx.hero,combat:ctx.combat,setFacing:yaw=>state.ctx.setFacing(yaw),
-        dark:state.darkMat,ready:zoneIsReady,floor:floorAt,passages:templePlan.passages,lintels:templeLintels
-      });
+    if(window.SinTempleDoors){
+      for(const [wing,plan,asset,key] of [
+        ['Temple',templePlan,SinTempleDoors.asset,'templeDoors'],
+        ['Library',libraryPlan,SinTempleDoors.libraryAsset,'libraryDoors']
+      ]){
+        if(!plan?.openings.length)continue;
+        const template=preloaded.get(asset);
+        if(!template?.scene)throw Error(wing+' door asset not prepared during palace loading');
+        state[key]=SinTempleDoors.mount(template,plan.openings,{
+          root:state.root,hero:ctx.hero,combat:ctx.combat,setFacing:yaw=>state.ctx.setFacing(yaw),
+          dark:state.darkMat,ready:zoneIsReady,floor:floorAt,passages:plan.passages,lintels:doorLintels[wing],wing
+        });
+      }
       rebuildDoorColliders();
     }
     rebuildSpatial(); loadRoomDoors(); phase('doors'); await yieldWing();
@@ -3345,7 +3355,7 @@
   }
 
   function templeSight(view, route, pad) {
-    return (!state.templeDoors || route.every(d=>state.templeDoors.allows(d?.id))) &&
+    return route.every(d=>(state.templeDoors?.allows(d?.id)??true)&&(state.libraryDoors?.allows(d?.id)??true)) &&
       SinWingVisibility.throughOpenings(view,route,pad);
   }
   function sacredHallSight(view) {
@@ -3499,16 +3509,16 @@
     const openings = id === 'L1' ? line : id === 'LC4' ? [west] : id === 'MP2' ? [east] :
       id === 'ARCH_R1' ? [state.archiveHallExit, ...line] :
         !id ? [state.archivePortals[0], state.archiveHallExit, ...line] : null;
-    return !!(openings && SinWingVisibility.throughOpenings(view, openings, .05));
+    return !!(openings && templeSight(view, openings, .05));
   }
 
   function cullFromObservatory(view, visible) {
     const region = regionAt(view.x, view.z);
     if (!region || region.id !== 'L4') return;
     const [west, east] = state.observatoryDoors;
-    const seeWest = SinWingVisibility.throughOpenings(view, [west], .08);
-    const seeEast = SinWingVisibility.throughOpenings(view, [east], .08);
-    const seeLibrary = seeWest && SinWingVisibility.throughOpenings(view, [west, state.observatoryApproach], .08);
+    const seeWest = templeSight(view, [west], .08);
+    const seeEast = templeSight(view, [east], .08);
+    const seeLibrary = seeWest && templeSight(view, [west, state.observatoryApproach], .08);
     if (!seeLibrary && !seeEast) visible.clear();
     else {
       if (!seeLibrary) state.regions.forEach(r => { if (r.wing === 'Library') visible.delete(r.id); });
@@ -3530,7 +3540,7 @@
     const openings = id === 'L1' ? [first, last] :
       (id === 'LC2' ? [last] : id === 'ARCH_R1' ? [state.archiveHallExit, first, last] :
         !id ? [hall, state.archiveHallExit, first, last] : null);
-    return heroInside || !!(openings && SinWingVisibility.throughOpenings(view, openings, 0.035));
+    return heroInside || !!(openings && templeSight(view, openings, 0.035));
   }
 
   function archiveExitReach(view) {
@@ -3538,8 +3548,8 @@
     const room = regionAt(view.x, view.z);
     if (!room || room.id !== 'L2') return null;
     const [, first, last] = state.archivePortals;
-    if (!SinWingVisibility.throughOpenings(view, [last], 0.08)) return 0;
-    return SinWingVisibility.throughOpenings(view, [last, first], 0.08) ? 2 : 1;
+    if (!templeSight(view, [last], 0.08)) return 0;
+    return templeSight(view, [last, first], 0.08) ? 2 : 1;
   }
 
   function makeLibrarySightRoutes() {
@@ -3576,7 +3586,7 @@
     if (!paths) return null;
     const visible = new Set();
     for (const [id, openings] of paths) {
-      if (!openings.length || SinWingVisibility.throughOpenings(view, openings, .06)) visible.add(id);
+      if (!openings.length || templeSight(view, openings, .06)) visible.add(id);
     }
     return visible;
   }
@@ -3656,8 +3666,10 @@
         if (approach) approach.visible = templeSight(view, [state.offeringPortal], .07);
       }
     }
-    if (view && state.templeDoors) {
-      state.templeDoors.sight(regionAt(view.x,view.z)?.id||state.current||'Palace',view,SinWingVisibility.throughOpenings);
+    if(view){
+      const viewer=regionAt(view.x,view.z)?.id||state.current||'Palace';
+      state.templeDoors?.sight(viewer,view,SinWingVisibility.throughOpenings);
+      state.libraryDoors?.sight(viewer,view,SinWingVisibility.throughOpenings);
     }
   }
 
@@ -4324,9 +4336,9 @@
         approach.add(id);
       }
     });
-    const templeDemand=state.templeDoors?.waiting();
-    const doorZones=state.templeDoors?.retainZones();
-    if (doorZones?.size) {
+    const templeDemand=state.templeDoors?.waiting()||state.libraryDoors?.waiting();
+    const doorZones=new Set([...(state.templeDoors?.retainZones()||[]),...(state.libraryDoors?.retainZones()||[])]);
+    if (doorZones.size) {
       for (const id of doorZones) approach.add(id);
       retained=new Set([...(retained||[]),...doorZones]);
     }
@@ -6243,7 +6255,7 @@
     sanctuaryCamera: () => state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.camera : null,
     offeringsCamera: () => state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.camera : null,
     beforePresent,
-    restoreTempleDoorPose:()=>state.templeDoors?.restore(),
+    restoreTempleDoorPose:()=>{state.templeDoors?.restore();state.libraryDoors?.restore();},
     prepareEntryLibrary,
     onLibraryStairs, onOfferingSteps, onEntranceSteps,
     restoreLibraryPose: () => { if (state.library) state.library.restoreGroundPose(); },

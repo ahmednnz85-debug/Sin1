@@ -1,23 +1,28 @@
-/* The temple doors are permanent architecture. Their model is decoded once
-   during palace load and its meshes and materials are shared by all openings. */
+/* Doors stay with their wing when rooms are streamed out. Each wing decodes
+   its model once and shares meshes and materials across its openings. */
 (function () {
   'use strict';
 
   const asset = 'assets/باب جناح المعبد.glb';
-  const rooms = /^T[1-5]$/;
+  const libraryAsset = 'assets/باب جناح المكتبة.glb';
   const clipName = side => side > 0 ? 'Inward' : 'Outward';
-  const hinge = 1.288, sill = .092, leafTop = 2.992;
+  const kits={
+    Temple:{hinge:1.288,sill:.092,leafTop:2.992,leafLength:1.276,room:/^T[1-5]$/,atlasWidth:.445,
+      entrance:'PalaceR3',threshold:'ARCH_R3',firstRoom:'T1',group:'Temple Wing Doors'},
+    Library:{hinge:1.392,sill:.076,leafTop:3.48,leafLength:1.380,room:/^L[1-4]$/,atlasWidth:.207,
+      entrance:'PalaceR1',threshold:'ARCH_R1',firstRoom:'L1',group:'Library Wing Doors'}
+  };
   const poseStart = .49, plant = .62, press = .665, release = .94, pullback = .285;
   const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
   const smooth = x => { const t = clamp(x); return t * t * (3 - 2*t); };
 
-  function plan(doors, regions) {
+  function plan(doors, regions, wing='Temple') {
     const byId = new Map(regions.map(region => [region.id, region]));
-    const list = doors.filter(d => byId.get(d.from)?.wing === 'Temple' || byId.get(d.to)?.wing === 'Temple');
+    const list = doors.filter(d => byId.get(d.from)?.wing === wing || byId.get(d.to)?.wing === wing);
     // The rear gallery meets TR1 along a common edge. Use the edge only
     // for sightlines to internal doors, leaving the shared passage open.
     const t = byId.get('TR1'), rear = byId.get('REAR');
-    if (t && rear) {
+    if (wing==='Temple' && t && rear) {
       const x0 = Math.max(t.bbox.x0, rear.bbox.x0), x1 = Math.min(t.bbox.x1, rear.bbox.x1);
       if (x1 > x0 && Math.abs(t.bbox.z1-rear.bbox.z0)<.02) {
         list.push({ id:'TR1-REAR', from:'TR1', to:'REAR', axis:'z', x:(x0+x1)/2, z:t.bbox.z1,
@@ -26,13 +31,15 @@
     }
     const openings=[], passages=[];
     for (const d of list) {
-      if (byId.get(d.from)?.wing !== 'Temple' || byId.get(d.to)?.wing !== 'Temple') {
+      if (byId.get(d.from)?.wing !== wing || byId.get(d.to)?.wing !== wing) {
         passages.push(d);
         continue;
       }
       const from = byId.get(d.from)?.bbox;
       const coord = d.axis === 'x' ? 'cx' : 'cz';
-      openings.push({portal:d,front:Math.sign((from?.[coord] ?? 0)-d[d.axis])||-1});
+      // The visible L1 arch is taller than its walking collider.
+      const coverHeight=d.id==='L1-LC4'?9.33:d.height+.08;
+      openings.push({portal:d,coverHeight,front:Math.sign((from?.[coord] ?? 0)-d[d.axis])||-1});
     }
     return {openings,passages};
   }
@@ -90,9 +97,9 @@
     };
   }
 
-  function sandstone(map) {
+  function sandstone(map,atlasWidth) {
     const material=new THREE.MeshStandardMaterial({map,color:0xab9075,roughness:.91,metalness:.02});
-    material.customProgramCacheKey=()=> 'temple-door-sandstone';
+    material.customProgramCacheKey=()=> 'wing-door-sandstone:'+atlasWidth;
     material.onBeforeCompile=shader=>{
       const varying='varying vec2 vTempleMasonryUv;';
       shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n'+varying)
@@ -110,7 +117,7 @@
         course.x+=mod(floor(course.y),2.0)*.5;
         vec2 face=fract(course);
         // Use the sandstone portion of the original door's atlas.
-        vec2 stoneUv=vec2(.025,.035)+face*vec2(.445,.43);
+        vec2 stoneUv=vec2(.025,.035)+face*vec2(${atlasWidth},.43);
         ${sample}
         vec2 edge=min(face,1.0-face);
         float joint=smoothstep(.005,.018,min(edge.x*2.3,edge.y));
@@ -120,20 +127,21 @@
     return material;
   }
 
-  function mount(template, rows, { root, hero, combat, setFacing, dark, ready, floor, passages=[], lintels=null }) {
+  function mount(template, rows, { root, hero, combat, setFacing, dark, ready, floor, passages=[], lintels=null, wing='Temple' }) {
+    const kit=kits[wing],{hinge,sill,leafTop,leafLength}=kit;
     const clips = new Map(template.animations.map(c=>[c.name,c]));
     for (const name of ['Open_Inward','Open_Outward','Close_Inward','Close_Outward']) {
-      if (!clips.has(name)) throw new Error('Temple door animation missing: '+name);
+      if (!clips.has(name)) throw new Error(wing+' door animation missing: '+name);
     }
     const hands = armRig(hero);
-    const group = new THREE.Group(); group.name='Temple Wing Doors';
+    const group = new THREE.Group(); group.name=kit.group;
     root.add(group);
-    const stone=sandstone(template.scene.getObjectByName('TempleDoor_Frame').material.map);
-    // These are the real upper walls and soffits of all nine thresholds.
+    const stone=sandstone(template.scene.getObjectByName('TempleDoor_Frame').material.map,kit.atlasWidth);
+    // The real upper walls and soffits of the thresholds.
     // They stay present even when the adjacent corridor is culled.
     const liner=lintels&&new THREE.Mesh(lintels,stone);
     if(liner){
-      liner.name='Temple Door Sandstone Lintels';
+      liner.name=wing+' Door Sandstone Lintels';
       liner.receiveShadow=true;
       root.add(liner);
     }
@@ -167,7 +175,7 @@
     function movingBoxes(d) {
       const result = [];
       for (const [i,leaf] of d.leaves.entries()) {
-        const sign=i===0?1:-1, x0=-sign*hinge, length=1.276*sign;
+        const sign=i===0?1:-1, x0=-sign*hinge, length=leafLength*sign;
         const dir=point.set(length,0,0).applyQuaternion(leaf.quaternion);
         for(let k=0;k<4;k++) {
           const a=k*.25,b=(k+1)*.25;
@@ -196,22 +204,22 @@
     }
     for(const p of passages)connect({p,progress:1});
 
-    for (const {portal:p,front} of rows) {
+    for (const {portal:p,front,coverHeight=p.height+.08} of rows) {
       const n=new THREE.Vector3(p.axis==='x'?front:0,0,p.axis==='z'?front:0);
       const t=new THREE.Vector3(n.z,0,-n.x);
       const pivot=new THREE.Group();
       pivot.position.set(p.x,0,p.z);pivot.rotation.y=Math.atan2(n.x,n.z);
-      pivot.name='TempleDoor-'+p.id; pivot.userData.isDoor=true;pivot.userData.sinKeepVisible=true;
+      pivot.name=wing+'Door-'+p.id; pivot.userData.isDoor=true;pivot.userData.sinKeepVisible=true;
       const model=template.scene.clone(true);
       const frame=model.getObjectByName('TempleDoor_Frame');
       const leaves=['TempleDoor_Left','TempleDoor_Right'].map(name=>model.getObjectByName(name));
-      if(!frame?.isMesh||leaves.some(leaf=>!leaf?.isMesh)) throw new Error('Temple door frame or leaves missing');
+      if(!frame?.isMesh||leaves.some(leaf=>!leaf||(!leaf.isMesh&&!leaf.isGroup))) throw new Error(wing+' door frame or leaves missing');
       const bounds=new THREE.Box3().setFromObject(frame), dimensions=bounds.getSize(new THREE.Vector3());
       // Uniform scaling preserves the carvings. Fit the remaining height
       // with masonry in the reveal, behind the decorated stone frame.
       const s=Math.min((p.width+.11)/dimensions.x,(p.height+.06)/dimensions.y);
       model.scale.setScalar(s); pivot.add(model);group.add(pivot);
-      const outer=(p.width*.5+.10)/s, upper=(p.height+.08)/s;
+      const outer=(p.width*.5+.10)/s, upper=coverHeight/s;
       slab(model,stone,-outer,-hinge+.018,-.019,upper,-.51,-.024,'TempleDoor-West-Reveal');
       slab(model,stone,hinge-.018,outer,-.019,upper,-.51,-.024,'TempleDoor-East-Reveal');
       slab(model,stone,-hinge-.035,hinge+.035,leafTop-.027,upper,-.51,-.031,'TempleDoor-Head');
@@ -231,8 +239,8 @@
           const x=(i===0?-1:1)*.33/s, y=1.05/s;
           const from=model.localToWorld(new THREE.Vector3(x,y,side*2));
           ray.set(from,dir.copy(n).multiplyScalar(-side));ray.far=4*s;
-          const hit=ray.intersectObject(leaf,false)[0];
-          if(!hit) throw new Error('Temple door has no palm contact surface: '+p.id);
+          const hit=ray.intersectObject(leaf,true)[0];
+          if(!hit) throw new Error(wing+' door has no palm contact surface: '+p.id);
           return leaf.worldToLocal(hit.point.addScaledVector(n,side*.008));
         }));
       }
@@ -345,7 +353,7 @@
       // Both leaves open away from the hero. Leaving the portal plane is
       // not enough if the capsule is still inside either leaf's sweep.
       const hingeDistance=Math.hypot(Math.abs(Math.abs(c.span)-d.s*hinge),c.side);
-      return hingeDistance>d.s*1.39+.37;
+      return hingeDistance>d.s*(leafLength+.114)+.37;
     }
     function tick(dt,motion) {
       let dirty=active ? advance(active,dt) : false, nearest=null;
@@ -387,22 +395,22 @@
     }
     function destination(d,side=d.side) {
       const name=side>0?d.p.to:d.p.from;
-      return rooms.test(name)?name:null;
+      return kit.room.test(name)?name:null;
     }
     function retainZones() {
       const retained=new Set();
       if(waiting)retained.add(waiting);
       for(const d of entries.values()){
         if(d.state==='Closed')continue;
-        for(const id of [d.p.from,d.p.to])if(rooms.test(id))retained.add(id);
+        for(const id of [d.p.from,d.p.to])if(kit.room.test(id))retained.add(id);
       }
       return retained;
     }
     function sight(viewer,view,through) {
       if(!view)return;
-      if(viewer==='ARCH_R3'){
-        const arch=passages.find(p=>p.id==='PalaceR3');
-        viewer=arch&&view.x>=arch.x?'T1':'Palace';
+      if(viewer===kit.threshold){
+        const arch=passages.find(p=>p.id===kit.entrance);
+        viewer=arch&&view.x>=arch.x?kit.firstRoom:'Palace';
       }
       const shown=new Set(), seen=new Set([viewer]), queue=[[viewer,[]]];
       while(queue.length){
@@ -451,5 +459,5 @@
     };
   }
 
-  window.SinTempleDoors={asset,plan,mount,clipName};
+  window.SinTempleDoors={asset,libraryAsset,plan,mount,clipName};
 })();

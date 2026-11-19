@@ -8,7 +8,7 @@ const { solveLayout } = require('../wing-architecture.js');
 const root = path.resolve(__dirname, '..');
 const context = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.join(root, 'temple-doors.js'), 'utf8'), context);
-const { asset, plan, clipName } = context.window.SinTempleDoors;
+const { asset, libraryAsset, plan, clipName } = context.window.SinTempleDoors;
 const { hall } = require('../data/palace-colliders.json');
 
 test('temple doors cover every room and connector opening in the existing layout', () => {
@@ -39,5 +39,24 @@ test('each fixed face uses its specific authored open and close clips', () => {
       assert.deepEqual(clip.channels.map(channel => leaves[channel.target.node]).sort(),
         ['TempleDoor_Left', 'TempleDoor_Right']);
     }
+  }
+});
+
+test('library doors fit only the six internal openings and use the original clips', () => {
+  const layout = solveLayout(hall);
+  const { openings, passages } = plan(layout.doors, layout.rooms.concat(layout.connectors), 'Library');
+  assert.deepEqual(Array.from(openings, row => row.portal.id), [
+    'L1-LC2', 'LC2-L2', 'L1-LC3', 'LC3-L3', 'L1-LC4', 'LC4-L4'
+  ]);
+  assert.deepEqual(Array.from(passages, door => door.id), ['PalaceR1', 'MP2-L4']);
+  assert.ok(openings.find(row => row.portal.id === 'L1-LC4').coverHeight > 9);
+  assert.equal(libraryAsset, 'assets/باب جناح المكتبة.glb');
+  const glb = fs.readFileSync(path.join(root, libraryAsset));
+  const data = JSON.parse(glb.toString('utf8', 20, 20 + glb.readUInt32LE(12)));
+  for (const clip of ['Open_Inward', 'Open_Outward', 'Close_Inward', 'Close_Outward']) {
+    const animation = data.animations.find(candidate => candidate.name === clip);
+    assert.ok(animation, clip);
+    assert.deepEqual(animation.channels.map(channel => data.nodes[channel.target.node].name).sort(),
+      ['TempleDoor_Left', 'TempleDoor_Right']);
   }
 });
