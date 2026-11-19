@@ -984,8 +984,8 @@
       if (specs.some(function (s) { return s.url === url; })) return; // same file as a palace asset: shared below
       specs.push({
         id: 'wing:' + a.url, key: 'wing:' + a.url, name: a.url.split('/').pop(),
-        kind: a.kind === 'tex' ? 'wtex' : (/طاولة|اثاث/.test(a.url) ? 'wglb-draco' : 'wglb'),
-        wingPath: a.url, url: url, optional: true,
+        kind: a.kind === 'tex' ? 'wtex' : (a.kind === 'draco' || /طاولة|اثاث/.test(a.url) ? 'wglb-draco' : 'wglb'),
+        wingPath: a.url, url: url, optional: !a.required,
         status: 'pending', loaded: 0, total: 0, error: '', attempt: 0, buf: null, result: null
       });
     });
@@ -4965,6 +4965,7 @@
     const observatoryBoxes = (wings && wings.observatory && wings.observatory.cameraColliders) || noCameraColliders;
     const sacredHallBoxes = (wings && wings.sacredHall && wings.sacredHall.cameraColliders) || noCameraColliders;
     const entranceBoxes = (wings && wings.sacredEntrance && wings.sacredEntrance.cameraColliders) || noCameraColliders;
+    const templeDoors = wings?.templeDoors?.cameraBoxes || noCameraColliders;
     const purificationBoxes = (wings && wings.purificationHall && wings.purificationHall.cameraColliders) || noCameraColliders;
     const sanctuaryBoxes = (wings && wings.lunarSanctuary && wings.lunarSanctuary.cameraColliders) || noCameraColliders;
     const offeringsBoxes = (wings && wings.royalOfferings && wings.royalOfferings.cameraColliders) || noCameraColliders;
@@ -4975,13 +4976,15 @@
     const offeringsCount = sacredHallCount + offeringsBoxes.length;
     const sanctuaryCount = offeringsCount + sanctuaryBoxes.length;
     const purificationCount = sanctuaryCount + purificationBoxes.length;
-    for (let i = 0; i < purificationCount + entranceBoxes.length; i++) {
+    const entranceCount = purificationCount + entranceBoxes.length;
+    for (let i = 0; i < entranceCount + templeDoors.length; i++) {
       const b = i < staticCount ? colliders[i] : i < libraryCount ? libraryBoxes[i - staticCount] :
         i < archiveCount ? archiveBoxes[i - libraryCount] : i < observatoryCount ? observatoryBoxes[i - archiveCount] :
         i < sacredHallCount ? sacredHallBoxes[i - observatoryCount] :
         i < offeringsCount ? offeringsBoxes[i - sacredHallCount] :
         i < sanctuaryCount ? sanctuaryBoxes[i - offeringsCount] :
-        i < purificationCount ? purificationBoxes[i - sanctuaryCount] : entranceBoxes[i - purificationCount];
+        i < purificationCount ? purificationBoxes[i - sanctuaryCount] :
+        i < entranceCount ? entranceBoxes[i - purificationCount] : templeDoors[i - entranceCount];
       if (b.maxx < lox || b.minx > hix || b.maxy < loy || b.miny > hiy || b.maxz < loz || b.minz > hiz) continue;
       if (isProp(b) !== !!props) continue;
       let box = padBox(b, r);

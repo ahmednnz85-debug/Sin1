@@ -156,6 +156,7 @@
     if (entryAssets.has(WING_DOOR_FILE) && !list.some(function (a) { return a.url === WING_DOOR_FILE; })) {
       list.push({ url: WING_DOOR_FILE, kind: 'glb' });
     }
+    if (window.SinTempleDoors) list.push({url:SinTempleDoors.asset,kind:'draco',required:true});
     return list.filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
   }
   function provideAsset(url, value) { if (url && value) preloaded.set(url, value); }
@@ -766,6 +767,7 @@
       if (Math.abs(libraryFeet - previous) > maxStep) return true;
     }
     for (const b of state.dynamicDoorBoxes) {
+      if (b._templeDoor && (b.miny > feet+1.65 || b.maxy < feet+.08)) continue;
       const qx = Math.max(b.minx, Math.min(x, b.maxx)), qz = Math.max(b.minz, Math.min(z, b.maxz));
       if ((x - qx) * (x - qx) + (z - qz) * (z - qz) < r * r) return true;
     }
@@ -1161,14 +1163,14 @@
       state.archiveScreen.castShadow = false;
     }
     const offeringCorridor = state.regionGroups.get('TC5');
-    if (state.offeringPortal && offeringCorridor && window.SinRoyalOfferings) {
+    if (state.offeringPortal && !state.templeDoorIds?.has(state.offeringPortal.id) && offeringCorridor && window.SinRoyalOfferings) {
       const { x, z, width, height } = state.offeringPortal;
       state.offeringScreen = mesh(boxAt(width + .08, height + .04, .16, x, height / 2, z),
         state.darkMat, 'TC5-offerings-portal-occluder', offeringCorridor);
       state.offeringScreen.castShadow = false;
     }
     if (window.SinT1Entrance) {
-      state.entranceScreens = state.entranceDoors.map(d => {
+      state.entranceScreens = state.entranceDoors.filter(d=>!state.templeDoorIds?.has(d.id)).map(d => {
         const outside = d.kind === 'arch' ? 'ARCH_R3' : (d.from === 'T1' ? d.to : d.from);
         const corridor = state.regionGroups.get(outside);
         const width = d.width + .07, h = d.height + .05;
@@ -1178,14 +1180,14 @@
       });
     }
     if (window.SinPurificationHall) {
-      state.purificationScreens = state.purificationDoors.map(d => {
+      state.purificationScreens = state.purificationDoors.filter(d=>!state.templeDoorIds?.has(d.id)).map(d => {
         const corridor = state.regionGroups.get(d.from === 'T2' ? d.to : d.from);
         return mesh(boxAt(.17, d.height + .05, d.width + .06, d.x, d.height / 2, d.z),
           state.darkMat, d.id + '-purification-portal-occluder', corridor);
       });
     }
     if (window.SinLunarSanctuary) {
-      state.sanctuaryScreens = state.sanctuaryDoors.map(d => {
+      state.sanctuaryScreens = state.sanctuaryDoors.filter(d=>!state.templeDoorIds?.has(d.id)).map(d => {
         const outside = state.regionGroups.get(d.from === 'T4' ? d.to : d.from);
         const width = d.width + .08;
         const [w, depth] = d.axis === 'x' ? [.16, width] : [width, .16];
@@ -2481,6 +2483,7 @@
       const box = doorBox(d, d._colliderBox || (d._colliderBox = { _door: true, _doorRef: d }));
       boxes[w++] = box;
     });
+    for (const b of state.templeDoors?.localBoxes || []) boxes[w++] = b;
     boxes.length = w;
   }
   function fitWingDoor(gltf, d, host) {
@@ -2651,7 +2654,7 @@
     if (!zoneStreamer || !state.doors || !state.current) return;
     const cur = state.current;
     state.doors.forEach(function (d) {
-      if (!d || d._roomDoor) return;
+      if (!d || d._roomDoor || state.templeDoorIds?.has(d.id)) return;
       const entranceDoor = window.SinT1Entrance && state.entranceDoors.includes(d);
       if (d.kind === 'arch' && d.id !== 'PalaceR1' && !entranceDoor) return;
       const targets = entranceDoor ? ['T1'] : d.id === 'PalaceR1' ? ['L1'] : d.id === 'LC2-L2' ? ['L2'] : d === state.offeringPortal ? ['T5'] :
@@ -2728,11 +2731,13 @@
         if (state.activeDoor === d) state.activeDoor = null;
       }
     });
+    state.templeDoors?.tick(dt,state.archiveMotion);
     rebuildDoorColliders();
     updatePassageGates();
   }
   function canInteract() { return false; }
   function doorLocked() {
+    if (state.templeDoors?.locked()) return true;
     // Freeze the hero only for the door they are actually opening or standing in.
     // A far door auto-closing after eviction (zone no longer ready) must not pin
     // the player in another room — that looked like a hang while standing or walking
@@ -2746,9 +2751,15 @@
       return !!(nearDoor(d, c) || doorOccupied(d));
     } catch (_) { return false; }
   }
-  function doorReport() { return state.doors.filter(d => d._roomDoor).map(d => ({ id:d.id, room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from, state:d.state||'pending', progress:+(d.progress||0).toFixed(3), loaded:!!d.model, collision:d.state!=='Open' })); }
+  function doorReport() {
+    const royal=state.doors.filter(d=>d._roomDoor).map(d=>({id:d.id,room:ROOM_DOOR_ROOMS.has(d.to)?d.to:d.from,
+      state:d.state||'pending',progress:+(d.progress||0).toFixed(3),loaded:!!d.model,collision:d.state!=='Open'}));
+    return royal.concat(state.templeDoors?.report()||[]);
+  }
 
   function dispose() {
+    state.templeDoors?.dispose();
+    state.templeDoors=state.templeDoorIds=null;
     if (state.entranceLoad) state.entranceLoad.abort();
     if (state.sacredEntrance) {
       state.sacredEntrance.root.removeFromParent();
@@ -2863,6 +2874,9 @@
     try { console.info('[palace load] wings-layout-to-bake'); } catch (_) {}
     state.rooms = layout.rooms; state.connectors = layout.connectors; state.doors = layout.doors;
     state.regions = state.rooms.concat(state.connectors); state.links = layout.links; state.sealed = layout.sealed; state.back = layout.back;
+    const templePlan = window.SinTempleDoors?.plan(state.doors,state.regions);
+    const templeOpenings = templePlan?.openings || [];
+    state.templeDoorIds = new Set(templeOpenings.map(row=>row.portal.id));
     state.archivePortals = ['PalaceR1', 'L1-LC2', 'LC2-L2'].map(id => state.doors.find(door => door.id === id));
     state.observatoryDoors = state.doors.filter(door => door.from === 'L4' || door.to === 'L4');
     state.observatoryApproach = state.doors.find(door => door.id === 'L1-LC4');
@@ -2954,6 +2968,15 @@
       wingMark('wings colliders'); phase('colliders'); await yieldWing();
     }
     await buildVisuals(layout); wingMark('wings visuals'); phase('visuals'); await yieldWing();
+    if (templeOpenings.length) {
+      const template=preloaded.get(SinTempleDoors.asset);
+      if (!template?.scene) throw new Error('Temple door asset was not prepared during palace loading');
+      state.templeDoors=SinTempleDoors.mount(template,templeOpenings,{
+        root:state.root,hero:ctx.hero,combat:ctx.combat,setFacing:yaw=>state.ctx.setFacing(yaw),
+        dark:state.darkMat,ready:zoneIsReady,floor:floorAt,passages:templePlan.passages
+      });
+      rebuildDoorColliders();
+    }
     rebuildSpatial(); loadRoomDoors(); phase('doors'); await yieldWing();
     try { console.info('[palace load] wings-after-doors'); } catch (_) {}
     state.built = true;
@@ -3251,12 +3274,16 @@
     });
   }
 
+  function templeSight(view, route, pad) {
+    return (!state.templeDoors || route.every(d=>state.templeDoors.allows(d?.id))) &&
+      SinWingVisibility.throughOpenings(view,route,pad);
+  }
   function sacredHallSight(view) {
     if (!view || !state.sacredHallRoutes || !window.SinWingVisibility) return false;
     const region = regionAt(view.x, view.z);
     if (state.current === 'T3' || (region && region.id === 'T3')) return true;
     const route = region && state.sacredHallRoutes.get(region.id);
-    return !!(route && SinWingVisibility.throughOpenings(view, route, .05));
+    return !!(route && templeSight(view, route, .05));
   }
 
   function cullFromSacredHall(view, visible) {
@@ -3268,7 +3295,7 @@
       const openings = [];
       for (const [id, door] of line) {
         openings.push(door);
-        if (!SinWingVisibility.throughOpenings(view, openings, .06)) break;
+        if (!templeSight(view, openings, .06)) break;
         visible.add(id);
       }
     }
@@ -3284,7 +3311,7 @@
     }
     const route=id ? state.entranceRoutes.get(id) :
       view.x<state.sacredHallEntry.x && view.x>0 ? [state.sacredHallEntry] : null;
-    return !!(route && SinWingVisibility.throughOpenings(view,route,.07));
+    return !!(route && templeSight(view,route,.07));
   }
 
   function syncEntranceShell(group,ready) {
@@ -3301,7 +3328,7 @@
     const id = regionAt(view.x, view.z)?.id;
     if (id === 'T2' || state.current === 'T2') return true;
     const route = state.purificationRoutes.get(id);
-    return !!(route && SinWingVisibility.throughOpenings(view, route, .07));
+    return !!(route && templeSight(view, route, .07));
   }
 
   function syncPurificationShell(group, ready) {
@@ -3320,7 +3347,7 @@
     const id = regionAt(view.x, view.z)?.id;
     if (id === 'T4' || state.current === 'T4') return true;
     const openings = state.sanctuaryRoutes.get(id);
-    return !!(openings && SinWingVisibility.throughOpenings(view, openings, .07));
+    return !!(openings && templeSight(view, openings, .07));
   }
 
   function sanctuaryExits(view, visible) {
@@ -3330,7 +3357,7 @@
       const openings = [];
       for (const [id, door] of line) {
         openings.push(door);
-        if (!SinWingVisibility.throughOpenings(view, openings, .07)) break;
+        if (!templeSight(view, openings, .07)) break;
         visible.add(id);
       }
     }
@@ -3354,7 +3381,7 @@
     if (id === 'T5') return true;
     const openings = id === 'TC5' ? [state.offeringPortal] :
       id === 'T3' ? [state.offeringPassage, state.offeringPortal] : null;
-    return !!(openings && SinWingVisibility.throughOpenings(view, openings, .07));
+    return !!(openings && templeSight(view, openings, .07));
   }
 
   function cullFromOfferings(view, visible) {
@@ -3362,8 +3389,8 @@
     if (!region || region.id !== 'T5') return;
     visible.clear();
     visible.add('T5');
-    if (SinWingVisibility.throughOpenings(view, [state.offeringPortal], .07)) visible.add('TC5');
-    if (SinWingVisibility.throughOpenings(view, [state.offeringPortal, state.offeringPassage], .07)) visible.add('T3');
+    if (templeSight(view, [state.offeringPortal], .07)) visible.add('TC5');
+    if (templeSight(view, [state.offeringPortal, state.offeringPassage], .07)) visible.add('T3');
   }
 
   function syncOfferingShell(group) {
@@ -3518,7 +3545,7 @@
       if (viewer==='T1' || viewer==='ARCH_R3') {
         for (const door of state.entranceDoors) {
           if (door.from!=='T1') continue;
-          state.regionGroups.get(door.to).visible=SinWingVisibility.throughOpenings(view,[door],.07);
+          state.regionGroups.get(door.to).visible=templeSight(view,[door],.07);
         }
       }
     }
@@ -3551,8 +3578,11 @@
       offerings.visible = seeRoom && zoneIsReady('T5');
       if (seeRoom && regionAt(view.x, view.z)?.id === 'T5') {
         const approach = state.regionGroups.get('TC5');
-        if (approach) approach.visible = SinWingVisibility.throughOpenings(view, [state.offeringPortal], .07);
+        if (approach) approach.visible = templeSight(view, [state.offeringPortal], .07);
       }
+    }
+    if (view && state.templeDoors) {
+      state.templeDoors.sight(regionAt(view.x,view.z)?.id||state.current||'Palace',view,SinWingVisibility.throughOpenings);
     }
   }
 
@@ -4183,13 +4213,19 @@
         approach.add(id);
       }
     });
-    const demand = entranceNear && !zoneIsReady('T1') ? 'T1' :
+    const templeDemand=state.templeDoors?.waiting();
+    const doorZones=state.templeDoors?.retainZones();
+    if (doorZones?.size) {
+      for (const id of doorZones) approach.add(id);
+      retained=new Set([...(retained||[]),...doorZones]);
+    }
+    const demand = templeDemand || (entranceNear && !zoneIsReady('T1') ? 'T1' :
       purgeNear && purgeEntry && !zoneIsReady('T2') ? 'T2' :
       towardSanctuary && atSanctuary && !zoneIsReady('T4') ? 'T4' :
       nearTemple && !zoneIsReady('T3') ? 'T3' :
       (origin === 'T3' || origin === 'TC5') && !zoneIsReady('T5') ? 'T5' :
       !zoneIsReady('L1') ? 'L1' : (state.archiveDemand || archiveNear) && !zoneIsReady('L2') ? 'L2' :
-        towardObservatory && !zoneIsReady('L4') ? 'L4' : null;
+        towardObservatory && !zoneIsReady('L4') ? 'L4' : null);
     const only = inLibrary ? (towardObservatory || (visibleIds && visibleIds.has('L4')) ? libraryZones : retainedLibrary) : null;
     return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds,
       memoryLevel: level, warmGroups, approach, retained, only,
@@ -6151,6 +6187,7 @@
     sanctuaryCamera: () => state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.camera : null,
     offeringsCamera: () => state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.camera : null,
     beforePresent,
+    restoreTempleDoorPose:()=>state.templeDoors?.restore(),
     prepareEntryLibrary,
     onLibraryStairs, onOfferingSteps, onEntranceSteps,
     restoreLibraryPose: () => { if (state.library) state.library.restoreGroundPose(); },
