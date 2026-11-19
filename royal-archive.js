@@ -273,8 +273,25 @@
     camera.lookAt(point);
     root.add(camera);
     const warmup = SinGreatLibrary.geometryWarmup(root);
+    function lunarStand() {
+      const clear=(x,z)=>colliders.every(box=>bounds.x0+x+.41<box.minx||bounds.x0+x-.41>box.maxx||
+        bounds.z0+z+1.03<box.minz||bounds.z0+z-1.03>box.maxz);
+      // Reuse the room's dressed sandstone. The stand sits beyond the left
+      // desk, on the opposite side of the aisle from the skylight runner.
+      const spots=[[axis-4.02,4.75],[axis-4.40,4.80],[axis-4.50,5.18],[axis-3.54,4.66]];
+      const spot=spots.find(([x,z])=>clear(x,z));
+      if(!spot)throw Error('No clear archive location for the lunar register');
+      const [x,z]=spot, height=1.17;
+      const pedestal=SinGreatLibrary.builder(root,'L2-');
+      pedestal.box('lunar-stand',slab,null,x,floor+.085,z,.76,.17,1.91,1.55);
+      pedestal.box('lunar-stand',stone,null,x,floor+.60,z,.59,.91,1.65,1.55);
+      pedestal.box('lunar-stand',slab,null,x,floor+1.11,z,.75,.12,1.91,1.55);
+      pedestal.flush();
+      solid(x-.38,x+.38,floor,floor+height,z-.96,z+.96);
+      return {x,z,y:floor+height+.004,edge:x+.375};
+    }
     return {
-      root, camera, colliders, warmup,
+      root, camera, colliders, warmup, lunarStand,
       dispose() { warmup.dispose(); SinGreatLibrary.disposeResources(root); }
     };
   }

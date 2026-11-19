@@ -68,7 +68,8 @@ test('K2/K3/K4 shells stay hidden until the dress is fully resident', () => {
   assert.match(k3, /hideUntilReady\(mesh\(sideGeo/);
   assert.match(k3, /hideUntilReady\(ceiling\)/);
   assert.match(wings, /function k3Put[\s\S]*?hideUntilReady\(holder\)/);
-  assert.match(k3, /if \(state\.k3Dress && state\.k3Dress\.furniture && state\.k3Dress\.table\)/);
+  assert.match(k3, /if \(!dress2\.furniture\|\|!dress2\.table\)return;/);
+  assert.match(k3, /loadLunarTablet\('K3'[\s\S]+?api\.add\(clue\.frame\);[\s\S]+?api\.done\(\)/);
 
   const k4 = wings.slice(wings.indexOf('function dressK4'), wings.indexOf('function dressK3'));
   assert.match(k4, /hideUntilReady\(floor\)/);

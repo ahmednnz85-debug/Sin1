@@ -2796,6 +2796,7 @@
   }
 
   function dispose() {
+    state.k3Dress?.lunarLoad?.abort();
     state.studyLoad?.abort();state.study?.warmup.dispose();state.studyLoad=state.study=null;
     state.k5Dress?.controller?.abort();state.k5Dress?.warmup?.dispose();
     state.studyDoor=state.studyScreen=null;state.privateApertures=[];
@@ -3194,13 +3195,23 @@
     state.archiveLoad = controller;
     const usage = window.SinProcessMemory && SinProcessMemory.last();
     const profile = archiveProfile(usage || {});
-    SinRoyalArchive.build(room, entrance, timedRoomModels(api), controller.signal, profile.textureSize).then(archive => {
+    SinRoyalArchive.build(room, entrance, timedRoomModels(api), controller.signal, profile.textureSize).then(async archive => {
       if (state.archiveLoad !== controller || controller.signal.aborted) { archive.dispose(); return; }
-      state.archive = archive;
-      zoneStreamer.markReleasable(archive.root);
-      api.add(archive.root);
-      api.done();
-    }, error => {
+      try {
+        const table=archive.root.getObjectByName('L2-tableLeft');
+        archive.lunar=await loadLunarTablet('L2',archive.root,table,controller.signal,api,archive.lunarStand);
+        controller.signal.throwIfAborted();
+        archive.warmup.dispose();
+        archive.warmup=SinGreatLibrary.geometryWarmup(archive.root);
+        state.archive = archive;
+        zoneStreamer.markReleasable(archive.root);
+        api.add(archive.root);
+        api.done();
+      } catch(error) {
+        archive.dispose();
+        throw error;
+      }
+    }).catch(error => {
       if (state.archiveLoad !== controller || controller.signal.aborted) return;
       api.fail(error);
     });
@@ -3215,7 +3226,7 @@
   }
 
   const timedRoomModels = api => (url,signal,meshopt) => loadRoomModel(url,signal,meshopt,api.recordAssetTime);
-  function loadRoomModel(url, signal, meshopt = false, record) {
+  function loadRoomModel(url, signal, meshopt = false, record, draco) {
     return enqueueWingLoad(async () => {
       signal.throwIfAborted();
       const fetchAt = performance.now();
@@ -3228,6 +3239,7 @@
       signal.throwIfAborted();
       const decodeAt = performance.now();
       const loader = new THREE.GLTFLoader();
+      if (draco) loader.setDRACOLoader(draco);
       if (meshopt) {
         const decoder = await new Promise(resolve => withMeshopt(resolve));
         signal.throwIfAborted();
@@ -3238,6 +3250,20 @@
       record?.('modelDecodeMs',performance.now()-decodeAt);
       return model;
     });
+  }
+
+  async function loadLunarTablet(id,parent,table,signal,api,fallback) {
+    if(!table)throw Error('Lunar discovery needs its original '+id+' table');
+    const draco=await new Promise(resolve=>k3EnsureDraco(resolve));
+    if(!draco)throw Error('Lunar discovery Draco decoder unavailable');
+    const model=await loadRoomModel(SinLunarDiscoveries.files[id],signal,false,api.recordAssetTime,draco);
+    try {
+      signal.throwIfAborted();
+      return SinLunarDiscoveries.monument(id,model.scene,parent,table,fallback);
+    } catch(error) {
+      SinGreatLibrary.disposeResources(model.scene);
+      throw error;
+    }
   }
 
   function privateCameraColliders(boxes) {
@@ -3301,6 +3327,16 @@
     state.lunarSanctuaryLoad = controller;
     SinLunarSanctuary.build(room, state.sanctuaryDoors, timedRoomModels(api), controller.signal, deviceProfile.constrained).then(sanctuary => {
       if (state.lunarSanctuaryLoad !== controller || controller.signal.aborted) { sanctuary.dispose(); return; }
+      try {
+        sanctuary.lunar=SinLunarDiscoveries.sanctuary(sanctuary.root,sanctuary.root.getObjectByName('T4-shrine'),
+          room,sanctuary.front);
+        sanctuary.warmup.dispose();
+        sanctuary.warmup=SinGreatLibrary.geometryWarmup(sanctuary.root);
+      } catch(error) {
+        sanctuary.dispose();
+        api.fail(error);
+        return;
+      }
       state.lunarSanctuary = sanctuary;
       zoneStreamer.markReleasable(sanctuary.root);
       api.add(sanctuary.root);
@@ -4018,9 +4054,15 @@
       ownsObject: streamedName('K2') },
     { id: 'K3', prefetchHops: deviceProfile.prefetchHops, priority: 1, requireComplete:true, serialPreparation:true,
       prepare:zonePrepare, onFailure:()=>registerLibraryFailure('K3'),
-      load: function () { dressK3(); },
+      load: dressK3,
       isComplete: function () { return roomCompleteness('K3').complete; },
-      unload: function (api) { state.k3Lights = null; state.k3LightBase = null; if (api.group) api.group.userData.k3Dressed = false; },
+      unload: function (api) {
+        state.k3Dress?.lunarLoad?.abort();
+        state.k3Dress=null;
+        state.colliders=state.colliders.filter(box=>!box._k3Prop);
+        state.k3Lights=null;state.k3LightBase=null;
+        if(api.group)api.group.userData.k3Dressed=false;
+      },
       ownsObject: streamedName('K3') },
     { id: 'K4', prefetchHops: deviceProfile.prefetchHops, priority: 2, requireComplete:true, serialPreparation:true,
       prepare:zonePrepare, onFailure:()=>registerLibraryFailure('K4'),
@@ -5632,7 +5674,7 @@
     rebuildSpatial();
     if (state.root) state.root.updateMatrixWorld(true);
   }
-  function dressK3() {
+  function dressK3(api) {
     const r = state.rooms.find(q => q.id === 'K3'), g = state.regionGroups.get('K3');
     if (!r || !g) return;
     const b = r.bbox, h = r.height;
@@ -5744,10 +5786,20 @@
         // Do NOT mark ready if the table or a furniture kind is missing —
         // that was revealing an empty (walls-only) K3 and opening the door
         // onto a pop-in. The door gate waits on zoneIsReady / isComplete.
-        if (state.k3Dress && state.k3Dress.furniture && state.k3Dress.table) {
-          if (g.userData) g.userData.k3Dressed = true;
+        if (!dress2.furniture||!dress2.table)return;
+        const controller=new AbortController();
+        dress2.lunarLoad=controller;
+        loadLunarTablet('K3',g,g.getObjectByName('K3-map-table'),controller.signal,api).then(clue=>{
+          if(state.k3Dress!==dress2||controller.signal.aborted)return;
+          dress2.lunar=clue;
+          api.add(clue.frame);
+          zoneStreamer.markReleasable(clue.frame);
+          g.userData.k3Dressed=true;
           markDressReady('K3');
-        }
+          api.done();
+        },error=>{
+          if(state.k3Dress===dress2&&!controller.signal.aborted)api.fail(error);
+        });
       });
     });
   }
@@ -5962,6 +6014,7 @@
     ],
     K3: [
       'K3-map-floor', 'K3-map-wall-far', 'K3-map-wall-side', 'K3-map-ceiling',
+      'K3-lunar-discovery',
       'K3-map-table',
       'K3-shelf-a', 'K3-shelf-b', 'K3-arch', 'K3-scrolls',
       'K3-brazier-s', 'K3-brazier-n', 'K3-easel',
@@ -6113,6 +6166,11 @@
     sanctuaryCamera: () => state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.camera : null,
     offeringsCamera: () => state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.camera : null,
     beforePresent,
+    lunarSite() {
+      const id=state.current;
+      if(!zoneIsReady(id))return null;
+      return (id==='K3'?state.k3Dress:id==='L2'?state.archive:id==='T4'?state.lunarSanctuary:null)?.lunar||null;
+    },
     restoreTempleDoorPose:()=>{state.templeDoors?.restore();state.libraryDoors?.restore();},
     prepareEntryLibrary,
     onLibraryStairs, onOfferingSteps, onEntranceSteps,

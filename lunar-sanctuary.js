@@ -438,7 +438,7 @@
     root.add(camera);
     const warmup = SinGreatLibrary.geometryWarmup(root);
     return {
-      root,camera,boxes,stairBoxes,warmup,
+      root,camera,boxes,stairBoxes,warmup,front:location.front,
       floorAt(x,z){return treadHeight(stairBoxes,x,z);},
       tick(time){
         clock.value=time;
