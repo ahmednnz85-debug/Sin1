@@ -1037,7 +1037,8 @@
     state.materials.push(state.darkMat, state.sealMat);
     vis('materials');
     const tCaps = performance.now();
-    const capGeos = (state.caps || []).map(function (c, i) {
+    const capGeos=[], templeLintels=[];
+    (state.caps || []).forEach(function (c, i) {
       const t1 = performance.now();
       // L1's large arch rises past the corridor's flat ceiling. Set the
       // visible lintel back from its crown while keeping the baked collider.
@@ -1047,7 +1048,8 @@
       if (dt > 16) {
         try { console.info('[palace load] visuals-slow-cap', i, c.door && c.door.id, Math.round(dt) + 'ms'); } catch (_) {}
       }
-      return g;
+      const target=state.templeDoorIds.has(c.door.id)?templeLintels:capGeos;
+      target.push(g);
     });
     vis('caps ' + Math.round(performance.now() - tCaps) + 'ms n=' + capGeos.length);
     await yieldWing();
@@ -1215,6 +1217,7 @@
     const tMx = performance.now();
     state.root.updateMatrixWorld(true);
     try { console.info('[palace load] visuals-matrix', Math.round(performance.now() - tMx) + 'ms'); } catch (_) {}
+    return templeLintels.length ? mergeGeometries(templeLintels) : null;
   }
   /* ---------------------------------------------------------------------------
      Corridor dressing: every corridor/gallery region of the Kings, Library and
@@ -2967,13 +2970,14 @@
       await makeColliders(state.baseWall, state.caps);
       wingMark('wings colliders'); phase('colliders'); await yieldWing();
     }
-    await buildVisuals(layout); wingMark('wings visuals'); phase('visuals'); await yieldWing();
+    const templeLintels=await buildVisuals(layout);
+    wingMark('wings visuals'); phase('visuals'); await yieldWing();
     if (templeOpenings.length) {
       const template=preloaded.get(SinTempleDoors.asset);
       if (!template?.scene) throw new Error('Temple door asset was not prepared during palace loading');
       state.templeDoors=SinTempleDoors.mount(template,templeOpenings,{
         root:state.root,hero:ctx.hero,combat:ctx.combat,setFacing:yaw=>state.ctx.setFacing(yaw),
-        dark:state.darkMat,ready:zoneIsReady,floor:floorAt,passages:templePlan.passages
+        dark:state.darkMat,ready:zoneIsReady,floor:floorAt,passages:templePlan.passages,lintels:templeLintels
       });
       rebuildDoorColliders();
     }

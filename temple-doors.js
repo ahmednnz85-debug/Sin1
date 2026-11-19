@@ -90,7 +90,37 @@
     };
   }
 
-  function mount(template, rows, { root, hero, combat, setFacing, dark, ready, floor, passages=[] }) {
+  function sandstone(map) {
+    const material=new THREE.MeshStandardMaterial({map,color:0xab9075,roughness:.91,metalness:.02});
+    material.customProgramCacheKey=()=> 'temple-door-sandstone';
+    material.onBeforeCompile=shader=>{
+      const varying='varying vec2 vTempleMasonryUv;';
+      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n'+varying)
+        .replace('#include <project_vertex>',`
+          vec3 stonePoint=(modelMatrix*vec4(transformed,1.0)).xyz;
+          vec3 stoneNormal=abs(mat3(modelMatrix)*objectNormal);
+          vTempleMasonryUv=vec2(stoneNormal.x>stoneNormal.z?stonePoint.z:stonePoint.x,
+            stoneNormal.y>max(stoneNormal.x,stoneNormal.z)?stonePoint.z:stonePoint.y)/vec2(1.42,.53);
+          #include <project_vertex>
+        `);
+      const sample=THREE.ShaderChunk.map_fragment.replace('vMapUv','stoneUv');
+      shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\n'+varying)
+        .replace('#include <map_fragment>',`
+        vec2 course=vTempleMasonryUv;
+        course.x+=mod(floor(course.y),2.0)*.5;
+        vec2 face=fract(course);
+        // Use the sandstone portion of the original door's atlas.
+        vec2 stoneUv=vec2(.025,.035)+face*vec2(.445,.43);
+        ${sample}
+        vec2 edge=min(face,1.0-face);
+        float joint=smoothstep(.005,.018,min(edge.x*2.3,edge.y));
+        diffuseColor.rgb*=mix(.69,1.0,joint);
+      `);
+    };
+    return material;
+  }
+
+  function mount(template, rows, { root, hero, combat, setFacing, dark, ready, floor, passages=[], lintels=null }) {
     const clips = new Map(template.animations.map(c=>[c.name,c]));
     for (const name of ['Open_Inward','Open_Outward','Close_Inward','Close_Outward']) {
       if (!clips.has(name)) throw new Error('Temple door animation missing: '+name);
@@ -98,11 +128,16 @@
     const hands = armRig(hero);
     const group = new THREE.Group(); group.name='Temple Wing Doors';
     root.add(group);
+    const stone=sandstone(template.scene.getObjectByName('TempleDoor_Frame').material.map);
+    // These are the real upper walls and soffits of all nine thresholds.
+    // They stay present even when the adjacent corridor is culled.
+    const liner=lintels&&new THREE.Mesh(lintels,stone);
+    if(liner){
+      liner.name='Temple Door Sandstone Lintels';
+      liner.receiveShadow=true;
+      root.add(liner);
+    }
     const brace = new THREE.BoxGeometry(1,1,1);
-    // The sandstone occupies the upper left half of the door's PBR atlas.
-    // Keep a rim inside that tile to avoid sampling the adjacent wood or gold.
-    const uv=brace.getAttribute('uv');
-    for(let i=0;i<uv.count;i++)uv.setXY(i,.025+uv.getX(i)*.445,.035+uv.getY(i)*.43);
     const entries = new Map(), adjacent = new Map();
     const localBoxes=[], cameraBoxes=[];
     let active = null, waiting = null;
@@ -177,11 +212,15 @@
       const s=Math.min((p.width+.11)/dimensions.x,(p.height+.06)/dimensions.y);
       model.scale.setScalar(s); pivot.add(model);group.add(pivot);
       const outer=(p.width*.5+.10)/s, upper=(p.height+.08)/s;
-      const stone=frame.material;
       slab(model,stone,-outer,-hinge+.018,-.019,upper,-.51,-.024,'TempleDoor-West-Reveal');
       slab(model,stone,hinge-.018,outer,-.019,upper,-.51,-.024,'TempleDoor-East-Reveal');
       slab(model,stone,-hinge-.035,hinge+.035,leafTop-.027,upper,-.51,-.031,'TempleDoor-Head');
       slab(model,stone,-outer,outer,-.022,sill+.016,-.45,.18,'TempleDoor-Sill');
+      // Face both sides through the full cut in the host wall, including
+      // the part in front of the GLB frame when the corridor is hidden.
+      const edge=p.width*.5/s, depth=((p.thickness||1)*.5+.10)/s;
+      slab(model,stone,-edge-.03,-edge+.013,0,p.height/s,-depth,depth,'TempleDoor-West-Jamb-Lining');
+      slab(model,stone,edge-.013,edge+.03,0,p.height/s,-depth,depth,'TempleDoor-East-Jamb-Lining');
       slab(leaves[0],dark,hinge-.034,hinge+.040,sill-.003,leafTop+.002,-.077,.088,'TempleDoor-Centre-Overlap');
       model.traverse(node=>{if(node.isMesh){node.receiveShadow=true;node.castShadow=false;node.userData.isDoor=true;}});
       pivot.updateWorldMatrix(true,true);
@@ -385,6 +424,11 @@
       if(active)combat.releasePush();
       for(const d of entries.values()){d.mixer.stopAllAction();d.mixer.uncacheRoot(d.model);}
       brace.dispose();group.removeFromParent();
+      stone.dispose();
+      if(liner){
+        liner.removeFromParent();
+        liner.geometry.dispose();
+      }
       // No remaining door uses these shared GPU uploads after the wing unloads.
       const resources=new Set();
       template.scene.traverse(mesh=>{
