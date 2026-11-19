@@ -2835,6 +2835,7 @@
       state.archive.dispose();
     }
     state.archive = state.archiveLoad = state.archiveMotion = null;
+    state.routes=state.nextStreamRoom=state.recentStreamRoom=state.lastStreamOrigin=null;
     state.archiveDemand = false;
     state.archiveBudgetSampleAt = 0;
     state.archiveScreen = state.librarySightRoutes = null;
@@ -2965,6 +2966,8 @@
     state.librarySightRoutes = makeLibrarySightRoutes();
     const hallBounds = { x0: -hall.width / 2, x1: hall.width / 2, z0: 0, z1: hall.length };
     state.planRegions = state.regions.concat({ id: 'Palace', bbox: hallBounds });
+    state.routes = SinPalaceRoutes.create(state.planRegions,state.links,state.doors);
+    state.hallPortalsByRoom=new Map(state.doors.filter(d=>d.from==='Palace').map(d=>[d.to,d]));
     // Prefer the build-time bake (data/palace-colliders.json): Clipper K1-diff and
     // the 0.5 m collider grid are identical to a live compute (see palace-collider-bake test)
     // and cost a JSON parse instead of minutes on the main thread.
@@ -3181,7 +3184,7 @@
     state.archiveLoad = controller;
     const usage = window.SinProcessMemory && SinProcessMemory.last();
     const profile = archiveProfile(usage || {});
-    SinRoyalArchive.build(room, entrance, loadRoomModel, controller.signal, profile.textureSize).then(archive => {
+    SinRoyalArchive.build(room, entrance, timedRoomModels(api), controller.signal, profile.textureSize).then(archive => {
       if (state.archiveLoad !== controller || controller.signal.aborted) { archive.dispose(); return; }
       state.archive = archive;
       zoneStreamer.markReleasable(archive.root);
@@ -3201,15 +3204,19 @@
       { processMB: 37, gpuMB: 30, cpuMB: 22, textureSize: 1024 };
   }
 
-  function loadRoomModel(url, signal, meshopt = false) {
+  const timedRoomModels = api => (url,signal,meshopt) => loadRoomModel(url,signal,meshopt,api.recordAssetTime);
+  function loadRoomModel(url, signal, meshopt = false, record) {
     return enqueueWingLoad(async () => {
       signal.throwIfAborted();
+      const fetchAt = performance.now();
       const response = await fetch(encodeURI(url), { signal });
       if (!response.ok) throw new Error(response.status + ' ' + url);
       const buffer = await response.arrayBuffer();
+      record?.('modelFetchMs',performance.now()-fetchAt);
       signal.throwIfAborted();
       await yieldWing();
       signal.throwIfAborted();
+      const decodeAt = performance.now();
       const loader = new THREE.GLTFLoader();
       if (meshopt) {
         const decoder = await new Promise(resolve => withMeshopt(resolve));
@@ -3217,7 +3224,9 @@
         if (!decoder) throw new Error('Meshopt decoder unavailable');
         loader.setMeshoptDecoder(decoder);
       }
-      return loader.parseAsync(buffer, '');
+      const model=await loader.parseAsync(buffer, '');
+      record?.('modelDecodeMs',performance.now()-decodeAt);
+      return model;
     });
   }
 
@@ -3235,7 +3244,7 @@
   function loadStudy(api) {
     const room=state.rooms.find(r=>r.id==='L3'), controller=new AbortController();
     state.studyLoad=controller;
-    SinPrivateRooms.study(room,[state.studyDoor],loadRoomModel,controller.signal,deviceProfile.constrained).then(study=>{
+    SinPrivateRooms.study(room,[state.studyDoor],timedRoomModels(api),controller.signal,deviceProfile.constrained).then(study=>{
       if(controller.signal.aborted||state.studyLoad!==controller){study.dispose();return;}
       state.study=study;
       const o=state.root.position;
@@ -3250,7 +3259,7 @@
     const room = state.rooms.find(r => r.id === 'T1');
     const controller = new AbortController();
     state.entranceLoad = controller;
-    SinT1Entrance.build(room,state.entranceDoors,loadRoomModel,controller.signal,deviceProfile.constrained).then(entrance=>{
+    SinT1Entrance.build(room,state.entranceDoors,timedRoomModels(api),controller.signal,deviceProfile.constrained).then(entrance=>{
       if (controller.signal.aborted || state.entranceLoad !== controller) { entrance.dispose(); return; }
       state.sacredEntrance=entrance;
       zoneStreamer.markReleasable(entrance.root);
@@ -3265,7 +3274,7 @@
     const room = state.rooms.find(r => r.id === 'T2');
     const controller = new AbortController();
     state.purificationLoad = controller;
-    SinPurificationHall.build(room, state.purificationDoors, loadRoomModel, controller.signal, deviceProfile.constrained).then(hall => {
+    SinPurificationHall.build(room, state.purificationDoors, timedRoomModels(api), controller.signal, deviceProfile.constrained).then(hall => {
       if (controller.signal.aborted || state.purificationLoad !== controller) { hall.dispose(); return; }
       state.purificationHall = hall;
       zoneStreamer.markReleasable(hall.root);
@@ -3280,7 +3289,7 @@
     const room = state.rooms.find(r => r.id === 'T4');
     const controller = new AbortController();
     state.lunarSanctuaryLoad = controller;
-    SinLunarSanctuary.build(room, state.sanctuaryDoors, loadRoomModel, controller.signal, deviceProfile.constrained).then(sanctuary => {
+    SinLunarSanctuary.build(room, state.sanctuaryDoors, timedRoomModels(api), controller.signal, deviceProfile.constrained).then(sanctuary => {
       if (state.lunarSanctuaryLoad !== controller || controller.signal.aborted) { sanctuary.dispose(); return; }
       state.lunarSanctuary = sanctuary;
       zoneStreamer.markReleasable(sanctuary.root);
@@ -3295,7 +3304,7 @@
     const room = state.rooms.find(r => r.id === 'T5');
     const controller = new AbortController();
     state.royalOfferingsLoad = controller;
-    SinRoyalOfferings.build(room, state.offeringPortal, loadRoomModel, controller.signal, deviceProfile.constrained).then(offerings => {
+    SinRoyalOfferings.build(room, state.offeringPortal, timedRoomModels(api), controller.signal, deviceProfile.constrained).then(offerings => {
       if (state.royalOfferingsLoad !== controller || controller.signal.aborted) { offerings.dispose(); return; }
       state.royalOfferings = offerings;
       zoneStreamer.markReleasable(offerings.root);
@@ -3310,7 +3319,7 @@
     const controller = new AbortController();
     state.observatoryLoad = controller;
     const room = state.rooms.find(r => r.id === 'L4');
-    SinObservatory.build(room, state.observatoryDoors, loadRoomModel, controller.signal, getLibraryFloorTexture).then(observatory => {
+    SinObservatory.build(room, state.observatoryDoors, timedRoomModels(api), controller.signal, getLibraryFloorTexture).then(observatory => {
       if (state.observatoryLoad !== controller || controller.signal.aborted) {
         observatory.dispose(observatory.sharedStone === getLibraryFloorTexture());
         return;
@@ -3334,7 +3343,7 @@
     const controller = new AbortController();
     state.sacredHallLoad = controller;
     const room = state.rooms.find(r => r.id === 'T3');
-    SinSacredColumns.build(room, state.sacredHallDoors, loadRoomModel, controller.signal).then(hall => {
+    SinSacredColumns.build(room, state.sacredHallDoors, timedRoomModels(api), controller.signal).then(hall => {
       if (state.sacredHallLoad !== controller || controller.signal.aborted) { hall.dispose(); return; }
       state.sacredHall = hall;
       zoneStreamer.markReleasable(hall.root);
@@ -3987,7 +3996,8 @@
         setLibraryCeiling(api.group);
       },
       ownsObject: function (node) { return node.name === 'L1-Grand-Library'; } },
-    { id: 'K2', prefetchHops: deviceProfile.prefetchHops, priority: 0,
+    { id: 'K2', prefetchHops: deviceProfile.prefetchHops, priority: 0, requireComplete:true, serialPreparation:true,
+      prepare:zonePrepare, onFailure:()=>registerLibraryFailure('K2'),
       load: function () { dressK2(); },
       isComplete: function () { return roomCompleteness('K2').complete; },
       unload: function (api) {
@@ -3996,12 +4006,14 @@
         if (api.group) api.group.userData.k2Dressed = false;
       },
       ownsObject: streamedName('K2') },
-    { id: 'K3', prefetchHops: deviceProfile.prefetchHops, priority: 1,
+    { id: 'K3', prefetchHops: deviceProfile.prefetchHops, priority: 1, requireComplete:true, serialPreparation:true,
+      prepare:zonePrepare, onFailure:()=>registerLibraryFailure('K3'),
       load: function () { dressK3(); },
       isComplete: function () { return roomCompleteness('K3').complete; },
       unload: function (api) { state.k3Lights = null; state.k3LightBase = null; if (api.group) api.group.userData.k3Dressed = false; },
       ownsObject: streamedName('K3') },
-    { id: 'K4', prefetchHops: deviceProfile.prefetchHops, priority: 2,
+    { id: 'K4', prefetchHops: deviceProfile.prefetchHops, priority: 2, requireComplete:true, serialPreparation:true,
+      prepare:zonePrepare, onFailure:()=>registerLibraryFailure('K4'),
       load: function () { dressK4(); loadK4Assets(); },
       isComplete: function () { return roomCompleteness('K4').complete; },
       unload: function (api) { state.k4Dress = null; state.colliders = state.colliders.filter(function (c) { return !c._k4Prop; }); if (api.group) api.group.userData.k4Dressed = false; },
@@ -4083,73 +4095,27 @@
     });
   }
   let zoneDistKey = '', zoneDist = null;
-  // Start loading a room once the player is heading toward its door and
-  // close enough that, at phone run speed (~7 m/s), the room is complete
-  // before they arrive. 48 m ≈ 7 s. Far rooms evict first (streamer budget).
-  // 48 m ≈ 7 s at phone run speed: the room should be ready when the hero
-  // reaches the door. Still only the single nearest streamed target ahead,
-  // so leftover dress evicts first and we never stack past the 650 cap.
-  const APPROACH_DIST = 48;
-  function approachRoomIds() {
-    const set = new Set();
-    if (!state.doors || !state.ctx || !state.ctx.hero || !state.root) return set;
-    const p = state.ctx.hero.position;
-    const px = p.x - state.root.position.x;
-    const pz = p.z - state.root.position.z;
-    const cur = state.current || '';
-    let hx = 0, hz = 1;
-    try {
-      if (state.ctx.hero.getWorldDirection) {
-        const dir = new THREE.Vector3();
-        state.ctx.hero.getWorldDirection(dir);
-        hx = dir.x; hz = dir.z;
-      }
-    } catch (_) {}
-    const roomIds = new Set();
-    (state.rooms || []).forEach(function (r) { if (r && r.id) roomIds.add(r.id); });
-    // Only the single nearest streamed room ahead (including one hop past a
-    // short corridor, e.g. K1-KC12 → K2). Adding every door's from+to inside
-    // range stacked K2+K3+K4 to 658 MB (over the 650 cap) on the KC1 walk.
-    let bestId = null, bestDist = Infinity;
-    for (let i = 0; i < state.doors.length; i++) {
-      const d = state.doors[i];
-      if (!d || d.kind === 'arch') continue;
-      const dx = d.x - px, dz = d.z - pz;
-      const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist > APPROACH_DIST) continue;
-      const nd = dist > 0.05 ? (dx * hx + dz * hz) / dist : 1;
-      if (nd < 0.15 && dist > 8) continue;
-      let ahead = null;
-      // Streamed destination on the far side, including one hop past a corridor.
-      const targets = streamedTargets(d, cur);
-      for (let t = 0; t < targets.length; t++) {
-        if (targets[t] && targets[t] !== cur) { ahead = targets[t]; break; }
-      }
-      if (!ahead) {
-        if (d.to && d.to !== cur && roomIds.has(d.to)) ahead = d.to;
-        if (d.from && d.from !== cur && roomIds.has(d.from)) {
-          if (!ahead) ahead = d.from;
-          else if (ahead === d.to && nd < 0) ahead = d.from;
-        }
-      }
-      if (ahead && dist < bestDist) { bestDist = dist; bestId = ahead; }
-    }
-    if (bestId) set.add(bestId);
-    return set;
-  }
+  const streamedRooms = new Set(WING_ZONES.map(zone => zone.id));
   const libraryZones = new Set(['L1','L2','L4',...(window.SinPrivateRooms?['L3']:[])]);
-  const retainedLibrary = new Set(['L1', 'L2']);
-  const retainedObservatory = new Set(['L1', 'L4']);
-  const retainedMoonPassage = new Set(['L4']);
-  const retainedSacredHall = new Set(['T3', 'T5']);
-  const retainedPurification = new Set(['T2', 'T3']);
-  const retainedEntrance = new Set(['T1','T2']);
-  const retainedTempleApproach = new Set(['T1', ...retainedPurification]);
-  const retainedSanctuary = new Set(['T3', 'T4']);
-  const retainedTemple = new Set(['T3', 'T4', 'T5']);
-  const offeringApproaches = new Set(['T2', 'TC23', 'T3', 'TC34', 'T4', 'TC5', 'T5']);
+  function portalIsOpen(portal) {
+    if (state.templeDoors && !state.templeDoors.allows(portal.id)) return false;
+    if (state.libraryDoors && !state.libraryDoors.allows(portal.id)) return false;
+    if (portal._roomDoor && !['Open','Opening','Closing'].includes(portal.state)) return false;
+    if (portal._roomDoor && (portal.progress||0)<.025) return false;
+    // A real gate or an existing screen protects any unfinished destination.
+    return [portal.from,portal.to].every(id=>!streamedRooms.has(id)||zoneIsReady(id));
+  }
+  function visibleRoutes(view) {
+    const region=regionAt(view.x,view.z);
+    let viewer=region?.id||'Palace';
+    if(region?.kind==='threshold'){
+      const door=state.hallPortalsByRoom.get(region.linkRoom);
+      const beyond=door&&Math.sign(door.x)*(view.x-door.x)>=-.035;
+      viewer=beyond?region.linkRoom:'Palace';
+    }
+    return state.routes.connectedView(viewer,view,SinWingVisibility.throughOpenings,portalIsOpen);
+  }
   const entryLibraryOnly = new Set(['L1']);
-  const entryArchiveOnly = new Set(['L2']);
   function registerLibraryFailure(id) {
     const failures = state.libraryFailures || (state.libraryFailures = new Map());
     const prior = failures.get(id);
@@ -4170,189 +4136,65 @@
     if (!state.entryLibrary) {
       attachStreamer();
       sampleEntryMemory();
-      state.entryLibrary = { started: performance.now(), archiveStarted: 0 };
+      state.entryLibrary = { started: performance.now() };
     }
     const entry = state.entryLibrary, now = performance.now();
     if (entry.done) return 'ready';
-    const libraryReady = zoneIsReady('L1');
-    if (libraryReady && !entry.archiveStarted) {
-      // Measure again after L1's GPU uploads and decoded image cleanup.
-      // L2 is optional at entry and goes through the normal memory budget.
-      sampleEntryMemory();
-      entry.archiveStarted = now;
+    // From the throne hall only L1 can be seen through R1. Rooms behind
+    // the six library doors go through the ordinary approach prediction.
+    zoneStreamer.update({current:'Palace',only:entryLibraryOnly,approach:entryLibraryOnly,
+      retained:entryLibraryOnly,allowBackgroundWarm:false});
+    const status=zoneStreamer.status('L1');
+    if(status==='ready'){
+      entry.done=true;entry.keepReadyUntil=now+45000;
+      return 'ready';
     }
-    const id = libraryReady ? 'L2' : 'L1';
-    const only = libraryReady ? entryArchiveOnly : entryLibraryOnly;
-    zoneStreamer.update({ current: 'Palace', only, approach: only, retained: retainedLibrary,
-      allowBackgroundWarm: false });
-    const status = zoneStreamer.status(id);
-    if (!libraryReady) {
-      if (status === 'cold' && !entry.reclaimed && reclaim) {
-        entry.reclaimed = true;
-        reclaim();
-        sampleEntryMemory();
-        return 'pending';
-      }
-      const elapsed = now - entry.started;
-      if (status === 'failed' || elapsed > 60000 || (status === 'cold' && elapsed > 3000)) {
-        // The whole palace remains playable if its base already needs the
-        // memory. R1 retains its frame and gates L1 until preparation fits.
-        entry.done = true;
-        return 'ready';
-      }
-      return 'pending';
-    }
-    if (status === 'cold' && !entry.archiveReclaimed && reclaim) {
-      entry.archiveReclaimed = true;
+    if(status==='cold' && !entry.reclaimed && reclaim){
+      entry.reclaimed=true;
       reclaim();
       sampleEntryMemory();
       return 'pending';
     }
-    if (status === 'ready') {
-      // Catch variance in the actual atlas uploads before leaving the load
-      // screen. L2 is still off-screen from the palace's entrance.
-      sampleEntryMemory();
-      const { usage, budget } = zoneStreamer.report();
-      if ((budget.processMB > 0 && usage.processMB > budget.processMB) ||
-          (budget.gpuMB > 0 && usage.gpuMB > budget.gpuMB)) zoneStreamer.forceEvict('L2');
-    }
-    // If L2 does not fit or takes too long, leave it to corridor prefetch.
-    entry.done = status === 'failed' || status === 'ready' ||
-      (status === 'cold' && now - entry.archiveStarted > 2500) || now - entry.archiveStarted > 55000;
-    if (entry.done) entry.keepReadyUntil = now + 45000;
-    return entry.done ? 'ready' : 'pending';
+    const elapsed=now-entry.started;
+    entry.done=status==='failed'||elapsed>60000||(status==='cold'&&elapsed>3000);
+    return entry.done?'ready':'pending';
   }
-  function streamZones(origin, visibleIds, preparedIds) {
+  function streamZones(origin, visibleIds) {
     if (!zoneStreamer) return 0;
     if (zoneDistKey !== origin || !zoneDist) { zoneDistKey = origin; zoneDist = distancesFrom(origin); }
-    const ctx = state.ctx;
     attachStreamer();
-    const level = (zoneStreamer.sample(ctx.renderer) || {}).level || 'normal';
-    const warmGroups = [];
-    const approach = approachRoomIds();
-    const move = state.archiveMotion, portal = state.archivePortals && state.archivePortals[0];
-    const region = regionAt(move ? move.x : 0, move ? move.z : 0);
-    const inLibrary = region && region.wing === 'Library';
-    const archiveNear = origin === 'L2' || origin === 'LC2';
-    if (archiveNear && !zoneIsReady('L2') && !state.archiveLoad) {
-      const now = performance.now();
-      if (!state.archiveBudgetSampleAt || now > state.archiveBudgetSampleAt + 1500) {
-        state.archiveBudgetSampleAt = now;
-        sampleEntryMemory();
-      }
+    const level = (zoneStreamer.sample(state.ctx.renderer) || {}).level || 'normal';
+    const move=state.archiveMotion;
+    const readyTime=id=>zoneStreamer.leadTime(id);
+    const next=state.routes.nextRoom(origin,move,streamedRooms,readyTime);
+    const nearby=state.routes.nearRoom(origin,move,streamedRooms,()=>false);
+    const demand=state.templeDoors?.waiting()||state.libraryDoors?.waiting()||
+      (nearby&&!zoneIsReady(nearby)?nearby:null);
+    const approach=new Set();
+    if(next) approach.add(next.id);
+    if(nearby) approach.add(nearby);
+    if(demand) approach.add(demand);
+    state.nextStreamRoom = demand || next?.id || null;
+
+    const retained=new Set([...(state.templeDoors?.retainZones()||[]),...(state.libraryDoors?.retainZones()||[])]);
+    const now=performance.now();
+    if(state.lastStreamOrigin!==origin){
+      if(streamedRooms.has(state.lastStreamOrigin))state.recentStreamRoom={id:state.lastStreamOrigin,until:now+11000};
+      state.lastStreamOrigin=origin;
     }
-    let retained;
-    if (inLibrary) retained = retainedLibrary;
-    const studyEntry=state.doors.find(d=>d.id==='L1-LC3');
-    const towardStudy=!!state.studyDoor&&(origin==='LC3'||origin==='L3'||
-      (origin==='L1'&&move&&studyEntry&&Math.hypot(move.x-studyEntry.x,move.z-studyEntry.z)<24&&
-        (Math.abs(move.x-studyEntry.x)<4.6||move.vz<-.25)));
-    if(towardStudy){
-      approach.add('L3');
-      retained=new Set(['L1','L3']);
-    } else if (inLibrary && !zoneIsReady('L2')) approach.add('L2');
-    if(['KC2','K5','KC5R'].includes(origin)) {
-      approach.add('K5');
-      retained=new Set([...(retained||[]),'K5']);
+    const recent=state.recentStreamRoom;
+    if(recent && now<recent.until && zoneDist.get(recent.id)<=2 && level==='normal' && !approach.size)retained.add(recent.id);
+    if(origin==='Palace' && level==='normal' && !approach.size && zoneIsReady('L1') &&
+      now<(state.entryLibrary?.keepReadyUntil||0))retained.add('L1');
+    for(const id of approach){
+      const failure=state.libraryFailures?.get(id);
+      if(failure?.count===1 && now>=failure.retryAt && zoneStreamer.status(id)==='failed') zoneStreamer.forceEvict(id);
     }
-    let towardObservatory = false;
-    if (move && state.observatoryApproach) {
-      const d = state.observatoryApproach;
-      const distance = Math.hypot(move.x - d.x, move.z - d.z);
-      const lateral = Math.abs(move.z - d.z);
-      const atMoonEnd = origin === 'MP2' && Math.abs(move.x - state.observatoryDoors[1].x) < 31;
-      towardObservatory = origin === 'L4' || origin === 'LC4' || atMoonEnd ||
-        (origin === 'L1' && ((distance < 11 && lateral < 5) || (distance < 24 && lateral < 7 && move.vx > .7)));
-      if (towardObservatory) {
-        approach.add('L4');
-        if (atMoonEnd) retained = retainedMoonPassage;
-        else if (origin === 'L4' || origin === 'LC4') retained = retainedObservatory;
-      }
-    }
-    if (origin === 'Palace' && move && portal) {
-      const dx = portal.x - move.x, dz = portal.z - move.z;
-      const distance = Math.hypot(dx, dz);
-      const speed = Math.hypot(move.vx, move.vz);
-      const toward = distance < 0.5 || (dx * move.vx + dz * move.vz) > distance * speed * 0.65;
-      if (distance < 32 || (state.entryLibrary && performance.now() < state.entryLibrary.keepReadyUntil)) retained = retainedLibrary;
-      if (distance < 24 || (toward && distance <= Math.min(42, 15 + speed * 3.5))) {
-        approach.add('L1');
-        if (zoneIsReady('L1')) {
-          approach.add('L2');
-        }
-      }
-    }
-    const templeEntry = state.sacredHallEntry;
-    const nearTemple = origin === 'T3' || state.sacredHallRoutes.has(origin) || origin === 'ARCH_R3' ||
-      (origin === 'Palace' && move && templeEntry && Math.hypot(templeEntry.x - move.x, templeEntry.z - move.z) < 15);
-    if (nearTemple && !inLibrary) {
-      approach.add('T3');
-      if (zoneIsReady('T3') && offeringApproaches.has(origin)) approach.add('T5');
-      retained = retained || retainedSacredHall;
-    }
-    const sanctuarySide = state.sanctuaryDoors[1];
-    const atMoonSanctuary = origin === 'MP1' && move && sanctuarySide && Math.abs(move.z - sanctuarySide.z) < 21;
-    const atSanctuary = origin === 'T4' || origin === 'TC34' || atMoonSanctuary;
-    const templeApproach = origin === 'T3' || origin === 'TC23' || origin === 'T2';
-    const towardSanctuary = window.SinLunarSanctuary && !inLibrary && (atSanctuary || templeApproach);
-    if (towardSanctuary) {
-      if (atSanctuary || zoneIsReady('T3')) approach.add('T4');
-      if (atSanctuary) retained = retainedSanctuary;
-      else if (level === 'normal') retained = retainedTemple;
-    }
-    // Keep T2 and T3 prepared at either side of the connecting hallway.
-    // Distant temple rooms still yield under the current device budget.
-    const purgeEntry = origin === 'T1' || origin === 'TC12' || origin === 'T2' || origin === 'TC23';
-    const purgeNear = window.SinPurificationHall && !inLibrary && (purgeEntry ||
-      (origin === 'T3' && move && Math.abs(move.x - state.purificationDoors[1].x) < 21));
-    if (purgeNear) {
-      approach.add('T2');
-      if (purgeEntry || level === 'normal') retained = retainedPurification;
-      else if (!retained) retained = retainedPurification;
-    }
-    const templeVestibule = origin==='ARCH_R3' || origin==='T1' || origin==='TC12' || origin==='TR1';
-    const templeFromPalace = origin==='Palace' && move && templeEntry &&
-      Math.hypot(templeEntry.x-move.x,templeEntry.z-move.z)<19;
-    const purificationEntry = state.purificationDoors[0];
-    const templeReturn = origin==='T2' && move &&
-      Math.hypot(purificationEntry.x-move.x,purificationEntry.z-move.z)<12;
-    const entranceNear = window.SinT1Entrance && (templeVestibule || templeFromPalace || templeReturn);
-    if (entranceNear) {
-      approach.add('T1');
-      retained=templeReturn ? retainedTempleApproach : retainedEntrance;
-    }
-    const allowBackgroundWarm = !inLibrary && (!move || Math.hypot(move.vx, move.vz) < 0.40);
-    if (allowBackgroundWarm) {
-      const eligible = new Set([...(preparedIds || []), ...(visibleIds || [])]);
-      eligible.forEach(id => {
-        const g = id !== 'T1' && id !== 'T2' && id !== 'T3' && id !== 'T4' && id !== 'T5' && !libraryZones.has(id) && state.regionGroups.get(id);
-        if (g) warmGroups.push(g);
-      });
-    }
-    if (retained && state.libraryFailures) retained.forEach(id => {
-      const failure = state.libraryFailures.get(id);
-      if (failure && failure.count === 1 && performance.now() >= failure.retryAt && zoneStreamer.status(id) === 'failed') {
-        zoneStreamer.forceEvict(id);
-        approach.add(id);
-      }
-    });
-    const templeDemand=state.templeDoors?.waiting()||state.libraryDoors?.waiting();
-    const doorZones=new Set([...(state.templeDoors?.retainZones()||[]),...(state.libraryDoors?.retainZones()||[])]);
-    if (doorZones.size) {
-      for (const id of doorZones) approach.add(id);
-      retained=new Set([...(retained||[]),...doorZones]);
-    }
-    const demand = templeDemand || (towardStudy&&!zoneIsReady('L3')?'L3':entranceNear && !zoneIsReady('T1') ? 'T1' :
-      purgeNear && purgeEntry && !zoneIsReady('T2') ? 'T2' :
-      towardSanctuary && atSanctuary && !zoneIsReady('T4') ? 'T4' :
-      nearTemple && !zoneIsReady('T3') ? 'T3' :
-      (origin === 'T3' || origin === 'TC5') && !zoneIsReady('T5') ? 'T5' :
-      !zoneIsReady('L1') ? 'L1' : (state.archiveDemand || archiveNear) && !zoneIsReady('L2') ? 'L2' :
-        towardObservatory && !zoneIsReady('L4') ? 'L4' : null);
-    const only = inLibrary ? (towardObservatory || towardStudy || (visibleIds && visibleIds.has('L4')) ? libraryZones : retainedLibrary) : null;
-    return zoneStreamer.update({ current: origin, distances: zoneDist, visible: visibleIds, prepared: preparedIds,
-      memoryLevel: level, warmGroups, approach, retained, only,
-      allowBackgroundWarm, demand });
+    const allowBackgroundWarm=level==='normal'&&!approach.size&&(!move||Math.hypot(move.vx,move.vz)<.3);
+    const warmGroups=allowBackgroundWarm?[...visibleIds]
+      .filter(id=>!streamedRooms.has(id)).map(id=>state.regionGroups.get(id)).filter(Boolean):[];
+    return zoneStreamer.update({current:origin,distances:zoneDist,visible:visibleIds,
+      memoryLevel:level,warmGroups,approach,retained,allowBackgroundWarm,demand,motionPrefetch:true});
   }
   // After LRU eviction a streamed room (K4 in particular) can sit complete=false
   // with its dress refs nulled. If the player is standing in it, re-issue the
@@ -4430,13 +4272,12 @@
     const view = cameraView(state.root.position.x, state.root.position.z);
     let visibleIds, preparedIds, meta = null;
     if (visibilityPlanner && view) {
-      // Camera-driven: what the camera can see (through open portals) is drawn,
-      // what it could see after a turn stays prepared.
+      // The camera only determines visibility through real openings.
+      // Preparation uses the player's route and speed in streamZones().
       const tPlan = performance.now();
-      const planRegions = state.planRegions;
       const libraryView = libraryPortalView(view);
-      const planned = libraryView ? { visible: libraryView, prepared: libraryView, meta: null } :
-        visibilityPlanner.plan(planRegions, state.links, origin, view, performance.now() / 1000);
+      const planned = libraryView ? { visible: libraryView, prepared: new Set(), meta: null } :
+        { visible: visibleRoutes(view), prepared: new Set(), meta: null };
       if (!libraryView) {
         const archiveReach = archiveExitReach(view);
         if (archiveReach === 0 || archiveReach === 1) {
@@ -4493,11 +4334,8 @@
       // Rooms in the camera prefetch wedge / within prefetch hops are streamed
       // by streamZones() below: assembled off-screen, revealed as one set.
       state.renderBudget = { triangles: Math.round(plan.triangles), budget: plan.budget, activeRegions: plan.ids.slice() };
-      // Seeing into the palace hall from a wing keeps the hall drawn.
-      if (!state.palaceNear && meta && state.links.some(l => (l[0] === 'Palace' && visibleIds.has(l[1])) || (l[1] === 'Palace' && visibleIds.has(l[0])))) {
-        const hallBox = { x0: -state.hall.width / 2, x1: state.hall.width / 2, z0: 0, z1: state.hall.length };
-        if (window.SinWingVisibility.inWedge(hallBox, view, view.halfFov + 0.6, 60)) state.palaceNear = true;
-      }
+      // Keep the throne hall when seen from a wing through its original arch.
+      if(planned.visible.has('Palace'))state.palaceNear=true;
     } else if (regionChanged) {
       const dist = distancesFrom(origin);
       visibleIds = new Set(); preparedIds = new Set();
@@ -4529,14 +4367,14 @@
       }
       {
         const tS = performance.now();
-        streamZones(origin, visibleIds, preparedIds);
+        streamZones(origin, visibleIds);
         ensureCurrentDress(origin);
         if (force) console.info('[palace load] cull-stream', Math.round(performance.now()-tS)+'ms');
       }
       const zr = zoneStreamer ? zoneStreamer.report() : null;
       state.visibility = { visible: Array.from(visibleIds), prepared: Array.from(preparedIds), warmPending: zr ? zr.warmPending : 0, memory: zr ? zr.memory : null, dressFailures: dressFailures.slice(-8), zones: zr };
     } else if (state._streamSets) {
-      streamZones(state._streamSets.origin, state._streamSets.visible, state._streamSets.prepared);
+      streamZones(state._streamSets.origin, state._streamSets.visible);
       ensureCurrentDress(state._streamSets.origin);
     }
     const inHall = Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
@@ -6055,7 +5893,7 @@
     }));
     try{
       const doors=state.doors.filter(d=>d.from==='K5'||d.to==='K5');
-      const architecture=await SinPrivateRooms.king(room,doors,loadRoomModel,signal,deviceProfile.constrained);
+      const architecture=await SinPrivateRooms.king(room,doors,timedRoomModels(api),signal,deviceProfile.constrained);
       if(!alive()){architecture.dispose();return;}
       dress.architecture=architecture;
       architecture.warmup.dispose();

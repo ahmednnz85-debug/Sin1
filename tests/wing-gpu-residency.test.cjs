@@ -76,14 +76,13 @@ test('wing culling calls GPU residency synchronization and is camera-driven, dra
   const tickAt = wings.indexOf('function tick(dt)', cullingAt);
   assert.ok(cullingAt >= 0 && tickAt > cullingAt);
   const culling = wings.slice(cullingAt, tickAt);
-  // plan() takes the hall-inclusive planRegions (so the hall is a first-class
-  // region) and a clock; the old state.regions-only signature is stale.
-  assert.match(culling, /visibilityPlanner\.plan\(planRegions, state\.links, origin, view/);
+  assert.match(wings, /SinPalaceRoutes\.create\(state\.planRegions,state\.links,state\.doors\)/);
+  assert.match(culling, /visibleRoutes\(view\)/);
   assert.doesNotMatch(culling, /distM < 18/);
   assert.doesNotMatch(culling, /renderBudget\.choose\(/);
   assert.match(culling, /state\.palaceNear = id === 'Palace' \|\| isArch \|\| hopsToHall <= 1/);
-  // Prepared/visible rooms are streamed through the zone streamer.
-  assert.match(culling, /streamZones\(origin, visibleIds, preparedIds\)/);
+  // Visibility retains ready rooms, and motion requests preparation.
+  assert.match(culling, /streamZones\(origin, visibleIds\)/);
   // Palace GPU residency is owned by the zone streamer; this module remains for the outdoor city only.
   assert.doesNotMatch(culling, /gpuResidency\.sync\(/);
   assert.match(wings, /visibleRegionTriangles/);
@@ -110,9 +109,9 @@ test('palace hall group stays visible while the player is an occupant (never cor
   assert.doesNotMatch(pi, /group\.visible = wingRuntime \? \(inHall \|\| palaceSeen\)/);
   const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
   assert.match(wings, /, d, state\.root\)/);
-  assert.match(wings, /approachRoomIds/);
-  assert.match(wings, /APPROACH_DIST/);
-  assert.match(wings, /bestId/);
+  assert.match(wings, /state\.routes\.nearRoom/);
+  assert.match(wings, /motionPrefetch:true/);
+  assert.match(wings, /state\.routes\.nextRoom/);
   assert.match(wings, /st !== 'DONE' && !occ/);
   const zs = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
   assert.match(zs, /isPersistentVisible/);

@@ -163,6 +163,7 @@
       g.children.forEach(child => { if (child.userData.streamDress) hideObject(child); });
     }
     function apiFor(rec) {
+      const attempt = rec.timing;
       return {
         id: rec.id,
         group: group(rec),
@@ -174,6 +175,10 @@
           g.add(obj);
           if (rec.state === 'ready') { queueTextures(rec, obj, 0); }
           return obj;
+        },
+        recordAssetTime(stage, elapsed) {
+          if (attempt !== rec.timing || !attempt || rec.state !== 'loading') return;
+          attempt[stage] = (attempt[stage] || 0) + elapsed;
         },
         done: function () { rec.done = true; },
         fail: function (e) { rec.failed = e || true; rec.done = true; }
@@ -538,7 +543,10 @@
       }
     }
 
-        function start(rec, t) {
+    function start(rec, t) {
+      const waiting = rec.firstWait ? t-rec.firstWait : 0;
+      rec.timing={ waitMs:Math.max(0,waiting), assetsMs:0, uploadMs:0, compileMs:0, totalMs:0 };
+      rec.firstWait=0;
       rec.state = 'loading'; rec.startedAt = t; rec.done = false; rec.failed = null; rec.pending.clear();
       note('load', rec.id + ' stream start');
       try { rec.spec.load(apiFor(rec)); } catch (e) { rec.failed = e; rec.done = true; console.warn('zone load failed', rec.id, e); }
@@ -552,11 +560,9 @@
       if (rec.spec.onFailure) {
         try { rec.spec.onFailure(error); } catch (cause) { console.warn('zone failure cleanup', rec.id, cause); }
       }
-      if (rec.spec.keepShell) {
-        evict(rec, 'forced');
-        rec.state = 'failed';
-        rec.failed = error;
-      }
+      evict(rec, 'forced');
+      rec.state = 'failed';
+      rec.failed = error;
       note('load', rec.id + ' failed: ' + String(error));
     }
     function complete(rec) {
@@ -584,7 +590,7 @@
         }
         if (done || failed || abandon) {
           if (!done) note('load', rec.id + (failed ? ' failed' : ' abandoned') + ' after ' + Math.round(elapsed) + ' ms — revealing what is present');
-          rec.state = 'uploading';
+          rec.state = 'uploading'; rec.timing.assetsMs=elapsed;
           // Program-affecting material tweaks run before upload/compile.
           try { if (rec.spec.prepare) rec.spec.prepare(apiFor(rec)); } catch (e) { console.warn('zone prepare', rec.id, e); }
           const uploadRoot = rec.spec.keepShell ? dressOf(g) : g;
@@ -598,7 +604,7 @@
             if (!rec.spec.prepareGeometry(apiFor(rec), ctx && ctx.renderer)) return;
           } catch (error) { failStrict(rec, error); return; }
         }
-        rec.state = 'compiling';
+        rec.state = 'compiling'; rec.timing.uploadMs=now()-rec.startedAt-rec.timing.assetsMs;
         const r = ctx && ctx.renderer;
         let p = null;
         if (g && r && ctx.camera) {
@@ -606,7 +612,7 @@
           try {
             // Compile against the real scene so the programs match what the
             // renderer will use (lights, fog, env): no compile at reveal.
-            const content = rec.spec.requireComplete && dressOf(g);
+            const content = rec.spec.requireComplete && rec.spec.keepShell && dressOf(g);
             if (content) g.visible = false; // include content lights exactly once
             if (typeof r.compileAsync === 'function') p = r.compileAsync(content || g, ctx.camera, ctx.scene || null);
             else if (typeof r.compile === 'function') r.compile(content || g, ctx.camera, ctx.scene || null);
@@ -637,6 +643,10 @@
     function reveal(rec) {
       const g = group(rec);
       rec.state = 'ready';
+      const elapsed=now()-rec.startedAt;
+      rec.timing.compileMs=Math.max(0,elapsed-rec.timing.assetsMs-rec.timing.uploadMs);
+      rec.timing.totalMs=elapsed;
+      rec.leadMs=rec.leadMs?rec.leadMs*.6+elapsed*.4:elapsed;
       const n = g ? revealObject(g) : 0;
       if (g) g.userData.dressReady = true;
       stats.reveals++;
@@ -831,17 +841,19 @@
         // the player is walking toward early enough that, at run speed, the
         // door can open onto a complete room. Far rooms are evicted first
         // (canStart); over-budget approach still defers rather than exceed 650.
-        const prefetch = hops <= rec.spec.prefetchHops || approaching || (!tight && prepared.has(id));
+        const passive = !view.motionPrefetch;
+        const prefetch = approaching || id===view.demand || (passive && (hops <= rec.spec.prefetchHops || (!tight && prepared.has(id))));
         const want = (!view.only || view.only.has(id)) && (isCurrent || prefetch ||
-          (rec.spec.requireComplete && visible.has(id)) || (retained.has(id) && rec.state !== 'cold'));
+          (rec.spec.requireComplete && visible.has(id) && (passive || rec.state!=='cold')) || (retained.has(id) && rec.state !== 'cold'));
         // hops <= 1 protects on desktop; on a 650 MB phone those neighbours
         // yield once evictForCurrent decides the current room needs space.
-        const protect = isCurrent || visible.has(id) || retained.has(id) || (!tight && hops <= 1);
+        const protect = isCurrent || visible.has(id) || retained.has(id) || (passive && !tight && hops <= 1);
         rec.hops = hops; rec.protected = protect; rec.visible = visible.has(id); rec.isCurrent = isCurrent;
         rec.retained = retained.has(id);
         if (isCurrent) rec._currentUntil = t + ((rec.state !== 'cold' && rec.state !== 'ready') ? 15000 : 2000);
         if (want) { rec.lastWanted = t; rec.leftAt = 0; wanted.push(rec); }
-        else if (rec.state !== 'cold' && !rec.leftAt) rec.leftAt = t;
+        else if(rec.state==='cold') rec.firstWait=0;
+        else if (!rec.leftAt) rec.leftAt = t;
       });
       // Nearest / visible first. Lower rank = more urgent.
       const demand = view.demand;
@@ -855,6 +867,7 @@
           // not fit, defer. The door gate waits on zoneIsReady, so nothing
           // is revealed incomplete in front of the player.
           if (canStart(rec) || handleDeferStall(rec, t)) { start(rec, t); loading++; }
+          else if(!rec.firstWait) rec.firstWait=t;
         }
         if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, t, i);
       });
@@ -1016,10 +1029,12 @@
         overBudget: wouldExceed({ processMB: 0, gpuMB: 0, cpuMB: 0 }),
         stats: Object.assign({}, stats)
       };
-      zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected, deferred: !!r.deferred }; });
+      zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected, deferred: !!r.deferred, timing:r.timing&&Object.fromEntries(
+          Object.entries(r.timing).map(([stage,ms])=>[stage,Math.round(ms)])) }; });
       return out;
     }
-    return { register, unregister, attach, update, status, isReady, whenReady, markReleasable, queueTextures: (obj) => queueTextures(null, obj, 50), pumpUploads, pumpWarm, enqueueWarm, forgetWarm, sample, memoryState, forceEvict, forceLoad, reset, report, hide: hideObject, reveal: revealObject, zones: () => Array.from(order) };
+    const leadTime=id=>Math.max(3,Math.min(8,((zones.get(id)?.leadMs||5200)+650)/1000));
+    return { register, unregister, attach, update, status, isReady, leadTime, whenReady, markReleasable, queueTextures: (obj) => queueTextures(null, obj, 50), pumpUploads, pumpWarm, enqueueWarm, forgetWarm, sample, memoryState, forceEvict, forceLoad, reset, report, hide: hideObject, reveal: revealObject, zones: () => Array.from(order) };
   }
   return { create, HIDE_FLAG };
 });

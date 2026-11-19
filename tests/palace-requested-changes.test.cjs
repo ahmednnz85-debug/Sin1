@@ -125,13 +125,13 @@ test('K4 layout follows the reference picture: mural at the back, altar centre, 
   assert.match(dress, /'k4_lionSphinx', R - /);
 });
 
-test('K4 kits are camera-prefetched and each kit is downloaded once', () => {
+test('K4 kits are prefetched from the player route and each kit is downloaded once', () => {
   assert.match(wings, /const K4_DEFERRED_MODELS = new Set\([\s\S]{0,180}WING_FILES\.k4FrontWall/);
   const cullStart = wings.indexOf('function updateCulling(force)');
   const cullEnd = wings.indexOf('function tick(dt)', cullStart);
   // K4 kits now start from the K4 zone manifest entry (streamer prefetch).
-  assert.match(wings.slice(cullStart, cullEnd), /streamZones\(origin, visibleIds, preparedIds\)/);
-  assert.match(wings, /id: 'K4'[\s\S]{0,120}load: function \(\) \{ dressK4\(\); loadK4Assets\(\); \}/);
+  assert.match(wings.slice(cullStart, cullEnd), /streamZones\(origin, visibleIds\)/);
+  assert.match(wings, /id: 'K4'[\s\S]{0,250}load: function \(\) \{ dressK4\(\); loadK4Assets\(\); \}/);
   assert.match(wings, /if \(kits\.indexOf\(spec\.url\) < 0\) kits\.push\(spec\.url\)/);
   assert.match(wings, /gltf\.scene\.getObjectByName\(spec\.item\)/);
   assert.match(wings, /loaded\.forEach\(function \(entry\)/);

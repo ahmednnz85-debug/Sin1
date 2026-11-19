@@ -644,11 +644,30 @@ test('strict archive stays hidden on GPU error and can be retried', async () => 
   const view = { current: 'L1', distances: new Map([['L2', 1]]) };
   for (let i = 0; i < 6; i++) { s.update(view); await tick(); }
   assert.equal(s.status('L2'), 'failed');
-  assert.equal(group.children[0].visible, false);
-  assert.equal(s.forceEvict('L2'), 1);
+  assert.equal(group.children.length, 0, 'incomplete assets were released after upload failure');
+  s.forceEvict('L2');
+  assert.equal(s.status('L2'), 'cold');
   R.initTexture = original;
   for (let i = 0; i < 6; i++) { s.update(view); await tick(); }
   assert.equal(s.status('L2'), 'ready');
+});
+
+test('motion-based streaming ignores passive sight of a cold room and protects a ready visible room', async () => {
+  const scene = obj('scene'), group = obj('L3'); scene.add(group);
+  const R = renderer(), s = Z.create({ graceMs: 0 });
+  s.register({ id: 'L3', requireComplete: true, load(api) { api.add(mesh('study', tex())); api.done(); } });
+  s.attach({ renderer: R, scene, camera: {}, groupOf: () => group });
+  const viewing = { current: 'LC3', distances: new Map([['L3', 1]]), visible: new Set(['L3']), motionPrefetch: true };
+  s.update(viewing);
+  assert.equal(s.status('L3'), 'cold');
+  const walking = { ...viewing, visible: new Set(), approach: new Set(['L3']), demand: 'L3' };
+  for (let i = 0; i < 6; i++) { s.update(walking); await tick(); }
+  assert.equal(s.status('L3'), 'ready');
+  assert.ok(s.report().zones.L3.timing.totalMs >= 0);
+  s.update({ ...viewing, memoryLevel: 'critical' });
+  assert.equal(s.status('L3'), 'ready');
+  s.update({ ...viewing, visible: new Set(), memoryLevel: 'critical' });
+  assert.equal(s.status('L3'), 'cold');
 });
 
 test('the archive can coexist with a visible library within a 650 MB budget', async () => {
