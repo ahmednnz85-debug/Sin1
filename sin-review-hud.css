@@ -1,0 +1,37 @@
+/* Sîn — Babylonian mobile UI / review branch */
+#run,#fight,#fmenu{display:none!important}
+#stick{
+ border:2px solid rgba(192,151,81,.75)!important;
+ background:radial-gradient(circle,rgba(34,49,72,.4) 0 30%,rgba(11,16,25,.72) 80%)!important;
+ box-shadow:inset 0 0 0 5px rgba(151,113,65,.2),inset 0 0 24px rgba(21,37,68,.8),0 3px 25px rgba(0,0,0,.3)!important
+}
+#stick:after{content:"";position:absolute;inset:23%;border:1px dashed rgba(214,170,90,.6);border-radius:50%;pointer-events:none}
+#knob{background:radial-gradient(circle at 40% 32%,#a59b7f 0,#856947 30%,#302c31 77%)!important;border:2px solid #ba9355!important;box-shadow:inset 0 0 0 3px #343444,0 2px 15px #0009!important}
+#sin-review-actions{
+ position:fixed;right:max(15px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));z-index:8700;
+ width:clamp(172px,27vw,250px);height:clamp(148px,30vh,208px);
+ display:none;touch-action:none;pointer-events:none;user-select:none;-webkit-user-select:none;
+}
+body.playing #sin-review-actions.enabled{display:block}
+.sin-action{position:absolute;width:clamp(44px,6.9vw,60px);height:clamp(44px,6.9vw,60px);
+ border-radius:50%;padding:8px;border:2px solid #9e7b47;pointer-events:auto;touch-action:none;
+ background:radial-gradient(circle at 38% 28%,#3f4850 0,#222933 32%,#10151f 83%);
+ color:#e8b76d;box-shadow:inset 0 0 0 3px rgba(47,63,92,.8),inset 0 0 10px #000,0 3px 9px #0008;
+ -webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;
+}
+.sin-action svg{width:83%;height:83%;filter:drop-shadow(0 0 2px #ba8b5680)}
+.sin-action.pressed{transform:scale(.94);border-color:#ffe2a7;background:#48402d}
+.sin-action:disabled{opacity:.36;pointer-events:none}
+.sin-action-light{bottom:1%;right:1%;width:clamp(64px,9.3vw,83px);height:clamp(64px,9.3vw,83px);border-width:3px}
+.sin-action-heavy{bottom:30%;right:37%}
+.sin-action-axe{bottom:66%;right:1%}
+.sin-action-dodge{bottom:4%;right:57%}
+.sin-action-guard{bottom:66%;right:64%}
+.sin-action-interact{bottom:69%;right:34%;display:none}
+.sin-action-interact.available{display:flex}
+@media (max-height:450px){
+ #sin-review-actions{right:max(10px,env(safe-area-inset-right));bottom:max(7px,env(safe-area-inset-bottom));height:145px;width:205px}
+ .sin-action{width:45px;height:45px}
+ .sin-action-light{width:65px;height:65px}
+}
+@media (orientation:portrait){#sin-review-actions{display:none!important}}
