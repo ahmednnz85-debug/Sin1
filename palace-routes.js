@@ -18,10 +18,27 @@
     }
     // Some corridor polygons overlap intentionally at an elbow.
     if(x1-x0>.16&&z1-z0>.16){
-      return x1-x0>=z1-z0?{x:(x0+x1)/2,z:(z0+z1)/2,axis:'z',width:x1-x0,thickness:.07}:
-        {x:(x0+x1)/2,z:(z0+z1)/2,axis:'x',width:z1-z0,thickness:.07};
+      // An L-shaped elbow: the two corridors share an open square. A thin
+      // plane through it can lie parallel to the line of sight, so it is
+      // tested as an open area (elbow box) in connectedView.
+      const elbow={x0,x1,z0,z1};
+      return x1-x0>=z1-z0?{x:(x0+x1)/2,z:(z0+z1)/2,axis:'z',width:x1-x0,thickness:.07,elbow}:
+        {x:(x0+x1)/2,z:(z0+z1)/2,axis:'x',width:z1-z0,thickness:.07,elbow};
     }
     return null;
+  }
+  function boxInView(cam,b,margin) {
+    if(cam.x>=b.x0&&cam.x<=b.x1&&cam.z>=b.z0&&cam.z<=b.z1)return true;
+    const half=(cam.halfFov||.6)+margin,cosHalf=Math.cos(Math.min(Math.PI,half));
+    const pts=[[b.x0,b.z0],[b.x1,b.z0],[b.x0,b.z1],[b.x1,b.z1],[(b.x0+b.x1)/2,(b.z0+b.z1)/2]];
+    let side=0;
+    for(const [px,pz] of pts){
+      const vx=px-cam.x,vz=pz-cam.z,len=Math.hypot(vx,vz)||1e-6;
+      const along=vx*cam.dirX+vz*cam.dirZ;
+      if(along/len>=cosHalf)return true;
+      if(along>0)side|=(cam.dirX*vz-cam.dirZ*vx)>0?1:2;
+    }
+    return side===3;
   }
   function create(regions,links,doors) {
     const byId=new Map(regions.map(r=>[r.id,r])), portals=new Map(doors.map(p=>[p.id,p]));
@@ -46,6 +63,13 @@
         if(openings.length>=8)continue;
         for(const {to,portal} of routes.get(id)||[]){
           if(path.includes(to)||!pass(portal))continue;
+          if(portal.elbow){
+            // Open square: visible if the chain so far passes and the square
+            // is inside the camera's horizontal wedge.
+            if(!(openings.length===0||through(camera,openings,.085))||!boxInView(camera,portal.elbow,.085))continue;
+            result.add(to);queue.push({id:to,openings,path:[...path,to]});
+            continue;
+          }
           const line=[...openings,portal];
           if(!through(camera,line,.085))continue;
           result.add(to);queue.push({id:to,openings:line,path:[...path,to]});

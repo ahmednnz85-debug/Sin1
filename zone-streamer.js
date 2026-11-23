@@ -726,7 +726,10 @@
         // A short timeoutMs (legacy 14 s) must NOT reveal a still-loading room:
         // on a phone the 6.8 MB K2 table often arrives after that, which was
         // the visible pop-in. Only complete, fail(), or a long abandon reveal.
-        const abandon = elapsed > abandonAt;
+        // Test instrumentation only: a CPU-rendered browser (no GPU) needs far
+        // longer per room; harnesses may scale the abandon time. Never set in play.
+        const scale = (typeof window !== 'undefined' && +window.__sinAbandonScale > 1) ? +window.__sinAbandonScale : 1;
+        const abandon = elapsed > abandonAt * scale;
         if (rec.spec.requireComplete && !done && abandon) {
           failStrict(rec, new Error('Room preparation timed out'));
           return;

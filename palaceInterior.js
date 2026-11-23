@@ -2419,13 +2419,15 @@
         hallRes.uploadQ.push(it); // let the mesh come back; process-memory guards nothing here
       }).then(pump);
     }
-    pump(); pump();
+    pump(); pump(); pump();
   }
   function pumpHallResidency(ctx) {
     if (hallRes.state === 'restoring' && hallRes.uploadQ && ctx && ctx.renderer) {
       const tStart = performance.now();
       let n = 0;
-      while (hallRes.uploadQ.length && n < 2 && performance.now() - tStart < 6) {
+      // Time-budgeted (not a fixed count): a fast GPU restores the hall in
+      // a few frames, a slow one never takes more than ~6 ms of a frame.
+      while (hallRes.uploadQ.length && (n < 1 || performance.now() - tStart < 6)) {
         const it = hallRes.uploadQ.shift();
         it.textures.forEach(function (t) { try { if (t.image) ctx.renderer.initTexture(t); } catch (_) {} });
         hallRes.pending--; n++;

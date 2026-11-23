@@ -3585,9 +3585,12 @@
     const region = regionAt(view.x, view.z);
     if (!region || region.id !== 'L4') return;
     const [west, east] = state.observatoryDoors;
-    const seeWest = templeSight(view, [west], .08);
-    const seeEast = templeSight(view, [east], .08);
-    const seeLibrary = seeWest && templeSight(view, [west, state.observatoryApproach], .08);
+    // The door-aware portal flood (same openings, slightly wider margin)
+    // may already have found L1 / MP1 at the screen edge: keep them.
+    const floodLibrary = visible.has('L1'), floodEast = visible.has('MP2') || visible.has('MP1');
+    const seeWest = templeSight(view, [west], .08) || floodLibrary;
+    const seeEast = templeSight(view, [east], .08) || floodEast;
+    const seeLibrary = (seeWest && templeSight(view, [west, state.observatoryApproach], .08)) || floodLibrary;
     if (!seeLibrary && !seeEast) visible.clear();
     else {
       if (!seeLibrary) state.regions.forEach(r => { if (r.wing === 'Library') visible.delete(r.id); });
@@ -4469,7 +4472,9 @@
       .filter(id=>!streamedRooms.has(id)).map(id=>state.regionGroups.get(id)).filter(Boolean):[];
     return zoneStreamer.update({current:origin,distances:zoneDist,visible:visibleIds,
       memoryLevel:level,warmGroups,approach,retained,allowBackgroundWarm,demand:demandRoom,motionPrefetch:true,
-      doorDemand:state.templeDoors?.waiting()||state.libraryDoors?.waiting()||null,
+      // A closed door waiting for its room, or an open arch the hero is
+      // about to cross: that room is admitted like the current one.
+      doorDemand:state.templeDoors?.waiting()||state.libraryDoors?.waiting()||(nearby&&!zoneIsReady(nearby)?nearby:null),
       keep:managed?managed.keep:null,rank:managed?managed.rank:null});
   }
   // After LRU eviction a streamed room (K4 in particular) can sit complete=false

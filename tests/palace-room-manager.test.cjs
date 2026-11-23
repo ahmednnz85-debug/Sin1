@@ -252,3 +252,13 @@ test('streamer.reserve frees least important finished rooms for the throne hall,
   assert.equal(s.status('K3'), 'ready', 'visible room kept');
   assert.equal(s.status('K2'), 'ready', 'current room kept');
 });
+
+test('L-shaped corridor elbows (MP2 -> MP1) are visible along the corridor, culled when facing away', () => {
+  const Vis = require('../wing-visibility.js');
+  const D = require('./fixtures/palace-graph.json');
+  const r = Routes.create(D.planRegions.filter(x => x.bbox), D.links, D.doors);
+  const east = { x: 79.4, z: 9.2, dirX: 1, dirZ: 0, halfFov: 0.64 };
+  const west = { x: 81.6, z: 9.2, dirX: -1, dirZ: 0, halfFov: 0.64 };
+  assert.ok(r.connectedView('L4', east, Vis.throughOpenings, () => true).has('MP1'), 'pixel audit: MP1 corner was culled (0.9%)');
+  assert.ok(!r.connectedView('L4', west, Vis.throughOpenings, () => true).has('MP1'));
+});

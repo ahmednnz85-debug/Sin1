@@ -267,7 +267,8 @@ function simulate(policy, kind, tour) {
       if (hall.state === 'resident' && !wanted && hall.unwantedAt && now - hall.unwantedAt > 8000) { hall.state = 'released'; hall.cycles++; }
     }
     zs.update({ current: origin, distances: dist, visible, memoryLevel: level, approach, retained, demand: demandRoom,
-      motionPrefetch: true, allowBackgroundWarm: false, keep, rank, doorDemand: templeWaiting ? templeWaiting.waiting : null });
+      motionPrefetch: true, allowBackgroundWarm: false, keep, rank,
+      doorDemand: policy === 'old' ? null : (templeWaiting ? templeWaiting.waiting : (nearby && !ready(nearby) ? nearby : null)) });
     if (/^K\d/.test(origin) && origin !== 'K1' && !ready(origin)) zs.forceLoad(origin);
     for (const [id, job] of pending) if (now >= job.at) { pending.delete(id); job.api.done(); }
     { const mbNow = zs.report().usage.processMB; peak = Math.max(peak, mbNow); if (mbNow > P.budget) overMs += dt * 1000; }
