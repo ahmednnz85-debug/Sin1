@@ -94,7 +94,42 @@
       }
       return closest;
     }
-    return {nextRoom,nearRoom,connectedView};
+    // Walking distance (metres, through portal centres) from a point inside
+    // `origin` to every connected region. Used by the room manager to rank
+    // preparation by how soon the player can reach / look into a room.
+    function pathDistances(origin,x,z,limit=140) {
+      const dist=new Map([[origin,0]]),at=new Map([[origin,{x,z}]]);
+      const open=[origin],done=new Set();
+      while(open.length){
+        let k=0;
+        for(let i=1;i<open.length;i++)if(dist.get(open[i])<dist.get(open[k]))k=i;
+        const id=open.splice(k,1)[0];
+        if(done.has(id))continue;
+        done.add(id);
+        const p=at.get(id),base=dist.get(id);
+        for(const {to,portal} of routes.get(id)||[]){
+          if(done.has(to))continue;
+          const d=base+Math.hypot(portal.x-p.x,portal.z-p.z);
+          if(d>limit)continue;
+          if(!dist.has(to)||d<dist.get(to)){dist.set(to,d);at.set(to,{x:portal.x,z:portal.z});open.push(to);}
+        }
+      }
+      return dist;
+    }
+    function neighbours(id){return (routes.get(id)||[]).map(r=>r.to);}
+    // Regions directly behind a CLOSED opening the camera looks at from
+    // `origin`. Their door reveals / jambs sit inside that region, so it
+    // must still be drawn (the leaf itself hides everything further on).
+    function closedFrames(origin,camera,through,pass) {
+      const out=new Set();
+      if(!camera)return out;
+      for(const {to,portal} of routes.get(origin)||[]){
+        if(pass(portal))continue;
+        if(through(camera,[portal],.055))out.add(to);
+      }
+      return out;
+    }
+    return {nextRoom,nearRoom,connectedView,pathDistances,neighbours,closedFrames};
   }
   return {create};
 });

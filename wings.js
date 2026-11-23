@@ -3071,11 +3071,18 @@
     };
   }
   function contains(x, z) { return state.built && pointInSolids(x, z, state.floorExtended); }
+  // The culling / sight tests ask for the camera's region ~20 times per
+  // frame with the same coordinates. Room polygons never change after
+  // build, so the last answer is reused (cleared by build / dispose).
+  let regionAtKeyX = NaN, regionAtKeyZ = NaN, regionAtHit = null, regionAtRooms = null;
   function regionAt(x, z) {
-    for (const r of state.rooms) if (pointInPoly(x, z, r.poly)) return r;
-    for (const r of state.connectors) if (r.kind !== 'threshold' && pointInPoly(x, z, r.poly)) return r;
-    for (const r of state.connectors) if (pointInPoly(x, z, r.poly)) return r;
-    return null;
+    if (x === regionAtKeyX && z === regionAtKeyZ && regionAtRooms === state.rooms) return regionAtHit;
+    let hit = null;
+    for (const r of state.rooms) if (pointInPoly(x, z, r.poly)) { hit = r; break; }
+    if (!hit) for (const r of state.connectors) if (r.kind !== 'threshold' && pointInPoly(x, z, r.poly)) { hit = r; break; }
+    if (!hit) for (const r of state.connectors) if (pointInPoly(x, z, r.poly)) { hit = r; break; }
+    regionAtKeyX = x; regionAtKeyZ = z; regionAtHit = hit; regionAtRooms = state.rooms;
+    return hit;
   }
   function adjacency() {
     const map = new Map();
@@ -3726,6 +3733,16 @@
       state.templeDoors?.sight(viewer,view,SinWingVisibility.throughOpenings);
       state.libraryDoors?.sight(viewer,view,SinWingVisibility.throughOpenings);
     }
+    // The per-room sight tests above are exact for one frame. The room the
+    // hero / camera stands in, and any prepared room that was in view a
+    // moment ago (hysteresis), stay drawn so a camera swing at a doorway
+    // never drops a wall, floor or the room beyond and pops it back.
+    if (roomManaged) {
+      for (const id of roomManaged.shown) {
+        const g = state.regionGroups.get(id);
+        if (g && !g.visible && zoneIsReady(id)) g.visible = true;
+      }
+    }
   }
 
   const WING_ZONES = [
@@ -4157,15 +4174,116 @@
     // A real gate or an existing screen protects any unfinished destination.
     return [portal.from,portal.to].every(id=>!streamedRooms.has(id)||zoneIsReady(id));
   }
+  function inHallBounds(x, z) {
+    return !!state.hall && Math.abs(x) <= state.hall.width * 0.5 + 0.3 && z >= -0.3 && z <= state.hall.length + 0.4;
+  }
   function visibleRoutes(view) {
     const region=regionAt(view.x,view.z);
-    let viewer=region?.id||'Palace';
+    // A camera pushed into a wall's thickness (between two room polygons)
+    // belongs to no region. Falling back to the throne hall then culled
+    // the room the hero stands in for that frame; use the hero's room.
+    let viewer=region?.id||(inHallBounds(view.x,view.z)||!state.current?'Palace':state.current);
     if(region?.kind==='threshold'){
       const door=state.hallPortalsByRoom.get(region.linkRoom);
       const beyond=door&&Math.sign(door.x)*(view.x-door.x)>=-.035;
       viewer=beyond?region.linkRoom:'Palace';
     }
     return state.routes.connectedView(viewer,view,SinWingVisibility.throughOpenings,portalIsOpen);
+  }
+  // Physical state of an opening, ignoring whether the room behind it is
+  // prepared. This is what the player WOULD see; the room manager uses it
+  // to prepare rooms before the camera can look into them.
+  function portalPhysicallyOpen(portal) {
+    if (state.templeDoors && !state.templeDoors.allows(portal.id)) return false;
+    if (state.libraryDoors && !state.libraryDoors.allows(portal.id)) return false;
+    if (portal._roomDoor && (!['Open','Opening','Closing'].includes(portal.state) || (portal.progress||0)<.025)) return false;
+    return true;
+  }
+  function viewerRegion(view) {
+    const region=regionAt(view.x,view.z);
+    let viewer=region?.id||null;
+    if(region?.kind==='threshold'){
+      const door=state.hallPortalsByRoom.get(region.linkRoom);
+      const beyond=door&&Math.sign(door.x)*(view.x-door.x)>=-.035;
+      viewer=beyond?region.linkRoom:'Palace';
+    }
+    return viewer;
+  }
+  // ---------------------------------------------------------------------------
+  // PalaceRoomManager (palace-room-manager.js): sight demand, graph/heading
+  // prefetch, cooldown residency and visibility hysteresis for all 14 rooms.
+  // zone-streamer.js stays the single owner of memory and GPU residency.
+  let roomManager = null, roomManaged = null, roomOverlay = null, roomSightAt = 0, roomSight = null;
+  const roomFrames = window.SinPalaceRoomManager ? SinPalaceRoomManager.frameStats(600) : null;
+  const roomDebugWanted = (() => { try { return /[?&]roomdebug=1/.test(location.search); } catch (_) { return false; } })();
+  function manageRooms(heroId, origin, view, drawn) {
+    if (!window.SinPalaceRoomManager || !zoneStreamer || !state.routes) return null;
+    if (!roomManager) roomManager = SinPalaceRoomManager.create({ streamed: streamedRooms, constrained: !!deviceProfile.constrained });
+    const now = performance.now();
+    const camId = view ? viewerRegion(view) : null;
+    // Geometric sight through physically open portals (8 hops), refreshed
+    // at ~15 Hz: rooms enter it long before they are reachable.
+    if (view && (!roomSight || now - roomSightAt > 66)) {
+      roomSightAt = now;
+      try { roomSight = state.routes.connectedView(camId || heroId, view, SinWingVisibility.throughOpenings, portalPhysicallyOpen); }
+      catch (_) { roomSight = null; }
+    }
+    const move = state.archiveMotion;
+    let distances = null;
+    if (move && state.routes.pathDistances) {
+      const key = origin + ':' + Math.round(move.x) + ':' + Math.round(move.z);
+      if (state._roomDistKey !== key) { state._roomDistKey = key; state._roomDist = state.routes.pathDistances(origin, move.x, move.z); }
+      distances = state._roomDist;
+    }
+    const level = (zoneStreamer.memoryState && zoneStreamer.memoryState().level) || 'normal';
+    roomManaged = roomManager.update({
+      now, heroRegion: heroId, camRegion: camId, origin, motion: move, drawn,
+      sight: roomSight || [], predicted: state._predictedRooms || [], distances,
+      status: id => zoneStreamer.status(id), leadSec: id => zoneStreamer.leadTime(id), memoryLevel: level
+    });
+    return roomManaged;
+  }
+  // Architecture that the portal flood cannot reach but the camera sees:
+  //  - the corridor region behind a CLOSED royal door owns the door's wall
+  //    reveal; culling it left a gap around the leaf (K3/K4 audit);
+  //  - a hall threshold (ARCH_*) is not a graph node, so across the throne
+  //    hall the far arch was only drawn while the hero stood in it.
+  // Only non-streamed shells are added here: a streamed room still appears
+  // through its atomic reveal and never half-built.
+  function completeArchitecture(view, visible) {
+    if (!state.routes || !state.routes.closedFrames || !window.SinWingVisibility) return;
+    const through = SinWingVisibility.throughOpenings;
+    const viewer = viewerRegion(view) || state.current;
+    for (const from of [viewer, state.current]) {
+      if (!from) continue;
+      state.routes.closedFrames(from, view, through, portalPhysicallyOpen).forEach(id => {
+        if (!streamedRooms.has(id) && state.regionGroups.has(id)) visible.add(id);
+      });
+    }
+    if (visible.has('Palace') || viewer === 'Palace') {
+      for (const r of state.connectors) {
+        if (r.kind !== 'threshold' || visible.has(r.id)) continue;
+        const arch = state.hallPortalsByRoom && state.hallPortalsByRoom.get(r.linkRoom);
+        if (!arch) continue;
+        const own = viewer !== 'Palace' && state.hallPortalsByRoom.get(viewer);
+        const line = viewer === 'Palace' ? [arch] : (own && own !== arch ? [own, arch] : null);
+        if (line ? through(view, line, .055) : (visible.has(r.linkRoom) || (roomSight && roomSight.has(r.linkRoom)))) visible.add(r.id);
+      }
+    }
+  }
+  function drawRoomOverlay(tickMs) {
+    if (!roomDebugWanted || !roomManager || typeof document === 'undefined') return;
+    if (!roomOverlay) roomOverlay = SinPalaceRoomManager.overlay(document);
+    if (!roomOverlay) return;
+    const r = state.ctx && state.ctx.renderer, info = r && r.info;
+    const mem = typeof performance !== 'undefined' && performance.memory;
+    roomOverlay.draw(performance.now(), {
+      current: state.current, rooms: roomManager.report(), zones: zoneStreamer.report(),
+      frame: roomFrames.summary(), cpuMs: tickMs, gpuMs: window.__sinGpuMs,
+      calls: info && info.render.calls, tris: info && info.render.triangles,
+      textures: info && info.memory.textures, geometries: info && info.memory.geometries,
+      heapMB: mem ? Math.round(mem.usedJSHeapSize / 1048576) : null
+    });
   }
   const entryLibraryOnly = new Set(['L1']);
   function registerLibraryFailure(id) {
@@ -4224,6 +4342,7 @@
     const nearby=state.routes.nearRoom(origin,move,streamedRooms,()=>false);
     const demand=state.templeDoors?.waiting()||state.libraryDoors?.waiting()||
       (nearby&&!zoneIsReady(nearby)?nearby:null);
+    state._predictedRooms=[next&&next.id,upcoming&&upcoming.id,nearby].filter(Boolean);
     const approach=new Set();
     if(next) approach.add(next.id);
     if(upcoming)approach.add(upcoming.id);
@@ -4253,11 +4372,35 @@
       const failure=state.libraryFailures?.get(id);
       if(failure?.count===1 && now>=failure.retryAt && zoneStreamer.status(id)==='failed') zoneStreamer.forceEvict(id);
     }
-    const allowBackgroundWarm=level==='normal'&&!approach.size&&(!move||Math.hypot(move.vx,move.vz)<.3);
+    // Room manager: rooms already in the camera's sight line come first,
+    // then graph / heading prefetch; rooms just left stay in cooldown.
+    // Any door that is moving keeps both of its rooms resident.
+    const managed=roomManaged;
+    let demandRoom=demand;
+    if(managed){
+      for(const id of managed.sight){approach.add(id);retained.add(id);if(!demandRoom)demandRoom=id;}
+      for(const id of managed.approach)approach.add(id);
+      for(const id of managed.retained)retained.add(id);
+    }
+    // A door that is moving, or that the hero stands at, keeps both of its
+    // rooms resident: readiness can never drop during the swing. (Open
+    // royal doors stay open for good, so "not Closed" alone would pin
+    // their rooms forever and starve the memory budget.)
+    const heroAt=state.ctx&&state.ctx.hero&&state.ctx.hero.position;
+    for(const d of state.doors){
+      if(!d._roomDoor||d.state==='Closed')continue;
+      const moving=d.state==='Opening'||d.state==='Closing';
+      const near=heroAt&&doorCoordinates(d,heroAt).distance<=5;
+      if(!moving&&!near)continue;
+      for(const id of [d.from,d.to])if(streamedRooms.has(id))retained.add(id);
+    }
+    const pendingApproach=[...approach].some(id=>!zoneIsReady(id));
+    const allowBackgroundWarm=level==='normal'&&!pendingApproach&&(!move||Math.hypot(move.vx,move.vz)<.3);
     const warmGroups=allowBackgroundWarm?[...visibleIds]
       .filter(id=>!streamedRooms.has(id)).map(id=>state.regionGroups.get(id)).filter(Boolean):[];
     return zoneStreamer.update({current:origin,distances:zoneDist,visible:visibleIds,
-      memoryLevel:level,warmGroups,approach,retained,allowBackgroundWarm,demand,motionPrefetch:true});
+      memoryLevel:level,warmGroups,approach,retained,allowBackgroundWarm,demand:demandRoom,motionPrefetch:true,
+      keep:managed?managed.keep:null,rank:managed?managed.rank:null});
   }
   // After LRU eviction a streamed room (K4 in particular) can sit complete=false
   // with its dress refs nulled. If the player is standing in it, re-issue the
@@ -4404,6 +4547,11 @@
       visibleIds = new Set(); preparedIds = new Set();
       state.regions.forEach(rr => { const d = dist.has(rr.id) ? dist.get(rr.id) : 99; if (d <= 2) { visibleIds.add(rr.id); preparedIds.add(rr.id); } });
     }
+    if (visibleIds && view) {
+      completeArchitecture(view, visibleIds);
+      const managed = manageRooms(id, origin, view, visibleIds);
+      if (managed) visibleIds = managed.shown;
+    }
     if (visibleIds) {
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
@@ -4444,6 +4592,16 @@
     if (_tr) _tr('updateCulling-end');
   }
   function tick(dt) {
+    if (!state.built) return;
+    const t0 = performance.now();
+    tickInner(dt);
+    if (roomFrames) {
+      if (state._lastTickAt) roomFrames.push(t0 - state._lastTickAt);
+      state._lastTickAt = t0;
+    }
+    drawRoomOverlay(performance.now() - t0);
+  }
+  function tickInner(dt) {
     const _trT = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     if (!state.built) return;
     const hero = state.ctx.hero.position, root = state.root.position;
@@ -6166,6 +6324,11 @@
     sanctuaryCamera: () => state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.camera : null,
     offeringsCamera: () => state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.camera : null,
     beforePresent,
+    // PalaceRoomManager diagnostics: lifecycle state per room, sight demand,
+    // prefetch, cooldown, and frame-time percentiles.
+    rooms: function () {
+      return roomManager ? Object.assign(roomManager.report(), { frame: roomFrames && roomFrames.summary() }) : null;
+    },
     lunarSite() {
       const id=state.current;
       if(!zoneIsReady(id))return null;

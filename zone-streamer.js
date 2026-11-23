@@ -476,6 +476,24 @@
         const prefetchExtra = (o.processBudgetMB > 0 && o.processBudgetMB <= 650)
           ? { processMB: extra.processMB + 40, gpuMB: extra.gpuMB, cpuMB: extra.cpuMB }
           : extra;
+        // Desktop: a more important room (sight line > predicted route >
+        // distance prefetch > cooldown) may displace strictly less important
+        // resident rooms. Equal ranks never displace each other (no thrash),
+        // and current / visible / retained rooms are never touched.
+        if (!(o.processBudgetMB > 0 && o.processBudgetMB <= 650) && wouldExceed(prefetchExtra) && rec.rank != null && rec.rank < 5) {
+          const lower = [];
+          zones.forEach(function (r) {
+            // Only finished rooms yield: aborting an in-flight preparation
+            // for a speculative one throws the work away (load thrash).
+            if (r === rec || r.state !== 'ready' || r.isCurrent || r.visible || r.retained) return;
+            if ((r.rank == null ? 9 : r.rank) > rec.rank) lower.push(r);
+          });
+          lower.sort(function (a, b) { return (b.rank - a.rank) || ((b.hops || 0) - (a.hops || 0)) || ((a.lastWanted || 0) - (b.lastWanted || 0)); });
+          for (let i = 0; i < lower.length && wouldExceed(prefetchExtra); i++) {
+            evict(lower[i], 'lower-priority (' + lower[i].rank + ' < ' + rec.id + ':' + rec.rank + ')');
+            stats.budgetEvictions++;
+          }
+        }
         if (!wouldExceed(prefetchExtra)) {
           if (o.processBudgetMB > 0 && o.processBudgetMB <= 650) {
             let currentBusy = false;
@@ -803,8 +821,10 @@
     }
 
     // view = { current, distances: Map(id->hops), visible:Set, prepared:Set, memoryLevel, warmGroups }
+    let lastUpdateAt = 0;
     function update(view) {
       const t = now();
+      lastUpdateAt = t;
       // A flicker of view.current must not evict or de-prioritize a mid-load
       // room the player just entered (playthrough-6 first K3).
       let midId = null;
@@ -843,21 +863,28 @@
         // (canStart); over-budget approach still defers rather than exceed 650.
         const passive = !view.motionPrefetch;
         const prefetch = approaching || id===view.demand || (passive && (hops <= rec.spec.prefetchHops || (!tight && prepared.has(id))));
-        const want = (!view.only || view.only.has(id)) && (isCurrent || prefetch ||
+        // `keep` (room-manager cooldown): stay resident while not needed for
+        // the budget, but never restart a room that was already evicted.
+        const keep = !!(view.keep && view.keep.has(id) && rec.state !== 'cold');
+        const want = (!view.only || view.only.has(id)) && (isCurrent || prefetch || keep ||
           (rec.spec.requireComplete && visible.has(id) && (passive || rec.state!=='cold')) || (retained.has(id) && rec.state !== 'cold'));
+        // Budget rank (lower = more important): current 0, sight 1,
+        // predicted 2, distance prefetch 3, cooldown 4, anything else 9.
+        rec.rank = isCurrent ? 0 : (view.rank && view.rank.has(id) ? view.rank.get(id) : (want ? 5 : 9));
         // hops <= 1 protects on desktop; on a 650 MB phone those neighbours
         // yield once evictForCurrent decides the current room needs space.
         const protect = isCurrent || visible.has(id) || retained.has(id) || (passive && !tight && hops <= 1);
         rec.hops = hops; rec.protected = protect; rec.visible = visible.has(id); rec.isCurrent = isCurrent;
         rec.retained = retained.has(id);
         if (isCurrent) rec._currentUntil = t + ((rec.state !== 'cold' && rec.state !== 'ready') ? 15000 : 2000);
-        if (want) { rec.lastWanted = t; rec.leftAt = 0; wanted.push(rec); }
+        if (want) { rec.lastWanted = t; rec.wantedAt = t; rec.leftAt = 0; wanted.push(rec); }
         else if(rec.state==='cold') rec.firstWait=0;
         else if (!rec.leftAt) rec.leftAt = t;
       });
       // Nearest / visible first. Lower rank = more urgent.
       const demand = view.demand;
       wanted.sort((a, b) => Number(b.id === demand) - Number(a.id === demand) ||
+        ((a.rank == null ? 9 : a.rank) - (b.rank == null ? 9 : b.rank)) ||
         (a.hops - b.hops) || (Number(visible.has(b.id)) - Number(visible.has(a.id))) || (a.spec.priority - b.spec.priority));
       let loading = 0;
       zones.forEach(r => { if (r.state === 'loading') loading++; });
@@ -958,6 +985,12 @@
       zones.forEach(function (r) {
         if (r.state === 'cold') return;
         if (r.isCurrent || r.visible || r.retained) return;
+        // Desktop: a room the planner still wants (sight line, predicted
+        // route, cooldown) is not "non-adjacent" just because it is two
+        // portals away. Evicting it here made every new prefetch unload the
+        // previous one and reload it seconds later (load thrash at doors).
+        // The hard budget (evictToFit) can still take it when memory is short.
+        if (!tight && r.wantedAt && r.wantedAt === lastUpdateAt) return;
         // Under the 650 bar, hop counts may be stale (still 0 from the
         // previous current room) and must not keep a neighbour resident
         // while the new current room starts. Evict every non-visible,
