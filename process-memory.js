@@ -61,6 +61,8 @@
 
   function gpuTexBytes(tex, renderer) {
     if (!tex) return 0;
+    // Hall residency released this GPU copy (only compressed bytes remain).
+    if (tex.userData && tex.userData.sinGpuReleased) return 0;
     // A 4K ImageBitmap is CPU, not GPU, until initTexture. Counting it as
     // both inflated the process peak (998 MB) during palace load, before
     // capTexture ran. When a renderer is provided, only count a live GPU copy.
@@ -619,6 +621,12 @@
       THREE.GLTFLoader.prototype.parse = function (data, path, onLoad, onError) {
         if (data && data.byteLength) trackBuffer(data);
         const wrapped = function (gltf) {
+          // Throne-hall residency needs each texture's compressed bytes; it
+          // registers its own buffers, which are read before the parser drop.
+          try {
+            const cap = typeof window !== 'undefined' && window.__sinGltfCapture;
+            if (cap && cap.buffers && cap.buffers.has(data)) { cap.buffers.delete(data); cap.fn(data, gltf); }
+          } catch (_) {}
           try { dropGltfParser(gltf); } catch (_) {}
           try { forgetBuffer(data); } catch (_) {}
           // The ArrayBuffer can be released once the parser is done — the

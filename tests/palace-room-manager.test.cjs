@@ -39,15 +39,26 @@ test('sight demand: a room visible through an open arch but not ready is request
   assert.equal(r.rank.get('T2'), 1);
 });
 
-test('constrained devices only follow the heading prediction (no speculative swaps)', () => {
+test('phone: nearest seen room ranked first but not hard-protected; one prefetch only; evictable cooldown', () => {
   const m = M.create({ streamed, constrained: true });
   const r = m.update({ now: 0, heroRegion: 'T1', origin: 'T1', sight: new Set(['T2','T3']), predicted: ['T2'],
     distances: new Map([['T2', 10], ['T3', 28], ['L1', 12]]), status: statusFrom({ T1: 'ready' }) });
-  assert.deepEqual(Array.from(r.sight), []);
-  assert.deepEqual(Array.from(r.approach), ['T2'], 'no speculative distance prefetch (L1 at 12 m) on a phone');
-  assert.equal(r.retained.size, 0);
-  assert.equal(r.keep.size, 0);
-  assert.deepEqual(m.report().sight, ['T2', 'T3'], 'sight is still reported for diagnostics');
+  assert.deepEqual(Array.from(r.sight), ['T2'], 'nearest seen room only');
+  assert.equal(r.retained.size, 0, 'the current room can always reclaim memory on a phone');
+  assert.equal(r.rank.get('T2'), 1);
+  assert.ok(!r.approach.has('L1'), 'no distance prefetch while a seen/predicted room is still preparing');
+  assert.deepEqual(m.report().sight, ['T2', 'T3'], 'all seen rooms are reported for diagnostics');
+  assert.equal(m.options.cooldownMs, 15000);
+});
+
+test('heading prediction stays sticky for a few seconds (no L3/L4 flip-flop)', () => {
+  const m = M.create({ streamed });
+  m.update({ now: 0, heroRegion: 'L1', origin: 'L1', predicted: ['L3'], status: statusFrom({ L1: 'ready' }) });
+  let r = m.update({ now: 1500, heroRegion: 'L1', origin: 'L1', predicted: ['L4'], status: statusFrom({ L1: 'ready' }) });
+  assert.ok(r.approach.has('L3') && r.approach.has('L4'));
+  assert.equal(r.rank.get('L3'), 2);
+  r = m.update({ now: 4000, heroRegion: 'L1', origin: 'L1', predicted: ['L4'], status: statusFrom({ L1: 'ready' }) });
+  assert.ok(!r.approach.has('L3') || r.rank.get('L3') !== 2);
 });
 
 test('distance prefetch prepares connected rooms before the player reaches the door', () => {
@@ -72,7 +83,9 @@ test('cooldown keeps a room just left resident (no reload on turn-back), not und
   assert.equal(r.rank.get('K2'), 4);
   assert.equal(m.state('K2'), 'COOLDOWN');
   r = m.update({ now: 3500, heroRegion: 'K3', origin: 'K3', status: st, memoryLevel: 'watch' });
-  assert.ok(!r.keep.has('K2'));
+  assert.ok(r.keep.has('K2'), 'cooldown rooms stay (evictable) under watch');
+  r = m.update({ now: 3600, heroRegion: 'K3', origin: 'K3', status: st, memoryLevel: 'critical' });
+  assert.ok(!r.keep.has('K2'), 'dropped under critical');
   r = m.update({ now: 9000, heroRegion: 'K3', origin: 'K3', status: st });
   assert.ok(!r.keep.has('K2'));
 });
@@ -164,4 +177,78 @@ test('no speculative prefetch while the room the hero stands in is not ready', (
   const r = m.update({ now: 0, heroRegion: 'T2', origin: 'T2', distances: new Map([['T1', 15], ['T3', 20]]),
     status: statusFrom({ T2: 'failed' }) });
   assert.equal(r.approach.size, 0);
+});
+
+// ---- zone-streamer: measured costs, byte pressure, door demand, reserve ----
+function fakeStreamer(opts) {
+  const Z = require('../zone-streamer.js');
+  const st = { mb: opts.base, loaded: new Set() };
+  const s = Z.create(Object.assign({ processBudgetMB: 650, gpuBudgetMB: 0, cpuBudgetMB: 0,
+    estimate: () => ({ processMB: st.mb, gpuMB: 0, cpuMB: 0 }) }, opts.streamer || {}));
+  for (const [id, real, est] of opts.rooms) {
+    s.register({ id, requireComplete: true, serialPreparation: true, estProcessMB: est, estGpuMB: 0, estCpuMB: 0,
+      load(api) { st.loaded.add(id); st.mb += real; api.done(); }, unload() { if (st.loaded.delete(id)) st.mb -= real; } });
+  }
+  return { s, st };
+}
+const run = (s, view, n = 4) => { for (let i = 0; i < n; i++) s.update(Object.assign({ distances: new Map(), motionPrefetch: true }, view)); };
+
+test('streamer learns real room costs and stops stacking on an under-declared room', () => {
+  const store = { v: null, load() { return this.v; }, save(v) { this.v = v; } };
+  const { s, st } = fakeStreamer({ base: 400, rooms: [['K5', 205, 48], ['K4', 60, 50]], streamer: { costStore: store } });
+  run(s, { current: 'K5' });
+  assert.equal(s.status('K5'), 'ready');
+  st.mb += 0; s.update({ current: 'K5', distances: new Map(), motionPrefetch: true });
+  // two fresh samples settle the measurement
+  st.mb += 0.5; s.report(); st.mb -= 0.5; s.report();
+  assert.ok(store.v && store.v.K5 && store.v.K5.processMB >= 200, JSON.stringify(store.v));
+  // a predicted K4 (rank 2) would now exceed 650 with K5's real cost: deferred, nothing evicted.
+  run(s, { current: 'K5', approach: new Set(['K4']), rank: new Map([['K4', 2]]) });
+  assert.equal(s.status('K4'), 'cold');
+  assert.equal(s.status('K5'), 'ready');
+  // A new session starts with the stored measurement.
+  const again = fakeStreamer({ base: 400, rooms: [['K5', 205, 48]], streamer: { costStore: store } });
+  assert.ok(again.s.report().measuredCost.K5.processMB >= 200);
+});
+
+test('streamer: the current room is admitted even when it cannot fit; nothing stacks on it', () => {
+  const { s } = fakeStreamer({ base: 560, rooms: [['K5', 205, 210], ['K4', 30, 30]] });
+  run(s, { current: 'K5' });
+  assert.equal(s.status('K5'), 'ready', 'never leave the hero in an empty room');
+  assert.equal(s.report().stats.overBudgetAdmits, 1);
+  run(s, { current: 'K5', approach: new Set(['K4']), rank: new Map([['K4', 2]]) });
+  assert.equal(s.status('K4'), 'cold');
+});
+
+test('streamer: a door waiting for a room admits it like the current room (no deadlock)', async () => {
+  const { s } = fakeStreamer({ base: 560, rooms: [['L1', 124, 124]] });
+  run(s, { current: 'LC2', approach: new Set(['L1']), rank: new Map([['L1', 2]]) });
+  assert.equal(s.status('L1'), 'cold', 'a plain prediction stays within the budget');
+  const door = { current: 'LC2', approach: new Set(['L1']), rank: new Map([['L1', 2]]), doorDemand: 'L1' };
+  run(s, door);
+  assert.equal(s.status('L1'), 'cold', 'first waits briefly for a visible room to leave the view');
+  await new Promise(r => setTimeout(r, 1600));
+  run(s, door);
+  assert.equal(s.status('L1'), 'ready');
+});
+
+test('streamer: memory pressure is measured in bytes, not texture count', () => {
+  const Z = require('../zone-streamer.js');
+  let mb = 500;
+  const s = Z.create({ processBudgetMB: 650, estimate: () => ({ processMB: mb, gpuMB: 0, cpuMB: 0 }), textureBudget: 72 });
+  // 120 textures used to mean "critical" on a phone regardless of bytes.
+  assert.equal(s.sample({ info: { memory: { textures: 120, geometries: 10 } } }, 16).level, 'normal');
+  mb = 600; assert.equal(s.sample({ info: { memory: { textures: 120 } } }, 16).level, 'watch');
+  mb = 640; assert.equal(s.sample({ info: { memory: { textures: 120 } } }, 16).level, 'critical');
+});
+
+test('streamer.reserve frees least important finished rooms for the throne hall, never the current or visible one', () => {
+  const { s } = fakeStreamer({ base: 300, rooms: [['K2', 90, 90], ['K3', 60, 60], ['K4', 30, 30]] });
+  run(s, { current: 'K2', approach: new Set(['K3', 'K4']), rank: new Map([['K3', 2], ['K4', 3]]) }, 12);
+  assert.equal(s.status('K3'), 'ready'); assert.equal(s.status('K4'), 'ready');
+  run(s, { current: 'K2', visible: new Set(['K3']), keep: new Set(['K4']), rank: new Map([['K4', 4]]) }, 1);
+  assert.equal(s.reserve(238, 'hall-restore'), false, 'cannot fit 238 MB without the current/visible rooms');
+  assert.equal(s.status('K4'), 'cold', 'cooldown room yielded');
+  assert.equal(s.status('K3'), 'ready', 'visible room kept');
+  assert.equal(s.status('K2'), 'ready', 'current room kept');
 });

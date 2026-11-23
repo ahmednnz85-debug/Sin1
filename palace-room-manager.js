@@ -38,20 +38,22 @@
       prefetchMetres: 42,      // walking distance inside which rooms are prepared (desktop)
       leadPadSec: 1.6,         // extra time on top of a room's measured preparation time
       sightHoldMs: 4000,       // a room seen through an arch stays urgent this long (camera swings)
+      predictHoldMs: 3000,     // a predicted next room stays predicted this long
       maxPrefetch: 4           // most rooms requested ahead at once (desktop)
     }, options || {});
     if (o.constrained) {
-      // A 650 MB phone cannot stack rooms: the streamer swaps instead. Ask
-      // for one predicted room at a time and keep no cooldown residency.
-      o.cooldownMs = Math.min(o.cooldownMs, options && options.cooldownMs != null ? options.cooldownMs : 0);
-      // Distance prefetch is off: every speculative start swaps the other
-      // rooms out under the no-stack rule (measured: more reloads, longer
-      // door waits). Heading prediction + sight demand only.
-      o.maxPrefetch = 0;
-      o.prefetchMetres = 0;
+      // A 650 MB phone: the same priorities as desktop, but narrower. The
+      // streamer admits every non-current room against the MEASURED budget
+      // (rank-limited displacement, a safety margin for purely speculative
+      // rooms), so stacking is allowed only while it really fits.
+      // One distance-prefetch room at a time, a shorter cooldown.
+      o.cooldownMs = options && options.cooldownMs != null ? options.cooldownMs : 15000;
+      o.maxPrefetch = 1;
+      o.prefetchMetres = Math.min(o.prefetchMetres, 24);
     }
     const lastShown = new Map();     // id -> ms last drawn
     const lastSight = new Map();     // id -> ms last geometrically visible
+    const lastPredicted = new Map(); // id -> ms last predicted by heading
     const lastActive = new Map();    // id -> ms last current/visible (for cooldown)
     const states = new Map();
     const transitions = [];
@@ -108,16 +110,19 @@
         if (!ready(id)) sight.add(id);
       });
       let sightList = Array.from(sight).sort((a, b) => (distances.get(a) ?? 999) - (distances.get(b) ?? 999));
-      // A 650 MB phone holds one dressed room at a time: sight-driven loads
-      // only swap rooms back and forth there (measured: +18% reloads, longer
-      // door waits). Its sealed portals keep the placeholder until the
-      // heading prediction brings the room in.
       const observed = sightList;
-      if (o.constrained) sightList = [];
+      // On a phone ask for the nearest seen room only (one at a time).
+      if (o.constrained) sightList = sightList.slice(0, 1);
 
       // ---- prefetch: graph distance + speed + heading ---------------------
+      // Heading prediction is sticky for a few seconds: as the hero turns
+      // between two doors it used to flip each frame, and every flip evicted
+      // the other room (L3 <-> L4 reload cycles).
+      for (const id of input.predicted || []) if (id && o.streamed.has(id)) lastPredicted.set(id, t);
+      const predicted = [];
+      lastPredicted.forEach((at, id) => { if (t - at <= o.predictHoldMs) predicted.push(id); else lastPredicted.delete(id); });
       const approach = new Set();
-      for (const id of input.predicted || []) if (id && o.streamed.has(id)) approach.add(id);
+      for (const id of predicted) approach.add(id);
       const leadSec = input.leadSec || (() => 5);
       const candidates = [];
       o.streamed.forEach(id => {
@@ -134,16 +139,18 @@
       // camera already sees or the player is predicted to enter next.
       const urgentPending = sightList.length > 0 || Array.from(approach).some(id => !ready(id)) ||
         (!!input.origin && o.streamed.has(input.origin) && !ready(input.origin));
-      // On a constrained device only start a distance prefetch while no
-      // predicted room is already asked for (no-stack swap rule).
+      // On a constrained device a distance prefetch never adds to a
+      // predicted room that is already requested.
       if (!(o.constrained && approach.size)) {
         candidates.slice(0, room).forEach(c => { if (!urgentPending || ready(c.id)) approach.add(c.id); });
       }
       // Under critical memory pressure keep only the heading prediction;
       // the streamer's budget still has the final word on every start.
-      if (level === 'critical') {
+      // Speculative distance prefetch only while memory is comfortable
+      // (it pushed 'watch' into 'critical' and caused evict/reload cycles).
+      if (level !== 'normal') {
         approach.clear();
-        for (const id of input.predicted || []) if (id && o.streamed.has(id)) approach.add(id);
+        for (const id of predicted) approach.add(id);
       }
 
       // ---- cooldown residency ---------------------------------------------
@@ -153,9 +160,11 @@
       // Sight rooms are protected (the camera is about to show them).
       // Cooldown rooms are only *kept*: they stay resident while memory
       // allows but yield to any more important room under the budget.
-      const retained = new Set(sightList);
+      // On a phone a seen room is ranked first but NOT hard-protected: the
+      // room the hero stands in must always be able to reclaim its memory.
+      const retained = new Set(o.constrained ? [] : sightList);
       const keep = new Set();
-      if (level === 'normal' && o.cooldownMs > 0) {
+      if (level !== 'critical' && o.cooldownMs > 0) {
         lastActive.forEach((at, id) => {
           if (active.has(id)) return;
           if (t - at <= o.cooldownMs && status(id) !== 'cold') keep.add(id);
@@ -165,7 +174,7 @@
       const rank = new Map();
       keep.forEach(id => rank.set(id, 4));
       approach.forEach(id => rank.set(id, 3));
-      for (const id of input.predicted || []) if (approach.has(id)) rank.set(id, 2);
+      for (const id of predicted) if (approach.has(id)) rank.set(id, 2);
       sightList.forEach(id => rank.set(id, 1));
       lastActive.forEach((at, id) => { if (t - at > Math.max(o.cooldownMs, 1) * 2) lastActive.delete(id); });
 

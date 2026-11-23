@@ -131,6 +131,7 @@
       defaultZoneCpuMB: 10,
       estimate: null,            // optional () => { processMB, gpuMB, cpuMB }
       deferStallMs: 3000,        // after this, evict harder rather than wait forever
+      speculativeMarginMB: null, // headroom a non-current room must leave (null: 60 on <=650 MB, else 0)
       onBudgetStall: null,       // (rec, report) => void  — release city / purge
       log: null                  // function(kind, msg) for the memory overlay
     }, options || {});
@@ -289,7 +290,26 @@
 
     // ---- lifecycle ----------------------------------------------------------
 
+    // Right after a reveal the memory sample lags the real cost (uploads
+    // and decoded bitmaps arrive over the next frames: 483 MB reported vs
+    // 592 MB real). Until two fresh samples have been seen, budget checks
+    // use the peak since that reveal. An eviction starts a fresh window.
+    let settle = null, lastSample = null;
+    function sameUsage(a, b) { return !!(a && b) && a.processMB === b.processMB && a.gpuMB === b.gpuMB && a.cpuMB === b.cpuMB; }
     function usage() {
+      const u = usageNow();
+      if (!settle) { lastSample = u; return u; }
+      if (!sameUsage(u, lastSample)) { settle.seen++; lastSample = u; }
+      settle.max.processMB = Math.max(settle.max.processMB, u.processMB);
+      settle.max.gpuMB = Math.max(settle.max.gpuMB, u.gpuMB);
+      settle.max.cpuMB = Math.max(settle.max.cpuMB, u.cpuMB);
+      if (settle.seen >= 2) {
+        if (settle.rec && settle.rec.costPending && settle.rec.state === 'ready') { settle.rec.costPending = false; learnCost(settle.rec, settle.max); }
+        settle = null; return u;
+      }
+      return { processMB: settle.max.processMB, gpuMB: settle.max.gpuMB, cpuMB: settle.max.cpuMB };
+    }
+    function usageNow() {
       try {
         // Cached figures only. A fresh SinProcessMemory.estimate() from
         // report()/wouldExceed() walked the whole scene and called
@@ -309,7 +329,14 @@
       } catch (_) {}
       return { processMB: 0, gpuMB: 0, cpuMB: 0 };
     }
-    function incoming(rec) {
+    // Measured cost per room: the real resident increase observed after its
+    // reveal settled (fresh samples). Declared estimates were far off on
+    // phones (K5 declared 48 MB, measured ~205 MB), which let a room be
+    // admitted that then pushed the process past the cap. Admission uses
+    // max(declared, measured); measurements persist via o.costStore.
+    const measured = new Map();
+    try { const saved = o.costStore && o.costStore.load && o.costStore.load(); if (saved) Object.keys(saved).forEach(k => measured.set(k, saved[k])); } catch (_) {}
+    function declared(rec) {
       const s = (rec && rec.spec) || {};
       if (s.estimateIncoming) return s.estimateIncoming(usage());
       return {
@@ -317,6 +344,24 @@
         gpuMB: s.estGpuMB != null ? +s.estGpuMB : o.defaultZoneGpuMB,
         cpuMB: s.estCpuMB != null ? +s.estCpuMB : o.defaultZoneCpuMB
       };
+    }
+    function incoming(rec) {
+      const d = declared(rec), m = rec && measured.get(rec.id);
+      if (!m) return d;
+      return { processMB: Math.max(d.processMB, m.processMB || 0), gpuMB: Math.max(d.gpuMB, m.gpuMB || 0), cpuMB: d.cpuMB };
+    }
+    function learnCost(rec, u) {
+      const b = rec.startUsage;
+      if (!b || !u || !(u.processMB > 0)) return;
+      const cost = { processMB: Math.round(Math.max(0, u.processMB - b.processMB)), gpuMB: Math.round(Math.max(0, u.gpuMB - b.gpuMB)) };
+      if (!(cost.processMB > 0)) return;
+      const prev = measured.get(rec.id);
+      // Keep the larger of the last two observations (eviction noise only lowers it).
+      const next = prev ? { processMB: Math.round(Math.max(cost.processMB, prev.processMB * 0.85)), gpuMB: Math.round(Math.max(cost.gpuMB, (prev.gpuMB || 0) * 0.85)) } : cost;
+      measured.set(rec.id, next);
+      stats.measured = stats.measured || {};
+      stats.measured[rec.id] = next;
+      try { if (o.costStore && o.costStore.save) { const obj = {}; measured.forEach((v, k) => { obj[k] = v; }); o.costStore.save(obj); } } catch (_) {}
     }
     function wouldExceed(extra, transientCpu) {
       extra = extra || { processMB: 0, gpuMB: 0, cpuMB: 0 };
@@ -424,11 +469,77 @@
           });
         }
         if (serial && order.some(id => busy(zones.get(id)))) return false;
+        // A room the hero is not standing in (sight line, predicted next
+        // room, prefetch) only displaces READY rooms that matter less
+        // (higher rank) and must leave a safety margin under the hard cap
+        // on phones. It never evicts the current, visible or retained rooms.
+        if (!rec.isCurrent && !rec.doorDemand) {
+          // Margin only for the purely speculative kinds (distance prefetch,
+          // cooldown: rank >= 3). A visible room or the predicted next room
+          // may use the budget up to the hard cap, as before.
+          const speculative = rec.rankFromPlanner && rec.rank >= 3 && !rec.visible;
+          // Speculative rooms keep usage below the 'watch' line (10%, at
+          // least 60 MB on a phone) so prefetch cannot push memory into
+          // 'critical' and trigger evict/reload cycles.
+          const margin = !speculative ? 0 : (o.speculativeMarginMB != null ? o.speculativeMarginMB : Math.max(o.processBudgetMB > 0 && o.processBudgetMB <= 650 ? 60 : 0, o.processBudgetMB * 0.1));
+          const extra = incoming(rec);
+          // Not measured yet: declared estimates under-shot real costs by
+          // up to 4x on phones, so planner-driven rooms carry +25% until
+          // their first measured reveal.
+          const unsure = rec.rankFromPlanner && !measured.has(rec.id) && !rec.spec.estMeasured ? 1.25 : 1;
+          const need = { processMB: extra.processMB * unsure + margin, gpuMB: extra.gpuMB * unsure + margin * 0.6, cpuMB: extra.cpuMB };
+          if (wouldExceed(need, serial)) {
+            const myRank = rec.visible ? Math.min(1, rec.rank == null ? 1 : rec.rank) : (rec.rank == null ? 5 : rec.rank);
+            const lower = [];
+            zones.forEach(function (r) {
+              if (r === rec || r.state !== 'ready' || r.isCurrent || r.visible || r.retained) return;
+              if ((r.rank == null ? 9 : r.rank) > myRank) lower.push(r);
+            });
+            lower.sort(function (a, b) { return (b.rank - a.rank) || ((b.hops || 0) - (a.hops || 0)) || ((a.lastWanted || 0) - (b.lastWanted || 0)); });
+            for (let i = 0; i < lower.length && wouldExceed(need, serial); i++) {
+              evict(lower[i], 'yield-to-rank (' + lower[i].id + ':' + lower[i].rank + ' < ' + rec.id + ':' + myRank + ')');
+              stats.budgetEvictions++;
+            }
+          }
+          if (!wouldExceed(need, serial)) { rec.deferredAt = 0; rec.deferred = false; return true; }
+          if (!rec.deferredAt) { rec.deferredAt = now(); stats.deferred++; }
+          rec.deferred = true;
+          stats.lastDefer = { id: rec.id, at: now(), usage: usage(), incoming: extra, reason: 'speculative-headroom' };
+          return false;
+        }
         // An open sight line can show two dressed rooms at once. Use the
         // device's measured memory budget instead of forcibly swapping them.
         // For a serial preparation, the CPU sub-budget is for the new decode.
         // Resident CPU bytes are already included in the hard process budget.
         if (evictToFit(incoming(rec), serial)) { rec.deferredAt = 0; rec.deferred = false; return true; }
+        if (rec.isCurrent || rec.doorDemand) {
+          // The hero is standing in this room (or at its closed door): it
+          // must not stay empty / shut. Any
+          // other finished room yields (least important first). If the room
+          // still cannot fit with nothing else resident, it is admitted on
+          // its own and the overrun is recorded (no other room may stack on it).
+          const others = [];
+          zones.forEach(function (r) { if (r !== rec && r.state === 'ready' && !r.isCurrent && !(rec.doorDemand && r.visible)) others.push(r); });
+          others.sort(function (a, b) { return ((b.rank == null ? 9 : b.rank) - (a.rank == null ? 9 : a.rank)) || ((b.hops || 0) - (a.hops || 0)); });
+          for (let i = 0; i < others.length && wouldExceed(incoming(rec), serial); i++) { evict(others[i], 'yield-to-current'); stats.budgetEvictions++; }
+          if (!wouldExceed(incoming(rec), serial)) { rec.deferredAt = 0; rec.deferred = false; return true; }
+          let busyOther = false;
+          zones.forEach(function (r) { if (r !== rec && r.state !== 'cold' && r.state !== 'ready' && r.state !== 'failed') busyOther = true; });
+          // A door-demanded room first waits briefly for the visible room
+          // behind the camera to leave the view (it can then yield without a
+          // hole); only after that may it run over, so the door never deadlocks.
+          if (!rec.isCurrent && rec.doorDemand) {
+            if (!rec.demandOverAt) rec.demandOverAt = now();
+            if (now() - rec.demandOverAt < 1500) busyOther = true;
+          }
+          if (!busyOther) {
+            rec.demandOverAt = 0;
+            stats.overBudgetAdmits = (stats.overBudgetAdmits || 0) + 1;
+            stats.lastOverBudget = { id: rec.id, at: now(), usage: usage(), incoming: incoming(rec) };
+            note('load', rec.id + ' admitted alone over the soft budget (current room)');
+            rec.deferredAt = 0; rec.deferred = false; return true;
+          }
+        }
         if (!rec.deferredAt) { rec.deferredAt = now(); stats.deferred++; }
         rec.deferred = true;
         return false;
@@ -579,6 +690,7 @@
       rec.timing={ waitMs:Math.max(0,waiting), assetsMs:0, uploadMs:0, compileMs:0, totalMs:0 };
       rec.firstWait=0;
       rec.state = 'loading'; rec.startedAt = t; rec.done = false; rec.failed = null; rec.pending.clear();
+      rec.startUsage = usageNow(); rec.costPending = true;
       note('load', rec.id + ' stream start');
       try { rec.spec.load(apiFor(rec)); } catch (e) { rec.failed = e; rec.done = true; console.warn('zone load failed', rec.id, e); }
     }
@@ -680,6 +792,7 @@
       rec.leadMs=rec.leadMs?rec.leadMs*.6+elapsed*.4:elapsed;
       const n = g ? revealObject(g) : 0;
       if (g) g.userData.dressReady = true;
+      { const u0 = usageNow(); settle = { rec, seen: 0, max: { processMB: u0.processMB, gpuMB: u0.gpuMB, cpuMB: u0.cpuMB } }; lastSample = u0; }
       stats.reveals++;
       note('load', rec.id + ' ready (' + n + ' meshes, ' + Math.round(now() - rec.startedAt) + ' ms)');
       if (rec.spec.onReady) try { rec.spec.onReady(apiFor(rec)); } catch (_) {}
@@ -772,6 +885,7 @@
         hideZone(rec, g);
       }
       rec.state = 'cold'; rec.leftAt = 0; rec.done = false; rec.failed = null;
+      settle = null;
       stats.evictions++;
       note('unload', rec.id + ' evicted (' + why + ', ' + doomed.length + ' objects)');
       try { console.info('[palace load] evict', rec.id, why, doomed.length); } catch (_) {}
@@ -786,16 +900,24 @@
       const memory = renderer && renderer.info && renderer.info.memory || {};
       const gr = Math.max(0, Number(memory.geometries) || 0) / memOpt.geometryBudget;
       const tr = Math.max(0, Number(memory.textures) || 0) / memOpt.textureBudget;
+      // Pressure is measured in bytes against the device budget when an
+      // estimate exists. Texture COUNT is not memory: the throne hall alone
+      // holds 81 textures, which kept a phone (count budget 72) in permanent
+      // 'critical' (every idle room evicted at once, resolution pushed down).
+      const u = (o.processBudgetMB > 0 || o.gpuBudgetMB > 0) ? usageNow() : null;
+      const byBytes = !!(u && u.processMB > 0);
+      const br = byBytes ? Math.max(o.processBudgetMB > 0 ? u.processMB / o.processBudgetMB : 0,
+        o.gpuBudgetMB > 0 ? u.gpuMB / o.gpuBudgetMB : 0) : 0;
       const ms = Number.isFinite(frameMs) && frameMs > 0 ? frameMs : memFrameEma;
       memFrameEma = memFrameEma * 0.88 + ms * 0.12;
-      const pressure = Math.max(gr, tr);
-      const critical = pressure >= memOpt.criticalRatio || memFrameEma >= memOpt.frameCriticalMs;
-      const watch = pressure >= memOpt.watchRatio || memFrameEma >= memOpt.frameWatchMs;
+      const pressure = byBytes ? br : Math.max(gr, tr);
+      const critical = (byBytes ? br >= 0.98 : pressure >= memOpt.criticalRatio) || memFrameEma >= memOpt.frameCriticalMs;
+      const watch = (byBytes ? br >= 0.9 : pressure >= memOpt.watchRatio) || memFrameEma >= memOpt.frameWatchMs;
       if (critical) { memLevel = 'critical'; memStableMs = 0; }
       else if (watch) { memLevel = 'watch'; memStableMs = 0; }
       else if (memLevel !== 'normal') { memStableMs += Math.max(0, ms); if (memStableMs >= memOpt.recoveryMs) memLevel = 'normal'; }
       else memStableMs = Math.min(memOpt.recoveryMs, memStableMs + Math.max(0, ms));
-      memLast = { level: memLevel, geometryRatio: gr, textureRatio: tr, frameMs: memFrameEma };
+      memLast = { level: memLevel, geometryRatio: gr, textureRatio: tr, byteRatio: +br.toFixed(3), byBytes, frameMs: memFrameEma };
       return memLast;
     }
     function memoryState() { return Object.assign({}, memLast); }
@@ -884,6 +1006,10 @@
         // Budget rank (lower = more important): current 0, sight 1,
         // predicted 2, distance prefetch 3, cooldown 4, anything else 9.
         rec.rank = isCurrent ? 0 : (view.rank && view.rank.has(id) ? view.rank.get(id) : (want ? 5 : 9));
+        rec.rankFromPlanner = !!(view.rank && view.rank.has(id));
+        // A closed door the hero is standing at waits for this room: it is
+        // admitted exactly like the room the hero stands in.
+        rec.doorDemand = !!view.doorDemand && view.doorDemand === id;
         // hops <= 1 protects on desktop; on a 650 MB phone those neighbours
         // yield once evictForCurrent decides the current room needs space.
         const protect = isCurrent || visible.has(id) || retained.has(id) || (passive && !tight && hops <= 1);
@@ -933,13 +1059,19 @@
       // period, at once under critical memory pressure.
       const idle = [];
       zones.forEach(r => { if (r.state !== 'cold' && !r.protected && r.leftAt) idle.push(r); });
-      idle.sort((a, b) => a.lastWanted - b.lastWanted); // oldest first
+      // Farthest first, then oldest: under pressure the rooms the hero just
+      // walked through go last.
+      idle.sort((a, b) => ((b.hops == null ? 99 : b.hops) - (a.hops == null ? 99 : a.hops)) || (a.lastWanted - b.lastWanted));
       const cache = o.cacheZones[level] != null ? o.cacheZones[level] : 0;
       // Phone (processBudgetMB <= 650): evict every unprotected zone at once
       // so a new K3/K4 load cannot stack on K2. graceMs/cache do not delay it.
       const tight = o.processBudgetMB > 0 && o.processBudgetMB <= 650;
       let evicted = 0;
+      const bytePressure = memLast && memLast.byBytes && o.processBudgetMB > 0;
       idle.forEach(function (rec, i) {
+        // Byte-measured pressure: shed idle rooms oldest-first only until
+        // usage is back under the 'watch' line, not every idle room at once.
+        if (level === 'critical' && bytePressure && usageNow().processMB < o.processBudgetMB * 0.9) return;
         const overCache = idle.length - i > cache;
         const far = rec.hops == null || rec.hops > 1;
         const keepWarm = rec.spec.requireComplete && t - rec.leftAt < o.graceMs;
@@ -1073,14 +1205,27 @@
         usage: u,
         budget: { processMB: o.processBudgetMB, gpuMB: o.gpuBudgetMB, cpuMB: o.cpuBudgetMB },
         overBudget: wouldExceed({ processMB: 0, gpuMB: 0, cpuMB: 0 }),
-        stats: Object.assign({}, stats)
+        stats: Object.assign({}, stats),
+        measuredCost: Object.fromEntries(measured)
       };
       zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected, deferred: !!r.deferred, timing:r.timing&&Object.fromEntries(
           Object.entries(r.timing).map(([stage,ms])=>[stage,Math.round(ms)])) }; });
       return out;
     }
+    // Make room for something outside the zone system (the throne hall's
+    // GPU copies coming back on a phone): finished rooms that matter least
+    // yield first; the current, visible and retained rooms never do.
+    function reserve(extraMB, why) {
+      const need = { processMB: Math.max(0, +extraMB || 0), gpuMB: Math.max(0, +extraMB || 0) * 0.85, cpuMB: 0 };
+      if (!wouldExceed(need, true)) return true;
+      const list = [];
+      zones.forEach(function (r) { if (r.state === 'ready' && !r.isCurrent && !r.visible && !r.retained) list.push(r); });
+      list.sort(function (a, b) { return ((b.rank == null ? 9 : b.rank) - (a.rank == null ? 9 : a.rank)) || ((b.hops || 0) - (a.hops || 0)); });
+      for (let i = 0; i < list.length && wouldExceed(need, true); i++) { evict(list[i], why || 'reserve'); stats.budgetEvictions++; }
+      return !wouldExceed(need, true);
+    }
     const leadTime=id=>Math.max(3,Math.min(8,((zones.get(id)?.leadMs||5200)+650)/1000));
-    return { register, unregister, attach, update, status, isReady, leadTime, whenReady, markReleasable, queueTextures: (obj) => queueTextures(null, obj, 50), pumpUploads, pumpWarm, enqueueWarm, forgetWarm, sample, memoryState, forceEvict, forceLoad, reset, report, hide: hideObject, reveal: revealObject, zones: () => Array.from(order) };
+    return { register, unregister, attach, update, status, isReady, leadTime, reserve, whenReady, markReleasable, queueTextures: (obj) => queueTextures(null, obj, 50), pumpUploads, pumpWarm, enqueueWarm, forgetWarm, sample, memoryState, forceEvict, forceLoad, reset, report, hide: hideObject, reveal: revealObject, zones: () => Array.from(order) };
   }
   return { create, HIDE_FLAG };
 });

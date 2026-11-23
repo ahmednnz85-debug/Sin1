@@ -32,6 +32,16 @@ const ZOld = process.env.SIN_OLD_STREAMER ? require(path.resolve(process.env.SIN
 
 const DATA = JSON.parse(fs.readFileSync(path.join(root, 'tests', 'fixtures', 'palace-graph.json'), 'utf8'));
 const STREAMED = ['T1','T2','T3','T4','T5','L4','L3','L2','L1','K2','K3','K4','K5'];
+// What the PHONE really holds per room (resident increase after reveal),
+// measured on the iPhone profile with Safari-like accounting. Rooms that
+// did not finish preparing in the CPU-rendered browser use 1.3x their
+// declared estimate. L1 measured ~47 MB (hall with L1 resident 597 MB vs ~550).
+const ACTUAL_PHONE = { K2: 90, K3: 60, K4: 30, K5: 210, T3: 45, T1: 52, T2: 56, T4: 59, T5: 70, L4: 69, L3: 44, L2: 65, L1: 47 };
+// Declared phone estimates before this change (wings.js): K2-K4 had none (default 50), K5 48.
+const HALL_RELEASE_MB = 238;
+const HALL_RESTORE_MS = 2500;
+const DECLARED_OLD_PHONE = { K2: 50, K3: 50, K4: 50, K5: 48 };
+const DECLARED_NEW_PHONE = { K2: 90, K3: 60, K4: 30, K5: 210, L1: 50 };
 const EST = { // estProcessMB per room from wings.js (desktop, constrained)
   T1: [98, 40], T2: [105, 43], T3: [138, 64], T4: [115, 45], T5: [120, 54], L4: [110, 53], L3: [65, 34],
   L2: [100, 50], L1: [155, 95], K2: [50, 50], K3: [50, 50], K4: [50, 50], K5: [48, 48]
@@ -46,7 +56,7 @@ const DEAD_ENDS = new Set(['K3','K4','T5','L2','L3']);
 
 function profile(kind) {
   return kind === 'phone'
-    ? { constrained: true, budget: 650, base: 400, cacheZones: { normal: 0, watch: 0, critical: 0 }, graceMs: 0, msPerMB: 55, fixedMs: 1400 }
+    ? { constrained: true, budget: 650, base: 550, cacheZones: { normal: 0, watch: 0, critical: 0 }, graceMs: 0, msPerMB: 55, fixedMs: 1400 }
     : { constrained: false, budget: 1400, base: 760, cacheZones: { normal: 3, watch: 2, critical: 0 }, graceMs: 20000, msPerMB: 24, fixedMs: 900 };
 }
 
@@ -92,18 +102,32 @@ function simulate(policy, kind, tour) {
   const zs = (policy === 'old' ? ZOld : Z).create({
     processBudgetMB: P.budget, gpuBudgetMB: 0, cpuBudgetMB: 0, cacheZones: P.cacheZones, graceMs: P.graceMs,
     estimate: () => {
-      let mb = P.base;
-      for (const id of STREAMED) if (zs.status(id) !== 'cold') mb += EST[id][P.constrained ? 1 : 0];
+      let mb = P.base - (hall.state === 'released' ? HALL_RELEASE_MB : hall.state === 'restoring' ? HALL_RELEASE_MB * (1 - hall.progress) : 0);
+      for (const id of STREAMED) {
+        const st = zs.status(id);
+        if (st === 'cold' || st === 'failed') continue;
+        const real = actual(id);
+        mb += st === 'ready' ? real : real * 0.5; // decode/upload ramps up while preparing
+      }
       return { processMB: mb, gpuMB: 0, cpuMB: 0 };
     }
   });
-  let loads = 0, peak = 0;
+  let loads = 0, peak = 0, overMs = 0;
+  // Throne-hall GPU residency (new policy, phone): measured 238 MB released,
+  // restore assumed 2.5 s on a phone GPU (16 s on the CPU renderer).
+  const hall = { state: 'resident', unwantedAt: 0, progress: 0, restoreAt: 0, hiddenSeenF: 0, cycles: 0 };
+  function actual(id) { return P.constrained ? ACTUAL_PHONE[id] : EST[id][0]; }
+  function declaredEst(id) {
+    if (!P.constrained) return EST[id][0];
+    const table = policy === 'old' ? DECLARED_OLD_PHONE : DECLARED_NEW_PHONE;
+    return table[id] != null ? table[id] : EST[id][1];
+  }
   // zone-streamer reads performance.now(); drive it from the simulation clock.
   const realNow = performance.now.bind(performance);
   performance.now = () => now;
   for (const id of STREAMED) {
     zs.register({ id, requireComplete: true, serialPreparation: true, prefetchHops: PREFETCH_HOPS[id] || 1,
-      estProcessMB: EST[id][P.constrained ? 1 : 0], estGpuMB: 0, estCpuMB: 0,
+      estProcessMB: declaredEst(id), estGpuMB: 0, estCpuMB: 0, estMeasured: P.constrained && policy !== 'old' && DECLARED_NEW_PHONE[id] != null,
       load(api) { loads++; pending.set(id, { at: now + P.fixedMs + P.msPerMB * EST[id][P.constrained ? 1 : 0], api }); },
       unload() { pending.delete(id); } });
   }
@@ -174,6 +198,9 @@ function simulate(policy, kind, tour) {
     const view = { x: camX, z: camZ, dirX: Math.sin(camYaw), dirZ: Math.cos(camYaw), halfFov };
     let heroId = regionAt(hero.x, hero.z); if (thresholdRoom[heroId]) heroId = thresholdRoom[heroId];
     let camId = regionAt(camX, camZ); if (thresholdRoom[camId]) camId = thresholdRoom[camId];
+    // As in wings.js: a camera inside a wall (no region, outside the hall) is the hero's room.
+    const inHall = Math.abs(camX) <= DATA.hall.width / 2 + 0.3 && camZ >= -0.3 && camZ <= DATA.hall.length + 0.4;
+    if (camId === 'Palace' && !inHall) camId = heroId;
     const sight = routes.connectedView(camId, view, Vis.throughOpenings, physicallyOpen);
     sight.add(heroId);
     let hole = false;
@@ -201,11 +228,13 @@ function simulate(policy, kind, tour) {
     if (st.recent && now < st.recent.until && (dist.get(st.recent.id) ?? 99) <= 2 && !approach.size) retained.add(st.recent.id);
     let keep = null, rank = null, demandRoom = demand;
     const visible = new Set([...sight].filter(ready));
+    // New policy: the streamer's byte-based pressure level (as wings.js passes it).
+    const level = policy.startsWith('new') ? ((zs.sample(null) || {}).level || 'normal') : 'normal';
     if (manager) {
       const distances = routes.pathDistances(origin, hero.x, hero.z);
       const r = manager.update({ now, heroRegion: heroId, camRegion: camId, origin, motion: move, drawn: visible, sight,
         predicted: [next && next.id, upcoming && upcoming.id, nearby].filter(Boolean), distances,
-        status: id => zs.status(id), leadSec: id => zs.leadTime(id), memoryLevel: 'normal' });
+        status: id => zs.status(id), leadSec: id => zs.leadTime(id), memoryLevel: level });
       if (!policy.includes('nosight')) for (const id of r.sight) { approach.add(id); retained.add(id); if (!demandRoom) demandRoom = id; }
       for (const id of r.approach) approach.add(id);
       for (const id of r.retained) retained.add(id);
@@ -213,16 +242,40 @@ function simulate(policy, kind, tour) {
       if (!policy.includes('nodoor')) for (const d of doors.values()) if (!d.temple && (d.state === 'Opening' || (d.state !== 'Closed' && Math.hypot(hero.x - d.x, hero.z - d.z) <= 5)))
         [d.from, d.to].forEach(id => streamedSet.has(id) && retained.add(id));
     }
-    zs.update({ current: origin, distances: dist, visible, memoryLevel: 'normal', approach, retained, demand: demandRoom,
-      motionPrefetch: true, allowBackgroundWarm: false, keep, rank });
+    if (policy.startsWith('new') && P.constrained && !policy.includes('nohall')) {
+      const heroInHall = Math.abs(hero.x) <= DATA.hall.width / 2 + 0.3 && hero.z >= -0.3 && hero.z <= DATA.hall.length + 0.4;
+      let at = origin;
+      if (at === 'Palace' && !heroInHall && hall.lastReal) at = hall.lastReal; else if (at !== 'Palace') hall.lastReal = at;
+      const hops = at === 'Palace' ? 0 : (hopsFrom(at).get('Palace') ?? 99);
+      let seen = false;
+      for (const [dx, dz] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+        const v = { x: camX, z: camZ, dirX: dx, dirZ: dz, halfFov: Math.PI / 4 + 0.12 };
+        if (routes.connectedView(camId, v, Vis.throughOpenings, physicallyOpen).has('Palace')) { seen = true; break; }
+      }
+      const forced = hops <= 1 || seen;
+      let wanted;
+      if (hall.state === 'released') {
+        wanted = forced || (hops <= 3 && zs.reserve(HALL_RELEASE_MB, 'hall-restore'));
+        if (forced) zs.reserve(HALL_RELEASE_MB, 'hall-restore');
+      } else wanted = forced || hops <= 2;
+      if (sight.has('Palace') && hall.state !== 'resident') hall.hiddenSeenF++;
+      if (wanted) {
+        hall.unwantedAt = 0;
+        if (hall.state === 'released') { hall.state = 'restoring'; hall.restoreAt = now; hall.progress = 0; }
+      } else if (!hall.unwantedAt) hall.unwantedAt = now;
+      if (hall.state === 'restoring') { hall.progress = Math.min(1, (now - hall.restoreAt) / HALL_RESTORE_MS); if (hall.progress >= 1) hall.state = 'resident'; }
+      if (hall.state === 'resident' && !wanted && hall.unwantedAt && now - hall.unwantedAt > 8000) { hall.state = 'released'; hall.cycles++; }
+    }
+    zs.update({ current: origin, distances: dist, visible, memoryLevel: level, approach, retained, demand: demandRoom,
+      motionPrefetch: true, allowBackgroundWarm: false, keep, rank, doorDemand: templeWaiting ? templeWaiting.waiting : null });
     if (/^K\d/.test(origin) && origin !== 'K1' && !ready(origin)) zs.forceLoad(origin);
     for (const [id, job] of pending) if (now >= job.at) { pending.delete(id); job.api.done(); }
-    peak = Math.max(peak, zs.report().usage.processMB);
+    { const mbNow = zs.report().usage.processMB; peak = Math.max(peak, mbNow); if (mbNow > P.budget) overMs += dt * 1000; }
     prevRegion = heroId;
   }
   performance.now = realNow;
   return { policy, kind, seconds: +(now / 1000).toFixed(1), doorWaitS: +doorWait.toFixed(1), unreadySightF: unreadySight,
-    unreadySightPct: +(100 * unreadySight / frames).toFixed(1), insideUnreadyF: insideUnready, loads, peakMB: Math.round(peak),
+    unreadySightPct: +(100 * unreadySight / frames).toFixed(1), insideUnreadyF: insideUnready, loads, peakMB: Math.round(peak), overBudgetS: +(overMs / 1000).toFixed(1), hallHiddenSeenF: hall.hiddenSeenF, hallCycles: hall.cycles,
     holes, waits: Object.fromEntries(Object.entries(waits).map(([k, v]) => [k, +v.toFixed(1)])) };
 }
 

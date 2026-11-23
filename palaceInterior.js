@@ -842,6 +842,7 @@
         if (!img.naturalWidth) { reject(new Error('صورة فارغة — ' + name)); return; }
         const tex = new THREE.Texture(img);
         tex.needsUpdate = true;
+        rememberHallSource(tex.source, blob, 'image');
         if (linear) {
           tex.anisotropy = aniso.v;
           tex.generateMipmaps = true;
@@ -917,6 +918,7 @@
     return waitDecoder().then(function (dec) {
       if (dec) loader.setMeshoptDecoder(dec);
       return new Promise(function (resolve, reject) {
+        hallGltfCapture().buffers.add(buf);
         loader.parse(buf, '', function (g) { resolve(tuneGLTF(g)); }, function (e) {
           reject(new Error('تعذّر قراءة النموذج — ' + ((e && (e.message || e)) || 'GLB')));
         });
@@ -2249,6 +2251,213 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Throne-hall GPU residency (phones). Measured on the iPhone profile, the
+  // hall alone keeps ~300 MB of 1024² textures on the GPU: with a 650 MB
+  // process cap that leaves room for a single dressed wing room, so the next
+  // room could never be prepared before the door. When the hero is deep in a
+  // wing (portal hops >= 4) and the hall is outside every physical sight
+  // line, the hall's GPU texture copies are released; each keeps only its
+  // COMPRESSED source bytes (captured at load, ~5-10x smaller). Before the
+  // hall can be seen again (hops <= 3 or in a sight line) the bytes are
+  // decoded off the main thread and uploaded a few per frame, and the hall
+  // meshes come back. Hidden meshes leave the render layer instead of
+  // toggling .visible (LOD code owns that) and lights are never touched, so
+  // no shader program changes. Same pixels, same textures, same sizes.
+  const hallSources = new WeakMap();   // THREE.Source -> { blob, kind }
+  const HALL_LAYER_OFF = 31;
+  const hallCapture = { image: 0, gltf: 0, glbFiles: 0, skipped: 0, errors: [] };
+  function rememberHallSource(source, blob, kind) {
+    try { if (source && blob && !hallSources.has(source)) { hallSources.set(source, { blob, kind }); hallCapture[kind]++; } } catch (_) {}
+  }
+  function hallGltfCapture() {
+    if (!window.__sinGltfCapture) window.__sinGltfCapture = { buffers: new WeakSet(), fn: rememberGLBImages };
+    return window.__sinGltfCapture;
+  }
+  function rememberGLBImages(buf, gltf) {
+    try {
+      const parser = gltf && gltf.parser, json = parser && parser.json;
+      hallCapture.glbFiles++;
+      if (!json || !json.images || !buf || !(buf.byteLength >= 28)) {
+        hallCapture.skipped++;
+        hallCapture.errors.push('skip: parser data unavailable');
+        return;
+      }
+      if (!(buf instanceof ArrayBuffer) && buf.buffer) buf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+      const dv = new DataView(buf);
+      if (dv.getUint32(0, true) !== 0x46546C67) return;
+      const jsonLen = dv.getUint32(12, true), binStart = 20 + jsonLen + 8;
+      parser.associations.forEach(function (ref, obj) {
+        if (!obj || !obj.isTexture || !ref || ref.textures == null) return;
+        const def = json.textures[ref.textures] || {};
+        const ext = def.extensions || {};
+        if (ext.KHR_texture_basisu) return;
+        const srcIndex = (ext.EXT_texture_webp || ext.EXT_texture_avif || {}).source != null ? (ext.EXT_texture_webp || ext.EXT_texture_avif).source : def.source;
+        const img = json.images[srcIndex];
+        if (!img || img.bufferView == null) return;
+        const bv = json.bufferViews[img.bufferView];
+        if (!bv || (bv.buffer || 0) !== 0 || (bv.extensions && bv.extensions.EXT_meshopt_compression)) return;
+        const off = binStart + (bv.byteOffset || 0);
+        if (off + bv.byteLength > buf.byteLength) return;
+        rememberHallSource(obj.source, new Blob([new Uint8Array(buf, off, bv.byteLength)], { type: img.mimeType || 'image/png' }), 'gltf');
+      });
+    } catch (e) { hallCapture.errors.push(String(e && e.message || e)); try { console.warn('[hall residency] capture failed', e); } catch (_) {} }
+  }
+  const hallRes = { state: 'resident', want: true, unwantedSince: 0, items: null, released: 0, restoreMs: 0,
+    releasedMB: 0, cycles: 0, skipped: 0, pending: 0, startedAt: 0, lastError: '' };
+  function hallTextureItems(scene) {
+    if (!group) return [];
+    const inHall = new Set(), outside = new Set();
+    const keyed = new Map();
+    function texturesOf(o, cb) {
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      mats.forEach(function (m) { if (m) for (const k in m) { const t = m[k]; if (t && t.isTexture && t.source) cb(t); } });
+    }
+    group.traverse(function (o) { texturesOf(o, function (t) { inHall.add(t.source); }); });
+    (scene || group.parent || group).traverse(function (o) {
+      for (let p = o; p; p = p.parent) if (p === group) return;
+      texturesOf(o, function (t) { outside.add(t.source); });
+    });
+    group.traverse(function (o) {
+      texturesOf(o, function (t) {
+        const src = t.source;
+        if (outside.has(src) || !hallSources.has(src) || t.isRenderTargetTexture || t.isCompressedTexture) return;
+        let it = keyed.get(src);
+        if (!it) { it = { source: src, textures: new Set(), meshes: new Set(), info: hallSources.get(src) }; keyed.set(src, it); }
+        it.textures.add(t);
+        if (o.isMesh || o.isInstancedMesh || o.isPoints) it.meshes.add(o);
+      });
+    });
+    return Array.from(keyed.values());
+  }
+  function hallReleasable() {
+    // A mesh whose material mixes a restorable texture with one that is not
+    // restorable still leaves the layer (its other maps stay resident).
+    return hallRes.state === 'resident';
+  }
+  function releaseHallTextures(ctx) {
+    const renderer = ctx && ctx.renderer;
+    if (!renderer || !group) return;
+    const items = hallTextureItems(ctx.scene);
+    if (!items.length) return;
+    const meshes = new Set();
+    let bytes = 0;
+    items.forEach(function (it) {
+      const t0 = it.textures.values().next().value;
+      const img = t0.image || (it.source && it.source.data);
+      const w = (img && (img.width || img.videoWidth)) || (t0.userData && t0.userData.sinGpuW) || 0;
+      const h = (img && (img.height || img.videoHeight)) || (t0.userData && t0.userData.sinGpuH) || 0;
+      it.w = w; it.h = h;
+      bytes += w * h * 4 * 1.33;
+      it.meshes.forEach(function (m) { meshes.add(m); });
+    });
+    hallRes.meshes = [];
+    meshes.forEach(function (m) {
+      hallRes.meshes.push({ mesh: m, mask: m.layers.mask });
+      m.layers.set(HALL_LAYER_OFF);
+    });
+    items.forEach(function (it) {
+      it.textures.forEach(function (t) {
+        if (!t.userData) t.userData = {};
+        t.userData.sinGpuReleased = true;
+        try { t.dispose(); } catch (_) {}
+      });
+      // Drop any decoded pixels still held on the CPU (closed by the GPU
+      // release path for GLB maps already); the compressed bytes remain.
+      const data = it.source.data;
+      if (data && typeof data.close === 'function') { try { data.close(); } catch (_) {} }
+      it.source.data = null;
+      it.textures.forEach(function (t) { t.image = null; });
+    });
+    hallRes.items = items;
+    hallRes.state = 'released';
+    hallRes.released = items.length;
+    hallRes.releasedMB = Math.round(bytes / 1048576);
+    hallRes.cycles++;
+    try { console.info('[hall residency] released', items.length, 'textures', hallRes.releasedMB + ' MB'); } catch (_) {}
+  }
+  function decodeHallSource(it) {
+    const blob = it.info.blob;
+    const cap = it.w && it.h ? { resizeWidth: it.w, resizeHeight: it.h, resizeQuality: 'high' } : {};
+    if (it.info.kind === 'image' || typeof createImageBitmap !== 'function') {
+      return new Promise(function (resolve, reject) {
+        const url = URL.createObjectURL(blob), img = new Image();
+        img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('hall image decode failed')); };
+        img.src = url;
+      });
+    }
+    // Same options as THREE.ImageBitmapLoader (GLTFLoader path).
+    return createImageBitmap(blob, Object.assign({ premultiplyAlpha: 'none' }, cap))
+      .catch(function () { return createImageBitmap(blob, { premultiplyAlpha: 'none' }); });
+  }
+  function restoreHallTextures(ctx) {
+    if (hallRes.state !== 'released') return;
+    hallRes.state = 'restoring';
+    hallRes.startedAt = performance.now();
+    const items = hallRes.items || [];
+    hallRes.pending = items.length;
+    hallRes.uploadQ = [];
+    let next = 0;
+    function pump() {
+      if (next >= items.length) return;
+      const it = items[next++];
+      decodeHallSource(it).then(function (img) {
+        const w = img.width || 0, h = img.height || 0;
+        it.source.data = img;
+        it.textures.forEach(function (t) { t.image = img; });
+        // Match the original GPU copy (phone cap) when the decoder ignored the resize.
+        if (it.w && it.h && (w > it.w || h > it.h) && window.SinDevice && SinDevice.capTexture) {
+          const t0 = it.textures.values().next().value;
+          try { SinDevice.capTexture(t0, Math.max(it.w, it.h)); } catch (_) {}
+          it.textures.forEach(function (t) { t.image = it.source.data; });
+        }
+        it.textures.forEach(function (t) { t.needsUpdate = true; if (t.userData) t.userData.sinGpuReleased = false; });
+        hallRes.uploadQ.push(it);
+      }, function (e) {
+        hallRes.lastError = String(e && e.message || e);
+        hallRes.uploadQ.push(it); // let the mesh come back; process-memory guards nothing here
+      }).then(pump);
+    }
+    pump(); pump();
+  }
+  function pumpHallResidency(ctx) {
+    if (hallRes.state === 'restoring' && hallRes.uploadQ && ctx && ctx.renderer) {
+      const tStart = performance.now();
+      let n = 0;
+      while (hallRes.uploadQ.length && n < 2 && performance.now() - tStart < 6) {
+        const it = hallRes.uploadQ.shift();
+        it.textures.forEach(function (t) { try { if (t.image) ctx.renderer.initTexture(t); } catch (_) {} });
+        hallRes.pending--; n++;
+      }
+      if (hallRes.pending <= 0) {
+        (hallRes.meshes || []).forEach(function (e) { e.mesh.layers.mask = e.mask; });
+        hallRes.meshes = null;
+        hallRes.items = null;
+        hallRes.state = 'resident';
+        hallRes.restoreMs = Math.round(performance.now() - hallRes.startedAt);
+        // Same CPU release as at palace load (GPU copies exist now).
+        try { if (window.SinProcessMemory) SinProcessMemory.releaseCpuFromObject(group, ctx.renderer, { upload: false }); } catch (_) {}
+        try { console.info('[hall residency] restored in', hallRes.restoreMs + ' ms'); } catch (_) {}
+      }
+    }
+    if (hallRes.state === 'resident' && !hallRes.want && state === 'DONE' && hallRes.unwantedSince &&
+        performance.now() - hallRes.unwantedSince > 8000 && hallReleasable()) releaseHallTextures(ctx);
+    if (hallRes.state === 'released' && hallRes.want) restoreHallTextures(ctx);
+  }
+  // wanted: the hall may be seen soon (<= 3 portal hops, or in a sight line).
+  function setHallResidency(wanted) {
+    wanted = !!wanted;
+    if (wanted) hallRes.unwantedSince = 0;
+    else if (hallRes.want || !hallRes.unwantedSince) hallRes.unwantedSince = hallRes.unwantedSince || performance.now();
+    hallRes.want = wanted;
+    return hallRes.state;
+  }
+  function hallResidencyReport() {
+    return { state: hallRes.state, want: hallRes.want, released: hallRes.released, releasedMB: hallRes.releasedMB,
+      cycles: hallRes.cycles, restoreMs: hallRes.restoreMs, pending: hallRes.pending, lastError: hallRes.lastError };
+  }
+
   // When the hero is in a wing room (hops from the hall > 1), drop the
   // hall's high-poly near-LOD InstancedMeshes from the scene and release
   // their GPU geometry. The far-LOD packs stay as a cheap stand-in if the
@@ -2292,6 +2501,7 @@
     if (_tr) _tr('animateHall-updatePalaceLights');
     if (wingRuntime && window.PalaceWings) PalaceWings.tick(dt, ctx);
     if (_tr) _tr('animateHall-PalaceWings.tick');
+    pumpHallResidency(ctx);
   }
 
   function updatePalaceLights(dt, hero) {
@@ -5180,6 +5390,26 @@
     loadProfile: function () { return loadProfile.slice(); },
     gpuUploadPending: function () { return gpuUploadQ.length; },
     setDeepWing: setDeepWing,
+    setHallResidency: setHallResidency,
+    hallResidency: hallResidencyReport,
+    // Diagnostics / tests: run one release or restore step now.
+    hallResidencyDebug: {
+      release: function () { if (hallRes.state === 'resident') releaseHallTextures(lastContext); return hallResidencyReport(); },
+      restore: function () { restoreHallTextures(lastContext); return hallResidencyReport(); },
+      pump: function () { pumpHallResidency(lastContext); return hallResidencyReport(); },
+      capture: function () { return JSON.parse(JSON.stringify(hallCapture)); },
+      coverage: function () {
+        const rows = [], seen = new Set();
+        if (group) group.traverse(function (o) {
+          const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+          mats.forEach(function (m) { if (m) for (const k in m) { const t = m[k]; if (!t || !t.isTexture || seen.has(t.source)) continue; seen.add(t.source);
+            let path = []; for (let p = o; p && p !== group && path.length < 4; p = p.parent) if (p.name) path.unshift(p.name);
+            const img = t.image || (t.source && t.source.data);
+            rows.push({ path: path.join('/'), key: k, restorable: hallSources.has(t.source), w: (img && img.width) || 0, cls: img ? img.constructor.name : 'none', name: t.name || '' }); } });
+        });
+        return rows;
+      }
+    },
     metrics: function () { return { H: H, length: hallLen, width: hallW, front: portalFront, x: portalX, state: state, occupant: occupant, lights: lights.length + 1, ramp: ramp ? ramp.yTop : 0 }; }
   };
   if (debugOn()) { ensureLoadScreen(); renderDebug(); }

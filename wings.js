@@ -50,6 +50,13 @@
     gpuBudgetMB: deviceProfile.gpuBudgetMB,
     cpuBudgetMB: deviceProfile.cpuBudgetMB,
     deferStallMs: 3000,
+    // Measured room costs survive reloads (per device class) so the first
+    // admission of a session already uses real numbers.
+    costStore: {
+      key: 'sin.roomCost.' + (deviceProfile.constrained ? 'phone' : 'desktop') + '.v1',
+      load() { try { return JSON.parse(localStorage.getItem(this.key) || 'null'); } catch (_) { return null; } },
+      save(v) { try { localStorage.setItem(this.key, JSON.stringify(v)); } catch (_) {} }
+    },
     onBudgetStall: function (rec) {
       try {
         const st = window.PalaceInterior && PalaceInterior.state && PalaceInterior.state();
@@ -4018,7 +4025,7 @@
       },
       ownsObject: node => node.name === 'L2-Royal-Archive' },
     { id: 'L1', prefetchHops: 3, priority: 0, requireComplete: true, keepShell: true, serialPreparation: true,
-      estProcessMB: deviceProfile.constrained ? 95 : 155,
+      estProcessMB: deviceProfile.constrained ? 50 : 155, estMeasured: !!deviceProfile.constrained /* phone: hall+L1 597 MB vs ~550 measured */,
       estGpuMB: deviceProfile.constrained ? 65 : 104,
       estCpuMB: deviceProfile.constrained ? 30 : 51,
       load: loadLibrary,
@@ -4062,6 +4069,8 @@
     { id: 'K2', prefetchHops: deviceProfile.prefetchHops, priority: 0, requireComplete:true, serialPreparation:true,
       prepare:zonePrepare, onFailure:()=>registerLibraryFailure('K2'),
       load: function () { dressK2(); },
+      // Phone: measured resident cost (desktop keeps the default).
+      ...(deviceProfile.constrained ? { estProcessMB: 90, estGpuMB: 70, estMeasured: true } : {}),
       isComplete: function () { return roomCompleteness('K2').complete; },
       unload: function (api) {
         state.colliders = state.colliders.filter(function (c) { return !c._k2Prop; });
@@ -4072,6 +4081,8 @@
     { id: 'K3', prefetchHops: deviceProfile.prefetchHops, priority: 1, requireComplete:true, serialPreparation:true,
       prepare:zonePrepare, onFailure:()=>registerLibraryFailure('K3'),
       load: dressK3,
+      // Phone: measured resident cost (desktop keeps the default).
+      ...(deviceProfile.constrained ? { estProcessMB: 60, estGpuMB: 45, estMeasured: true } : {}),
       isComplete: function () { return roomCompleteness('K3').complete; },
       unload: function (api) {
         state.k3Dress?.lunarLoad?.abort();
@@ -4084,12 +4095,16 @@
     { id: 'K4', prefetchHops: deviceProfile.prefetchHops, priority: 2, requireComplete:true, serialPreparation:true,
       prepare:zonePrepare, onFailure:()=>registerLibraryFailure('K4'),
       load: function () { dressK4(); loadK4Assets(); },
+      // Phone: measured resident cost (desktop keeps the default).
+      ...(deviceProfile.constrained ? { estProcessMB: 30, estGpuMB: 22, estMeasured: true } : {}),
       isComplete: function () { return roomCompleteness('K4').complete; },
       unload: function (api) { state.k4Dress = null; state.colliders = state.colliders.filter(function (c) { return !c._k4Prop; }); if (api.group) api.group.userData.k4Dressed = false; },
       ownsObject: streamedName('K4') },
     ...(window.SinPrivateRooms?[{id:'K5',prefetchHops:deviceProfile.prefetchHops,priority:3,
       requireComplete:true,keepShell:true,serialPreparation:true,
-      estProcessMB:48,estGpuMB:34,estCpuMB:24,
+      // Measured on the phone profile: ~205 MB resident (bed, steps, chandelier,
+      // cabinet set). The old 48 MB let a second room stack on it (760 MB).
+      estProcessMB:deviceProfile.constrained?210:48,estGpuMB:deviceProfile.constrained?160:34,estCpuMB:24,estMeasured:!!deviceProfile.constrained,
       load:dressK5,prepareGeometry:(api,renderer)=>state.k5Dress.warmup.step(renderer),
       onReady(api){
         state.k5Dress.cameraColliders=privateCameraColliders(state.colliders.filter(b=>b._k5Prop));
@@ -4273,6 +4288,54 @@
       }
     }
   }
+  // Phone only: the throne hall's GPU textures are released while it cannot
+  // be seen (palaceInterior.js, hall residency) and restored >= 1 room before
+  // it can. Rooms that matter least make room for the restore first.
+  function syncHallResidency(heroId, origin, isArch) {
+    const PI = window.PalaceInterior;
+    if (!PI || typeof PI.setHallResidency !== 'function') return;
+    if (!deviceProfile.constrained) { PI.setHallResidency(true); return; }
+    // A doorway gap between two room polygons reads as "no region" (=
+    // 'Palace'); outside the hall bounds keep the last real room instead.
+    const hero = state.ctx && state.ctx.hero && state.ctx.hero.position, o = state.root.position;
+    let at = origin || heroId || 'Palace';
+    if (at === 'Palace' && hero && !inHallBounds(hero.x - o.x, hero.z - o.z) && state._lastRealRegion) at = state._lastRealRegion;
+    else if (at !== 'Palace') state._lastRealRegion = at;
+    const d = distancesFrom(at);
+    const hops = at === 'Palace' || isArch ? 0 : (d.has('Palace') ? d.get('Palace') : 99);
+    // "Seen" is any sight line from the camera's position in four directions
+    // (a camera turn must never expose a released hall), refreshed ~4 Hz.
+    const now = performance.now();
+    if (!state._hallSightAt || now - state._hallSightAt > 250) {
+      state._hallSightAt = now;
+      state._hallSeen = hallPotentiallyVisible(at);
+    }
+    const seen = !!state._hallSeen;
+    const before = PI.hallResidency ? PI.hallResidency() : null;
+    // forced: next to the hall, or in any sight line -> must be resident.
+    // soon (<= 3 hops): restore early, but only if lower-priority rooms can
+    // make room. Kept resident within 2 hops; released beyond (after 8 s).
+    const forced = hops <= 1 || seen;
+    let wanted;
+    if (before && before.state === 'released') {
+      wanted = forced || (hops <= 3 && zoneStreamer && zoneStreamer.reserve ? zoneStreamer.reserve(before.releasedMB || 0, 'hall-restore') : forced);
+      if (forced && zoneStreamer && zoneStreamer.reserve) zoneStreamer.reserve(before.releasedMB || 0, 'hall-restore');
+    } else wanted = forced || hops <= 2;
+    PI.setHallResidency(wanted);
+    state.hallResidency = { hops, seen, wanted, state: before && before.state };
+  }
+  function hallPotentiallyVisible(at) {
+    const cam = state.ctx && state.ctx.camera, o = state.root && state.root.position;
+    if (!cam || !o || !state.routes || !window.SinWingVisibility) return false;
+    const p = cam.parent && !cam.parent.isScene ? cam.getWorldPosition(new THREE.Vector3()) : cam.position;
+    const x = p.x - o.x, z = p.z - o.z;
+    const viewer = viewerRegion({ x, z }) || at;
+    for (const [dx, dz] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+      const v = { x, z, dirX: dx, dirZ: dz, halfFov: Math.PI / 4 + 0.12 };
+      try { if (state.routes.connectedView(viewer, v, SinWingVisibility.throughOpenings, portalPhysicallyOpen).has('Palace')) return true; } catch (_) { return true; }
+    }
+    return false;
+  }
   function drawRoomOverlay(tickMs) {
     if (!roomDebugWanted || !roomManager || typeof document === 'undefined') return;
     if (!roomOverlay) roomOverlay = SinPalaceRoomManager.overlay(document);
@@ -4406,6 +4469,7 @@
       .filter(id=>!streamedRooms.has(id)).map(id=>state.regionGroups.get(id)).filter(Boolean):[];
     return zoneStreamer.update({current:origin,distances:zoneDist,visible:visibleIds,
       memoryLevel:level,warmGroups,approach,retained,allowBackgroundWarm,demand:demandRoom,motionPrefetch:true,
+      doorDemand:state.templeDoors?.waiting()||state.libraryDoors?.waiting()||null,
       keep:managed?managed.keep:null,rank:managed?managed.rank:null});
   }
   // After LRU eviction a streamed room (K4 in particular) can sit complete=false
@@ -4558,6 +4622,7 @@
       const managed = manageRooms(id, origin, view, visibleIds);
       if (managed) visibleIds = managed.shown;
     }
+    syncHallResidency(id, origin, isArch);
     if (visibleIds) {
       state.regions.forEach(rr => {
         const g = state.regionGroups.get(rr.id); if (!g) return;
