@@ -471,7 +471,7 @@
   function pollGpu() {
     if (!pendingQ || !tq) return;
     if (!gl.getQueryParameter(pendingQ, gl.QUERY_RESULT_AVAILABLE)) return;
-    if (!gl.getParameter(tq.GPU_DISJOINT_EXT)) perf.gpu = gl.getQueryParameter(pendingQ, gl.QUERY_RESULT) / 1e6;
+    if (!gl.getParameter(tq.GPU_DISJOINT_EXT)) { perf.gpu = gl.getQueryParameter(pendingQ, gl.QUERY_RESULT) / 1e6; window.__sinGpuMs = perf.gpu; }
     gl.deleteQuery(pendingQ); pendingQ = null;
   }
   function hud(ts) {

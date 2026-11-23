@@ -4260,14 +4260,16 @@
         if (!streamedRooms.has(id) && state.regionGroups.has(id)) visible.add(id);
       });
     }
-    if (visible.has('Palace') || viewer === 'Palace') {
+    // The throne hall has no region group, so test the sight line through
+    // the viewer's own hall arch directly (hall or a hall-linked room).
+    const own = viewer && viewer !== 'Palace' && state.hallPortalsByRoom && state.hallPortalsByRoom.get(viewer);
+    if (viewer === 'Palace' || own) {
       for (const r of state.connectors) {
         if (r.kind !== 'threshold' || visible.has(r.id)) continue;
-        const arch = state.hallPortalsByRoom && state.hallPortalsByRoom.get(r.linkRoom);
+        const arch = state.hallPortalsByRoom.get(r.linkRoom);
         if (!arch) continue;
-        const own = viewer !== 'Palace' && state.hallPortalsByRoom.get(viewer);
-        const line = viewer === 'Palace' ? [arch] : (own && own !== arch ? [own, arch] : null);
-        if (line ? through(view, line, .055) : (visible.has(r.linkRoom) || (roomSight && roomSight.has(r.linkRoom)))) visible.add(r.id);
+        if (arch === own) { visible.add(r.id); continue; }
+        if (through(view, viewer === 'Palace' ? [arch] : [own, arch], .055)) visible.add(r.id);
       }
     }
   }
@@ -4368,9 +4370,13 @@
     if(recent && now<recent.until && zoneDist.get(recent.id)<=2 && level==='normal' && !approach.size)retained.add(recent.id);
     if(origin==='Palace' && level==='normal' && !approach.size && zoneIsReady('L1') &&
       now<(state.entryLibrary?.keepReadyUntil||0))retained.add('L1');
-    for(const id of approach){
+    // A failed preparation is retried once the back-off passed. The room
+    // the hero stands in is included (it used to stay 'failed' for good,
+    // leaving its placeholder in place), with two retries at most.
+    for(const id of [...approach,origin]){
       const failure=state.libraryFailures?.get(id);
-      if(failure?.count===1 && now>=failure.retryAt && zoneStreamer.status(id)==='failed') zoneStreamer.forceEvict(id);
+      const limit=id===origin?2:1;
+      if(failure && failure.count<=limit && now>=failure.retryAt && zoneStreamer.status(id)==='failed') zoneStreamer.forceEvict(id);
     }
     // Room manager: rooms already in the camera's sight line come first,
     // then graph / heading prefetch; rooms just left stay in cooldown.
@@ -4596,7 +4602,12 @@
     const t0 = performance.now();
     tickInner(dt);
     if (roomFrames) {
-      if (state._lastTickAt) roomFrames.push(t0 - state._lastTickAt);
+      // Sub-stepped simulation runs several ticks inside one frame; only
+      // frame-to-frame gaps count toward the percentiles.
+      const gap = state._lastTickAt ? t0 - state._lastTickAt : 0;
+      if (!state._lastTickAt || gap >= 2) {
+        if (gap) roomFrames.push(gap);
+      }
       state._lastTickAt = t0;
     }
     drawRoomOverlay(performance.now() - t0);

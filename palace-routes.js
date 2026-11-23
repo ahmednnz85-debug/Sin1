@@ -47,7 +47,7 @@
         for(const {to,portal} of routes.get(id)||[]){
           if(path.includes(to)||!pass(portal))continue;
           const line=[...openings,portal];
-          if(!through(camera,line,.055))continue;
+          if(!through(camera,line,.085))continue;
           result.add(to);queue.push({id:to,openings:line,path:[...path,to]});
         }
       }
@@ -125,7 +125,14 @@
       if(!camera)return out;
       for(const {to,portal} of routes.get(origin)||[]){
         if(pass(portal))continue;
-        if(through(camera,[portal],.055))out.add(to);
+        if(!through(camera,[portal],.055))continue;
+        out.add(to);
+        // The leaf may not fill the arch top: the next open passage behind
+        // it shows through that gap.
+        for(const next of routes.get(to)||[]){
+          if(next.to===origin||!pass(next.portal))continue;
+          if(through(camera,[portal,next.portal],.055))out.add(next.to);
+        }
       }
       return out;
     }

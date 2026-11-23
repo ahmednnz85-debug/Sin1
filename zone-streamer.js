@@ -406,11 +406,24 @@
     function canStart(rec) {
       if (rec.spec.requireComplete) {
         const serial = rec.spec.serialPreparation;
-        if (serial && order.some(id => {
-          const other = zones.get(id);
+        const busy = function (other) {
           return other !== rec && other.spec.serialPreparation &&
             (other.state === 'loading' || other.state === 'uploading' || other.state === 'compiling');
-        })) return false;
+        };
+        // The room the hero stands in never waits behind a speculative
+        // preparation (prefetch / cooldown rank >= 2, not on screen): that
+        // one is abandoned and restarts later. Seen on a failed-and-retried
+        // current room that queued a full minute behind a prefetch.
+        if (serial && rec.isCurrent) {
+          order.forEach(function (id) {
+            const other = zones.get(id);
+            if (busy(other) && !other.isCurrent && !other.visible && !other.retained && (other.rank == null || other.rank >= 2)) {
+              evict(other, 'yield-to-current');
+              stats.budgetEvictions++;
+            }
+          });
+        }
+        if (serial && order.some(id => busy(zones.get(id)))) return false;
         // An open sight line can show two dressed rooms at once. Use the
         // device's measured memory budget instead of forcibly swapping them.
         // For a serial preparation, the CPU sub-budget is for the new decode.

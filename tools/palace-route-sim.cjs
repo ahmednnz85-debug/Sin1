@@ -26,6 +26,9 @@ const Routes = require(path.join(root, 'palace-routes.js'));
 const Vis = require(path.join(root, 'wing-visibility.js'));
 const Z = require(path.join(root, 'zone-streamer.js'));
 const M = require(path.join(root, 'palace-room-manager.js'));
+// Optional: compare against the previous streamer source (e.g. a checkout of
+// the commit before the room manager): SIN_OLD_STREAMER=/path/zone-streamer.js
+const ZOld = process.env.SIN_OLD_STREAMER ? require(path.resolve(process.env.SIN_OLD_STREAMER)) : Z;
 
 const DATA = JSON.parse(fs.readFileSync(path.join(root, 'tests', 'fixtures', 'palace-graph.json'), 'utf8'));
 const STREAMED = ['T1','T2','T3','T4','T5','L4','L3','L2','L1','K2','K3','K4','K5'];
@@ -86,7 +89,7 @@ function simulate(policy, kind, tour) {
   // ---- streamer ---------------------------------------------------------------
   let now = 0;
   const pending = new Map();
-  const zs = Z.create({
+  const zs = (policy === 'old' ? ZOld : Z).create({
     processBudgetMB: P.budget, gpuBudgetMB: 0, cpuBudgetMB: 0, cacheZones: P.cacheZones, graceMs: P.graceMs,
     estimate: () => {
       let mb = P.base;

@@ -146,3 +146,22 @@ test('closed doors: the region holding the door reveal stays drawn when the came
   assert.equal(r.closedFrames('K3', away, Vis.throughOpenings, closed).size, 0);
   assert.equal(r.closedFrames('K3', facing, Vis.throughOpenings, () => true).size, 0, 'open doors are handled by the portal flood');
 });
+
+test('streamer: the current room preempts a speculative serial preparation', () => {
+  const Z = require('../zone-streamer.js');
+  const s = Z.create({ processBudgetMB: 0 });
+  const started = [];
+  for (const id of ['A', 'B']) s.register({ id, requireComplete: true, serialPreparation: true, load() { started.push(id); } });
+  s.update({ current: 'X', approach: new Set(['A']), rank: new Map([['A', 3]]), distances: new Map(), motionPrefetch: true });
+  assert.equal(s.status('A'), 'loading');
+  s.update({ current: 'B', approach: new Set(['A']), rank: new Map([['A', 3]]), distances: new Map(), motionPrefetch: true });
+  assert.equal(s.status('B'), 'loading');
+  assert.equal(s.status('A'), 'cold');
+});
+
+test('no speculative prefetch while the room the hero stands in is not ready', () => {
+  const m = M.create({ streamed, prefetchMetres: 40 });
+  const r = m.update({ now: 0, heroRegion: 'T2', origin: 'T2', distances: new Map([['T1', 15], ['T3', 20]]),
+    status: statusFrom({ T2: 'failed' }) });
+  assert.equal(r.approach.size, 0);
+});

@@ -132,7 +132,8 @@
       const room = Math.max(0, o.maxPrefetch - approach.size);
       // Speculative (distance) prefetch never competes with a room the
       // camera already sees or the player is predicted to enter next.
-      const urgentPending = sightList.length > 0 || Array.from(approach).some(id => !ready(id));
+      const urgentPending = sightList.length > 0 || Array.from(approach).some(id => !ready(id)) ||
+        (!!input.origin && o.streamed.has(input.origin) && !ready(input.origin));
       // On a constrained device only start a distance prefetch while no
       // predicted room is already asked for (no-stack swap rule).
       if (!(o.constrained && approach.size)) {
