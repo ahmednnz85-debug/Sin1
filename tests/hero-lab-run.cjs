@@ -18,24 +18,16 @@ const THREE_DIR = process.env.THREE_DIR;
   const R = await page.evaluate(() => {
     const L = __lab, H = L.hero, V = new THREE.Vector3(), out = {};
     const balls = ['ball_l', 'ball_r'].map(n => H.model.getObjectByName(n));
-    // 1) planted-foot sliding across the stick range (percent of ground speed)
-    out.slide = [0.4, 0.7, 0.8, 1].map(mag => {
-      L.place(0, -11, 0); L.set(1, 0, mag, true); L.step(90);
-      const rec = [[], []], sp = [];
-      for (let i = 0; i < 180; i++) { L.step(1); sp.push(H.debug().speed); balls.forEach((b, k) => { b.getWorldPosition(V); rec[k].push([V.x, V.y - H.root.position.y, V.z]); }); if (H.root.position.z > 11) { L.place(0, -11, 0); rec[0].push(null); rec[1].push(null); } }
-      let s = 0, n = 0;
-      for (const r of rec) { const mn = Math.min(...r.filter(Boolean).map(a => a[1])); for (let i = 1; i < r.length; i++) { const a = r[i - 1], b = r[i]; if (a && b && a[1] < mn + .02 && b[1] < mn + .02) { s += Math.hypot(b[0] - a[0], b[2] - a[2]) * 60; n++; } } }
-      const v = sp.reduce((a, b) => a + b) / sp.length; return { mag, speed: v, pct: 100 * s / Math.max(1, n) / v };
-    });
-    L.set(0, 0, 0);
+    // foot sliding, stops, turns and frame-rate independence: tests/hero-motion-audit.cjs
     // 2) axe socket switch: no world-space jump on the re-parent frame
     const axe = H.model.getObjectByName('Axe'); L.place(-8, -8, 0); L.step(30); L.press('axe');
     let prev = null, par = axe.parent.name, jump = 0;
     for (let i = 0; i < 40; i++) { L.step(1); axe.getWorldPosition(V); if (axe.parent.name !== par && prev) { jump = V.distanceTo(prev); par = axe.parent.name; } prev = V.clone(); }
     out.equip = { state: H.weapon.state(), seat: H.weapon.seat(), switchStep: jump };
     // 3) combo spam: one hit per swing, no action growth
-    const D = L.dummies[0]; L.place(0, 1.5, 0); L.step(40); D.hits = 0; const before = H.debug().totalActions;
-    for (let i = 0; i < 48; i++) { if (i % 4 === 0) L.press('light'); L.step(1); } L.step(220);
+    // 1.2 m from the dummy: inside the real reach of all three swings (no motion warping)
+    const D = L.dummies[0]; L.place(0, 2.0, 0); L.step(40); D.hits = 0; const before = H.debug().totalActions;
+    for (let i = 0; i < 72; i++) { if (i % 4 === 0) L.press('light'); L.step(1); } L.step(240);   // 18 presses in 1.2 s: one 3-hit combo, never more
     out.combo = { hits: D.hits, actions: H.debug().totalActions, before };
     // 4) dodge distance, block, hit reaction, push
     L.place(0, -4, 0); L.step(30); L.press('dodge'); const z0 = H.root.position.z; L.step(70); out.dodge = z0 - H.root.position.z;
@@ -45,10 +37,9 @@ const THREE_DIR = process.env.THREE_DIR;
     return out;
   });
   console.log(JSON.stringify(R, null, 1));
-  for (const s of R.slide) assert.ok(s.pct < 14, 'foot slide ' + JSON.stringify(s));
   assert.equal(R.equip.state, 'Equipped'); assert.equal(R.equip.seat, 'hand'); assert.ok(R.equip.switchStep < 0.08, 'axe jump on socket switch');
   assert.equal(R.combo.hits, 3); assert.equal(R.combo.actions, R.combo.before);
-  assert.ok(R.dodge > 1.0 && R.dodge < 1.5);
+  assert.ok(R.dodge > 0.45 && R.dodge < 0.65, 'dodge travels its authored root motion (~0.55 m)');
   assert.equal(R.block.state, 'block'); assert.ok(R.block.speed <= 1.5 + 1e-6);
   assert.equal(R.stagger, 'stagger'); assert.equal(R.recovered, 'none');
   assert.equal(R.push, true); assert.equal(R.pushState.name, 'push_object'); assert.equal(R.pushEnd, false);

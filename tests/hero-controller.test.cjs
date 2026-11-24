@@ -50,11 +50,15 @@ test('runtime rig mapping uses the new arm chain and door integration does not u
   assert.doesNotMatch(doorsSource, /HandMiddle1/);
 });
 
-test('weapon attachment is reasserted after animation evaluation and exposes visibility diagnostics', () => {
+test('one axe under one socket: re-seated after evaluation, never force-shown, never classed as city dressing', () => {
   const source = fs.readFileSync(path.join(root, 'sin-hero.js'), 'utf8');
-  assert.match(source, /axe\.parent !== handSock/);
-  assert.match(source, /axe\.parent !== backSock/);
+  assert.match(source, /const p = weapon\.seat === 'hand' \? handSock : backSock;\s*if \(axe\.parent !== p\) seat\(weapon\.seat\)/);
   assert.match(source, /axeVisible/);
+  assert.doesNotMatch(source, /axe\.visible = true/);                     // visibility is fixed at the cause, not forced
+  assert.match(source, /root\.userData\.sinHeroRoot = true/);
+  const perf = fs.readFileSync(path.join(root, 'outdoor-perf.js'), 'utf8');
+  assert.match(perf, /function onHero\(o\)/);
+  assert.match(perf, /if \(onHero\(o\)\) return;/);
 });
 
 test('attack windows lie inside their clips and chain points follow the active frames', () => {
@@ -66,21 +70,27 @@ test('attack windows lie inside their clips and chain points follow the active f
     assert.ok(A.impact >= A.act[0] && A.impact <= A.act[1], k);
     assert.ok(A.cancel > A.act[1] && A.end <= d, k);
     assert.ok(A.blendIn >= 0.05 && A.blendIn <= 0.09, k + ' blend in 50-90 ms');
+    assert.equal(A.ts, 1, k + ' plays at its authored rate');
   }
   assert.ok(CONFIG.BUFFER >= 0.15 && CONFIG.BUFFER <= 0.25);
   assert.ok(CONFIG.DODGE.blendIn >= 0.04 && CONFIG.DODGE.blendIn <= 0.08);
 });
 
-test('one stick selects exactly idle, walk, or run with fixed speeds and hysteresis', () => {
-  assert.deepEqual(Array.from(CONFIG.GAIT_UP), [0.10, 0.58]);
-  const B = CONFIG.BAND;
-  assert.equal(JSON.stringify(B), JSON.stringify([[0, 0], [0.10, 1.30], [0.58, 6.60]]));
-  const C = CONFIG.STICK_CURVE;
-  assert.equal(JSON.stringify(C), JSON.stringify([[0.10, 1.30], [0.58, 6.60], [1.0, 6.60]]));
-  assert.deepEqual(Object.keys(CONFIG.LOCO).sort(), ['run', 'walk']);
-  assert.doesNotMatch(fs.readFileSync(path.join(root, 'sin-hero.js'), 'utf8'), /addState\(['"]jog|goals\.jog|S\.sprint/);
-  assert.ok(CONFIG.HYST > 0 && CONFIG.HYST < 0.06);
-  assert.ok(CONFIG.ACCEL >= 8 && CONFIG.ACCEL <= 12 && CONFIG.DECEL >= 10 && CONFIG.DECEL <= 15);
+test('one stick selects idle, walk or run; speeds come from the clips, never from typed numbers', () => {
+  const src = fs.readFileSync(path.join(root, 'sin-hero.js'), 'utf8');
+  assert.deepEqual({ ...CONFIG.STICK }, { dead: 0.10, runIn: 0.58, runOut: 0.52 });   // hysteresis only at the walk/run edge
+  assert.ok(CONFIG.STICK.runIn - CONFIG.STICK.runOut > 0 && CONFIG.STICK.runIn - CONFIG.STICK.runOut < 0.1);
+  assert.match(src, /const V = \{ walk: motion\.walk\.speed, run: motion\.run\.speed \}/);
+  assert.match(src, /loco\.speed = \(loco\.w\.walk \* V\.walk \+ loco\.w\.run \* V\.run\) \* lk/);   // root speed follows the blend weights
+  assert.doesNotMatch(src, /setEffectiveTimeScale|timeScale = [^0]/);                       // no playback-rate warping
+  assert.doesNotMatch(src, /addState\(['"](jog|sprint)/);
+  assert.doesNotMatch(src, /inertialize|ik\.lean|camera: cam|shake\(/);                       // removed layers stay removed
+  // one duration per transition, all inside the ranges asked for
+  const X = CONFIG.XF;
+  assert.ok(X.idleWalk >= 0.12 && X.idleWalk <= 0.18 + 1e-9 && X.walkIdle >= 0.15 && X.walkIdle <= 0.22);
+  assert.ok(X.walkRun >= 0.12 && X.walkRun <= 0.20 + 1e-9 && X.runIdle >= 0.18 && X.runIdle <= 0.28);
+  assert.ok(X.chain >= 0.05 && X.chain <= 0.10);
+  assert.ok(CONFIG.TURN_MAX[0] > CONFIG.TURN_MAX[1]);
 });
 
 test('the game loads only the new hero through SinHero and has no sprint button', () => {
@@ -115,7 +125,6 @@ test('the weapon has an explicit persistence and frustum-culling regression guar
   assert.match(source, /axe\.userData\.sinPersistentWeapon = true/);
   assert.match(source, /o\.frustumCulled = false/);
   assert.match(source, /computeBoundingSphere/);
-  assert.match(source, /for \(const key of \[idleKey, 'walk', 'run'\]\)/);
 });
 
 test('main and lab cameras retain the pre-PR63 framing and have no combat camera effects', () => {

@@ -510,9 +510,14 @@
     const used = new Set();
     function markUsed(list) { for (let i = 0; i < list.length; i++) if (list[i].mesh) used.add(list[i].mesh); }
     markUsed(state.grass); markUsed(state.palms); markUsed(state.walls);
+    // The hero (and the axe on its bone sockets) moves: never treat it as static city dressing. Its cached
+    // world position would be frustum-tested / far-hidden from the spawn point, which made the axe vanish
+    // when the camera turned and for good after the Ishtar gate.
+    function onHero(o) { for (let p = o; p; p = p.parent) { if (p.userData && (p.userData.sinHeroRoot || p.userData.sinPersistentWeapon)) return true; } return false; }
     scene.traverse(function (o) {
       if ((!o.isMesh && !o.isInstancedMesh) || used.has(o)) return;
       if (o.userData && (o.userData.sinHlod || o.userData.sinHlodImpostor)) return;
+      if (onHero(o)) return;
       const name = ((o.name || '') + ' ' + ((o.parent && o.parent.name) || '')).toLowerCase();
       if (/sky|cloud|sun|hero|player|water|canal|ground|terrain|floor|road|path|gate|ishtar|portal|door|shadow|fill|hemi/.test(name)) return;
       // Skip enormous unique meshes (ground plane, palace shell) — only
