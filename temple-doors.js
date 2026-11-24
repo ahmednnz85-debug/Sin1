@@ -45,11 +45,9 @@
   }
 
   function armRig(hero) {
-    const arms = ['Left','Right'].map(side => [
-      hero.getObjectByName(side+'Arm'), hero.getObjectByName(side+'ForeArm'),
-      hero.getObjectByName(side+'Hand'), hero.getObjectByName(side+'HandMiddle1')
-    ]);
-    if (arms.some(nodes => nodes.some(node => !node))) throw new Error('Temple door push requires the hero arm and hand bones');
+    const mapped = window.SinHero && window.SinHero.resolveRig ? window.SinHero.resolveRig(hero) : null;
+    if (!mapped || !mapped.valid) throw new Error('Temple door push requires the runtime hero arm and hand rig');
+    const arms = [mapped.left, mapped.right].map(r => [r.upperarm, r.lowerarm, r.hand, r.palm || r.hand]);
     let saved = null;
     function restore() {
       if (!saved) return;

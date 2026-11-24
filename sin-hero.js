@@ -74,6 +74,21 @@
   const sstep = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
   const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
   const damp = (k, dt) => 1 - Math.exp(-k * dt);
+  // Canonical runtime rig map shared by combat, IK and streamed door scenes.
+  function resolveRig(model) {
+    const root = model && model.model ? model.model : model;
+    const find = names => { for (const n of names) { const o = root && root.getObjectByName && root.getObjectByName(n); if (o) return o; } return null; };
+    const side = s => ({
+      clavicle: find(['clavicle_' + s, s === 'l' ? 'LeftShoulder' : 'RightShoulder']),
+      upperarm: find(['upperarm_' + s, s === 'l' ? 'LeftArm' : 'RightArm']),
+      lowerarm: find(['lowerarm_' + s, s === 'l' ? 'LeftForeArm' : 'RightForeArm']),
+      hand: find(['hand_' + s, s === 'l' ? 'LeftHand' : 'RightHand']),
+      palm: find(['middle_02_' + s, 'middle_01_' + s, 'index_02_' + s, 'thumb_02_' + s])
+    });
+    const out = { left: side('l'), right: side('r'), weapon: find(['weapon_r']), handSocket: find(['Axe_RightHand_Socket']), backSocket: find(['Axe_Back_Socket']), backHook: find(['Axe_Back_Hook']), axe: find(['Axe']) };
+    out.valid = ['left', 'right'].every(s => out[s].upperarm && out[s].lowerarm && out[s].hand) && !!out.weapon;
+    return out;
+  }
   function curve(pts, x) {
     if (x <= pts[0][0]) return pts[0][1];
     for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) { const a = pts[i - 1], b = pts[i]; return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); }
@@ -443,7 +458,9 @@
     const ik = CharacterIK(model, events);
 
     // ---------------- weapon: sockets and data-driven attach transforms (no world-space jump on re-parent)
-    const axe = model.getObjectByName('Axe'), backSock = model.getObjectByName('Axe_Back_Socket'), handSock = model.getObjectByName('Axe_RightHand_Socket');
+    const rig = resolveRig(model);
+    const axe = rig.axe, backSock = rig.backSocket, handSock = rig.handSocket;
+    if (!rig.valid || !axe || !backSock || !handSock) throw new Error('SinHero: runtime rig mapping is incomplete');
     const ATT = holster && holster.attach ? holster.attach : {
       back: { translation: [0.0026894831, -0.2646781504, -0.0490150489], rotation: [0.0772297904, 0.8029142022, 0.1443045437, 0.5731846690] },
       hand: { translation: [0.0159736704, 0.0025291829, 0.0006476183], rotation: [0.1958154589, 0.7226944566, -0.0331940479, 0.6620175243] }
@@ -519,6 +536,9 @@
         if (W.t >= 0.367) { W.state = 'Holstered'; S.unequip.a = 0; events.emit('weapon:holstered'); if (W.queued === 'equip') { W.queued = null; requestEquip(); } }
       } else { S.equip.a = 0; S.unequip.a = 0; }
       // right-hand grip around the handle whenever the axe is in the hand (locomotion clips have an open hand)
+      // Keep the authored local attachment after animation tracks and re-parenting.
+      if (W.seat === 'hand' && axe.parent !== handSock) seat('hand');
+      if (W.seat === 'back' && axe.parent !== backSock) seat('back');
       const inHand = W.seat === 'hand';
       const gw = inHand && !combat.act ? 1 : 0;
       S.grip.g += (gw - S.grip.g) * damp(gw ? 30 : 18, dt); if (!gw && S.grip.g < 1e-3) S.grip.g = 0;
@@ -898,7 +918,7 @@
 
     // ================================================================== public
     const hero = {
-      root, model, mixer: anim.mixer, events, lib,
+      root, model, mixer: anim.mixer, events, lib, rig,
       update,
       weapon: { state: () => weapon.state, equip: requestEquip, unequip: requestUnequip, seat: () => weapon.seat, canThrow: () => false },
       combat: {
@@ -918,7 +938,7 @@
       debug() {
         const w = {}; for (const s of anim.list) if (s.w[0] + s.w[1] + s.w[2] + s.w[3] > 1e-3) w[s.key] = s.w.map(x => +x.toFixed(3));
         return {
-          weapon: weapon.state, seat: weapon.seat, axeParent: axe.parent && axe.parent.name, speed: +loco.speed.toFixed(3), target: +loco.target.toFixed(3), gait: loco.gait,
+          weapon: weapon.state, seat: weapon.seat, axeParent: axe.parent && axe.parent.name, axeVisible: axe.visible !== false, axeScale: +axe.scale.x.toFixed(3), speed: +loco.speed.toFixed(3), target: +loco.target.toFixed(3), gait: loco.gait,
           phase: +loco.phase.toFixed(3), combat: hero.combat.state(), attackTime: combat.act ? +combat.act.st.time.toFixed(3) : null, queued: combat.act ? combat.act.queued : null,
           push: pushState(), weights: w, activeActions: anim.activeActions(), totalActions: anim.totalActions(), listeners: events.count(), camCombat: +cam.combat.toFixed(3), shake: +cam.shake.toFixed(3),
           ik: ik.state(), stride: STRIDE, nat: NAT
@@ -933,5 +953,5 @@
     return hero;
   }
 
-  window.SinHero = { create, InputController, buildHUD, hudSync, CONFIG: { BAND, STICK_CURVE, GAIT_UP, HYST, ACCEL, DECEL, BUFFER, ATTACKS, COMBO, DODGE, LOCO, CLIPS, JOG_CUT, HERO_SCALE } };
+  window.SinHero = { create, resolveRig, InputController, buildHUD, hudSync, CONFIG: { BAND, STICK_CURVE, GAIT_UP, HYST, ACCEL, DECEL, BUFFER, ATTACKS, COMBO, DODGE, LOCO, CLIPS, JOG_CUT, HERO_SCALE } };
 })();
