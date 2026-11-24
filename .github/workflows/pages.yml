@@ -12,16 +12,15 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write   # list / delete this run's own github-pages artifact (re-run safety)
 
+# Queue deployments instead of cancelling one that is already publishing.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -31,10 +30,45 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Stage the playable site
+        run: python3 .github/pages/stage.py "$RUNNER_TEMP/site"
+      - name: Verify runtime files
+        run: python3 .github/pages/verify-bundle.py "$RUNNER_TEMP/site"
+      # A re-run of this job would add a second "github-pages" artifact to the same run and
+      # deploy-pages refuses duplicates ("Multiple artifacts named github-pages"). Remove the old one first.
+      - name: Remove github-pages artifacts left by earlier attempts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[] | select(.name=="github-pages") | .id'); do
+            echo "deleting stale artifact $id"; gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+          done
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # deploy-pages looks the artifact up once, with no retry. Right after a large upload the run's
+      # artifact list can still be empty ("No artifacts named github-pages"); wait until it is listed.
+      - name: Wait until the github-pages artifact is listed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 30); do
+            n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '[.artifacts[] | select(.name=="github-pages" and (.expired|not))] | length')
+            echo "attempt $i: $n github-pages artifact(s)"
+            [ "$n" = "1" ] && exit 0
+            sleep 5
+          done
+          echo "::error::github-pages artifact not available (count=$n)"; exit 1
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
