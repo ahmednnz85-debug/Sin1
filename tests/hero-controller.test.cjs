@@ -32,7 +32,7 @@ test('the hero file carries every clip the controller uses, the axe and both soc
   assert.ok(Math.abs(h.clips.Axe_Unequip.switch.time - 0.2168) < 1e-3);
   const dur = Object.fromEntries(j.animations.map(a => [a.name, Math.max(...a.samplers.map(s => j.accessors[s.input].max[0]))]));
   assert.ok(Math.abs(dur.Axe_Equip - 0.4) < 0.01 && Math.abs(dur.Axe_Unequip - 0.367) < 0.01);
-  assert.ok(CONFIG.JOG_CUT[1] <= dur.kr_run_to_sprint_sword);
+  assert.ok(dur.sprint_loop_quaternius > 0);
 });
 
 test('runtime rig mapping uses the new arm chain and door integration does not use Mixamo names', () => {
@@ -71,13 +71,14 @@ test('attack windows lie inside their clips and chain points follow the active f
   assert.ok(CONFIG.DODGE.blendIn >= 0.04 && CONFIG.DODGE.blendIn <= 0.08);
 });
 
-test('one stick: zones, contiguous speed bands, monotonic curve, hysteresis, accel/decel ranges', () => {
-  assert.deepEqual(Array.from(CONFIG.GAIT_UP), [0.10, 0.55, 0.75, 0.90]);
+test('one stick selects exactly idle, walk, or run with fixed speeds and hysteresis', () => {
+  assert.deepEqual(Array.from(CONFIG.GAIT_UP), [0.10, 0.58]);
   const B = CONFIG.BAND;
-  for (let i = 2; i < B.length; i++) assert.equal(B[i][0], B[i - 1][1]);
-  assert.deepEqual(Array.from(B[1]), [0.8, 1.8]); assert.deepEqual(Array.from(B[2]), [1.8, 3.2]); assert.deepEqual(Array.from(B[3]), [3.2, 4.8]);
+  assert.equal(JSON.stringify(B), JSON.stringify([[0, 0], [0.10, 1.30], [0.58, 6.60]]));
   const C = CONFIG.STICK_CURVE;
-  for (let i = 1; i < C.length; i++) { assert.ok(C[i][0] > C[i - 1][0]); assert.ok(C[i][1] > C[i - 1][1]); }
+  assert.equal(JSON.stringify(C), JSON.stringify([[0.10, 1.30], [0.58, 6.60], [1.0, 6.60]]));
+  assert.deepEqual(Object.keys(CONFIG.LOCO).sort(), ['run', 'walk']);
+  assert.doesNotMatch(fs.readFileSync(path.join(root, 'sin-hero.js'), 'utf8'), /addState\(['"]jog|goals\.jog|S\.sprint/);
   assert.ok(CONFIG.HYST > 0 && CONFIG.HYST < 0.06);
   assert.ok(CONFIG.ACCEL >= 8 && CONFIG.ACCEL <= 12 && CONFIG.DECEL >= 10 && CONFIG.DECEL <= 15);
 });
@@ -106,4 +107,13 @@ test('the runtime hero is the master file minus unplayed clips (mesh, skin, text
     for (const att in p.attributes) assert.deepEqual(acc(r, r.meshes[i].primitives[k].attributes[att]), acc(m, p.attributes[att]));
   }));
   assert.deepEqual(r.animations.map(a => a.name).sort(), Object.values(CONFIG.CLIPS).sort());
+});
+
+test('the weapon has an explicit persistence and frustum-culling regression guard', () => {
+  const source = fs.readFileSync(path.join(root, 'sin-hero.js'), 'utf8');
+  assert.match(source, /root\.userData\.keepDuringPalace = true/);
+  assert.match(source, /axe\.userData\.sinPersistentWeapon = true/);
+  assert.match(source, /o\.frustumCulled = false/);
+  assert.match(source, /computeBoundingSphere/);
+  assert.match(source, /for \(const key of \[idleKey, 'walk', 'run'\]\)/);
 });

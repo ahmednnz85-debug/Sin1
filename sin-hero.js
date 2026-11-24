@@ -22,30 +22,25 @@
 
   // ------------------------------------------------------------------ constants
   const HERO_SCALE = 1.85;                       // model is ~1 unit tall -> ~1.84 m
-  const BAND = [[0, 0], [0.8, 1.8], [1.8, 3.2], [3.2, 4.8], [4.8, 6.6]];   // idle walk jog run sprint (m/s)
-  const STICK_CURVE = [[0.10, 0.8], [0.30, 1.2], [0.55, 1.8], [0.75, 3.2], [0.90, 4.8], [1.0, 6.6]];
-  const GAIT_UP = [0.10, 0.55, 0.75, 0.90];      // stick deflection that enters gait i+1
+  const BAND = [[0, 0], [0.10, 1.30], [0.58, 6.60]]; // idle, walk, run (fixed m/s)
+  const STICK_CURVE = [[0.10, 1.30], [0.58, 6.60], [1.0, 6.60]]; // state selection only
+  const GAIT_UP = [0.10, 0.58];                  // walk -> run threshold; release uses 0.52 hysteresis
   const HYST = 0.04;
   const ACCEL = 10.5, DECEL = 13.5;              // m/s²
   const BUFFER = 0.22;                           // input buffer (s)
 
   // Clips used (everything else in the file is dropped after load).
   const CLIPS = {
-    idle: 'idle_impatient', cidle: 'Axe_CombatIdle', walk: 'walk_casual', sprint: 'sprint_loop_quaternius',
-    jogSrc: 'kr_run_to_sprint_sword',
+    idle: 'idle_impatient', cidle: 'Axe_CombatIdle', walk: 'walk_casual', run: 'sprint_loop_quaternius',
     atkR: 'Attack_Right', atkL: 'Attack_Left', finH: 'Finisher_Heavy', finJ: 'Finisher_Jump',
     dodge: 'km_dodge_back', dodgeM: 'km_dodge_back_mirror', stagger: 'fall', knock: 'km_knockdown_getup_mirror',
     push: 'push_object', pushEnter: 'push_enter_quaternius', equip: 'Axe_Equip', unequip: 'Axe_Unequip'
   };
-  // Jog: one steady stride of the MVN run (left contact 1.842 s -> next left contact 2.675 s).
-  const JOG_CUT = [1.842, 2.675];
-
   // Locomotion nodes. nat = planted-foot speed of the in-place clip (model units / s, measured at 120 Hz),
   // cycles = strides in the clip, ph0 = time of the left-foot contact (phase 0) so the nodes stay in step.
   const LOCO = {
     walk: { nat: 0.705, cycles: 2, ph0: 0.417 },
-    jog: { nat: 1.38, cycles: 1, ph0: 0.07 },
-    sprint: { nat: 4.60, cycles: 1, ph0: 0.05 }
+    run: { nat: 4.60, cycles: 1, ph0: 0.05 }
   };
 
   // Attack data, from the axe-head trajectory of each clip (speed peaks) + the file's combat metadata.
@@ -145,13 +140,10 @@
       c.tracks = c.tracks.filter(t => { const n = nodeOf(t.name); return n !== 'Axe' && n !== 'Axe_Back_Socket' && n !== 'Axe_Back_Hook' && (keepSocket || n !== 'Axe_RightHand_Socket'); });
       lib[k] = c;
     }
-    const jog = resample(lib.jogSrc, JOG_CUT[0], JOG_CUT[1], 'Sin_Jog_Cycle', 60);
-    closeLoop(jog, 0.16);
     const idlePel = lib.idle.tracks.find(t => t.name === 'pelvis.position');
     const ref = idlePel ? [idlePel.values[0], idlePel.values[1]] : null;
-    centerPelvis(jog, ref);
-    lib.jog = jog; delete lib.jogSrc;
-    closeLoop(lib.sprint, 0.06);
+    centerPelvis(lib.run, ref);
+    closeLoop(lib.run, 0.06);
     // Drop every other clip: one hero, one set of clips in memory.
     gltf.animations.length = 0;
     for (const k in lib) gltf.animations.push(lib[k]);
@@ -187,7 +179,7 @@
       S[key] = s; list.push(s); return s;
     }
     addState('idle', lib.idle, true); addState('cidle', lib.cidle, true);
-    addState('walk', lib.walk, true); addState('jog', lib.jog, true); addState('sprint', lib.sprint, true);
+    addState('walk', lib.walk, true); addState('run', lib.run, true);
     for (const k of ['atkR', 'atkL', 'finH', 'finJ']) addState(k, lib[k], false);
     addState('dodge', lib.dodge, false); addState('dodgeM', lib.dodgeM, false);
     addState('guard', lib.dodge, false, { time: GUARD_T });
@@ -333,7 +325,7 @@
       let dx = e.clientX - sOx, dy = e.clientY - sOy; const l = Math.hypot(dx, dy);
       if (l > sMax) { dx *= sMax / l; dy *= sMax / l; }
       st.x = dx / sMax; st.y = -dy / sMax; st.mag = Math.min(1, l / sMax); knobAt(dx, dy);
-      stick.dataset.zone = st.mag < GAIT_UP[0] ? '0' : st.mag < GAIT_UP[1] ? '1' : st.mag < GAIT_UP[2] ? '2' : st.mag < GAIT_UP[3] ? '3' : '4';
+      stick.dataset.zone = st.mag < GAIT_UP[0] ? '0' : st.mag < GAIT_UP[1] ? '1' : '2';
     }
     function releaseStick() { sId = null; st.x = st.y = st.mag = 0; knobAt(0, 0); stick.dataset.zone = '0'; stick.classList.remove('active'); }
     function playing() { return opts.enabled ? opts.enabled() : true; }
@@ -449,6 +441,10 @@
     const gltf = cfg.gltf, events = AnimationEvents();
     const model = gltf.scene, root = new T.Group(); root.name = 'SinHeroRoot';
     const hs = cfg.scale || HERO_SCALE; model.scale.setScalar(hs); root.add(model);
+    // The hero is a session-persistent root. The weapon is attached to moving
+    // bones, so its bounds are not reliable for camera frustum tests.
+    root.userData.keepDuringPalace = true;
+    model.userData.keepDuringPalace = true;
     model.traverse(o => { if (o.isSkinnedMesh) o.frustumCulled = false; });
     const meta = (gltf.scenes && gltf.scenes[0] && gltf.scenes[0].userData) || model.userData || {};
     const holster = meta.axeHolster || null;
@@ -461,6 +457,32 @@
     const rig = resolveRig(model);
     const axe = rig.axe, backSock = rig.backSocket, handSock = rig.handSocket;
     if (!rig.valid || !axe || !backSock || !handSock) throw new Error('SinHero: runtime rig mapping is incomplete');
+    axe.userData.keepDuringPalace = true;
+    axe.userData.sinPersistentWeapon = true;
+    axe.traverse(o => {
+      if (!o.userData) o.userData = {};
+      o.userData.keepDuringPalace = true;
+      o.userData.sinPersistentWeapon = true;
+      if (o.isMesh) {
+        // Do not disable culling for the whole hero: only the bone-attached
+        // weapon needs this exception because its animated bounds can lag.
+        o.frustumCulled = false;
+        if (o.geometry) {
+          if (o.geometry.computeBoundingBox) o.geometry.computeBoundingBox();
+          if (o.geometry.computeBoundingSphere) o.geometry.computeBoundingSphere();
+          o.geometry.userData.sinPersistentWeapon = true;
+        }
+        const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        mats.forEach(m => {
+          if (!m) return;
+          m.userData = m.userData || {};
+          m.userData.sinPersistentWeapon = true;
+          ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'bumpMap'].forEach(k => {
+            if (m[k]) { m[k].userData = m[k].userData || {}; m[k].userData.sinPersistentWeapon = true; }
+          });
+        });
+      }
+    });
     const ATT = holster && holster.attach ? holster.attach : {
       back: { translation: [0.0026894831, -0.2646781504, -0.0490150489], rotation: [0.0772297904, 0.8029142022, 0.1443045437, 0.5731846690] },
       hand: { translation: [0.0159736704, 0.0025291829, 0.0006476183], rotation: [0.1958154589, 0.7226944566, -0.0331940479, 0.6620175243] }
@@ -684,45 +706,39 @@
 
     // ================================================================== LocomotionController
     function gaitFor(mag) {
-      let g = loco.gait;
-      while (g < 4 && mag > GAIT_UP[g] + (g === 0 ? 0 : HYST)) g++;
-      while (g > 0 && mag < GAIT_UP[g - 1] - (g === 1 ? 0 : HYST)) g--;
-      return g;
+      // Three states only: idle, walk, run. Hysteresis is deliberately applied
+      // only at the walk/run boundary; stick magnitude never changes speed.
+      if (mag < GAIT_UP[0]) return 0;
+      if (loco.gait === 2) return mag > 0.52 ? 2 : 1;
+      return mag > GAIT_UP[1] ? 2 : 1;
     }
     function targetSpeed(mag, cap) {
       loco.gait = gaitFor(mag);
-      if (loco.gait === 0) return 0;
-      const b = BAND[loco.gait];
-      return Math.min(cap, clamp(curve(STICK_CURVE, mag), b[0], b[1]));
+      return Math.min(cap, loco.gait === 2 ? BAND[2][1] : loco.gait === 1 ? BAND[1][1] : 0);
     }
-    // speed -> blend-space weights (idle/walk/jog/sprint) + shared phase advance, stride-synced
-    const LC = cfg.loco ? { walk: Object.assign({}, LOCO.walk, cfg.loco.walk), jog: Object.assign({}, LOCO.jog, cfg.loco.jog), sprint: Object.assign({}, LOCO.sprint, cfg.loco.sprint) } : LOCO;
-    const NAT = { walk: LC.walk.nat * hs, jog: LC.jog.nat * hs, sprint: LC.sprint.nat * hs };
-    const CYC = { walk: S.walk.dur / LC.walk.cycles, jog: S.jog.dur / LC.jog.cycles, sprint: S.sprint.dur / LC.sprint.cycles };
-    const STRIDE = { walk: NAT.walk * CYC.walk, jog: NAT.jog * CYC.jog, sprint: NAT.sprint * CYC.sprint };
-    const lw = { idle: 0, walk: 0, jog: 0, sprint: 0 };
+    // Fixed-speed state blend. The stick selects a state and direction only.
+    const LC = cfg.loco ? { walk: Object.assign({}, LOCO.walk, cfg.loco.walk), run: Object.assign({}, LOCO.run, cfg.loco.run) } : LOCO;
+    const NAT = { walk: LC.walk.nat * hs, run: LC.run.nat * hs };
+    const CYC = { walk: S.walk.dur / LC.walk.cycles, run: S.run.dur / LC.run.cycles };
+    const STRIDE = { walk: NAT.walk * CYC.walk, run: NAT.run * CYC.run };
+    const lw = { idle: 0, walk: 0, run: 0 };
     function locoWeights(v, paced) {
-      lw.idle = lw.walk = lw.jog = lw.sprint = 0;
-      if (paced) { lw.walk = 1; return; }
-      if (v < 0.03) { lw.idle = 1; return; }
-      if (v < 0.8) { const k = sstep(v / 0.8); lw.idle = 1 - k; lw.walk = k; return; }
-      if (v < 1.8) { lw.walk = 1; return; }
-      if (v < 2.6) { const k = sstep((v - 1.8) / 0.8); lw.walk = 1 - k; lw.jog = k; return; }
-      if (v < 3.4) { lw.jog = 1; return; }
-      const k = sstep((v - 3.4) / 3.0); lw.jog = 1 - k; lw.sprint = k;
+      lw.idle = lw.walk = lw.run = 0;
+      if (paced || v > 0.03) { if (loco.gait === 2) lw.run = 1; else lw.walk = 1; }
+      else lw.idle = 1;
     }
     function locoStep(dt, v, paced, idleKey, turnStep) {
       locoWeights(v, paced);
       const m = 1 - lw.idle;
-      const stride = (lw.walk * STRIDE.walk + lw.jog * STRIDE.jog + lw.sprint * STRIDE.sprint) / Math.max(1e-4, m);
-      const vv = paced ? Math.max(0.62, v) : Math.max(v, 0.55);
+      const stride = (lw.walk * STRIDE.walk + lw.run * STRIDE.run) / Math.max(1e-4, m);
+      const vv = paced ? (loco.gait === 2 ? BAND[2][1] : BAND[1][1]) : (loco.gait === 2 ? BAND[2][1] : BAND[1][1]);
       let dphi = m > 0 ? vv / stride * dt : 0;
       if (turnStep > 0 && m < 0.5) { dphi = Math.max(dphi, turnStep * dt / CYC.walk * 0.9); lw.walk = Math.max(lw.walk, turnStep * 0.55); }
       const ph0 = loco.phase; loco.phase = (loco.phase + dphi) % 1;
       if (m > 0.3 && dphi > 0) { if (loco.phase < ph0) events.emit('foot', { side: 'l', speed: v }); else if (ph0 < 0.5 && loco.phase >= 0.5) events.emit('foot', { side: 'r', speed: v }); }
-      for (const k of ['walk', 'jog', 'sprint']) S[k].time = LC[k].ph0 + loco.phase * CYC[k];
-      goals[idleKey] = (goals[idleKey] || 0) + Math.max(0, 1 - lw.walk - lw.jog - lw.sprint);
-      goals.walk = lw.walk; goals.jog = lw.jog; goals.sprint = lw.sprint;
+      for (const k of ['walk', 'run']) S[k].time = LC[k].ph0 + loco.phase * CYC[k];
+      goals[idleKey] = (goals[idleKey] || 0) + Math.max(0, 1 - lw.walk - lw.run);
+      goals.walk = lw.walk; goals.run = lw.run;
     }
 
     // ================================================================== InteractionController
@@ -882,7 +898,7 @@
       if (!owns || (pushing && push.mode === 'out')) {
         const animV = ctx.paced ? loco.extSpeed : loco.speed;
         locoStep(dt, animV, !!ctx.paced && ctx.pacedMove !== false, idleKey, loco.turnStep);
-        if (pushing) { const k = 1 - push.w; for (const key of [idleKey, 'walk', 'jog', 'sprint']) goals[key] = (goals[key] || 0) * k; }
+        if (pushing) { const k = 1 - push.w; for (const key of [idleKey, 'walk', 'run']) goals[key] = (goals[key] || 0) * k; }
       }
       if (S.idle.b < 1e-3 && !goals.idle) S.idle.time = 0;
       S.idle.time += dt; S.cidle.time += dt;
@@ -912,7 +928,7 @@
       cam.roll = Math.sin(f * 0.9) * s * 0.008;
 
       result.speed = owns ? 0 : loco.speed; result.gait = loco.gait; result.moving = !owns && loco.speed > 0.05; result.facing = facing;
-      result.running = !owns && loco.gait >= 3;
+      result.running = !owns && loco.gait === 2;
       return result;
     }
 
@@ -932,8 +948,8 @@
       compat: {
         startPush, releasePush, pushing: () => !!push.mode, pushState,
         locked: () => !!(combat.act || combat.dodge || combat.react) && !(combat.act && combat.act.st.time >= combat.act.A.move),
-        state: () => push.mode ? 'push' : combat.act ? combat.act.key : combat.dodge ? 'dodge' : ['idle', 'walk', 'jog', 'run', 'sprint'][loco.gait],
-        pushClipRef: () => lib.push, setWalkScale() {}, runSample: () => ({ time: S.sprint.time, dur: S.sprint.dur, loop: T.LoopRepeat, w: S.sprint.w[0] })
+        state: () => push.mode ? 'push' : combat.act ? combat.act.key : combat.dodge ? 'dodge' : ['idle', 'walk', 'run'][loco.gait],
+        pushClipRef: () => lib.push, setWalkScale() {}, runSample: () => ({ time: S.run.time, dur: S.run.dur, loop: T.LoopRepeat, w: S.run.w[0] })
       },
       debug() {
         const w = {}; for (const s of anim.list) if (s.w[0] + s.w[1] + s.w[2] + s.w[3] > 1e-3) w[s.key] = s.w.map(x => +x.toFixed(3));
@@ -953,5 +969,5 @@
     return hero;
   }
 
-  window.SinHero = { create, resolveRig, InputController, buildHUD, hudSync, CONFIG: { BAND, STICK_CURVE, GAIT_UP, HYST, ACCEL, DECEL, BUFFER, ATTACKS, COMBO, DODGE, LOCO, CLIPS, JOG_CUT, HERO_SCALE } };
+  window.SinHero = { create, resolveRig, InputController, buildHUD, hudSync, CONFIG: { BAND, STICK_CURVE, GAIT_UP, HYST, ACCEL, DECEL, BUFFER, ATTACKS, COMBO, DODGE, LOCO, CLIPS, HERO_SCALE } };
 })();
