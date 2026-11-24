@@ -35,6 +35,28 @@ test('the hero file carries every clip the controller uses, the axe and both soc
   assert.ok(CONFIG.JOG_CUT[1] <= dur.kr_run_to_sprint_sword);
 });
 
+test('runtime rig mapping uses the new arm chain and door integration does not use Mixamo names', () => {
+  const j = glbJson('assets/Sin_hero_runtime.glb');
+  const nodes = new Set(j.nodes.map(n => n.name));
+  for (const n of ['clavicle_l', 'clavicle_r', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r', 'hand_l', 'hand_r', 'middle_02_l', 'middle_02_r']) {
+    assert.ok(nodes.has(n), 'runtime rig missing ' + n);
+  }
+  const heroSource = fs.readFileSync(path.join(root, 'sin-hero.js'), 'utf8');
+  const doorsSource = fs.readFileSync(path.join(root, 'temple-doors.js'), 'utf8');
+  assert.match(heroSource, /function resolveRig\(model\)/);
+  assert.match(heroSource, /handSocket: find\(\['Axe_RightHand_Socket'\]\)/);
+  assert.match(doorsSource, /SinHero\.resolveRig/);
+  assert.doesNotMatch(doorsSource, /side\+'Arm'/);
+  assert.doesNotMatch(doorsSource, /HandMiddle1/);
+});
+
+test('weapon attachment is reasserted after animation evaluation and exposes visibility diagnostics', () => {
+  const source = fs.readFileSync(path.join(root, 'sin-hero.js'), 'utf8');
+  assert.match(source, /axe\.parent !== handSock/);
+  assert.match(source, /axe\.parent !== backSock/);
+  assert.match(source, /axeVisible/);
+});
+
 test('attack windows lie inside their clips and chain points follow the active frames', () => {
   const j = glbJson(HERO);
   const dur = Object.fromEntries(j.animations.map(a => [a.name, Math.max(...a.samplers.map(s => j.accessors[s.input].max[0]))]));
