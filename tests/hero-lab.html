@@ -83,11 +83,10 @@ function step(dt) {
   facing = res.facing;
   const p = hero.root.position; p.y += (ground(p.x, p.z) - p.y) * Math.min(1, dt * 14);
   if (!input.cameraActive() && !lab.override?.camFixed) { let d = facing - yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); if (res.moving) yaw += d * (1 - Math.exp(-dt * 2.6)); }
-  const c = hero.camera.combat, dd = dist * (1 - .06 * c), cp = Math.cos(pitch), sh = .32 + .06 * c;
-  const hx = p.x - Math.cos(yaw) * sh, hy = p.y + 1.18 + .04 * c, hz = p.z + Math.sin(yaw) * sh;
+  const dd = dist, cp = Math.cos(pitch), sh = .32;
+  const hx = p.x - Math.cos(yaw) * sh, hy = p.y + 1.18, hz = p.z + Math.sin(yaw) * sh;
   camWant.set(hx - Math.sin(yaw) * cp * dd, hy + Math.sin(pitch) * dd, hz - Math.cos(yaw) * cp * dd);
   camera.position.lerp(camWant, 1 - Math.pow(.0008, dt)); camera.lookAt(hx, hy, hz);
-  camera.position.add(hero.camera.out); camera.rotateZ(hero.camera.roll);
   for (const d of dummies) { d.wob *= Math.exp(-dt * 5); d.g.rotation.x = Math.sin(performance.now() / 70) * d.wob * .4; d.flash *= Math.exp(-dt * 8); d.body.material.emissive.setRGB(d.flash * .6, d.flash * .25, 0); }
   lab.frames++;
 }

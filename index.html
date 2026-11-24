@@ -1813,7 +1813,7 @@ function clipFollowCamera(want,hx,hy,hz){
 const ease=t=>t*t*(3-2*t);
 const SKY_FADE_SECONDS=5.8,SKY_POST_GATE_DISTANCE=5.5;
 const skyTransition={gatePassed:false,started:false,elapsed:0,finished:false};
-const camShake=new THREE.Vector3();const camStart=new THREE.Vector3(6,1.6,-56),gateTop=new THREE.Vector3(0,9,0),want=new THREE.Vector3(),look=new THREE.Vector3();
+const camStart=new THREE.Vector3(6,1.6,-56),gateTop=new THREE.Vector3(0,9,0),want=new THREE.Vector3(),look=new THREE.Vector3();
 // cinematic intro path: start at the head of the walkway, sweep across the market stalls, then rise to the Ishtar gate, then settle behind the hero
 const cP0=new THREE.Vector3(-4.2,1.7,-71),cP1=new THREE.Vector3(3.6,2.4,-60),cP2=new THREE.Vector3(0,3.6,-46),cL0=new THREE.Vector3(-10.5,2.6,-60),cL1=new THREE.Vector3(10.5,2.6,-50),tmpP=new THREE.Vector3(),tmpL=new THREE.Vector3(),hv=new THREE.Vector3();
 const smx=(a,b,t)=>ease(Math.max(0,Math.min(1,(t-a)/(b-a))));
@@ -1888,12 +1888,11 @@ function loop(ts){requestAnimationFrame(loop);try{if(!window.__sinFirstTickLogge
   if(palaceWings)palaceWings.groundLibraryHero(heroRoot);
   if(window.__sinTraceOn)__sinTrace('pre-PalaceInterior.tick');if(window.PalaceInterior)PalaceInterior.tick(dt,{doorOpen:royalDoor.open(),hero:heroRoot,setFacing:v=>{heroYaw=v;yaw=v;ctrlYaw=v;ctrlStick=null;},camera,renderer,scene,portal:royalDoor.portal(),combat});if(window.__sinTraceOn)__sinTrace('PalaceInterior.tick');
   // camera
-  camera.position.sub(camShake);camShake.set(0,0,0);
-  const hp=heroRoot.position,cp=Math.cos(pitch),dEff=dist*(1-.07*hero.camera.combat);
+  const hp=heroRoot.position,cp=Math.cos(pitch);
   // over-the-shoulder pivot: shifted to the hero's right along the camera's right axis (controls still use yaw)
   const shK=window.SinGfx?SinGfx.camera.shoulder:0;
   const hx=hp.x-Math.cos(yaw)*shK,hy=hp.y+CAM_LOOK,hz=hp.z+Math.sin(yaw)*shK;
-  want.set(hx-Math.sin(yaw)*cp*dEff,hy+Math.sin(pitch)*dEff,hz-Math.cos(yaw)*cp*dEff);
+  want.set(hx-Math.sin(yaw)*cp*dist,hy+Math.sin(pitch)*dist,hz-Math.cos(yaw)*cp*dist);
   if(Math.abs(want.z)<GATE_HD+.5&&want.y<GATE_H)want.x=Math.max(-PASS+.3,Math.min(PASS-.3,want.x));
   want.y=Math.max(.5,want.y);
   let followCam=false;
@@ -1906,11 +1905,10 @@ function loop(ts){requestAnimationFrame(loop);try{if(!window.__sinFirstTickLogge
     camera.position.copy(tmpP);camera.lookAt(tmpL);}
   else if(royalDoor.updateCamera(dt)){}
   else if(window.PalaceInterior&&PalaceInterior.ownsCamera()){}
-  else if(insideHall&&window.PalaceInterior.followCamera&&PalaceInterior.followCamera(camera,hp,yaw,pitch,dEff,dt)){if(window.__sinTraceOn)__sinTrace('followCamera');}
+  else if(insideHall&&window.PalaceInterior.followCamera&&PalaceInterior.followCamera(camera,hp,yaw,pitch,dist,dt)){if(window.__sinTraceOn)__sinTrace('followCamera');}
   else{if(insideHall&&window.PalaceInterior.clampFollowTarget)window.PalaceInterior.clampFollowTarget(want);else{let ct=clipFollowCamera(want,hx,hy,hz);if(window.SinGfx)ct=SinGfx.smoothClip(ct,dt);if(ct<1){want.x=hx+(want.x-hx)*ct;want.y=hy+(want.y-hy)*ct;want.z=hz+(want.z-hz)*ct;}}camera.position.lerp(want,introT>=0?1-Math.pow(.0008,dt):1);followCam=true;}
   if(!lunarCamera&&window.PalaceInterior&&PalaceInterior.constrainCamera)PalaceInterior.constrainCamera(camera,hp);
   if(followCam)camera.lookAt(hx,hy,hz);
-  if(!lunarCamera&&!intro&&!doorCinematic&&hero.camera.shake>.002){camShake.copy(hero.camera.out);camera.position.add(camShake);if(followCam)camera.rotateZ(hero.camera.roll);}
   if(!lunarLock&&clue) lunar.advance(dt,clue,heroRoot,!intro&&!doorCinematic&&!interiorLock&&
     !combat.locked()&&!PalaceWings.locked()&&PalaceInterior.state()==='DONE');
   
