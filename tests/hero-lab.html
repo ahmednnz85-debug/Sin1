@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Sîn Hero Lab</title>
+<link rel="stylesheet" href="../sin-hud.css">
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#0b0805;color:#f6e8d0;font-family:system-ui,sans-serif;touch-action:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+#touch{position:fixed;inset:0;z-index:2;touch-action:none}
+#info{position:fixed;top:calc(6px + env(safe-area-inset-top,0px));left:8px;z-index:5;font:11px/1.35 ui-monospace,monospace;background:rgba(0,0,0,.5);padding:4px 8px;border-radius:6px;pointer-events:none;direction:ltr;white-space:pre}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}
+</script>
+</head>
+<body class="playing">
+<canvas id="c"></canvas>
+<div id="touch"></div>
+<div id="info">loading…</div>
+<script type="module">
+import * as THREE_ from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const THREE = { ...THREE_, GLTFLoader }; window.THREE = THREE;
+const src = await (await fetch('../sin-hero.js?' + Date.now())).text();
+const sc = document.createElement('script'); sc.textContent = src; document.body.appendChild(sc);
+const qs = new URLSearchParams(location.search);
+
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.shadowMap.enabled = true;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x2b2520); scene.fog = new THREE.Fog(0x2b2520, 18, 60);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+scene.add(new THREE.HemisphereLight(0xbcd0ff, 0x6b4a2a, 1.4));
+const sun = new THREE.DirectionalLight(0xffd2a0, 2.4); sun.position.set(-6, 10, -4); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12 }); scene.add(sun);
+function resize() { const w = innerWidth, h = innerHeight; renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+// ---- test world: tiled floor, a 3-step stair (IK), walls (collision), training dummies (hit detection)
+const floorTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#7d6a52'; g.fillRect(0, 0, 256, 256); g.strokeStyle = '#4a3c2c'; g.lineWidth = 3; for (let i = 0; i <= 256; i += 64) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 256); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(256, i); g.stroke(); } const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(30, 30); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ map: floorTex, roughness: .9 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const STEPS = [{ z0: 6, z1: 6.6, h: 0.16 }, { z0: 6.6, z1: 7.2, h: 0.32 }, { z0: 7.2, z1: 9.5, h: 0.48 }]; const STX = [-6, -2];
+const stone = new THREE.MeshStandardMaterial({ color: 0x9c8466, roughness: .85 });
+for (const s of STEPS) { const m = new THREE.Mesh(new THREE.BoxGeometry(STX[1] - STX[0], s.h, s.z1 - s.z0), stone); m.position.set((STX[0] + STX[1]) / 2, s.h / 2, (s.z0 + s.z1) / 2); m.castShadow = m.receiveShadow = true; scene.add(m); }
+const ground = (x, z) => { if (x < STX[0] || x > STX[1]) return 0; let h = 0; for (const s of STEPS) if (z >= s.z0 && z < s.z1) h = s.h; return h; };
+const WALLS = [[-12, 12, 13.5, 14.2], [11.5, 12.2, -12, 14], [-12.2, -11.5, -12, 14]];
+for (const w of WALLS) { const m = new THREE.Mesh(new THREE.BoxGeometry(w[1] - w[0], 3.2, w[3] - w[2]), stone); m.position.set((w[0] + w[1]) / 2, 1.6, (w[2] + w[3]) / 2); m.castShadow = m.receiveShadow = true; scene.add(m); }
+const collide = (x, z) => WALLS.some(w => x > w[0] - .35 && x < w[1] + .35 && z > w[2] - .35 && z < w[3] + .35);
+
+// ---- hero
+const gltf = await new GLTFLoader().loadAsync('../assets/' + (qs.get('file') || 'Sin_hero_runtime') + '.glb');
+gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+const hud = SinHero.buildHUD(document);
+let yaw = 0, pitch = 0.22, dist = 3.45;
+const input = SinHero.InputController({ el: { stick: hud.stick, knob: hud.knob, touch: document.getElementById('touch'), buttons: hud.buttons }, onCamera: (dx, dy) => { yaw -= dx * .005; pitch = Math.max(-.1, Math.min(1.1, pitch + dy * .004)); } });
+const hero = SinHero.create({ gltf, input, loco: qs.get('loco') ? JSON.parse(qs.get('loco')) : null });
+scene.add(hero.root);
+
+// training dummies
+const dummies = [];
+function addDummy(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(.08, .1, 1.9, 10), new THREE.MeshStandardMaterial({ color: 0x5a3e24 })); post.position.y = .95; g.add(post);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.32, .36, 1.0, 16), new THREE.MeshStandardMaterial({ color: 0xb59a6a, roughness: .95 })); body.position.y = 1.25; body.castShadow = true; g.add(body);
+  const d = { g, body, hits: 0, wob: 0, flash: 0, last: null };
+  d.target = { position: () => g.position, radius: .36, height: 1.9, onHit: info => { d.hits++; d.wob = info.heavy ? .45 : .25; d.flash = 1; d.last = info; } };
+  hero.combat.registerTarget(d.target); dummies.push(d); return d;
+}
+if (!qs.has('nodummy')) { addDummy(0, 3.2); addDummy(3, 1.5); }
+
+// ---- loop (deterministic stepping available for tests)
+const k = { yaw: 0 }; let facing = 0;
+const lab = window.__lab = { hero, input, scene, camera, renderer, dummies, ground, collide, frames: 0, fps: [], override: null, auto: !qs.has('manual') };
+const camWant = new THREE.Vector3();
+function step(dt) {
+  let fw = 0, st = 0, mag = 0;
+  if (lab.override) { ({ fw, st, mag } = lab.override); }
+  else { const r = input.read(); fw = r.fw; st = r.st; mag = r.mag; }
+  const sy = Math.sin(yaw), cy = Math.cos(yaw);
+  const dx = sy * fw - cy * st, dz = cy * fw + sy * st;
+  const res = hero.update({ dt, dirX: dx, dirZ: dz, mag, allowMove: true, allowAct: true, collide, ground: (x, z) => ground(x, z), facing, cap: 99 });
+  facing = res.facing;
+  const p = hero.root.position; p.y += (ground(p.x, p.z) - p.y) * Math.min(1, dt * 14);
+  if (!input.cameraActive() && !lab.override?.camFixed) { let d = facing - yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); if (res.moving) yaw += d * (1 - Math.exp(-dt * 2.6)); }
+  const c = hero.camera.combat, dd = dist * (1 - .06 * c), cp = Math.cos(pitch), sh = .32 + .06 * c;
+  const hx = p.x - Math.cos(yaw) * sh, hy = p.y + 1.18 + .04 * c, hz = p.z + Math.sin(yaw) * sh;
+  camWant.set(hx - Math.sin(yaw) * cp * dd, hy + Math.sin(pitch) * dd, hz - Math.cos(yaw) * cp * dd);
+  camera.position.lerp(camWant, 1 - Math.pow(.0008, dt)); camera.lookAt(hx, hy, hz);
+  camera.position.add(hero.camera.out); camera.rotateZ(hero.camera.roll);
+  for (const d of dummies) { d.wob *= Math.exp(-dt * 5); d.g.rotation.x = Math.sin(performance.now() / 70) * d.wob * .4; d.flash *= Math.exp(-dt * 8); d.body.material.emissive.setRGB(d.flash * .6, d.flash * .25, 0); }
+  lab.frames++;
+}
+lab.step = (n = 1, dt = 1 / 60) => { for (let i = 0; i < n; i++) step(dt); renderer.render(scene, camera); };
+lab.set = (fw, st, mag, camFixed) => { lab.override = mag == null ? null : { fw, st, mag, camFixed }; };
+lab.press = name => { input.st.presses.push({ name, t: performance.now() / 1000 }); };
+lab.hold = (name, on) => { input.st.held[name] = !!on; };
+lab.place = (x, z, f) => { hero.root.position.set(x, ground(x, z), z); facing = f || 0; yaw = facing; };
+lab.setYaw = y => { yaw = y; };
+lab.facing = () => facing;
+lab.yaw = () => yaw;
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (lab.auto) { step(dt); renderer.render(scene, camera); lab.fps.push(dt); if (lab.fps.length > 120) lab.fps.shift(); }
+  SinHero.hudSync(hud, hero, true);
+  if (lab.frames % 10 === 0) { const d = hero.debug(); document.getElementById('info').textContent = `speed ${d.speed.toFixed(2)} m/s  gait ${['idle','walk','jog','run','sprint'][d.gait]}  weapon ${d.weapon}  combat ${d.combat}\nactions ${d.activeActions}/${d.totalActions}  hits ${dummies.map(x => x.hits).join(',')}`; }
+}
+lab.ready = true;
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

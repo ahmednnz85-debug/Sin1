@@ -1,0 +1,58 @@
+/* Sîn — mobile combat HUD (Babylonian bronze / lunar). Shared by index.html and tests/hero-lab.html. */
+:root{--hud-l:clamp(78px,19vmin,108px);--hud-gold:#e1b76f;--hud-bronze:#a9783e;--hud-ink:rgba(14,11,8,.58)}
+#stick.sin-stick{position:fixed;z-index:4;display:none;pointer-events:none;
+  left:calc(22px + env(safe-area-inset-left,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  width:clamp(118px,31vmin,168px);height:clamp(118px,31vmin,168px);border-radius:50%;
+  background:radial-gradient(circle,rgba(20,15,10,.18) 0 40%,rgba(10,8,6,.42) 41% 100%);
+  border:1.5px solid rgba(225,183,111,.72);
+  box-shadow:inset 0 0 0 5px rgba(225,183,111,.07),inset 0 0 22px rgba(0,0,0,.45),0 8px 28px rgba(0,0,0,.32);transition:opacity .2s}
+#stick.sin-stick::before{content:"";position:absolute;inset:6px;border-radius:50%;pointer-events:none;
+  background:repeating-conic-gradient(from 0deg,rgba(225,183,111,.42) 0 1.2deg,transparent 1.2deg 15deg);
+  -webkit-mask:radial-gradient(circle,transparent 0 calc(50% - 7px),#000 calc(50% - 6px) 50%,transparent calc(50% + 1px));
+          mask:radial-gradient(circle,transparent 0 calc(50% - 7px),#000 calc(50% - 6px) 50%,transparent calc(50% + 1px))}
+#stick.sin-stick .ring-walk{position:absolute;left:50%;top:50%;width:55%;height:55%;transform:translate(-50%,-50%);border-radius:50%;
+  border:1px solid rgba(225,183,111,.22);background:radial-gradient(circle,rgba(225,183,111,.05),rgba(225,183,111,0) 70%)}
+#stick.sin-stick #knob{position:absolute;left:50%;top:50%;width:38%;height:38%;transform:translate(-50%,-50%);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 35% 28%,rgba(236,205,146,.92),rgba(128,88,40,.92) 55%,rgba(52,36,18,.95));
+  border:1px solid rgba(255,231,185,.85);box-shadow:0 4px 14px rgba(0,0,0,.55),inset 0 1px 2px rgba(255,255,255,.4),inset 0 -3px 6px rgba(0,0,0,.35)}
+#stick.sin-stick #knob svg{width:58%;height:58%;fill:rgba(40,26,10,.78)}
+#stick.sin-stick.active{border-color:rgba(242,207,140,.95)}
+#stick.sin-stick[data-zone="3"] .ring-walk,#stick.sin-stick[data-zone="4"] .ring-walk{border-color:rgba(225,183,111,.42)}
+#stick.sin-stick[data-zone="4"]{box-shadow:inset 0 0 0 5px rgba(225,183,111,.14),inset 0 0 22px rgba(0,0,0,.45),0 0 26px rgba(232,170,80,.35)}
+body.playing #stick.sin-stick{display:block}
+#combat-pad{position:fixed;z-index:4;display:none;pointer-events:none;
+  right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));
+  width:calc(var(--hud-l)*2.85);height:calc(var(--hud-l)*2.35)}
+body.playing #combat-pad{display:block}
+#combat-pad.off{opacity:.45}
+.sin-btn{position:absolute;pointer-events:auto;border-radius:50%;padding:0;margin:0;color:#f3e2bf;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;touch-action:none;
+  background:radial-gradient(circle at 38% 30%,rgba(58,44,28,.72),var(--hud-ink) 62%,rgba(6,5,4,.72));
+  border:1.5px solid rgba(225,183,111,.82);
+  box-shadow:inset 0 0 0 3px rgba(12,9,6,.55),inset 0 0 0 4.5px rgba(225,183,111,.32),0 6px 20px rgba(0,0,0,.38);
+  transition:transform .08s,filter .12s,opacity .2s,box-shadow .12s;-webkit-tap-highlight-color:transparent}
+.sin-btn::before{content:"";position:absolute;inset:3px;border-radius:50%;pointer-events:none;
+  background:repeating-conic-gradient(rgba(225,183,111,.38) 0 2deg,transparent 2deg 22.5deg);
+  -webkit-mask:radial-gradient(circle,transparent 0 calc(50% - 4px),#000 calc(50% - 3px));mask:radial-gradient(circle,transparent 0 calc(50% - 4px),#000 calc(50% - 3px))}
+.sin-btn svg{width:48%;height:48%;fill:none;stroke:currentColor;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 2px rgba(0,0,0,.7))}
+.sin-btn svg .f{fill:currentColor;stroke:none}.sin-btn svg .f2{fill:rgba(225,183,111,.22)}.sin-btn svg .arc{stroke-width:2.2;opacity:.75}
+.sin-btn span{font:700 clamp(8.5px,1.9vmin,11.5px)/1.1 "Noto Naskh Arabic",Tahoma,sans-serif;letter-spacing:0;color:#f6e7c6;text-shadow:0 1px 3px #000;white-space:nowrap}
+.sin-btn.pressed{transform:scale(.92);filter:brightness(1.3);box-shadow:inset 0 0 0 3px rgba(12,9,6,.55),inset 0 0 0 4.5px rgba(242,207,140,.6),0 0 22px rgba(232,170,80,.45)}
+.sin-btn.on{border-color:#f2cf8c;box-shadow:inset 0 0 0 3px rgba(12,9,6,.5),inset 0 0 0 4.5px rgba(242,207,140,.55),0 0 18px rgba(232,170,80,.4)}
+.sin-btn.busy{filter:brightness(1.15)}
+.sin-btn.disabled{opacity:.42}
+.sin-btn.hidden{opacity:0;pointer-events:none;transform:scale(.6)}
+/* layout (after the reference sheet): light is the anchor at the bottom-right corner */
+.b-light{right:0;bottom:0;width:var(--hud-l);height:var(--hud-l)}
+.b-light svg{width:54%;height:54%}
+.b-heavy{right:calc(var(--hud-l)*1.02);bottom:calc(var(--hud-l)*0.02);width:calc(var(--hud-l)*.70);height:calc(var(--hud-l)*.70)}
+.b-dodge{right:calc(var(--hud-l)*1.84);bottom:calc(var(--hud-l)*0.0);width:calc(var(--hud-l)*.62);height:calc(var(--hud-l)*.62)}
+.b-axe{right:calc(var(--hud-l)*.70);bottom:calc(var(--hud-l)*.86);width:calc(var(--hud-l)*.66);height:calc(var(--hud-l)*.66)}
+.b-block{right:calc(var(--hud-l)*-.02);bottom:calc(var(--hud-l)*1.16);width:calc(var(--hud-l)*.58);height:calc(var(--hud-l)*.58)}
+.b-interact{right:calc(var(--hud-l)*1.48);bottom:calc(var(--hud-l)*.86);width:calc(var(--hud-l)*.52);height:calc(var(--hud-l)*.52)}
+.b-lock{right:calc(var(--hud-l)*.72);bottom:calc(var(--hud-l)*1.62);width:calc(var(--hud-l)*.42);height:calc(var(--hud-l)*.42)}
+.b-lock span,.b-interact span{font-size:clamp(7.5px,1.6vmin,10px)}
+body.lunar-cinematic #combat-pad,body.hero-cinematic #combat-pad,body.hero-cinematic #stick.sin-stick{visibility:hidden;pointer-events:none}
+body.lunar-cinematic #combat-pad .sin-btn{pointer-events:none}
+@media (max-height:420px){:root{--hud-l:clamp(72px,21vmin,96px)}}
