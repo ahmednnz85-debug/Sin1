@@ -117,3 +117,13 @@ test('the weapon has an explicit persistence and frustum-culling regression guar
   assert.match(source, /computeBoundingSphere/);
   assert.match(source, /for \(const key of \[idleKey, 'walk', 'run'\]\)/);
 });
+
+test('main and lab cameras retain the pre-PR63 framing and have no combat camera effects', () => {
+  const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const lab = fs.readFileSync(path.join(root, 'tests/hero-lab.html'), 'utf8');
+  assert.match(index, /CAM_VFOV=42,CAM_LOOK=1\.18,CAM_DIST=3\.45,CAM_PITCH=0\.22/);
+  assert.match(index, /want\.set\(hx-Math\.sin\(yaw\)\*cp\*dist,hy\+Math\.sin\(pitch\)\*dist/);
+  assert.doesNotMatch(index, /dEff=dist|camShake|hero\.camera\.shake|hero\.camera\.out|hero\.camera\.roll/);
+  assert.doesNotMatch(lab, /hero\.camera\.combat|hero\.camera\.out|hero\.camera\.roll/);
+  assert.match(fs.readFileSync(path.join(root, 'sin-hero.js'), 'utf8'), /innerWidth \* 0\.48/);
+});

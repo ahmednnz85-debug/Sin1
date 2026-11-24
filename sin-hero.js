@@ -335,7 +335,7 @@
       if (sId === null && e.clientX >= r.left - pad && e.clientX <= r.right + pad && e.clientY >= r.top - pad && e.clientY <= r.bottom + pad) {
         try { surf.setPointerCapture(e.pointerId); } catch (_) {}
         sId = e.pointerId; sMax = Math.max(24, r.width * 0.5 - 6); sOx = r.left + r.width / 2; sOy = r.top + r.height / 2; stick.classList.add('active'); setStick(e);
-      } else if (cId === null && e.clientX >= innerWidth * 0.42) {
+      } else if (cId === null && e.clientX >= innerWidth * 0.48) {
         try { surf.setPointerCapture(e.pointerId); } catch (_) {}
         cId = e.pointerId; cLx = e.clientX; cLy = e.clientY; st.camActive = true;
       }
@@ -561,9 +561,16 @@
       // Keep the authored local attachment after animation tracks and re-parenting.
       if (W.seat === 'hand' && axe.parent !== handSock) seat('hand');
       if (W.seat === 'back' && axe.parent !== backSock) seat('back');
+      axe.visible = true;
       const inHand = W.seat === 'hand';
       const gw = inHand && !combat.act ? 1 : 0;
       S.grip.g += (gw - S.grip.g) * damp(gw ? 30 : 18, dt); if (!gw && S.grip.g < 1e-3) S.grip.g = 0;
+    }
+    function maintainWeaponAttachment() {
+      const p = weapon.seat === 'hand' ? handSock : backSock;
+      if (axe.parent !== p) p.add(axe);
+      axe.visible = true;
+      axe.updateMatrixWorld(true);
     }
     function forceHolster() { // cinematic push: put the axe away with the real clip, or seat it if a clip cannot play
       if (weapon.state === 'Equipped') requestUnequip();
@@ -911,6 +918,9 @@
 
       // ---------- evaluate
       anim.evaluate(dt);
+      // Animation tracks can update socket matrices after weaponStep. Reassert
+      // only the selected authored socket; never create or substitute a weapon.
+      maintainWeaponAttachment();
       // foot IK / pelvis on uneven ground, then turn lean
       model.position.y = modelBaseY;
       root.rotation.y = facing; root.updateMatrixWorld(true);
