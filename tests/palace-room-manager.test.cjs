@@ -30,51 +30,50 @@ test('visibility hysteresis: a ready room lingers briefly, then hides; never for
   assert.ok(!r.shown.has('T3'));
 });
 
-test('sight demand: a room visible through an open arch but not ready is requested and retained', () => {
+test('the camera never starts a load: sight is reported for diagnostics only', () => {
   const m = M.create({ streamed });
   const r = m.update({ now: 0, heroRegion: 'T1', origin: 'T1', sight: new Set(['T1','TC12','T2','TC23','T3']),
-    distances: new Map([['T2', 10], ['T3', 28]]), status: statusFrom({ T1: 'ready', T2: 'cold', T3: 'cold' }) });
-  assert.deepEqual(Array.from(r.sight), ['T2', 'T3']);
-  assert.ok(r.retained.has('T2') && r.retained.has('T3'));
-  assert.equal(r.rank.get('T2'), 1);
+    distances: new Map([['T2', 10], ['T3', 140]]), leadSec: () => 4, status: statusFrom({ T1: 'ready', T2: 'cold', T3: 'cold' }) });
+  assert.ok(!r.approach.has('T3'), 'T3 is in the camera sight line but 140 m away on foot');
+  assert.ok(r.approach.has('T2'), 'T2 is requested because it is 10 m away, not because it is seen');
+  assert.equal(r.retained.size, 0);
+  assert.deepEqual(m.report().sight.sort(), ['T1', 'T2', 'T3']);
 });
 
-test('constrained devices only follow the heading prediction (no speculative swaps)', () => {
-  const m = M.create({ streamed, constrained: true });
-  const r = m.update({ now: 0, heroRegion: 'T1', origin: 'T1', sight: new Set(['T2','T3']), predicted: ['T2'],
-    distances: new Map([['T2', 10], ['T3', 28], ['L1', 12]]), status: statusFrom({ T1: 'ready' }) });
-  assert.deepEqual(Array.from(r.sight), []);
-  assert.deepEqual(Array.from(r.approach), ['T2'], 'no speculative distance prefetch (L1 at 12 m) on a phone');
-  assert.equal(r.retained.size, 0);
-  assert.equal(r.keep.size, 0);
-  assert.deepEqual(m.report().sight, ['T2', 'T3'], 'sight is still reported for diagnostics');
+test('load radius = run speed x (preparation + pad) + doorway slack, clamped; release adds hysteresis', () => {
+  const m = M.create({ streamed, runSpeed: 9.5, leadPadSec: 1, doorMarginM: 4, minLoadM: 22, maxLoadM: 75, hysteresisM: 18 });
+  const r = m.update({ now: 0, heroRegion: 'Palace', origin: 'Palace', leadSec: id => ({ L1: 3, T1: 1, K2: 20 })[id] || 3,
+    distances: new Map([['L1', 13], ['T1', 40], ['K2', 92]]), status: statusFrom({}) });
+  assert.equal(Math.round(r.radius.get('L1')), Math.round(9.5 * 4 + 4));   // 42 m
+  assert.equal(Math.round(r.radius.get('T1')), 23);                         // 9.5 x 2 + 4
+  assert.equal(r.radius.get('K2'), 75, 'clamped to the device maximum');
+  assert.ok(r.approach.has('L1') && !r.approach.has('T1') && !r.approach.has('K2'));
+  assert.ok(r.keep.has('T1'), 'inside load + hysteresis: kept if resident, not started');
+  assert.equal(r.rank.get('L1'), 13);
 });
 
 test('distance prefetch prepares connected rooms before the player reaches the door', () => {
-  const m = M.create({ streamed, prefetchMetres: 30 });
-  const r = m.update({ now: 0, heroRegion: 'K1', origin: 'K1', motion: { vx: 0, vz: 0 },
+  const m = M.create({ streamed });
+  const r = m.update({ now: 0, heroRegion: 'K1', origin: 'K1', motion: { vx: 0, vz: 0 }, leadSec: () => 3,
     distances: new Map([['K2', 25], ['K5', 60], ['K3', 70]]), status: statusFrom({}) });
   assert.ok(r.approach.has('K2'));
   assert.ok(!r.approach.has('K5'));
-  // Running fast widens the horizon by the room's preparation lead time.
-  const fast = m.update({ now: 16, heroRegion: 'K1', origin: 'K1', motion: { vx: 7, vz: 0 }, leadSec: () => 6,
+  // A room that measured a slower preparation is requested from farther away.
+  const slow = m.update({ now: 16, heroRegion: 'K1', origin: 'K1', motion: { vx: 0, vz: 0 }, leadSec: () => 6,
     distances: new Map([['K2', 25], ['K5', 55], ['K3', 70]]), status: statusFrom({}) });
-  assert.ok(fast.approach.has('K5'));
+  assert.ok(slow.approach.has('K5'));
 });
 
-test('cooldown keeps a room just left resident (no reload on turn-back), not under memory pressure', () => {
-  const m = M.create({ streamed, cooldownMs: 5000 });
+test('a room just left stays resident until the hero passes its release radius, then is released', () => {
+  const m = M.create({ streamed, hysteresisM: 18 });
   const st = statusFrom({ K2: 'ready', K3: 'ready' });
-  m.update({ now: 0, heroRegion: 'K2', origin: 'K2', status: st });
-  let r = m.update({ now: 3000, heroRegion: 'K3', origin: 'K3', status: st });
-  assert.ok(r.keep.has('K2'));
-  assert.ok(!r.retained.has('K2'), 'cooldown never hard-protects a room from the memory budget');
-  assert.equal(r.rank.get('K2'), 4);
+  let r = m.update({ now: 0, heroRegion: 'K3', origin: 'K3', leadSec: () => 3, distances: new Map([['K2', 30]]), status: st });
+  assert.ok(r.keep.has('K2') && r.approach.has('K2'));
+  r = m.update({ now: 100, heroRegion: 'KC1', origin: 'KC1', leadSec: () => 3, distances: new Map([['K2', 50]]), status: st });
+  assert.ok(r.keep.has('K2') && !r.approach.has('K2'), 'between the radii: kept, not re-requested');
   assert.equal(m.state('K2'), 'COOLDOWN');
-  r = m.update({ now: 3500, heroRegion: 'K3', origin: 'K3', status: st, memoryLevel: 'watch' });
-  assert.ok(!r.keep.has('K2'));
-  r = m.update({ now: 9000, heroRegion: 'K3', origin: 'K3', status: st });
-  assert.ok(!r.keep.has('K2'));
+  r = m.update({ now: 200, heroRegion: 'KC2', origin: 'KC2', leadSec: () => 3, distances: new Map([['K2', 70]]), status: st });
+  assert.ok(!r.keep.has('K2'), 'beyond the release radius: unloaded');
 });
 
 test('lifecycle states cover UNLOADED / PREPARING / READY / ACTIVE / VISIBLE', () => {
@@ -159,9 +158,43 @@ test('streamer: the current room preempts a speculative serial preparation', () 
   assert.equal(s.status('A'), 'cold');
 });
 
-test('no speculative prefetch while the room the hero stands in is not ready', () => {
-  const m = M.create({ streamed, prefetchMetres: 40 });
-  const r = m.update({ now: 0, heroRegion: 'T2', origin: 'T2', distances: new Map([['T1', 15], ['T3', 20]]),
-    status: statusFrom({ T2: 'failed' }) });
-  assert.equal(r.approach.size, 0);
+test('streamer (metric): nearest room first; memory is made only from farther rooms', () => {
+  const Z = require('../zone-streamer.js');
+  let mb = 540;
+  const sizes = { A: 60, B: 60, C: 60 };
+  const s = Z.create({ processBudgetMB: 650, gpuBudgetMB: 0, cpuBudgetMB: 0, estimate: () => ({ processMB: mb, gpuMB: 0, cpuMB: 0 }) });
+  const started = [];
+  for (const id of ['A', 'B', 'C']) s.register({ id, requireComplete: true, serialPreparation: true, estProcessMB: sizes[id], estGpuMB: 0, estCpuMB: 0,
+    load(api) { started.push(id); mb += sizes[id]; api.done(); }, unload() { mb -= sizes[id]; } });
+  const view = (rank, current) => ({ metric: true, current: current || 'X', approach: new Set(rank.keys()), keep: new Set(rank.keys()), rank, visible: new Set() });
+  const run = v => { for (let i = 0; i < 6; i++) s.update(v); };
+  run(view(new Map([['A', 10], ['B', 30]])));
+  assert.deepEqual(started, ['A'], 'A (10 m) first; B (30 m) does not fit next to it and never displaces it');
+  assert.equal(s.status('B'), 'cold');
+  // The hero walks on: B is now nearer than A, so A (farther) yields to B.
+  run(view(new Map([['A', 35], ['B', 8]])));
+  assert.equal(s.status('B'), 'ready');
+  assert.equal(s.status('A'), 'cold');
+  // Never a farther room for a nearer one: C at 40 m waits.
+  run(view(new Map([['A', 35], ['B', 8], ['C', 40]])));
+  assert.equal(s.status('C'), 'cold');
+  assert.ok(mb <= 650);
+});
+
+test('streamer (metric): a room beyond its release radius is unloaded after a short linger, never while drawn', () => {
+  const Z = require('../zone-streamer.js');
+  let t = 0; const real = performance.now.bind(performance); performance.now = () => t;
+  try {
+    const s = Z.create({ processBudgetMB: 0, releaseMs: 2500, cacheZones: { normal: 0, watch: 0, critical: 0 } });
+    s.register({ id: 'A', load(api) { api.done(); } });
+    const v = (keep, visible) => ({ metric: true, current: 'X', approach: new Set(keep ? ['A'] : []), keep: new Set(keep ? ['A'] : []), rank: new Map([['A', 20]]), visible: new Set(visible ? ['A'] : []) });
+    for (let i = 0; i < 4; i++) { t += 16; s.update(v(true)); }
+    assert.equal(s.status('A'), 'ready');
+    t += 16; s.update(v(false, true)); t += 5000; s.update(v(false, true));
+    assert.equal(s.status('A'), 'ready', 'on screen: protected');
+    t += 16; s.update(v(false)); t += 1000; s.update(v(false));
+    assert.equal(s.status('A'), 'ready', 'linger');
+    t += 2000; s.update(v(false));
+    assert.equal(s.status('A'), 'cold');
+  } finally { performance.now = real; }
 });

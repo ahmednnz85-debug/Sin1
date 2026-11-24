@@ -127,7 +127,7 @@ test('wings registers K2-K4 through the data manifest and exposes registerZone',
   assert.match(wings, /WING_ZONES\.forEach\(registerZone\)/);
   assert.match(wings, /registerZone: registerZone/);
   const streamer = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
-  assert.match(streamer, /compileAsync\(g, ctx\.camera, ctx\.scene/);
+  assert.match(streamer, /compileAsync\(root, ctx\.camera, ctx\.scene/);
   assert.ok(index.indexOf('zone-streamer.js') > 0 && index.indexOf('zone-streamer.js') < index.indexOf('wings.js?'));
 });
 

@@ -5,9 +5,12 @@
    palace-room-manager.js over the real portal graph (tests/fixtures/
    palace-graph.json, dumped from the running game) along a full tour of the
    14 rooms at the hero's run speed, with device-like room preparation
-   times and memory budgets. Compares the streaming policy before the room
-   manager ("old", reproduced from the original wings.js streamZones) with
-   the current one ("new").
+   times and memory budgets. Compares the original heading/sight policy
+   ("old", reproduced from the original wings.js streamZones) with the
+   distance policy ("metric": palace-room-manager.js radii + the streamer's
+   nearest-first admission). Profiles: desktop, phone (measured iPhone hall
+   base 566 MB / 650 MB budget) and phone-ktx (projection with GPU-compressed
+   textures: ~4x smaller texture memory).
 
    Metrics:
      doorWaitS     seconds the hero stood at a closed door waiting for a room
@@ -17,7 +20,7 @@
      loads         room preparations started (restarts = thrash)
      peakMB        estimated process memory peak
 
-   Usage: node tools/palace-route-sim.cjs [desktop|phone] [--json] */
+   Usage: node tools/palace-route-sim.cjs [desktop|phone|phone-ktx] [old,metric] [full|repeat] [--json] */
 'use strict';
 const path = require('path');
 const fs = require('fs');
@@ -44,11 +47,14 @@ TOURS.repeat = ['Palace','K1','KC12','K2','KC12','K1','KC12','K2','KC12','K1','K
 let TOUR = TOUR_FULL;
 const DEAD_ENDS = new Set(['K3','K4','T5','L2','L3']);
 
+// base: measured process estimate of the throne hall + K1 + corridors with no
+// streamed room (iOS formula, tools/palace-stream-probe.cjs): 566 MB.
 function profile(kind) {
-  return kind === 'phone'
-    ? { constrained: true, budget: 650, base: 400, cacheZones: { normal: 0, watch: 0, critical: 0 }, graceMs: 0, msPerMB: 55, fixedMs: 1400 }
-    : { constrained: false, budget: 1400, base: 760, cacheZones: { normal: 3, watch: 2, critical: 0 }, graceMs: 20000, msPerMB: 24, fixedMs: 900 };
+  if (kind === 'phone') return { constrained: true, budget: 650, base: 566, scale: 1, cacheZones: { normal: 0, watch: 0, critical: 0 }, graceMs: 0, msPerMB: 55, fixedMs: 1400 };
+  if (kind === 'phone-ktx') return { constrained: true, budget: 650, base: 316, scale: 0.45, cacheZones: { normal: 0, watch: 0, critical: 0 }, graceMs: 0, msPerMB: 30, fixedMs: 1200 };
+  return { constrained: false, budget: 1400, base: 760, scale: 1, cacheZones: { normal: 3, watch: 2, critical: 0 }, graceMs: 20000, msPerMB: 24, fixedMs: 900 };
 }
+const RUN_SPEED = 9.4; // m/s, the hero's run clip (SinHero motion analysis)
 
 function simulate(policy, kind, tour) {
   TOUR = TOURS[tour || 'full'];
@@ -93,7 +99,7 @@ function simulate(policy, kind, tour) {
     processBudgetMB: P.budget, gpuBudgetMB: 0, cpuBudgetMB: 0, cacheZones: P.cacheZones, graceMs: P.graceMs,
     estimate: () => {
       let mb = P.base;
-      for (const id of STREAMED) if (zs.status(id) !== 'cold') mb += EST[id][P.constrained ? 1 : 0];
+      for (const id of STREAMED) if (zs.status(id) !== 'cold') mb += EST[id][P.constrained ? 1 : 0] * P.scale;
       return { processMB: mb, gpuMB: 0, cpuMB: 0 };
     }
   });
@@ -103,13 +109,14 @@ function simulate(policy, kind, tour) {
   performance.now = () => now;
   for (const id of STREAMED) {
     zs.register({ id, requireComplete: true, serialPreparation: true, prefetchHops: PREFETCH_HOPS[id] || 1,
-      estProcessMB: EST[id][P.constrained ? 1 : 0], estGpuMB: 0, estCpuMB: 0,
+      estProcessMB: EST[id][P.constrained ? 1 : 0] * P.scale, estGpuMB: 0, estCpuMB: 0,
       load(api) { loads++; pending.set(id, { at: now + P.fixedMs + P.msPerMB * EST[id][P.constrained ? 1 : 0], api }); },
       unload() { pending.delete(id); } });
   }
   const ready = id => !STREAMED.includes(id) || zs.status(id) === 'ready';
   const streamedSet = new Set(STREAMED);
-  const manager = policy.startsWith('new') ? M.create({ streamed: streamedSet, constrained: P.constrained }) : null;
+  const pvs = routes.potentiallyVisible(Vis.throughOpenings, portal => !doors.has(portal.id), { step: 3, yaws: 16 });
+  const manager = policy === 'metric' ? M.create({ streamed: streamedSet, constrained: P.constrained, maxLoadM: P.constrained ? 75 : 95 }) : null;
   const hopsFrom = origin => { const d = new Map([[origin, 0]]), q = [origin]; while (q.length) { const a = q.shift(); for (const b of routes.neighbours(a)) if (!d.has(b)) { d.set(b, d.get(a) + 1); q.push(b); } } return d; };
   // ---- hero / camera ------------------------------------------------------------
   const first = pts[0];
@@ -123,12 +130,43 @@ function simulate(policy, kind, tour) {
     return 'Palace';
   };
   const thresholdRoom = { ARCH_L3: 'K1', ARCH_R3: 'T1', ARCH_R1: 'L1' };
+  // wings.js streamedTargets(): the rooms a door must wait for — its own
+  // sides plus a streamed room one doorless hop past a short corridor.
+  const gateRooms = door => {
+    const out = new Set();
+    for (const side of [door.from, door.to]) {
+      if (streamedSet.has(side)) out.add(side);
+      else for (const n of routes.neighbours(side)) {
+        const link = DATA.links.find(l => (l[0] === side && l[1] === n) || (l[1] === side && l[0] === n));
+        if (streamedSet.has(n) && link && !doors.has(link[2])) out.add(n);
+      }
+    }
+    return [...out];
+  };
   const physicallyOpen = portal => { const d = doors.get(portal.id); return !d || d.state !== 'Closed'; };
   const dt = 1 / 60;
   let i = 0, waitS = 0, doorWait = 0, unreadySight = 0, insideUnready = 0, frames = 0, stopT = 0;
   const waits = {}, holes = {};
   let st = { approached: null, recent: null, lastOrigin: null };
   let prevRegion = null;
+  // Palace entry, behind the blackout (wings.js prepareEntryLibrary): the
+  // rooms the spawn point can see or reach first are prepared before the
+  // first frame is presented. Not counted in any metric below.
+  if (manager) {
+    const origin = 'Palace', distances = routes.pathDistances(origin, hero.x, hero.z, 200);
+    for (let k = 0; k < 60 * 60; k++) {
+      now += dt * 1000;
+      const plan = manager.update({ now, heroRegion: origin, origin, distances, pvs, status: id => zs.status(id), leadSec: id => zs.leadTime(id) });
+      zs.update({ metric: true, current: origin, approach: plan.approach, keep: plan.keep, rank: plan.rank, visible: new Set(), retained: new Set(), allowBackgroundWarm: false });
+      for (const [id, job] of pending) if (now >= job.at) { pending.delete(id); job.api.done(); }
+      const rep = zs.report().zones;
+      const shown = [...plan.approach].filter(id => pvs.get(origin).has(id));
+      const busy = shown.some(id => ['loading', 'uploading', 'compiling'].includes(zs.status(id)));
+      if (!busy && shown.every(id => ready(id) || (rep[id] && rep[id].deferred))) break;
+    }
+    loads = 0;
+  }
+  const entryS = +(now / 1000).toFixed(1);
   while (i < pts.length && now < 30 * 60 * 1000) {
     frames++;
     now += dt * 1000;
@@ -146,7 +184,7 @@ function simulate(policy, kind, tour) {
         const ahead = door.axis === 'x' ? (p.x - door.x) * n < 0 : (p.z - door.z) * n < 0;
         if (!ahead && Math.abs(n) > 0.2) continue;
         if (door.state === 'Closed') {
-          const beyond = [door.from, door.to].filter(id => id !== regionAt(hero.x, hero.z) && streamedSet.has(id));
+          const beyond = gateRooms(door).filter(id => id !== regionAt(hero.x, hero.z));
           if (beyond.every(ready)) { door.state = 'Opening'; door.t = 0; }
           else {
             doorWait += dt; waits[door.id] = (waits[door.id] || 0) + dt; door.waiting = beyond.find(id => !ready(id));
@@ -156,8 +194,8 @@ function simulate(policy, kind, tour) {
         if (door.state !== 'Open') blocked = true;
       }
       if (!blocked) {
-        const step = Math.min(d, 7.15 * dt);
-        if (d > 1e-6) { hero.x += dx / d * step; hero.z += dz / d * step; hero.vx = dx / d * 7.15; hero.vz = dz / d * 7.15; moving = true;
+        const step = Math.min(d, RUN_SPEED * dt);
+        if (d > 1e-6) { hero.x += dx / d * step; hero.z += dz / d * step; hero.vx = dx / d * RUN_SPEED; hero.vz = dz / d * RUN_SPEED; moving = true;
           const want = Math.atan2(dx, dz); let diff = Math.atan2(Math.sin(want - camYaw), Math.cos(want - camYaw)); camYaw += diff * (1 - Math.exp(-dt * 3.4)); }
         if (d < 0.05) i++;
       }
@@ -167,6 +205,7 @@ function simulate(policy, kind, tour) {
       if (door.state === 'Opening') { door.t += dt; if (door.t > 1.1) door.state = 'Open'; }
       else if (door.state === 'Open' && door.temple && Math.hypot(hero.x - door.x, hero.z - door.z) > 3.2) { door.state = 'Closing'; door.t = 0; }
       else if (door.state === 'Closing') { door.t += dt; if (door.t > 1.47) door.state = 'Closed'; }
+      if (door.state === 'Open' && !door.temple && !gateRooms(door).every(ready)) { door.state = 'Closing'; door.t = 0; }
       if (door.state !== 'Closed') door.waiting = null;
     }
     // ---- visibility truth -------------------------------------------------------
@@ -177,59 +216,63 @@ function simulate(policy, kind, tour) {
     const sight = routes.connectedView(camId, view, Vis.throughOpenings, physicallyOpen);
     sight.add(heroId);
     let hole = false;
-    for (const id of sight) if (streamedSet.has(id) && !ready(id)) { hole = true; holes[id] = (holes[id] || 0) + 1; }
+    for (const id of sight) if (streamedSet.has(id) && !ready(id)) {
+      hole = true; holes[id] = (holes[id] || 0) + 1;
+      if (process.env.SIM_DEBUG && holes[id] % 30 === 1) console.error('hole', id, (now / 1000).toFixed(1) + 's', 'hero in', heroId, 'cam in', camId, 'state', zs.status(id), JSON.stringify(zs.report().zones[id]), 'mem', zs.report().usage.processMB);
+    }
     if (hole) unreadySight++;
     if (streamedSet.has(heroId) && !ready(heroId)) insideUnready++;
     // ---- streaming policy (every frame, as wings.tick) -------------------------
     const origin = heroId;
-    const dist = hopsFrom(origin);
     const move = { x: hero.x, z: hero.z, vx: hero.vx, vz: hero.vz };
-    const readyTime = id => zs.leadTime(id);
-    const next = routes.nextRoom(origin, move, streamedSet, readyTime);
-    const upcoming = next && ready(next.id) && routes.nextRoom(origin, move, streamedSet, readyTime, ready);
-    const nearby = routes.nearRoom(origin, move, streamedSet, () => false);
-    const templeWaiting = [...doors.values()].find(d => d.temple && d.waiting);
-    const demand = (templeWaiting && templeWaiting.waiting) || (nearby && !ready(nearby) ? nearby : null);
-    const approach = new Set([next && next.id, upcoming && upcoming.id, nearby, demand].filter(Boolean));
-    const nextStream = demand || (upcoming && upcoming.id) || (next && next.id) || null;
-    const retained = new Set();
-    for (const d of doors.values()) if (d.temple) { if (d.waiting) retained.add(d.waiting); if (d.state !== 'Closed') [d.from, d.to].forEach(id => streamedSet.has(id) && retained.add(id)); }
-    if (upcoming) retained.add(next.id);
-    if (nextStream && nextStream !== origin) st.approached = { id: nextStream, until: now + 7500 };
-    if (st.approached && now < st.approached.until && (dist.get(st.approached.id) ?? 99) <= 4) retained.add(st.approached.id);
-    if (st.lastOrigin !== origin) { if (streamedSet.has(st.lastOrigin)) st.recent = { id: st.lastOrigin, until: now + 11000 }; st.lastOrigin = origin; }
-    if (st.recent && now < st.recent.until && (dist.get(st.recent.id) ?? 99) <= 2 && !approach.size) retained.add(st.recent.id);
-    let keep = null, rank = null, demandRoom = demand;
     const visible = new Set([...sight].filter(ready));
+    const waitingDoor = [...doors.values()].find(d => d.waiting);
     if (manager) {
-      const distances = routes.pathDistances(origin, hero.x, hero.z);
-      const r = manager.update({ now, heroRegion: heroId, camRegion: camId, origin, motion: move, drawn: visible, sight,
-        predicted: [next && next.id, upcoming && upcoming.id, nearby].filter(Boolean), distances,
+      // wings.js streamZones(): distance plan + doors; the camera only protects what is drawn.
+      const distances = routes.pathDistances(origin, hero.x, hero.z, 200);
+      const r = manager.update({ now, heroRegion: heroId, camRegion: camId, origin, motion: move, drawn: visible, sight, distances, pvs,
         status: id => zs.status(id), leadSec: id => zs.leadTime(id), memoryLevel: 'normal' });
-      if (!policy.includes('nosight')) for (const id of r.sight) { approach.add(id); retained.add(id); if (!demandRoom) demandRoom = id; }
-      for (const id of r.approach) approach.add(id);
-      for (const id of r.retained) retained.add(id);
-      keep = r.keep; rank = policy.includes('norank') ? null : r.rank;
-      if (!policy.includes('nodoor')) for (const d of doors.values()) if (!d.temple && (d.state === 'Opening' || (d.state !== 'Closed' && Math.hypot(hero.x - d.x, hero.z - d.z) <= 5)))
+      const approach = new Set(r.approach), rank = new Map(r.rank), retained = new Set();
+      const demand = waitingDoor ? waitingDoor.waiting : null;
+      if (demand) { approach.add(demand); rank.set(demand, 0); }
+      for (const d of doors.values()) if (d.state === 'Opening' || d.state === 'Closing' || (d.state !== 'Closed' && Math.hypot(hero.x - d.x, hero.z - d.z) <= 5))
         [d.from, d.to].forEach(id => streamedSet.has(id) && retained.add(id));
+      zs.update({ metric: true, current: origin, visible, memoryLevel: 'normal', approach, keep: r.keep, rank, retained, demand, allowBackgroundWarm: false });
+    } else {
+      const dist = hopsFrom(origin);
+      const readyTime = id => zs.leadTime(id);
+      const next = routes.nextRoom(origin, move, streamedSet, readyTime);
+      const upcoming = next && ready(next.id) && routes.nextRoom(origin, move, streamedSet, readyTime, ready);
+      const nearby = routes.nearRoom(origin, move, streamedSet, () => false);
+      const templeWaiting = [...doors.values()].find(d => d.temple && d.waiting);
+      const demand = (templeWaiting && templeWaiting.waiting) || (nearby && !ready(nearby) ? nearby : null);
+      const approach = new Set([next && next.id, upcoming && upcoming.id, nearby, demand].filter(Boolean));
+      const nextStream = demand || (upcoming && upcoming.id) || (next && next.id) || null;
+      const retained = new Set();
+      for (const d of doors.values()) if (d.temple) { if (d.waiting) retained.add(d.waiting); if (d.state !== 'Closed') [d.from, d.to].forEach(id => streamedSet.has(id) && retained.add(id)); }
+      if (upcoming) retained.add(next.id);
+      if (nextStream && nextStream !== origin) st.approached = { id: nextStream, until: now + 7500 };
+      if (st.approached && now < st.approached.until && (dist.get(st.approached.id) ?? 99) <= 4) retained.add(st.approached.id);
+      if (st.lastOrigin !== origin) { if (streamedSet.has(st.lastOrigin)) st.recent = { id: st.lastOrigin, until: now + 11000 }; st.lastOrigin = origin; }
+      if (st.recent && now < st.recent.until && (dist.get(st.recent.id) ?? 99) <= 2 && !approach.size) retained.add(st.recent.id);
+      zs.update({ current: origin, distances: dist, visible, memoryLevel: 'normal', approach, retained, demand,
+        motionPrefetch: true, allowBackgroundWarm: false });
     }
-    zs.update({ current: origin, distances: dist, visible, memoryLevel: 'normal', approach, retained, demand: demandRoom,
-      motionPrefetch: true, allowBackgroundWarm: false, keep, rank });
     if (/^K\d/.test(origin) && origin !== 'K1' && !ready(origin)) zs.forceLoad(origin);
     for (const [id, job] of pending) if (now >= job.at) { pending.delete(id); job.api.done(); }
     peak = Math.max(peak, zs.report().usage.processMB);
     prevRegion = heroId;
   }
   performance.now = realNow;
-  return { policy, kind, seconds: +(now / 1000).toFixed(1), doorWaitS: +doorWait.toFixed(1), unreadySightF: unreadySight,
+  return { policy, kind, entryS, seconds: +(now / 1000 - entryS).toFixed(1), doorWaitS: +doorWait.toFixed(1), unreadySightF: unreadySight,
     unreadySightPct: +(100 * unreadySight / frames).toFixed(1), insideUnreadyF: insideUnready, loads, peakMB: Math.round(peak),
     holes, waits: Object.fromEntries(Object.entries(waits).map(([k, v]) => [k, +v.toFixed(1)])) };
 }
 
 if (require.main === module) {
   console.info = () => {};
-  const kind = process.argv[2] === 'phone' ? 'phone' : 'desktop';
-  const out = (process.argv[3] ? process.argv[3].split(',') : ['old', 'new']).map(p => simulate(p, kind, process.argv[4]));
+  const kind = ['phone', 'phone-ktx'].includes(process.argv[2]) ? process.argv[2] : 'desktop';
+  const out = (process.argv[3] ? process.argv[3].split(',') : ['old', 'metric']).map(p => simulate(p, kind, process.argv[4]));
   if (process.argv.includes('--json')) console.log(JSON.stringify(out, null, 1));
   else for (const r of out) console.log(JSON.stringify(r));
 }

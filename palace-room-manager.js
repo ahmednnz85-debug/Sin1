@@ -2,18 +2,19 @@
    ---------------------------------------------------------------------------
    It does NOT own memory or GPU uploads (zone-streamer.js stays the single
    owner of load / upload / compile / reveal / eviction). It owns the
-   *decisions* that used to be scattered across wings.js:
+   *decisions*, and they are made from WALKING DISTANCE only:
 
-     - which streamed rooms are needed NOW because the camera can already
-       look at them through physically open arches (sight demand),
-     - which rooms must be prepared next from the room connectivity graph,
-       the player's walking distance, speed and heading (prefetch),
-     - which rooms recently left stay resident for a while (cooldown) so a
-       turn-back never reloads them,
+     - every streamed room gets a load radius from the hero's running speed
+       and the room's measured preparation time (it is ready before the hero
+       can reach its doorway) and a larger release radius (hysteresis);
+     - rooms inside the load radius are requested nearest first, rooms
+       between the two radii stay resident, rooms beyond the release radius
+       are unloaded — and come back the same way before the hero returns;
+     - the camera never starts or stops a load (what it can see is only
+       reported for diagnostics; drawn rooms are protected by the streamer);
      - visibility hysteresis: a room the camera just stopped seeing keeps
        drawing for a short linger window, and the room the hero or the
-       camera stands in is always drawn (no wall / floor dropping out while
-       the camera swings around a doorway),
+       camera stands in is always drawn;
      - a per-room lifecycle state for diagnostics:
          UNLOADED -> PREPARING -> READY -> ACTIVE / VISIBLE -> COOLDOWN.
 
@@ -34,25 +35,21 @@
       streamed: new Set(),
       constrained: false,
       lingerMs: 450,           // keep drawing a room this long after the camera left it
-      cooldownMs: 30000,       // keep a left room resident this long (desktop)
-      prefetchMetres: 42,      // walking distance inside which rooms are prepared (desktop)
-      leadPadSec: 1.6,         // extra time on top of a room's measured preparation time
-      sightHoldMs: 4000,       // a room seen through an arch stays urgent this long (camera swings)
-      maxPrefetch: 4           // most rooms requested ahead at once (desktop)
+      // ---- distance planning (metres along the walkable route) ----------
+      // A room starts preparing when the hero could reach its doorway in
+      // less time than the room needs to prepare, at full running speed:
+      //   load radius = runSpeed x (preparation s + leadPadSec) + doorMarginM
+      // and is unloaded once the hero is farther than the load radius plus
+      // hysteresisM (no load/unload flapping on a radius line).
+      runSpeed: 9.5,           // m/s: the hero's run clip (fastest approach on foot)
+      leadPadSec: 1.0,
+      doorMarginM: 4,
+      minLoadM: 22,
+      maxLoadM: 75,
+      hysteresisM: 18
     }, options || {});
-    if (o.constrained) {
-      // A 650 MB phone cannot stack rooms: the streamer swaps instead. Ask
-      // for one predicted room at a time and keep no cooldown residency.
-      o.cooldownMs = Math.min(o.cooldownMs, options && options.cooldownMs != null ? options.cooldownMs : 0);
-      // Distance prefetch is off: every speculative start swaps the other
-      // rooms out under the no-stack rule (measured: more reloads, longer
-      // door waits). Heading prediction + sight demand only.
-      o.maxPrefetch = 0;
-      o.prefetchMetres = 0;
-    }
     const lastShown = new Map();     // id -> ms last drawn
-    const lastSight = new Map();     // id -> ms last geometrically visible
-    const lastActive = new Map();    // id -> ms last current/visible (for cooldown)
+    const lastSight = new Map();     // id -> ms last geometrically visible (diagnostics only)
     const states = new Map();
     const transitions = [];
     let last = null, lastSpeed = 0;
@@ -64,29 +61,46 @@
       transitions.push({ id, from: prev || null, to: next, t: Math.round(t) });
       if (transitions.length > 64) transitions.shift();
     }
+    let pvsCache = null, seenCache = null;
+    function seenFromOf(pvs) {
+      if (!pvs) return null;
+      if (pvs === pvsCache) return seenCache;
+      const inv = new Map();
+      pvs.forEach((set, region) => set.forEach(id => {
+        if (id === region || !o.streamed.has(id)) return;
+        if (!inv.has(id)) inv.set(id, []);
+        inv.get(id).push(region);
+      }));
+      pvsCache = pvs; seenCache = inv;
+      return inv;
+    }
+    function loadRadius(id, leadSec) {
+      const lead = Math.max(0, Number(leadSec(id)) || 0);
+      return Math.max(o.minLoadM, Math.min(o.maxLoadM, o.runSpeed * (lead + o.leadPadSec) + o.doorMarginM));
+    }
 
     /* input = {
          now, heroRegion, camRegion, origin,
          motion: {vx, vz},
          drawn: Set   — rooms the portal culling decided to draw this frame,
-         sight: Set   — regions geometrically visible through physically open
-                        portals, ignoring readiness (what the player WOULD see),
-         predicted: Iterable — heading-based next rooms from palace-routes,
-         distances: Map id->metres walking distance from the hero,
+         sight: Set   — regions geometrically visible through open portals
+                        (reported for diagnostics; it never starts a load),
+         distances: Map id->metres walking distance from the hero to every
+                    region's doorway (0 inside it),
+         pvs: Map region -> Set of regions visible from it (static, optional),
          status(id) -> zone-streamer state, leadSec(id) -> seconds to prepare,
-         memoryLevel: 'normal' | 'watch' | 'critical'
+         memoryLevel
        } */
     function update(input) {
       const t = Number.isFinite(input.now) ? input.now : 0;
       const status = input.status || (() => 'unregistered');
       const ready = id => { const s = status(id); return s === 'ready' || s === 'unregistered'; };
       const distances = input.distances || new Map();
-      const level = input.memoryLevel || 'normal';
       const motion = input.motion || { vx: 0, vz: 0 };
-      const speed = Math.hypot(motion.vx || 0, motion.vz || 0);
-      lastSpeed = speed;
+      lastSpeed = Math.hypot(motion.vx || 0, motion.vz || 0);
+      const leadSec = input.leadSec || (() => 5);
 
-      // ---- visibility with hysteresis -------------------------------------
+      // ---- visibility with hysteresis (rendering only) --------------------
       const shown = new Set(input.drawn || []);
       // Whatever the hero or the camera stands in is always drawn.
       for (const id of [input.heroRegion, input.camRegion, input.origin]) if (id) shown.add(id);
@@ -97,79 +111,35 @@
         if (t - at <= o.lingerMs && ready(id)) { shown.add(id); lingering.add(id); }
         else if (t - at > o.lingerMs * 4) lastShown.delete(id);
       });
-
-      // ---- sight demand: rooms the camera can look into right now ---------
-      // Sticky: a quick camera swing away from an arch must not demote a
-      // room that is mid-preparation (it would be evicted and restarted).
       (input.sight || []).forEach(id => { if (o.streamed.has(id)) lastSight.set(id, t); });
-      const sight = new Set();
-      lastSight.forEach((at, id) => {
-        if (t - at > o.sightHoldMs) { lastSight.delete(id); return; }
-        if (!ready(id)) sight.add(id);
-      });
-      let sightList = Array.from(sight).sort((a, b) => (distances.get(a) ?? 999) - (distances.get(b) ?? 999));
-      // A 650 MB phone holds one dressed room at a time: sight-driven loads
-      // only swap rooms back and forth there (measured: +18% reloads, longer
-      // door waits). Its sealed portals keep the placeholder until the
-      // heading prediction brings the room in.
-      const observed = sightList;
-      if (o.constrained) sightList = [];
+      const observed = [];
+      lastSight.forEach((at, id) => { if (t - at > 4000) lastSight.delete(id); else observed.push(id); });
 
-      // ---- prefetch: graph distance + speed + heading ---------------------
-      const approach = new Set();
-      for (const id of input.predicted || []) if (id && o.streamed.has(id)) approach.add(id);
-      const leadSec = input.leadSec || (() => 5);
-      const candidates = [];
+      // ---- distance planning: the camera never decides what loads ---------
+      const approach = new Set(), keep = new Set(), rank = new Map(), radius = new Map();
+      const metres = id => id === input.origin ? 0 : (distances.has(id) ? distances.get(id) : Infinity);
+      // A room counts as near as the nearest spot it can be SEEN from: with
+      // the potentially visible set (static, per region), a room seen down
+      // an open passage is prepared before the hero reaches that passage.
+      const seenFrom = seenFromOf(input.pvs);
+      const sightMetres = id => {
+        let d = metres(id);
+        const from = seenFrom && seenFrom.get(id);
+        if (from) from.forEach(r => { const m = metres(r); if (m < d) d = m; });
+        return d;
+      };
       o.streamed.forEach(id => {
-        if (id === input.origin || approach.has(id) || sight.has(id)) return;
-        const d = distances.get(id);
-        if (d == null) return;
-        // Reachable before preparation could finish at the current pace?
-        const reach = speed * (leadSec(id) + o.leadPadSec) + 6;
-        if (o.maxPrefetch > 0 && d <= Math.max(o.prefetchMetres, reach)) candidates.push({ id, d });
+        const d = sightMetres(id);
+        if (!Number.isFinite(d)) return;
+        const r = loadRadius(id, leadSec);
+        radius.set(id, r);
+        if (d <= r + o.hysteresisM) { keep.add(id); rank.set(id, d); }
+        if (d <= r) approach.add(id);
       });
-      candidates.sort((a, b) => a.d - b.d);
-      const room = Math.max(0, o.maxPrefetch - approach.size);
-      // Speculative (distance) prefetch never competes with a room the
-      // camera already sees or the player is predicted to enter next.
-      const urgentPending = sightList.length > 0 || Array.from(approach).some(id => !ready(id)) ||
-        (!!input.origin && o.streamed.has(input.origin) && !ready(input.origin));
-      // On a constrained device only start a distance prefetch while no
-      // predicted room is already asked for (no-stack swap rule).
-      if (!(o.constrained && approach.size)) {
-        candidates.slice(0, room).forEach(c => { if (!urgentPending || ready(c.id)) approach.add(c.id); });
-      }
-      // Under critical memory pressure keep only the heading prediction;
-      // the streamer's budget still has the final word on every start.
-      if (level === 'critical') {
-        approach.clear();
-        for (const id of input.predicted || []) if (id && o.streamed.has(id)) approach.add(id);
-      }
-
-      // ---- cooldown residency ---------------------------------------------
-      const active = new Set([input.origin, input.heroRegion].filter(Boolean));
-      shown.forEach(id => active.add(id));
-      active.forEach(id => { if (o.streamed.has(id) && ready(id)) lastActive.set(id, t); });
-      // Sight rooms are protected (the camera is about to show them).
-      // Cooldown rooms are only *kept*: they stay resident while memory
-      // allows but yield to any more important room under the budget.
-      const retained = new Set(sightList);
-      const keep = new Set();
-      if (level === 'normal' && o.cooldownMs > 0) {
-        lastActive.forEach((at, id) => {
-          if (active.has(id)) return;
-          if (t - at <= o.cooldownMs && status(id) !== 'cold') keep.add(id);
-        });
-      }
-      // Budget rank for the streamer: sight 1, predicted 2, prefetch 3, cooldown 4.
-      const rank = new Map();
-      keep.forEach(id => rank.set(id, 4));
-      approach.forEach(id => rank.set(id, 3));
-      for (const id of input.predicted || []) if (approach.has(id)) rank.set(id, 2);
-      sightList.forEach(id => rank.set(id, 1));
-      lastActive.forEach((at, id) => { if (t - at > Math.max(o.cooldownMs, 1) * 2) lastActive.delete(id); });
 
       // ---- lifecycle states ------------------------------------------------
+      const active = new Set([input.origin, input.heroRegion].filter(Boolean));
+      shown.forEach(id => active.add(id));
       o.streamed.forEach(id => {
         const s = status(id);
         let next;
@@ -182,7 +152,9 @@
         setState(id, next, t);
       });
 
-      last = { shown, lingering, sight: new Set(sightList), observed, approach, retained, keep, rank, t };
+      // retained: hard eviction protection is the streamer's job (drawn,
+      // current, moving doors); the planner only orders and bounds.
+      last = { shown, lingering, sight: new Set(), observed, approach, retained: new Set(), keep, rank, radius, t };
       return last;
     }
 
@@ -196,12 +168,14 @@
         sight: last ? Array.from(last.observed) : [],
         approach: last ? Array.from(last.approach) : [],
         retained: last ? Array.from(last.retained) : [],
-        cooldown: last ? Array.from(last.keep) : [],
+        cooldown: last ? Array.from(last.keep).filter(id => !last.approach.has(id)) : [],
+        radius: last ? Object.fromEntries(Array.from(last.radius, ([k, v]) => [k, Math.round(v)])) : {},
+        metres: last ? Object.fromEntries(Array.from(last.rank, ([k, v]) => [k, Math.round(v)])) : {},
         speed: +lastSpeed.toFixed(2),
         transitions: transitions.slice(-16)
       };
     }
-    function reset() { lastShown.clear(); lastActive.clear(); states.clear(); transitions.length = 0; last = null; }
+    function reset() { lastShown.clear(); lastSight.clear(); states.clear(); transitions.length = 0; last = null; }
     return { update, report, reset, options: o, state: id => states.get(id) || 'UNLOADED' };
   }
 

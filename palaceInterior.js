@@ -2333,6 +2333,10 @@
     group.position.set(portal.x, gy, portal.frontZ);
     ctx.scene.add(group);
     if (ctx.renderer && ctx.renderer.shadowMap) ctx.renderer.shadowMap.enabled = false;
+    // Fixed light budget from here on (light-rig.js): rooms appearing or
+    // leaving the view never change the light layout, so no shader program
+    // has to be rebuilt in front of the player.
+    try { if (window.SinLightRig) SinLightRig.install(ctx.scene, ctx.renderer); } catch (e) { console.warn('[light-rig] install', e); }
     // Release the exterior once the palace is ready; holdCull already hides it
     // during the transition, and the palace/wings remain retained.
     if (CONFIG.disposeExteriorAfterEntry) {
@@ -4669,7 +4673,10 @@
           // compiled hall shaders against the full graph — a multi-minute
           // software-GL stall at REVEAL-warm-n. Lights are cloned so the
           // compiled program matches the first real hall frame.
-          warmScene = new THREE.Scene();
+          // With the light rig the compile scene carries exactly the fixed
+          // layout every palace frame uses (no lights copied from the hall).
+          const rigScene = window.SinLightRig && SinLightRig.active() ? SinLightRig.compileScene(ctx.scene) : null;
+          warmScene = rigScene || new THREE.Scene();
           warmScene.environment = ctx.scene.environment;
           if (ctx.scene.environmentIntensity != null) warmScene.environmentIntensity = ctx.scene.environmentIntensity;
           if (ctx.scene.fog) warmScene.fog = ctx.scene.fog;
@@ -4686,8 +4693,10 @@
               } catch (_) {}
             });
           };
-          addLights(group);
-          addLights(wingRuntime && wingRuntime.root);
+          if (!rigScene) {
+            addLights(group);
+            addLights(wingRuntime && wingRuntime.root);
+          }
           warmScene.add(warmProxy);
           warmScene.add(warmProxyI);
           warmIndex = 0;
