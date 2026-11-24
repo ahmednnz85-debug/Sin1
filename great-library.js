@@ -734,7 +734,8 @@
     hero.traverse(node => { if (node.isSkinnedMesh) mesh = node; });
     if (!mesh) return null;
     const legs = ['Left', 'Right'].map(side => {
-      const bones = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => mesh.skeleton.getBoneByName(side + name));
+      const UE = { UpLeg: 'thigh_', Leg: 'calf_', Foot: 'foot_', ToeBase: 'ball_' };   // Sin_combat_FINAL3_axe rig names
+      const bones = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => mesh.skeleton.getBoneByName(side + name) || mesh.skeleton.getBoneByName(UE[name] + (side === 'Left' ? 'l' : 'r')));
       if (bones.some(bone => !bone)) return null;
       const [hip, knee, ankle, toe] = bones;
       return { hip, knee, ankle, samples: bootSamples(mesh, ankle, toe),

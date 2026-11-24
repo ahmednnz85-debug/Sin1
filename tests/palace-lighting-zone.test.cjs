@@ -38,8 +38,10 @@ test('light cache rebuilds promptly for new palace lights', () => {
   assert.doesNotMatch(compat, /entry\.builtAt < 1000/);
 });
 
-test('fight button hides indoors so run is not duplicated', () => {
-  assert.match(index, /fightB\.style\.display='none'/);
+test('no separate run button can duplicate the combat controls indoors', () => {
+  // The analog stick drives walk -> run; the only right-side controls are the SinHero combat pad.
+  assert.doesNotMatch(index, /id="run"|id="fight"/);
+  assert.match(index, /id="combat-pad"/);
   assert.match(index, /cityReleased/);
 });
 
