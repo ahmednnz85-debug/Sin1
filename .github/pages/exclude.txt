@@ -1,0 +1,12 @@
+# Not part of the playable site (kept in the repository, left out of the Pages bundle).
+/.git/
+/.github/
+/docs/
+/evidence/
+/tests/
+/tools/
+/*.md
+/ASSET_MAPPING.csv
+/static-server.mjs
+# Master hero file: the game loads assets/Sin_hero_runtime.glb (built from it by tools/trim-hero-clips.py).
+/assets/Sin_combat_FINAL3_axe.glb
