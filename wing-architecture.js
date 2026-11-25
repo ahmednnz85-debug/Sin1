@@ -17,6 +17,17 @@
     T1: 'sacred entrance', T2: 'purification hall', T3: 'sacred columns', T4: 'holy sanctuary', T5: 'offering room',
     L1: 'great library', L2: 'archive', L3: 'scribes room', L4: 'observatory'
   };
+  // Arabic display names (area registry, sin-areas.js). A region without an
+  // entry is listed with its English name; add one here when adding a room.
+  const REGION_NAMES_AR = {
+    K1: 'قاعة الاستقبال', K2: 'قاعة المجلس', K3: 'غرفة الخرائط', K4: 'الخزانة الملكية', K5: 'جناح الملك الخاص',
+    T1: 'المدخل المقدس', T2: 'قاعة التطهير', T3: 'قاعة الأعمدة المقدسة', T4: 'الحرم القمري', T5: 'غرفة القرابين',
+    L1: 'المكتبة الكبرى', L2: 'الأرشيف الملكي', L3: 'غرفة الكتبة', L4: 'المرصد',
+    KC12: 'ممر الملوك', KC1: 'ممر الملوك الشمالي', KC2: 'ممر الملوك الجنوبي', KC3: 'ممر الخرائط', KC4: 'ممر الخزانة',
+    KC5R: 'الممر الخلفي', REAR: 'الرواق الخلفي', TR1: 'ممر المعبد الخلفي', TC12: 'ممر التطهير', TC23: 'ممر الأعمدة',
+    TC34: 'ممر الحرم', TC5: 'ممر القرابين', LC2: 'ممر الأرشيف', LC3: 'ممر الكتبة', LC4: 'ممر المرصد',
+    MP1: 'الممر القمري الأول', MP2: 'الممر القمري الثاني'
+  };
   const HALL_DEFAULTS = {
     hallWidthH: 14,
     hallLengthH: 30,
@@ -531,6 +542,31 @@
     computeBake: computeBake, hallMatches: hallMatches, hallMismatchReason: hallMismatchReason, applyColliderBake: applyColliderBake
   };
 
+  // Area registry: every room and connector the layout builds, from the
+  // shipped bake (data/palace-colliders.json holds the canonical hall). Runs
+  // only when a reader asks (SinAreas.list); the game itself never does.
+  api.REGION_NAMES_AR = REGION_NAMES_AR;
+  api.registerAreas = function (areas, loadBake) {
+    if (!areas) return;
+    areas.group('Kings', 'الجناح الملكي', 'Royal wing', 30)
+      .group('Library', 'المكتبة والأرشيف', 'Library & archive', 40)
+      .group('Temple', 'معبد القمر', 'Moon temple', 50)
+      .group('corridors', 'الممرات والأروقة', 'Corridors & galleries', 60);
+    areas.provide('palace-regions', async () => {
+      const bake = await loadBake();
+      const layout = solveLayout(bake.hall);
+      return layout.rooms.concat(layout.connectors).filter(r => r.kind !== 'threshold').map((r, i) => ({
+        id: r.id, stage: 'palace', group: r.kind === 'room' ? r.wing : 'corridors', order: i,
+        ar: REGION_NAMES_AR[r.id] || r.name, en: r.name.replace(/^./, c => c.toUpperCase()), spawn: { teleport: r.id }
+      }));
+    });
+  };
+  if (root.SinAreas && typeof fetch === 'function') {
+    api.registerAreas(root.SinAreas, () => fetch('data/palace-colliders.json', { cache: 'no-cache' }).then(r => {
+      if (!r.ok) throw new Error('palace bake ' + r.status);
+      return r.json();
+    }));
+  }
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.PalaceWingArchitecture = api;
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

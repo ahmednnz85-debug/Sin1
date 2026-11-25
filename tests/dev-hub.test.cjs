@@ -7,7 +7,14 @@ const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
 const HUB = fs.readFileSync(path.join(ROOT, 'dev-hub.js'), 'utf8');
-const AREAS = fs.readFileSync(path.join(ROOT, 'dev-hub-areas.js'), 'utf8');
+const AREAS = fs.readFileSync(path.join(ROOT, 'sin-areas.js'), 'utf8');
+const HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const PALACE = fs.readFileSync(path.join(ROOT, 'palaceInterior.js'), 'utf8');
+const BAKE = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/palace-colliders.json'), 'utf8'));
+// The registrations exactly as the owning files write them.
+const outdoorBlock = HTML.slice(HTML.indexOf("if(window.SinAreas){SinAreas.group('outdoor'"), HTML.indexOf("'index.html'));}") + "'index.html'));}".length);
+const marketBlock = HTML.split('\n').find(l => l.startsWith("if(window.SinAreas)SinAreas.register({id:'OUT-MARKET'"));
+const hallBlock = PALACE.slice(PALACE.indexOf('  if (window.SinAreas) SinAreas.group(\'hall\''), PALACE.indexOf("'palaceInterior');") + "'palaceInterior');".length);
 
 function load({ search = '', enabled = true } = {}) {
   const store = new Map();
@@ -19,27 +26,51 @@ function load({ search = '', enabled = true } = {}) {
   const body = { appendChild() {}, };
   const document = { head: { appendChild() {} }, body, getElementById: () => null,
     createElement: () => ({ setAttribute() {}, addEventListener() {}, appendChild() {}, querySelector: () => ({ focus() {}, style: {}, addEventListener() {} }), querySelectorAll: () => [], style: {}, remove() {} }) };
-  const window = { location: { search, href: 'http://localhost/index.html' + search }, document, history: { replaceState() {} }, console };
-  const ctx = vm.createContext({ window, Storage, URL, URLSearchParams, performance, console, setTimeout, Map, Set });
-  ctx.globalThis = ctx;
-  vm.runInContext(enabled ? HUB : HUB.replace('const ENABLED = true;', 'const ENABLED = false;'), ctx);
+  const page = { location: { search, href: 'http://localhost/index.html' + search }, document, history: { replaceState() {} }, console };
+  const fetch = async url => ({ ok: true, json: async () => { assert.match(url, /data\/palace-colliders\.json/); return BAKE; } });
+  // As in the browser, window is the global object.
+  const ctx = vm.createContext({ ...page, Storage, URL, URLSearchParams, performance, console, setTimeout, Map, Set, fetch });
+  ctx.window = ctx.self = ctx.globalThis = ctx;
+  const window = ctx;
   vm.runInContext(AREAS, ctx);
-  return { hub: window.SinDevHub, store, Storage };
+  vm.runInContext(enabled ? HUB : HUB.replace('const ENABLED = true;', 'const ENABLED = false;'), ctx);
+  // Owners register in the browser as each script loads.
+  window.fetch = fetch;
+  window.ClipperLib = require(path.join(ROOT, 'vendor/clipper.js'));
+  for (const f of ['wing-architecture.js', 'r3-sealed-zone.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
+  vm.runInContext('(function(){const CANAL_Z0=7,CANAL_Z1=76;' + marketBlock + '})()', ctx);
+  vm.runInContext('(function(){const PL_Z0=76,PL_FRONT=160;' + outdoorBlock + '})()', ctx);
+  vm.runInContext(hallBlock, ctx);
+  return { hub: window.SinDevHub, store, Storage, ctx };
 }
 
-test('registry covers every palace region of the real layout, R3 and the exterior', () => {
+test('menu = core registry: every palace region of the real layout, R3 and the exterior', async () => {
   const { hub } = load();
-  const ids = hub.areas().map(a => a.id);
+  const list = await hub.catalog();
+  assert.equal(list.errors.length, 0, list.errors.join());
+  const ids = list.map(a => a.id);
   assert.equal(new Set(ids).size, ids.length, 'unique ids');
   const graph = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/palace-graph.json'), 'utf8'));
   const regions = graph.planRegions.filter(r => r.kind === 'room' || r.kind === 'corridor' || r.kind === 'gallery').map(r => r.id);
   for (const id of regions) assert.ok(ids.includes(id), 'palace region ' + id + ' registered');
   for (const id of ['HALL', 'R3-01', 'R3-02', 'R3-03', 'OUT-START', 'OUT-GATE', 'OUT-MARKET', 'OUT-PLAZA', 'OUT-PALACE']) assert.ok(ids.includes(id), id);
-  for (const a of hub.areas()) {
+  for (const a of list) {
     assert.ok(a.ar && a.en && a.group, a.id + ' labelled');
     if (a.stage === 'palace') assert.ok(a.spawn.teleport, a.id + ' teleport');
   }
   assert.equal(hub.area('R3-02').stage, 'r3');
+  assert.equal(list.length, 9 + regions.length, 'nothing else is listed');
+  assert.deepEqual(JSON.parse(JSON.stringify([...new Set(list.map(a => a.group))])), ['outdoor', 'hall', 'Kings', 'Library', 'Temple', 'corridors', 'r3']);
+});
+
+test('a room added to the layout appears in the menu with no hub change', async () => {
+  const { hub, ctx } = load({ keep: true });
+  // A new room registered by its owner through the same registry.
+  ctx.window.SinAreas.register({ id: 'K6', stage: 'palace', group: 'Kings', ar: 'غرفة جديدة', en: 'New room', spawn: { teleport: 'K6' } }, 'test');
+  const list = await hub.catalog();
+  const k6 = list.find(a => a.id === 'K6');
+  assert.ok(k6 && hub.link('K6') === '?dev=1&level=K6');
+  assert.ok(list.indexOf(k6) < list.findIndex(a => a.group === 'Library'), 'sorted into its wing');
 });
 
 test('direct links are stable and absolute on request', () => {
@@ -48,12 +79,15 @@ test('direct links are stable and absolute on request', () => {
   assert.equal(hub.link('R3-01', true), 'http://localhost/index.html?dev=1&level=R3-01');
 });
 
-test('registry rejects duplicates and unknown stages', () => {
-  const { hub } = load();
-  assert.throws(() => hub.register({ id: 'K3', stage: 'palace' }));
-  assert.throws(() => hub.register({ id: 'NEW', stage: 'moon' }));
-  hub.register({ id: 'NEW-ROOM', group: 'kings', ar: 'غرفة', en: 'Room', stage: 'palace', spawn: { teleport: 'K1' } });
-  assert.ok(hub.areas().some(a => a.id === 'NEW-ROOM'));
+test('registry rejects bad definitions and reports duplicate ids', async () => {
+  const { ctx } = load();
+  const A = ctx.window.SinAreas;
+  assert.throws(() => A.register({ id: 'X', stage: 'moon', group: 'g', spawn: {} }));
+  assert.throws(() => A.register({ id: 'X', stage: 'palace', group: 'g', spawn: {} }), /teleport/);
+  A.register({ id: 'K3', stage: 'palace', group: 'Kings', spawn: { teleport: 'K3' } }, 'test');
+  const list = await A.list();
+  assert.ok(list.errors.some(e => /duplicate id K3/.test(e)));
+  assert.equal(list.filter(a => a.id === 'K3').length, 1);
 });
 
 test('normal link: storage untouched; dev link: game keys are isolated', () => {

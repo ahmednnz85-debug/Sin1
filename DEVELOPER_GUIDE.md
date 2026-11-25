@@ -20,80 +20,93 @@ PORT=8080 node static-server.mjs
 
 ## معرّفات المناطق وروابطها
 
-### العالم الخارجي
+**القائمة ديناميكية.** يبنيها وضع المطور من سجل المناطق الأساسي `sin-areas.js`، الذي تسجّل فيه كل وحدة من وحدات اللعبة مناطقها بنفسها. قواعد التسجيل في `AGENTS.md`.
 
-| المعرّف | المنطقة | الرابط |
-| --- | --- | --- |
-| `OUT-START` | نقطة البداية (Story start) | `index.html?dev=1&level=OUT-START` |
-| `OUT-GATE` | بوابة عشتار (Ishtar Gate) | `index.html?dev=1&level=OUT-GATE` |
-| `OUT-MARKET` | طريق الأسواق (Market road) | `index.html?dev=1&level=OUT-MARKET` |
-| `OUT-PLAZA` | ساحة القصر (Palace plaza) | `index.html?dev=1&level=OUT-PLAZA` |
-| `OUT-PALACE` | مدخل القصر (Palace royal door) | `index.html?dev=1&level=OUT-PALACE` |
+- غرف القصر وممراته يكتشفها `solveLayout()` في `wing-architecture.js` من التخطيط الفعلي.
+- كل غرفة جديدة تظهر تلقائياً باسمها ومعرّفها ورابطها ونقطة ظهورها، دون أي تعديل في واجهة المطور.
 
-### قاعة العرش
+لعرض القائمة الحالية:
 
-| المعرّف | المنطقة | الرابط |
-| --- | --- | --- |
-| `HALL` | قاعة العرش (Throne hall) | `index.html?dev=1&level=HALL` |
+```
+THREE_DIR=…/node_modules/three node tools/list-areas.cjs --md
+```
 
-### الجناح الملكي
+الجدول التالي هو مخرجات هذا الأمر لحظة كتابة الدليل، وهو للاطلاع فقط وليس مصدراً:
 
-| المعرّف | المنطقة | الرابط |
-| --- | --- | --- |
-| `K1` | قاعة الاستقبال (Reception hall) | `index.html?dev=1&level=K1` |
-| `K2` | قاعة المجلس (Council hall) | `index.html?dev=1&level=K2` |
-| `K3` | غرفة الخرائط (Map room) | `index.html?dev=1&level=K3` |
-| `K4` | الخزانة الملكية (Royal treasury) | `index.html?dev=1&level=K4` |
-| `K5` | جناح الملك الخاص (King private wing) | `index.html?dev=1&level=K5` |
+### العالم الخارجي (Outdoor world)
 
-### المكتبة والأرشيف
+| المعرّف | المنطقة | المرحلة | الرابط | المصدر |
+| --- | --- | --- | --- | --- |
+| `OUT-START` | نقطة البداية (Story start) | outdoor | `index.html?dev=1&level=OUT-START` | index.html |
+| `OUT-GATE` | بوابة عشتار (Ishtar Gate) | outdoor | `index.html?dev=1&level=OUT-GATE` | index.html |
+| `OUT-MARKET` | طريق الأسواق والقناة (Market & canal road) | outdoor | `index.html?dev=1&level=OUT-MARKET` | index.html |
+| `OUT-PLAZA` | ساحة القصر (Palace plaza) | outdoor | `index.html?dev=1&level=OUT-PLAZA` | index.html |
+| `OUT-PALACE` | واجهة القصر الملكي (Palace front) | outdoor | `index.html?dev=1&level=OUT-PALACE` | index.html |
 
-| المعرّف | المنطقة | الرابط |
-| --- | --- | --- |
-| `L1` | المكتبة الكبرى (Great library) | `index.html?dev=1&level=L1` |
-| `L2` | الأرشيف الملكي (Royal archive) | `index.html?dev=1&level=L2` |
-| `L3` | غرفة الكتبة (Scribes room) | `index.html?dev=1&level=L3` |
-| `L4` | المرصد (Observatory) | `index.html?dev=1&level=L4` |
+### قاعة العرش (Throne hall)
 
-### معبد القمر
+| المعرّف | المنطقة | المرحلة | الرابط | المصدر |
+| --- | --- | --- | --- | --- |
+| `HALL` | قاعة العرش (Throne hall) | palace | `index.html?dev=1&level=HALL` | palaceInterior |
 
-| المعرّف | المنطقة | الرابط |
-| --- | --- | --- |
-| `T1` | المدخل المقدس (Sacred entrance) | `index.html?dev=1&level=T1` |
-| `T2` | قاعة التطهير (Purification hall) | `index.html?dev=1&level=T2` |
-| `T3` | قاعة الأعمدة المقدسة (Sacred columns) | `index.html?dev=1&level=T3` |
-| `T4` | الحرم القمري (Holy sanctuary) | `index.html?dev=1&level=T4` |
-| `T5` | غرفة القرابين (Offering room) | `index.html?dev=1&level=T5` |
+### الجناح الملكي (Royal wing)
 
-### الممرات والأروقة
+| المعرّف | المنطقة | المرحلة | الرابط | المصدر |
+| --- | --- | --- | --- | --- |
+| `K1` | قاعة الاستقبال (Reception hall) | palace | `index.html?dev=1&level=K1` | palace-regions |
+| `K2` | قاعة المجلس (Council hall) | palace | `index.html?dev=1&level=K2` | palace-regions |
+| `K5` | جناح الملك الخاص (King private wing) | palace | `index.html?dev=1&level=K5` | palace-regions |
+| `K3` | غرفة الخرائط (Map room) | palace | `index.html?dev=1&level=K3` | palace-regions |
+| `K4` | الخزانة الملكية (Royal treasury) | palace | `index.html?dev=1&level=K4` | palace-regions |
 
-| المعرّف | المنطقة | الرابط |
-| --- | --- | --- |
-| `KC12` | ممر الملوك (Kings corridor) | `index.html?dev=1&level=KC12` |
-| `KC1` | ممر الملوك الشمالي (Kings L corridor (north)) | `index.html?dev=1&level=KC1` |
-| `KC2` | ممر الملوك الجنوبي (Kings L corridor (south)) | `index.html?dev=1&level=KC2` |
-| `KC3` | ممر الخرائط (Map corridor) | `index.html?dev=1&level=KC3` |
-| `KC4` | ممر الخزانة (Treasury corridor) | `index.html?dev=1&level=KC4` |
-| `KC5R` | الممر الخلفي (Rear approach) | `index.html?dev=1&level=KC5R` |
-| `REAR` | الرواق الخلفي (Rear gallery) | `index.html?dev=1&level=REAR` |
-| `TR1` | ممر المعبد الخلفي (Temple rear corridor) | `index.html?dev=1&level=TR1` |
-| `TC12` | ممر التطهير (Temple corridor T1–T2) | `index.html?dev=1&level=TC12` |
-| `TC23` | ممر الأعمدة (Temple corridor T2–T3) | `index.html?dev=1&level=TC23` |
-| `TC34` | ممر الحرم (Temple corridor T3–T4) | `index.html?dev=1&level=TC34` |
-| `TC5` | ممر القرابين (Temple corridor T3–T5) | `index.html?dev=1&level=TC5` |
-| `LC2` | ممر الأرشيف (Library corridor L1–L2) | `index.html?dev=1&level=LC2` |
-| `LC3` | ممر الكتبة (Library corridor L1–L3) | `index.html?dev=1&level=LC3` |
-| `LC4` | ممر المرصد (Library corridor L1–L4) | `index.html?dev=1&level=LC4` |
-| `MP1` | الممر القمري الأول (Moon passage 1) | `index.html?dev=1&level=MP1` |
-| `MP2` | الممر القمري الثاني (Moon passage 2) | `index.html?dev=1&level=MP2` |
+### المكتبة والأرشيف (Library & archive)
 
-### المنطقة المختومة R3
+| المعرّف | المنطقة | المرحلة | الرابط | المصدر |
+| --- | --- | --- | --- | --- |
+| `L1` | المكتبة الكبرى (Great library) | palace | `index.html?dev=1&level=L1` | palace-regions |
+| `L2` | الأرشيف الملكي (Archive) | palace | `index.html?dev=1&level=L2` | palace-regions |
+| `L3` | غرفة الكتبة (Scribes room) | palace | `index.html?dev=1&level=L3` | palace-regions |
+| `L4` | المرصد (Observatory) | palace | `index.html?dev=1&level=L4` | palace-regions |
 
-| المعرّف | المنطقة | الرابط |
-| --- | --- | --- |
-| `R3-01` | درج السنين المدفونة (Buried Years Stair) | `index.html?dev=1&level=R3-01` |
-| `R3-02` | قاعة الختم الأول (First Seal Hall) | `index.html?dev=1&level=R3-02` |
-| `R3-03` | فم الهاوية (Mouth of the Abyss) | `index.html?dev=1&level=R3-03` |
+### معبد القمر (Moon temple)
+
+| المعرّف | المنطقة | المرحلة | الرابط | المصدر |
+| --- | --- | --- | --- | --- |
+| `T1` | المدخل المقدس (Sacred entrance) | palace | `index.html?dev=1&level=T1` | palace-regions |
+| `T2` | قاعة التطهير (Purification hall) | palace | `index.html?dev=1&level=T2` | palace-regions |
+| `T3` | قاعة الأعمدة المقدسة (Sacred columns) | palace | `index.html?dev=1&level=T3` | palace-regions |
+| `T4` | الحرم القمري (Holy sanctuary) | palace | `index.html?dev=1&level=T4` | palace-regions |
+| `T5` | غرفة القرابين (Offering room) | palace | `index.html?dev=1&level=T5` | palace-regions |
+
+### الممرات والأروقة (Corridors & galleries)
+
+| المعرّف | المنطقة | المرحلة | الرابط | المصدر |
+| --- | --- | --- | --- | --- |
+| `KC12` | ممر الملوك (Kings corridor) | palace | `index.html?dev=1&level=KC12` | palace-regions |
+| `REAR` | الرواق الخلفي (Rear Gallery) | palace | `index.html?dev=1&level=REAR` | palace-regions |
+| `KC2` | ممر الملوك الجنوبي (Kings L corridor) | palace | `index.html?dev=1&level=KC2` | palace-regions |
+| `KC1` | ممر الملوك الشمالي (Kings L corridor) | palace | `index.html?dev=1&level=KC1` | palace-regions |
+| `KC3` | ممر الخرائط (Map corridor) | palace | `index.html?dev=1&level=KC3` | palace-regions |
+| `KC4` | ممر الخزانة (Treasury corridor) | palace | `index.html?dev=1&level=KC4` | palace-regions |
+| `KC5R` | الممر الخلفي (Rear approach) | palace | `index.html?dev=1&level=KC5R` | palace-regions |
+| `TR1` | ممر المعبد الخلفي (Rear temple approach) | palace | `index.html?dev=1&level=TR1` | palace-regions |
+| `TC12` | ممر التطهير (Temple corridor) | palace | `index.html?dev=1&level=TC12` | palace-regions |
+| `TC23` | ممر الأعمدة (Temple corridor) | palace | `index.html?dev=1&level=TC23` | palace-regions |
+| `TC34` | ممر الحرم (Sanctuary corridor) | palace | `index.html?dev=1&level=TC34` | palace-regions |
+| `TC5` | ممر القرابين (Offering side passage) | palace | `index.html?dev=1&level=TC5` | palace-regions |
+| `LC2` | ممر الأرشيف (Archive corridor) | palace | `index.html?dev=1&level=LC2` | palace-regions |
+| `LC3` | ممر الكتبة (Scribes corridor) | palace | `index.html?dev=1&level=LC3` | palace-regions |
+| `LC4` | ممر المرصد (Observatory opening) | palace | `index.html?dev=1&level=LC4` | palace-regions |
+| `MP1` | الممر القمري الأول (Moon Passage) | palace | `index.html?dev=1&level=MP1` | palace-regions |
+| `MP2` | الممر القمري الثاني (Moon Passage) | palace | `index.html?dev=1&level=MP2` | palace-regions |
+
+### المنطقة المختومة R3 (Sealed zone R3)
+
+| المعرّف | المنطقة | المرحلة | الرابط | المصدر |
+| --- | --- | --- | --- | --- |
+| `R3-01` | درج السنين المدفونة (Buried Years Stair) | r3 | `index.html?dev=1&level=R3-01` | r3-sealed-zone |
+| `R3-02` | قاعة الختم الأول (First Seal Hall) | r3 | `index.html?dev=1&level=R3-02` | r3-sealed-zone |
+| `R3-03` | فم الهاوية (Mouth of the Abyss) | r3 | `index.html?dev=1&level=R3-03` | r3-sealed-zone |
 
 ## كيف تُحمَّل كل منطقة
 
@@ -159,24 +172,19 @@ PORT=8080 node static-server.mjs
 
 ## إضافة منطقة جديدة
 
-سجّلها في `dev-hub-areas.js`، أو في أي ملف يُحمَّل بعد `dev-hub.js`:
+لا تُضاف المناطق في أداة المطور. تسجّلها وحدة اللعبة المالكة في `sin-areas.js`، كما يشرح `AGENTS.md`:
 
-```js
-SinDevHub.register({ id: 'K6', group: 'kings', ar: 'اسم عربي', en: 'English name', stage: 'palace', spawn: { teleport: 'K6' } });
-```
-
-- `stage: 'outdoor'` مع `spawn: { x, z, yaw }` بالمتر في إحداثيات العالم الخارجي، و`yaw = 0` باتجاه +z.
-- `stage: 'palace'` مع `spawn: { teleport: '<معرّف المنطقة في wing-architecture.js>' }`.
-- `stage: 'r3'` مع `spawn: { u, v, y, yaw }` في فضاء مرحلة R3، أو `{ stageSpawn: true }`.
-- لقسم جديد في القائمة: `SinDevHub.groups([['id', 'عربي', 'English']])`.
-
-تظهر المنطقة تلقائياً في القائمة، ويعمل رابطها المباشر فوراً. لا تغيّر معرّفاً منشوراً، فالوكلاء والتقارير تعتمد عليه.
+- **غرفة في القصر:** تكفي إضافتها إلى `solveLayout()` واسمها العربي إلى `REGION_NAMES_AR`.
+- **منطقة أخرى:** `SinAreas.register({...})` من الوحدة المالكة.
+- **مرحلة جديدة كلياً:** أضِف `stage` جديداً، ودالة دخول له في `dev-hub.js`.
 
 ## التعطيل والإزالة
 
 - **تعطيل فوري:** في `dev-hub.js` غيّر `const ENABLED = true;` إلى `false`. لن تظهر واجهة الدخول، وستعمل الروابط كلها كاللعبة الأصلية، ولن يُعزل الحفظ.
 - **إزالة كاملة:**
-  1. احذف `dev-hub.js` و`dev-hub-areas.js` و`tools/dev-hub-check.cjs` و`tests/dev-hub.test.cjs` و`DEVELOPER_GUIDE.md`.
-  2. احذف وسمي `<script>` الخاصين بهما في `index.html`، ومعهما التعليق فوقهما.
+  1. احذف `dev-hub.js` و`tools/dev-hub-check.cjs` و`tests/dev-hub.test.cjs` و`DEVELOPER_GUIDE.md`.
+  2. احذف وسم `<script>` الخاص بـ`dev-hub.js` في `index.html`، ومعه التعليق فوقه.
+  - يبقى `sin-areas.js` والتسجيلات في وحدات اللعبة، لأنها جزء من اللعبة نفسها: سجل المناطق الموحد. لا تحمّل أي مورد، ولا تغيّر اللعب.
+  - يبقى `tools/list-areas.cjs` أيضاً، لكنه يقرأ السجل عبر قائمة المطور (`index.html?dev=1`)، فيتوقف بعد إزالة الأداة. إن أردت الاحتفاظ به فاجعله يقرأ `SinAreas.list()` مباشرة.
   3. السطر الأخير في سكربت اللعبة يعمل دونهما، لأنه يستدعي `init()` الأصلي حين لا توجد الأداة. يمكن إرجاعه إلى أصله: `init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);});`
   4. لا يحتاج أي ملف آخر في اللعبة إلى تعديل.

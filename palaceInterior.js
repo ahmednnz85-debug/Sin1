@@ -5356,6 +5356,10 @@
     want.y = Math.max(floorY + 1.2, Math.min(floorY + Math.max(2.4, CONFIG.hallHeightH * H * 0.55), want.y));
   }
 
+  // Area registry (sin-areas.js): the throne hall is this module's stage.
+  if (window.SinAreas) SinAreas.group('hall', 'قاعة العرش', 'Throne hall', 20)
+    .register({ id: 'HALL', stage: 'palace', group: 'hall', ar: 'قاعة العرش', en: 'Throne hall', spawn: { teleport: 'Palace' } }, 'palaceInterior');
+
   window.PalaceInterior = {
     CONFIG: CONFIG,
     BUILD: BUILD,

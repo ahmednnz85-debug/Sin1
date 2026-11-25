@@ -6,6 +6,7 @@
   const TURN = 34, HALL_U = 59, HALL_V = 24;
   const RADIUS = 20, GALLERY = -15, BASIN = GALLERY - 1.2;
   const SPRING = BASIN + 11.5, CROWN = BASIN + 20;
+  const ABYSS_LANDING = -15.8; // floor of the landing that opens the Mouth of the Abyss
   const HALF = 3, PORT = Math.asin(HALF / RADIUS);
   const CHORD = Math.sqrt(RADIUS ** 2 - HALF ** 2);
   const HALL_ENTRY = HALL_U - CHORD, SIDE_EXIT = HALL_V - CHORD;
@@ -449,10 +450,10 @@
     part = parts[2];
     const crossAbyss = (d, y, t) => alongV(d, y, t + HALL_U);
     crossAbyss.isTransverse = true;
-    tunnel(crossAbyss, -1, SIDE_EXIT, 2.32, -15.8, GALLERY, 0, 8.4, [-1, 1]);
-    landing(HALL_U - 3, HALL_U + 3, -7, -1, -15.8, 8.4, [true, false, true, false]);
+    tunnel(crossAbyss, -1, SIDE_EXIT, 2.32, ABYSS_LANDING, GALLERY, 0, 8.4, [-1, 1]);
+    landing(HALL_U - 3, HALL_U + 3, -7, -1, ABYSS_LANDING, 8.4, [true, false, true, false]);
     const jog = (d, y, t) => alongU(d, y, t - 4);
-    tunnel(jog, HALL_U + 3, HALL_U + 8, 2.32, -15.8, -16.7, 0, 8.4, [-1, 1]);
+    tunnel(jog, HALL_U + 3, HALL_U + 8, 2.32, ABYSS_LANDING, -16.7, 0, 8.4, [-1, 1]);
     landing(HALL_U + 8, HALL_U + 14, -7, -1, -16.7, 8.4, [false, true, false, true]);
     const drop = (d, y, t) => alongV(d, y, t + HALL_U + 11);
     drop.isTransverse = true;
@@ -666,5 +667,14 @@
     return counts;
   }
 
+  // Area registry (sin-areas.js): the three sections, spawned in stage space
+  // (u out of passage-L0, v along the hall, y below the hall floor).
+  if (window.SinAreas) {
+    SinAreas.group('r3', 'المنطقة المختومة R3', 'Sealed zone R3', 70);
+    [['R3-01', 'درج السنين المدفونة', 'Buried Years Stair', { stageSpawn: true }],
+      ['R3-02', 'قاعة الختم الأول', 'First Seal Hall', { u: HALL_ENTRY + 1.7, v: HALL_V, y: GALLERY, yaw: -Math.PI / 2 }],
+      ['R3-03', 'فم الهاوية', 'Mouth of the Abyss', { u: HALL_U, v: -4.2, y: ABYSS_LANDING, yaw: -Math.PI / 2 }]]
+      .forEach(([id, ar, en, spawn]) => SinAreas.register({ id, stage: 'r3', group: 'r3', ar, en, spawn }, 'r3-sealed-zone'));
+  }
   window.SinR3SealedZone = { mount, resources, release, passageId: SEAL };
 })();

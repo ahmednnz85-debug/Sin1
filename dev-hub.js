@@ -1,13 +1,16 @@
 /* Sîn Developer Hub — TEMPORARY developer tool, removable in one step.
    ---------------------------------------------------------------------------
-   CENTRAL SWITCH: set ENABLED to false (or delete this file, dev-hub-areas.js
-   and their two <script> tags) and the game boots exactly as before: the
-   index.html hook falls back to the original init().
+   CENTRAL SWITCH: set ENABLED to false (or delete this file and its
+   <script> tag) and the game boots exactly as before: the index.html hook
+   falls back to the original init().
+
+   Areas: read from the core registry sin-areas.js (see AGENTS.md); this
+   module keeps no list of its own.
 
    What it does (only when ENABLED):
      • Normal link: an entry screen before any world asset loads.
          "بدء اللعبة" → the original init() and story, unchanged.
-         "وضع المطور" → the area menu (dev-hub-areas.js registry).
+         "وضع المطور" → the area menu, built from SinAreas.
      • ?dev=1&level=<id>: boots straight into that area, no menu, no story.
          outdoor: original boot, story start skipped, Sîn placed at the spawn.
          palace : the existing quick hall path (startInHall + royalDoorTest:
@@ -31,7 +34,16 @@
 
   const qs = new URLSearchParams(root.location ? root.location.search : '');
   const devSession = ENABLED && qs.get('dev') === '1';
-  const areas = [], byId = new Map(), groupList = [];
+  // Areas come from the game's core registry (sin-areas.js), never from a
+  // list kept here: whatever the game registers appears in the menu.
+  let areas = [], byId = new Map();
+  async function catalog() {
+    if (!root.SinAreas) throw new Error('SinAreas registry missing');
+    areas = await SinAreas.list();
+    byId = new Map(areas.map(a => [a.id, a]));
+    if (areas.errors && areas.errors.length) console.warn('[dev-hub] registry', areas.errors);
+    return areas;
+  }
 
   // ---- storage isolation (must run before any game script reads storage) --
   function isolateStorage(proto) {
@@ -44,14 +56,7 @@
   }
   if (devSession && typeof Storage !== 'undefined') isolateStorage(Storage.prototype);
 
-  // ---- registry ------------------------------------------------------------
-  function register(a) {
-    if (!a || !a.id || byId.has(a.id)) throw new Error('SinDevHub: bad or duplicate area id ' + (a && a.id));
-    if (!['outdoor', 'palace', 'r3'].includes(a.stage)) throw new Error('SinDevHub: unknown stage for ' + a.id);
-    areas.push(a); byId.set(a.id, a);
-    return a;
-  }
-  function groups(list) { list.forEach(g => { if (!groupList.some(x => x[0] === g[0])) groupList.push(g); }); }
+  // ---- links -------------------------------------------------------------
   function link(id, absolute) {
     const path = 'index.html?dev=1&level=' + encodeURIComponent(id);
     if (!absolute || !root.location) return '?dev=1&level=' + encodeURIComponent(id);
@@ -140,19 +145,25 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
   function showList(host, onClose) {
     style();
     const wrap = el('div', { id: 'sin-dev-list' });
+    wrap.innerHTML = '<div class="bar"><h2>وضع المطور · المناطق</h2></div><p>جارٍ قراءة سجل المناطق…</p>';
+    const card = host.querySelector('.card'); if (card) card.style.display = 'none';
+    host.appendChild(wrap);
+    catalog().then(() => fillList(wrap, card, onClose), e => { wrap.querySelector('p').textContent = 'تعذّرت قراءة سجل المناطق: ' + e.message; });
+  }
+  function fillList(wrap, card, onClose) {
     const by = {};
     areas.forEach(a => (by[a.group] || (by[a.group] = [])).push(a));
     let html = `<div class="bar"><h2>وضع المطور · المناطق</h2><button data-act="back">${onClose ? 'إغلاق' : 'رجوع'}</button></div>
       <input type="search" placeholder="بحث: K3 ، المكتبة ، R3-02 …" aria-label="search">`;
-    groupList.concat(Object.keys(by).filter(g => !groupList.some(x => x[0] === g)).map(g => [g, g, g])).forEach(([g, ar, en]) => {
+    const declared = SinAreas.groups();
+    declared.map(g => [g.id, g.ar, g.en]).concat(Object.keys(by).filter(g => !declared.some(x => x.id === g)).map(g => [g, g, g])).forEach(([g, ar, en]) => {
       const list = by[g]; if (!list) return;
       html += `<details ${g === 'outdoor' || g === 'hall' || g === 'r3' ? 'open' : ''} data-group="${esc(g)}"><summary>${esc(ar)} <em style="font-style:normal;font-size:12px;color:#8f7a59;direction:ltr">${esc(en)}</em><span class="count">${list.length}</span></summary><div class="grid">`;
       list.forEach(a => { html += `<button class="area" data-id="${esc(a.id)}"><code>${esc(a.id)}</code><span>${esc(a.ar)}<em>${esc(a.en)}</em></span></button>`; });
       html += '</div></details>';
     });
+    if (areas.errors && areas.errors.length) html += `<p style="color:#d98c6a;font-size:12px;direction:ltr">${esc(areas.errors.join(' · '))}</p>`;
     wrap.innerHTML = html;
-    const card = host.querySelector('.card'); if (card) card.style.display = 'none';
-    host.appendChild(wrap);
     wrap.querySelector('input').addEventListener('input', ev => {
       const q = ev.target.value.trim().toLowerCase();
       wrap.querySelectorAll('.area').forEach(b => { b.style.display = !q || b.textContent.toLowerCase().includes(q) ? '' : 'none'; });
@@ -190,8 +201,9 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     if (AUTOMATION.some(k => qs.has(k))) return start();
     showGate(start);
   }
-  function startSession(id, start) {
-    const a = byId.get(id);
+  async function startSession(id, start) {
+    let a = null;
+    try { await catalog(); a = byId.get(id); } catch (e) { console.error('[dev-hub]', e); }
     if (!a) { showGate(start); showList(gateEl, null); status('معرّف غير معروف: ' + id); return; }
     session = { area: a, ready: false, t0: performance.now(), log: [] };
     root.__sinDev = session;
@@ -503,7 +515,7 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
 
   root.SinDevHub = {
     enabled: ENABLED, devSession, PREFIX,
-    register, groups, areas: () => areas.slice(), area: id => byId.get(id), link, bind, game: () => game,
+    catalog, area: id => byId.get(id), link, bind, game: () => game,
     boot, go, respawn, session: () => session,
     tools: { setFps, setMem, setFly, setCollisions, copyLink }
   };
