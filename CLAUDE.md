@@ -1,3 +1,5 @@
+@AGENTS.md
+
 قواعد تطوير لعبة Sîn: Curse of Babylon
 
 1. دورك الأساسي
