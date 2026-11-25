@@ -758,7 +758,7 @@
       const waiting = rec.firstWait ? t-rec.firstWait : 0;
       rec.timing={ waitMs:Math.max(0,waiting), assetsMs:0, uploadMs:0, compileMs:0, totalMs:0 };
       rec.firstWait=0;
-      rec.state = 'loading'; rec.startedAt = t; rec.done = false; rec.failed = null; rec.pending.clear(); rec.loadTicks = 0;
+      rec.state = 'loading'; rec.startedAt = t; rec.done = false; rec.failed = null; rec.pending.clear(); rec.loadTicks = 0; rec.prepFrames = 0;
       measureStart(rec); stats.starts = (stats.starts || 0) + 1;
       note('load', rec.id + ' stream start');
       try { rec.spec.load(apiFor(rec)); } catch (e) { rec.failed = e; rec.done = true; console.warn('zone load failed', rec.id, e); }
@@ -784,6 +784,7 @@
     }
     function step(rec, t, rank) {
       if (rec.state === 'failed') return;
+      rec.prepFrames = (rec.prepFrames || 0) + 1;
       const g = group(rec);
       if (rec.spec.requireComplete && rec.failed) { failStrict(rec, rec.failed); return; }
       if (rec.state === 'loading') {
@@ -988,7 +989,7 @@
       const n = g ? revealObject(g) : 0;
       if (g) g.userData.dressReady = true;
       stats.reveals++;
-      note('load', rec.id + ' ready (' + n + ' meshes, ' + Math.round(now() - rec.startedAt) + ' ms)');
+      note('load', rec.id + ' ready (' + n + ' meshes, ' + Math.round(now() - rec.startedAt) + ' ms, ' + (rec.prepFrames || 0) + ' frames)');
       if (rec.spec.onReady) try { rec.spec.onReady(apiFor(rec)); } catch (_) {}
       const w = rec.waiters.splice(0); w.forEach(fn => { try { fn(rec.id); } catch (_) {} });
     }
