@@ -613,8 +613,10 @@
         });
         // A speculative preparation yields when the hero is in, or about to
         // reach, a room that is much nearer (its work restarts later).
-        if (busy && !busy.isCurrent && !busy.visible && !busy.retained &&
-          (rec.isCurrent || (rankOf(rec) < 24 && rankOf(rec) + 15 < rankOf(busy)))) {
+        // (A preparation is never on screen, so a door holding its room
+        // does not stop it from yielding: only finished rooms are held.)
+        if (busy && !busy.isCurrent && !busy.isDemand && !busy.visible &&
+          (rec.isCurrent || rec.isDemand || (rankOf(rec) < 24 && rankOf(rec) + 15 < rankOf(busy)))) {
           evict(busy, rec.isCurrent ? 'yield-to-current' : 'yield-to-nearer');
           stats.budgetEvictions++;
           busy = null;

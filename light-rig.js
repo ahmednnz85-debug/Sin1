@@ -293,6 +293,17 @@
       if (active && scene === s) return true;
       if (active) uninstall();
       scene = s;
+      // The decisive moment: three.js calls scene.onBeforeRender after every
+      // wrapper around render() has run (the palace updates which rooms are
+      // drawn in one of them) and right before it collects the lights.
+      if (!s.__sinLightRigHook) {
+        const prev = s.onBeforeRender;
+        s.onBeforeRender = function (renderer, sc, camera) {
+          if (active && sc === scene) apply(camera);
+          if (typeof prev === 'function') return prev.apply(this, arguments);
+        };
+        s.__sinLightRigHook = true;
+      }
       if (!padRoot) {
         if (!o.fixedTargets) {
           let maxVectors = 1024;
