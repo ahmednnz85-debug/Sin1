@@ -1,0 +1,485 @@
+{
+ "base": "http://127.0.0.1:8080/index.html",
+ "results": {
+  "direct": {
+   "OUT-START": {
+    "wallSeconds": 187.129,
+    "level": "OUT-START",
+    "ready": true,
+    "ms": 18979,
+    "error": null,
+    "phase": "IDLE",
+    "hero": [
+     0,
+     0,
+     -30
+    ],
+    "blockedAtHero": false,
+    "geometries": 74,
+    "textures": 63,
+    "calls": 185,
+    "triangles": 1766450,
+    "est": {
+     "cpuMB": 58.2,
+     "gpuMB": 250.4
+    },
+    "url": "?dev=1&level=OUT-START",
+    "movedAfterWalk": 2.53,
+    "heroAfterWalk": [
+     0,
+     0,
+     -27.47
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 13,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready OUT-START in 18979 ms"
+    ]
+   },
+   "OUT-GATE": {
+    "wallSeconds": 176.293,
+    "level": "OUT-GATE",
+    "ready": true,
+    "ms": 19394,
+    "error": null,
+    "phase": "IDLE",
+    "hero": [
+     0,
+     0,
+     -13
+    ],
+    "blockedAtHero": false,
+    "geometries": 75,
+    "textures": 63,
+    "calls": 182,
+    "triangles": 1255657,
+    "est": {
+     "cpuMB": 58.3,
+     "gpuMB": 250.4
+    },
+    "url": "?dev=1&level=OUT-GATE",
+    "movedAfterWalk": 2.53,
+    "heroAfterWalk": [
+     0,
+     0,
+     -10.47
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 13,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready OUT-GATE in 19394 ms"
+    ]
+   },
+   "OUT-MARKET": {
+    "wallSeconds": 156.547,
+    "level": "OUT-MARKET",
+    "ready": true,
+    "ms": 20626,
+    "error": null,
+    "phase": "IDLE",
+    "hero": [
+     0,
+     0,
+     41.5
+    ],
+    "blockedAtHero": false,
+    "geometries": 82,
+    "textures": 65,
+    "calls": 171,
+    "triangles": 1093095,
+    "est": {
+     "cpuMB": 50.1,
+     "gpuMB": 260.9
+    },
+    "url": "?dev=1&level=OUT-MARKET",
+    "movedAfterWalk": 2.53,
+    "heroAfterWalk": [
+     0,
+     0,
+     44.03
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 13,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready OUT-MARKET in 20626 ms"
+    ]
+   },
+   "OUT-PLAZA": {
+    "wallSeconds": 86.897,
+    "level": "OUT-PLAZA",
+    "ready": true,
+    "ms": 19299,
+    "error": null,
+    "phase": "IDLE",
+    "hero": [
+     0,
+     0,
+     96
+    ],
+    "blockedAtHero": false,
+    "geometries": 60,
+    "textures": 65,
+    "calls": 169,
+    "triangles": 787806,
+    "est": {
+     "cpuMB": 50.7,
+     "gpuMB": 261.6
+    },
+    "url": "?dev=1&level=OUT-PLAZA",
+    "movedAfterWalk": 2.53,
+    "heroAfterWalk": [
+     0,
+     0,
+     98.53
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 13,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready OUT-PLAZA in 19299 ms"
+    ]
+   },
+   "OUT-PALACE": {
+    "wallSeconds": 73.816,
+    "level": "OUT-PALACE",
+    "ready": true,
+    "ms": 20213,
+    "error": null,
+    "phase": "IDLE",
+    "hero": [
+     0,
+     0,
+     157.22
+    ],
+    "blockedAtHero": false,
+    "geometries": 60,
+    "textures": 64,
+    "calls": 58,
+    "triangles": 585726,
+    "est": {
+     "cpuMB": 54.7,
+     "gpuMB": 256.1
+    },
+    "url": "?dev=1&level=OUT-PALACE",
+    "movedAfterWalk": 2.53,
+    "heroAfterWalk": [
+     0,
+     0,
+     159.75
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 13,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready OUT-PALACE in 20213 ms"
+    ]
+   },
+   "HALL": {
+    "failed": "TimeoutError: page.screenshot: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - taking page screenshot\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n",
+    "snap": {
+     "level": "HALL",
+     "ready": true,
+     "ms": 107220,
+     "error": null,
+     "phase": "DONE",
+     "hero": [
+      1,
+      3.75,
+      194.33
+     ],
+     "blockedAtHero": false,
+     "geometries": 279,
+     "textures": 136,
+     "calls": 272,
+     "triangles": 1875211,
+     "est": {
+      "cpuMB": 80.1,
+      "gpuMB": 217.7
+     },
+     "url": "?dev=1&level=HALL"
+    },
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready HALL in 107220 ms"
+    ]
+   },
+   "K1": {
+    "wallSeconds": 316.695,
+    "level": "K1",
+    "ready": true,
+    "ms": 112021,
+    "error": null,
+    "phase": "DONE",
+    "hero": [
+     -25.18,
+     4,
+     229.66
+    ],
+    "blockedAtHero": false,
+    "geometries": 213,
+    "textures": 104,
+    "calls": 125,
+    "triangles": 559966,
+    "est": {
+     "cpuMB": 76.2,
+     "gpuMB": 187
+    },
+    "url": "?dev=1&level=K1",
+    "movedAfterWalk": 2.53,
+    "heroAfterWalk": [
+     -27.71,
+     4,
+     229.66
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 32,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready K1 in 112021 ms"
+    ]
+   },
+   "K3": {
+    "wallSeconds": 349.988,
+    "level": "K3",
+    "ready": true,
+    "ms": 178785,
+    "error": null,
+    "phase": "DONE",
+    "hero": [
+     -87.74,
+     3.75,
+     265.66
+    ],
+    "blockedAtHero": false,
+    "geometries": 227,
+    "textures": 117,
+    "calls": 28,
+    "triangles": 483725,
+    "est": {
+     "cpuMB": 83.9,
+     "gpuMB": 216.5
+    },
+    "url": "?dev=1&level=K3",
+    "movedAfterWalk": 0.77,
+    "heroAfterWalk": [
+     -88.51,
+     3.75,
+     265.66
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 37,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready K3 in 178785 ms"
+    ]
+   },
+   "L2": {
+    "failed": "TimeoutError: page.screenshot: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - taking page screenshot\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n",
+    "snap": {
+     "level": "L2",
+     "ready": true,
+     "ms": 223655,
+     "error": null,
+     "phase": "DONE",
+     "hero": [
+      33.1,
+      3.75,
+      166.86
+     ],
+     "blockedAtHero": false,
+     "geometries": 186,
+     "textures": 83,
+     "calls": 41,
+     "triangles": 448254,
+     "est": {
+      "cpuMB": 135.2,
+      "gpuMB": 160.4
+     },
+     "url": "?dev=1&level=L2"
+    },
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready L2 in 223655 ms"
+    ]
+   },
+   "T4": {
+    "wallSeconds": 542.534,
+    "level": "T4",
+    "ready": true,
+    "ms": 326486,
+    "error": null,
+    "phase": "DONE",
+    "hero": [
+     123.94,
+     3.75,
+     229.66
+    ],
+    "blockedAtHero": false,
+    "geometries": 161,
+    "textures": 83,
+    "calls": 44,
+    "triangles": 265342,
+    "est": {
+     "cpuMB": 69.7,
+     "gpuMB": 137.8
+    },
+    "url": "?dev=1&level=T4",
+    "movedAfterWalk": 2.53,
+    "heroAfterWalk": [
+     126.47,
+     3.75,
+     229.66
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 31,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready T4 in 326486 ms"
+    ]
+   },
+   "KC3": {
+    "wallSeconds": 269.408,
+    "level": "KC3",
+    "ready": true,
+    "ms": 107941,
+    "error": null,
+    "phase": "DONE",
+    "hero": [
+     -83.06,
+     3.75,
+     265.66
+    ],
+    "blockedAtHero": true,
+    "geometries": 126,
+    "textures": 67,
+    "calls": 36,
+    "triangles": 727475,
+    "est": {
+     "cpuMB": 113.3,
+     "gpuMB": 145.7
+    },
+    "url": "?dev=1&level=KC3",
+    "movedAfterWalk": 0.85,
+    "heroAfterWalk": [
+     -82.21,
+     3.75,
+     265.66
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 33,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready KC3 in 107941 ms"
+    ]
+   },
+   "R3-01": {
+    "wallSeconds": 213.519,
+    "level": "R3-01",
+    "ready": true,
+    "ms": 140048,
+    "error": null,
+    "phase": "R3",
+    "hero": [
+     -17.11,
+     3.75,
+     192.86
+    ],
+    "blockedAtHero": false,
+    "geometries": 66,
+    "textures": 84,
+    "calls": 90,
+    "triangles": 708323,
+    "est": {
+     "cpuMB": 43.6,
+     "gpuMB": 84.8
+    },
+    "url": "?dev=1&level=R3-01",
+    "movedAfterWalk": 2.53,
+    "heroAfterWalk": [
+     -19.64,
+     2.92,
+     192.86
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 30,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready R3-01 in 140048 ms"
+    ]
+   },
+   "R3-02": {
+    "wallSeconds": 159.486,
+    "level": "R3-02",
+    "ready": true,
+    "ms": 135234,
+    "error": null,
+    "phase": "R3",
+    "hero": [
+     -52.81,
+     -11.25,
+     216.86
+    ],
+    "blockedAtHero": false,
+    "geometries": 89,
+    "textures": 84,
+    "calls": 30,
+    "triangles": 143732,
+    "est": {
+     "cpuMB": 43.6,
+     "gpuMB": 85.8
+    },
+    "url": "?dev=1&level=R3-02",
+    "movedAfterWalk": 2.64,
+    "heroAfterWalk": [
+     -55.45,
+     -11.54,
+     216.86
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 30,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready R3-02 in 135234 ms"
+    ]
+   },
+   "R3-03": {
+    "wallSeconds": 168.178,
+    "level": "R3-03",
+    "ready": true,
+    "ms": 144079,
+    "error": null,
+    "phase": "R3",
+    "hero": [
+     -70.88,
+     -12.05,
+     188.66
+    ],
+    "blockedAtHero": false,
+    "geometries": 78,
+    "textures": 84,
+    "calls": 15,
+    "triangles": 116884,
+    "est": {
+     "cpuMB": 43.6,
+     "gpuMB": 85.8
+    },
+    "url": "?dev=1&level=R3-03",
+    "movedAfterWalk": 2.64,
+    "heroAfterWalk": [
+     -73.52,
+     -12.05,
+     188.66
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 30,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready R3-03 in 144079 ms"
+    ]
+   }
+  }
+ }
+}
