@@ -134,3 +134,12 @@ test('the palace installs the rig on the live renderer before the entry shader w
   const zs = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
   assert.match(zs, /rig\.compile\(r, root, ctx\.camera\)/);
 });
+
+test('the budget fits the GPU uniform limit and grows to what this device has shown', () => {
+  const full = L.fitTargets(L.DEFAULT_TARGETS, null, 1024);
+  assert.ok(L.vectors(full) <= 1024 - 128);
+  assert.ok(full.point >= 28 && full.spot >= 6, 'L2 / L4 views (28 point, 6 spot) fit the default budget');
+  for (const v of [224, 256]) assert.ok(L.vectors(L.fitTargets(L.DEFAULT_TARGETS, null, v)) <= v - 128, 'uniform limit ' + v);
+  const grown = L.fitTargets(L.DEFAULT_TARGETS, { point: 44, spot: 9 }, 1024);
+  assert.equal(grown.point, 44); assert.equal(grown.spot, 9);
+});

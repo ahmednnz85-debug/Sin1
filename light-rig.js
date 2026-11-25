@@ -48,7 +48,32 @@
   // the hall looking into L1 and T1 = 25 point lights. Without the rig the
   // same tour produced 10 different light layouts, i.e. 10 full rebuilds of
   // every visible material.
-  const DEFAULT_TARGETS = { point: 26, pointShadow: 0, spot: 4, spotShadow: 0, spotMap: 0, spotShadowMap: 1, dir: 3, dirShadow: 1, hemi: 4, rect: 0, probe: 0 };
+  // With compressed textures more rooms stay resident, so views through open
+  // doors combine more rooms (the L2 / L4 views reached 28 point and 6 spot
+  // lights). The target is then fitted to the GPU's uniform limit, and a
+  // view that ever shows more is remembered for the next session.
+  const DEFAULT_TARGETS = { point: 40, pointShadow: 0, spot: 8, spotShadow: 1, spotMap: 0, spotShadowMap: 1, dir: 4, dirShadow: 1, hemi: 6, rect: 0, probe: 0 };
+  // Fragment uniform vectors per light of each kind (struct members are
+  // vec4-aligned), and what is left for the material's own uniforms.
+  const VEC_COST = { point: 4, pointShadow: 9, spot: 7, spotShadow: 12, spotMap: 8, spotShadowMap: 13, dir: 2, dirShadow: 7, hemi: 3, rect: 4, probe: 9 };
+  const MATERIAL_RESERVE = 128;
+  const MEMORY_KEY = 'sinLightRigMax';
+  function vectors(t) { return CATEGORIES.reduce((n, k) => n + (t[k] || 0) * (VEC_COST[k] || 4), 0); }
+  // Largest real counts seen on this device, bounded by what the GPU's
+  // fragment uniforms can hold.
+  function fitTargets(base, learned, maxVectors) {
+    const t = {};
+    CATEGORIES.forEach(k => { t[k] = Math.max(base[k] || 0, learned && learned[k] ? Math.min(64, learned[k]) : 0); });
+    const room = (maxVectors || 1024) - MATERIAL_RESERVE;
+    const need = vectors(t);
+    if (need > room) {
+      // A GPU with few fragment uniforms: shrink every kind in proportion
+      // (views beyond it compile once, as plain three.js would).
+      const scale = Math.max(0, room) / need;
+      CATEGORIES.forEach(k => { t[k] = Math.floor(t[k] * scale); });
+    }
+    return t;
+  }
 
   function category(l) {
     if (!l || !l.isLight || l.isAmbientLight) return null;
@@ -105,7 +130,7 @@
   function create(THREE, options) {
     const o = Object.assign({ targets: DEFAULT_TARGETS, log: null }, options || {});
     const attachHook = o.attachRenderer || null;
-    const targets = Object.assign(emptyCounts(), o.targets);
+    let targets = Object.assign(emptyCounts(), o.targets);
     const lights = new Set();
     const pads = {};
     let scene = null, padRoot = null, active = false, configScene = null, padMap = null;
@@ -202,7 +227,8 @@
       if (overflow && !overflowSeen.has(overflow)) {
         overflowSeen.add(overflow);
         stats.overflows++;
-        note('light budget exceeded —' + overflow + ' (programs for this view compile once)');
+        note('light budget exceeded —' + overflow + ' (programs for this view compile once; remembered for the next session)');
+        remember();
       }
       return c;
     }
@@ -251,13 +277,31 @@
       return withoutOwnLights(object, () => renderer.compileAsync(object, camera, target));
     }
 
+    function learned() {
+      try { const w = typeof window !== 'undefined' ? window : null; const v = w && w.localStorage && w.localStorage.getItem(MEMORY_KEY); return v ? JSON.parse(v) : null; } catch (_) { return null; }
+    }
+    let savedAt = 0;
+    function remember() {
+      const now = Date.now();
+      if (now - savedAt < 5000) return;
+      savedAt = now;
+      try { const w = typeof window !== 'undefined' ? window : null; if (w && w.localStorage) w.localStorage.setItem(MEMORY_KEY, JSON.stringify(stats.max)); } catch (_) {}
+    }
     function install(s, renderer) {
       if (!s) return false;
       if (renderer && typeof attachHook === 'function') attachHook(renderer);
       if (active && scene === s) return true;
       if (active) uninstall();
       scene = s;
-      if (!padRoot) buildPads();
+      if (!padRoot) {
+        if (!o.fixedTargets) {
+          let maxVectors = 1024;
+          try { const gl = renderer && renderer.getContext && renderer.getContext(); if (gl) maxVectors = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) || maxVectors; } catch (_) {}
+          targets = Object.assign(emptyCounts(), fitTargets(targets, learned(), maxVectors));
+          stats.maxVectors = maxVectors;
+        }
+        buildPads();
+      }
       scene.add(padRoot);
       lights.clear();
       track(scene);
@@ -272,7 +316,7 @@
     }
     function report() {
       return { active, targets: Object.fromEntries(CATEGORIES.map(k => [k, targets[k]])), lights: lights.size,
-        counts: stats.lastCounts, max: stats.max, applies: stats.applies, overflows: stats.overflows, overflowKinds: Array.from(overflowSeen) };
+        counts: stats.lastCounts, max: stats.max, maxVectors: stats.maxVectors || null, vectors: vectors(targets), applies: stats.applies, overflows: stats.overflows, overflowKinds: Array.from(overflowSeen) };
     }
     return { install, uninstall, apply, track, count, compile, compileAsync, compileScene, report,
       active: () => active, scene: () => scene, targets: () => Object.assign({}, targets) };
@@ -325,7 +369,7 @@
     return true;
   }
 
-  const api = { create, boot, attachRenderer, category, rendered, patchShaderChunks, CATEGORIES, DEFAULT_TARGETS };
+  const api = { create, boot, attachRenderer, category, rendered, patchShaderChunks, fitTargets, vectors, CATEGORIES, DEFAULT_TARGETS };
   Object.defineProperty(api, 'shared', { get: () => shared });
   ['install', 'uninstall', 'apply', 'compile', 'compileAsync', 'compileScene', 'report'].forEach(fn => {
     api[fn] = function () { return shared ? shared[fn].apply(null, arguments) : null; };
