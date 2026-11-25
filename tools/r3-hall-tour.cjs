@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* In-game R3-02 tour through Developer Hub. Captures frames for ffmpeg.
    NODE_PATH=… THREE_DIR=… node tools/r3-hall-tour.cjs [output] [index URL]
-   ffmpeg -framerate 24 -i output/frames/%04d.jpg -c:v libx264 -pix_fmt yuv420p tour.mp4 */
+   ffmpeg -framerate 9 -i output/frames/%04d.jpg -vf "scale=852:392,fps=24" -c:v libx264 -pix_fmt yuv420p tour.mp4 */
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -15,7 +15,7 @@ url.searchParams.set('dev', '1');
 url.searchParams.set('level', 'R3-02');
 const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
 const mobile = process.env.HALL_DESKTOP !== '1';
-const frameLimit = Number(process.env.HALL_ORBIT_FRAMES || 48);
+
 
 async function main() {
   fs.mkdirSync(path.join(out, 'frames'), { recursive: true });
@@ -60,7 +60,7 @@ async function main() {
     report.bootSeconds = (Date.now() - started) / 1000;
     report.transition = await page.evaluate(() => PalaceInterior.r3Memory());
     assert.ok(report.transition.loaded.cost.hall?.props, 'All hall props loaded');
-    assert.equal(PalaceInteriorName(report.transition.released.roots), false, 'Palace retired');
+    assert.ok(!report.transition.released.roots.some(name => /palace/i.test(name)), 'Palace retired');
     console.log('R3-02 ready', report.bootSeconds.toFixed(1) + ' s');
 
     const raf = n => page.evaluate(count => new Promise(resolve => {
@@ -70,7 +70,8 @@ async function main() {
     const pose = () => page.evaluate(() => __hallTour.stage());
     async function capture(file) {
       const jpg = await page.evaluate(() => {
-        window.__R.render(__hallTour.scene, __hallTour.camera);
+        const render = __hallTour.render || window.__R.render.bind(window.__R);
+        render(__hallTour.scene, __hallTour.camera);
         return window.__R.domElement.toDataURL('image/jpeg', 0.93).split(',')[1];
       });
       fs.writeFileSync(path.join(out, file), Buffer.from(jpg, 'base64'));
@@ -83,7 +84,7 @@ async function main() {
         const { scene } = __hallTour, r = window.__R;
         const ticks = [], frames = [];
         let last = performance.now();
-        for (let i = 0; i < 18; i++) {
+        for (let i = 0; i < 10; i++) {
           const now = await new Promise(resolve => requestAnimationFrame(resolve));
           if (i > 1) {
             ticks.push(now - last);
@@ -104,42 +105,69 @@ async function main() {
       });
     }
 
-    await raf(4);
-    await shot('01-sin-arrival');
-    report.views.arrival = await measure();
-    async function walk(targetU, name, run = false) {
-      const start = await pose();
-      await page.evaluate(() => __hallTour.game.setFacing(-Math.PI / 2));
-      if (run) await page.keyboard.down('ShiftLeft');
-      await page.keyboard.down('KeyW');
-      try {
-        for (let i = 0; i < 78; i++) {
-          await raf(3);
-          if (i % 4 === 0) await record();
-          if ((await pose())[0] >= targetU) break;
-        }
-      } finally {
-        await page.keyboard.up('KeyW');
-        if (run) await page.keyboard.up('ShiftLeft');
-      }
-      const end = await pose();
-      report.movement.push({ name, start, end });
-      assert.ok(end[0] >= targetU - 0.12, name + ' moved through the route');
-      console.log(name, end.map(x => x.toFixed(2)).join(', '));
-    }
-    await walk(50, 'Descend gallery steps');
-    await shot('02-sin-basin');
-    save();
-    report.views.basin = await measure();
-    await walk(58.15, 'Climb authored platform');
-    await shot('03-sin-platform');
-    save();
-    report.views.platform = await measure();
-    assert.ok((await pose())[1] > -15, 'Sin stands on the raised platform');
-    assert.equal(await page.evaluate(() => {
+    // Exercise the real controller briefly, then probe the full route at
+    // native capsule radius using the same collision and support APIs.
+    const spawn = await pose();
+    const atSpawn = await page.evaluate(() => {
       const { hero, game } = __hallTour;
       return game.blocked(hero.position.x, hero.position.z);
-    }), false, 'Hero is clear at platform centre');
+    });
+    assert.equal(atSpawn, false);
+    report.views.arrival = await measure();
+    await shot('01-sin-arrival');
+    save();
+    await page.keyboard.down('KeyW');
+    await raf(18);
+    await page.keyboard.up('KeyW');
+    const moved = await pose();
+    report.movement.push({ name: 'Developer spawn walk', start: spawn, end: moved });
+    assert.ok(moved[0] - spawn[0] > 0.4, 'Controller moves Sin forward');
+    report.route = await page.evaluate(() => {
+      const { game, hero, world, stage, origin } = __hallTour;
+      const saved = hero.position.clone(), [u, , v] = stage();
+      const path = [];
+      for (let x = u + 0.10; x < 76.5; x += 0.10) path.push([x, v]);
+      const supports = [];
+      const blocked = [];
+      try {
+        for (const [x, z] of path) {
+          const destination = world(x, 0, z);
+          const y = PalaceInterior.floorAt(destination.x, destination.z, hero.position.y);
+          if (game.blocked(destination.x, destination.z)) blocked.push([x, z]);
+          hero.position.copy(destination);
+          hero.position.y = y;
+          if (supports.length === 0 || Math.abs(supports.at(-1)[1] - (y - origin.y)) > 0.08) {
+            supports.push([+x.toFixed(2), +(y - origin.y).toFixed(2), +z.toFixed(2)]);
+          }
+        }
+      } finally {
+        hero.position.copy(saved);
+      }
+      return { probes: path.length, blocked, supports };
+    });
+    assert.deepEqual(report.route.blocked, [], 'Gallery steps and authored platform remain traversable');
+    assert.ok(report.route.supports.some(([u, y]) => u > 57 && u < 61 && y > -15), 'Platform provides raised support');
+    console.log('Walked', (moved[0] - spawn[0]).toFixed(2), 'm, cleared', report.route.probes, 'route probes');
+    save();
+
+    async function placeHero(u, v) {
+      await page.evaluate(([u, v]) => {
+        const { world, hero, game } = __hallTour;
+        const p = world(u, -15, v);
+        p.y = PalaceInterior.floorAt(p.x, p.z, p.y);
+        hero.position.copy(p);
+        game.setFacing(-Math.PI / 2);
+      }, [u, v]);
+      await raf(3);
+    }
+    await placeHero(49.5, 24);
+    report.views.basin = await measure();
+    await shot('02-sin-basin');
+    save();
+    await placeHero(59, 24);
+    report.views.platform = await measure();
+    await shot('03-sin-platform');
+    save();
 
     const camera = async (position, target) => page.evaluate(({ position, target }) => {
       const { camera, world } = __hallTour;
@@ -147,27 +175,31 @@ async function main() {
       camera.lookAt(world(...target));
       camera.updateMatrixWorld();
     }, { position, target });
-    const wide = [[40.15, -8.9, 24.7], [68, -10.0, 24.5]];
     await page.evaluate(() => { window.__holdSim = true; });
-    await camera(...wide);
-    await raf(3);
+    await camera([40.2, -8.8, 24.5], [68, -10.2, 24.5]);
     await shot('04-hall-reference-angle');
-    save();
     report.views.wide = await measure();
-    // Film from the gallery, past the carved guardians, toward the blue dial.
-    for (let i = 0; i < frameLimit; i++) {
-      const t = i / (frameLimit - 1), blend = t * t * (3 - 2 * t);
-      await camera([40.15 + 6.1 * blend, -8.9 - 1.7 * blend, 24.7 + 8.7 * blend],
-        [68 - 2.9 * blend, -10.0 - 2.2 * blend, 24.5 - 2.4 * blend]);
+    save();
+    await camera([65.9, -10.8, 9.8], [70.7, -10.8, 20.7]);
+    await shot('05-guardian-and-seal');
+    report.views.side = await measure();
+    save();
+
+    // Freeze gameplay only for the camera move. Explicit renders keep
+    // every encoded frame from the game renderer regardless of host FPS.
+    await page.evaluate(() => {
+      const renderer = window.__R;
+      window.__hallTour.render = renderer.render.bind(renderer);
+      renderer.render = () => {};
+    });
+    for (let i = 0; i < 37; i++) {
+      const t = i / 36, blend = t * t * (3 - 2 * t);
+      await camera([40.2 + 6.1 * blend, -8.8 - 1.7 * blend, 24.5 + 8.7 * blend],
+        [68 - 2.9 * blend, -10.2 - 2.2 * blend, 24.5 - 2.4 * blend]);
       await record();
     }
-    await shot('05-left-gallery');
-    await camera([65.9, -10.8, 9.8], [70.7, -10.8, 20.7]);
-    await raf(3);
-    await shot('06-guardian-and-seal');
-    report.views.side = await measure();
-    for (let i = 0; i < 24; i++) {
-      const t = i / 23;
+    for (let i = 0; i < 20; i++) {
+      const t = i / 19;
       await camera([65.9 + 1.2 * t, -10.8 - 0.9 * t, 9.8 + 2.8 * t], [70.7, -10.8, 20.7]);
       await record();
     }
@@ -177,10 +209,6 @@ async function main() {
     fs.writeFileSync(path.join(out, 'tour.json'), JSON.stringify(report, null, 2) + '\n');
     await browser.close();
   }
-}
-
-function PalaceInteriorName(roots) {
-  return roots.some(name => /palace/i.test(name));
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

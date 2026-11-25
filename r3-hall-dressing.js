@@ -74,14 +74,22 @@
     let shared;
     let lodX = Infinity, lodZ = Infinity;
     let wasInside = false;
+    // The game's shader adapter reserves a negative exponent for
+    // inverse-square falloff. WebGLRenderer installs render() on the
+    // instance, so the adapter's prototype hook cannot supply the sign.
+    const lampDecay = T.ShaderChunk.lights_pars_begin.includes('decayExponent < 0.0') ? -2 : 2;
+    const pigment = hex => {
+      const color = new T.Color(hex);
+      return T.ColorManagement.enabled ? color : color.convertSRGBToLinear();
+    };
 
     function stone(slot) {
       if (materials.has(slot)) return materials.get(slot);
       if (slot === 'RoofGlow') {
-        return new T.MeshBasicMaterial({ color: 0xc1a583, side: T.DoubleSide });
+        return new T.MeshBasicMaterial({ color: pigment(0xc1a583), side: T.DoubleSide });
       }
       const material = new T.MeshStandardMaterial({
-        color: colors[slot] || 0xffffff, metalness: 0, roughness: 1,
+        color: pigment(colors[slot] || 0xffffff), metalness: 0, roughness: 1,
         side: T.DoubleSide
       });
       material.normalScale.set(1.18, 1.18);
@@ -96,7 +104,7 @@
       }
       // Retain the shade inside the carved recesses under the moonlight.
       if (slot === 'Niches') {
-        material.emissive.setHex(0x506d9b);
+        material.emissive.copy(pigment(0x506d9b));
         material.emissiveIntensity = 0.20;
       }
       materials.set(slot, material);
@@ -265,8 +273,9 @@
 
     function addLight(color, intensity, falloff, position, target) {
       const light = target
-        ? new T.SpotLight(color, intensity, falloff, 0.53, 0.69, 2)
-        : new T.PointLight(color, intensity, falloff, 2);
+        ? new T.SpotLight(color, intensity, falloff, 0.53, 0.69, lampDecay)
+        : new T.PointLight(color, intensity, falloff, lampDecay);
+      light.color.copy(pigment(color));
       light.position.set(...position);
       if (target) {
         light.target.position.set(...target);
@@ -283,7 +292,7 @@
       const material = new T.ShaderMaterial({
         transparent: true, depthWrite: false, side: T.DoubleSide,
         blending: T.AdditiveBlending, forceSinglePass: true,
-        uniforms: { tint: { value: new T.Color(color) }, density: { value: density }, time },
+        uniforms: { tint: { value: pigment(color) }, density: { value: density }, time },
         vertexShader: `
           varying vec2 vTex;
           varying vec3 vView, vNrm;
@@ -477,7 +486,7 @@
             if (material[field]) material[field].anisotropy = anisotropy;
           }
           if (material.name === 'Astral_Platform_Engraved_Dial') {
-            material.emissive.setHex(0x5b8ddd);
+            material.emissive.copy(pigment(0x5b8ddd));
             material.emissiveMap = material.map;
             material.emissiveIntensity = 0.16;
           }
@@ -585,7 +594,8 @@
       }
     }
 
-    const fog = new T.FogExp2(0x4c403a, 0.018);
+    const fog = new T.FogExp2(pigment(0x4c403a), 0.018);
+    const fillColor = pigment(0xffeee0), bounceColor = pigment(0x6b5650), rimColor = pigment(0xffdfc1);
     function update(x, z, inside, visible) {
       if (!installed) return;
       updateLods(x, z);
@@ -600,9 +610,9 @@
       if (!scene) return;
       if (inside) {
         for (const [light] of shared) {
-          light.intensity = light.isHemisphereLight ? 0.98 : 0.34;
-          light.color.setHex(light.isHemisphereLight ? 0xffeee0 : 0xffdfc1);
-          light.groundColor?.setHex(0x6b5650);
+          light.intensity = light.isHemisphereLight ? 1.12 : 0.42;
+          light.color.copy(light.isHemisphereLight ? fillColor : rimColor);
+          light.groundColor?.copy(bounceColor);
         }
         scene.fog = fog;
         if (!wasInside) {
