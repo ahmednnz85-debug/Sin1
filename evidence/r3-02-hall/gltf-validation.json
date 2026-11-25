@@ -1,0 +1,105 @@
+{
+  "validator": "2.0.0-dev.3.10",
+  "source": {
+    "file": "اصول قاعة الختم.glb",
+    "bytes": 17628956,
+    "sha256": "df64ada547b23c56ace36e2efe874753aaf4de9dbba944bb2e6682450ad94dbc",
+    "nodes": [
+      "Astral_Platform_Circular_Ruins",
+      "Lamassu_Left_Facing_Guardian_On_Inscribed_Plinth",
+      "Engraved_Sandstone_Column_Complete",
+      "Sun_Medallion_Cuneiform_Stele",
+      "Collapsed_Stone_And_Broken_Drum_Rubble"
+    ],
+    "materials": 7,
+    "images": 21,
+    "errors": 0,
+    "warnings": 42,
+    "summary": {
+      "VALUE_NOT_IN_LIST": 21,
+      "IMAGE_UNRECOGNIZED_FORMAT": 21
+    }
+  },
+  "standalone": [
+    {
+      "file": "Astral_Platform_Circular_Ruins.glb",
+      "bytes": 8033916,
+      "sha256": "6142c9e7d79e147ca7924d733142e6b8ba8049aa5320d47c3cecbbd04df93f10",
+      "nodes": [
+        "Astral_Platform_Circular_Ruins"
+      ],
+      "materials": 3,
+      "images": 9,
+      "errors": 0,
+      "warnings": 18,
+      "summary": {
+        "VALUE_NOT_IN_LIST": 9,
+        "IMAGE_UNRECOGNIZED_FORMAT": 9
+      }
+    },
+    {
+      "file": "Collapsed_Stone_And_Broken_Drum_Rubble.glb",
+      "bytes": 2896764,
+      "sha256": "ba95195c107bb2648dccefcfda9dd4749e43d16755563bd3479df5239fe65d5b",
+      "nodes": [
+        "Collapsed_Stone_And_Broken_Drum_Rubble"
+      ],
+      "materials": 1,
+      "images": 3,
+      "errors": 0,
+      "warnings": 6,
+      "summary": {
+        "VALUE_NOT_IN_LIST": 3,
+        "IMAGE_UNRECOGNIZED_FORMAT": 3
+      }
+    },
+    {
+      "file": "Engraved_Sandstone_Column_Complete.glb",
+      "bytes": 4992800,
+      "sha256": "18681739b0a0e55239efd13ce53da0177683915026ce415b6dc83e952f49e9ea",
+      "nodes": [
+        "Engraved_Sandstone_Column_Complete"
+      ],
+      "materials": 2,
+      "images": 6,
+      "errors": 0,
+      "warnings": 12,
+      "summary": {
+        "VALUE_NOT_IN_LIST": 6,
+        "IMAGE_UNRECOGNIZED_FORMAT": 6
+      }
+    },
+    {
+      "file": "Lamassu_Left_Facing_Guardian_On_Inscribed_Plinth.glb",
+      "bytes": 6752604,
+      "sha256": "7be12d1db8d81134c5db0a1d000ab61ee4b00f271045fd5e6ab94b6225ed3bbc",
+      "nodes": [
+        "Lamassu_Left_Facing_Guardian_On_Inscribed_Plinth"
+      ],
+      "materials": 3,
+      "images": 9,
+      "errors": 0,
+      "warnings": 18,
+      "summary": {
+        "VALUE_NOT_IN_LIST": 9,
+        "IMAGE_UNRECOGNIZED_FORMAT": 9
+      }
+    },
+    {
+      "file": "Sun_Medallion_Cuneiform_Stele.glb",
+      "bytes": 3983864,
+      "sha256": "a1c9f6b853da07eac9b5c1765cbf93f8382a164ca2ccb0de7fc3851a787fcc88",
+      "nodes": [
+        "Sun_Medallion_Cuneiform_Stele"
+      ],
+      "materials": 2,
+      "images": 6,
+      "errors": 0,
+      "warnings": 12,
+      "summary": {
+        "VALUE_NOT_IN_LIST": 6,
+        "IMAGE_UNRECOGNIZED_FORMAT": 6
+      }
+    }
+  ]
+}

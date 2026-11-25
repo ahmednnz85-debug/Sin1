@@ -1,0 +1,408 @@
+{
+  "entry": "http://127.0.0.1:3000/index.html?dev=1&level=R3-02",
+  "browser": "159.0.8154.6",
+  "profile": "iPhone landscape UA, Chromium SwiftShader",
+  "errors": [],
+  "movement": [
+    {
+      "name": "Developer spawn walk",
+      "start": [
+        40.92628006671481,
+        -15,
+        24
+      ],
+      "end": [
+        41.41987215367197,
+        -15,
+        24
+      ]
+    }
+  ],
+  "views": {
+    "arrival": {
+      "samples": 8,
+      "meanFrameMs": 2420.8,
+      "fps": 0.4,
+      "p95Ms": 6483.1,
+      "drawCalls": 58,
+      "triangles": 693089,
+      "residentGeometry": 117,
+      "residentTextures": 135,
+      "cpuMB": 77,
+      "gpuMB": 138.8,
+      "heapMB": null
+    },
+    "basin": {
+      "samples": 8,
+      "meanFrameMs": 3831.1,
+      "fps": 0.3,
+      "p95Ms": 6549.7,
+      "drawCalls": 47,
+      "triangles": 679628,
+      "residentGeometry": 117,
+      "residentTextures": 135,
+      "cpuMB": 77,
+      "gpuMB": 138.8,
+      "heapMB": null
+    },
+    "platform": {
+      "samples": 8,
+      "meanFrameMs": 22.9,
+      "fps": 43.6,
+      "p95Ms": 33.4,
+      "drawCalls": 46,
+      "triangles": 634744,
+      "residentGeometry": 117,
+      "residentTextures": 135,
+      "cpuMB": 77,
+      "gpuMB": 138.8,
+      "heapMB": null
+    },
+    "wide": {
+      "samples": 8,
+      "meanFrameMs": 18.8,
+      "fps": 53.3,
+      "p95Ms": 33.4,
+      "drawCalls": 56,
+      "triangles": 656882,
+      "residentGeometry": 117,
+      "residentTextures": 135,
+      "cpuMB": 77,
+      "gpuMB": 138.8,
+      "heapMB": null
+    },
+    "side": {
+      "samples": 8,
+      "meanFrameMs": 20.8,
+      "fps": 48,
+      "p95Ms": 33.3,
+      "drawCalls": 46,
+      "triangles": 634692,
+      "residentGeometry": 117,
+      "residentTextures": 135,
+      "cpuMB": 77,
+      "gpuMB": 138.8,
+      "heapMB": null
+    }
+  },
+  "bootSeconds": 198.913,
+  "transition": {
+    "before": {
+      "geometries": 198,
+      "textures": 87,
+      "programs": 0,
+      "calls": 136,
+      "triangles": 1240757,
+      "cityReleased": true,
+      "cpuMB": 158.5,
+      "gpuMB": 159.3,
+      "heapMB": null,
+      "roots": [
+        "HemisphereLight",
+        "DirectionalLight",
+        "DirectionalLight",
+        "SinHeroRoot",
+        "PalaceInterior",
+        "SinLightRigPads",
+        "PalaceWings"
+      ]
+    },
+    "disposed": {
+      "geometries": 460,
+      "materials": 133,
+      "textures": 147
+    },
+    "released": {
+      "geometries": 4,
+      "textures": 13,
+      "programs": 0,
+      "calls": 2,
+      "triangles": 115174,
+      "cityReleased": true,
+      "cpuMB": 5.9,
+      "gpuMB": 16.1,
+      "heapMB": null,
+      "roots": [
+        "SinHeroRoot"
+      ]
+    },
+    "loaded": {
+      "geometries": 56,
+      "textures": 80,
+      "programs": 0,
+      "calls": 69,
+      "triangles": 508624,
+      "cityReleased": true,
+      "cpuMB": 95,
+      "gpuMB": 99.8,
+      "heapMB": null,
+      "roots": [
+        "SinHeroRoot",
+        "R3Stage"
+      ],
+      "budget": {
+        "geometryBytes": 3145728,
+        "textures": 0,
+        "batches": 52,
+        "hall": {
+          "textureMiB": 42,
+          "glbMiB": 18,
+          "drawCalls": 100,
+          "trianglesInView": 850000
+        },
+        "stair": {
+          "textureMiB": 48,
+          "glbMiB": 24,
+          "drawCalls": 110,
+          "trianglesInView": 900000
+        }
+      },
+      "cost": {
+        "geometryBytes": 1816800,
+        "batches": 42,
+        "textures": 0,
+        "stair": {
+          "textures": 31,
+          "textureMiB": 40.2,
+          "glbMiB": 22.1,
+          "triangles": 1864054,
+          "meshes": 221,
+          "ms": 2093
+        },
+        "hall": {
+          "glbBytes": 17628956,
+          "props": {
+            "platform": {
+              "instances": 1,
+              "triangles": 178774,
+              "lodTriangles": 178774
+            },
+            "guardian": {
+              "instances": 2,
+              "triangles": 121594,
+              "lodTriangles": 27963
+            },
+            "column": {
+              "instances": 9,
+              "triangles": 44888,
+              "lodTriangles": 8729
+            },
+            "stele": {
+              "instances": 4,
+              "triangles": 29824,
+              "lodTriangles": 9244
+            },
+            "rubble": {
+              "instances": 15,
+              "triangles": 29700,
+              "lodTriangles": 7280
+            }
+          },
+          "maps": 30,
+          "propTextures": 21,
+          "propTextureBytes": 16515856,
+          "loadMs": 1123,
+          "mapBytesWithMipmaps": 20938752
+        }
+      }
+    }
+  },
+  "checks": {
+    "clearSpawn": true,
+    "controllerMovesSin": true,
+    "clearGalleryAndPlatform": true,
+    "raisedPlatform": false
+  },
+  "route": {
+    "probes": 350,
+    "blocked": [],
+    "supports": [
+      [
+        41.52,
+        -15,
+        24
+      ],
+      [
+        43.02,
+        -15.15,
+        24
+      ],
+      [
+        43.52,
+        -15.3,
+        24
+      ],
+      [
+        44.02,
+        -15.45,
+        24
+      ],
+      [
+        44.52,
+        -15.6,
+        24
+      ],
+      [
+        45.02,
+        -15.75,
+        24
+      ],
+      [
+        45.52,
+        -15.9,
+        24
+      ],
+      [
+        46.02,
+        -16.05,
+        24
+      ],
+      [
+        46.52,
+        -16.2,
+        24
+      ],
+      [
+        51.52,
+        -16.02,
+        24
+      ],
+      [
+        51.92,
+        -15.84,
+        24
+      ],
+      [
+        52.32,
+        -15.66,
+        24
+      ],
+      [
+        52.72,
+        -15.48,
+        24
+      ],
+      [
+        53.12,
+        -15.3,
+        24
+      ],
+      [
+        56.02,
+        -15.17,
+        24
+      ],
+      [
+        56.22,
+        -15.04,
+        24
+      ],
+      [
+        56.42,
+        -14.91,
+        24
+      ],
+      [
+        56.62,
+        -14.78,
+        24
+      ],
+      [
+        56.82,
+        -14.67,
+        24
+      ],
+      [
+        61.42,
+        -14.8,
+        24
+      ],
+      [
+        61.62,
+        -14.93,
+        24
+      ],
+      [
+        61.82,
+        -15.06,
+        24
+      ],
+      [
+        62.02,
+        -15.19,
+        24
+      ],
+      [
+        62.22,
+        -15.29,
+        24
+      ],
+      [
+        65.02,
+        -15.48,
+        24
+      ],
+      [
+        65.42,
+        -15.66,
+        24
+      ],
+      [
+        65.82,
+        -15.84,
+        24
+      ],
+      [
+        66.12,
+        -16.02,
+        24
+      ],
+      [
+        66.52,
+        -16.2,
+        24
+      ],
+      [
+        71.52,
+        -16.05,
+        24
+      ],
+      [
+        72.02,
+        -15.9,
+        24
+      ],
+      [
+        72.52,
+        -15.75,
+        24
+      ],
+      [
+        73.02,
+        -15.6,
+        24
+      ],
+      [
+        73.52,
+        -15.45,
+        24
+      ],
+      [
+        74.02,
+        -15.3,
+        24
+      ],
+      [
+        74.52,
+        -15.15,
+        24
+      ],
+      [
+        75.02,
+        -15,
+        24
+      ]
+    ]
+  },
+  "frames": 57
+}
