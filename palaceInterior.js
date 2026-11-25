@@ -4582,6 +4582,8 @@
     key.position.set(3, 9, -4);
     envelope.add(key);
     ctx.scene.add(envelope);
+    // R3-01 props and stone sets load while the curtain is still black.
+    await stage.ready?.(ctx.renderer).catch(error => console.error('[R3-01] stair assets', error));
     r3Stage = stage;
     ctx.hero.position.set(origin.x + stage.spawn[0], origin.y + stage.spawn[1], origin.z + stage.spawn[2]);
     ctx.setFacing(-Math.PI / 2);

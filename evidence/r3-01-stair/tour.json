@@ -1,0 +1,1234 @@
+{
+ "entry": {
+  "passage": [
+   -12.881019386649129,
+   0,
+   9.200728133320807
+  ],
+  "width": 5.5204368799924834,
+  "portalX": 1,
+  "front": 183.65999999999997,
+  "floorY": 3.7544692556158643,
+  "wallThickness": 2.5643261702223548,
+  "alcoveDepth": 2.116167470663785
+ },
+ "mounted": {
+  "before": {
+   "geometries": 244,
+   "textures": 105,
+   "programs": 0,
+   "calls": 34,
+   "triangles": 213648,
+   "cityReleased": true,
+   "cpuMB": 104.3,
+   "gpuMB": 180.5,
+   "heapMB": null,
+   "roots": [
+    "HemisphereLight",
+    "DirectionalLight",
+    "DirectionalLight",
+    "SinHeroRoot",
+    "PalaceInterior",
+    "SinLightRigPads",
+    "PalaceWings"
+   ]
+  },
+  "disposed": {
+   "geometries": 460,
+   "materials": 133,
+   "textures": 147
+  },
+  "released": {
+   "geometries": 4,
+   "textures": 13,
+   "programs": 0,
+   "calls": 3,
+   "triangles": 115684,
+   "cityReleased": true,
+   "cpuMB": 5.9,
+   "gpuMB": 15.8,
+   "heapMB": null,
+   "roots": [
+    "SinHeroRoot"
+   ]
+  },
+  "loaded": {
+   "geometries": 66,
+   "textures": 84,
+   "programs": 0,
+   "calls": 91,
+   "triangles": 709485,
+   "cityReleased": true,
+   "cpuMB": 43.6,
+   "gpuMB": 85.8,
+   "heapMB": null,
+   "roots": [
+    "SinHeroRoot",
+    "R3Stage"
+   ],
+   "budget": {
+    "geometryBytes": 2097152,
+    "textures": 0,
+    "batches": 40,
+    "stair": {
+     "textureMiB": 48,
+     "glbMiB": 24,
+     "drawCalls": 110,
+     "trianglesInView": 900000
+    }
+   },
+   "cost": {
+    "geometryBytes": 740736,
+    "batches": 30,
+    "textures": 0,
+    "stair": {
+     "textures": 31,
+     "textureMiB": 40.2,
+     "glbMiB": 22.1,
+     "triangles": 1864054,
+     "meshes": 221,
+     "ms": 12636
+    }
+   }
+  }
+ },
+ "points": [],
+ "errors": [],
+ "logs": [
+  "info: [ktx2] active: 181 compressed images",
+  "warning: THREE.KTX2Loader: ETC1S and UASTC textures should use multiple-of-four dimensions.",
+  "warning: THREE.KTX2Loader: ETC1S and UASTC textures should use multiple-of-four dimensions.",
+  "warning: THREE.KTX2Loader: ETC1S and UASTC textures should use multiple-of-four dimensions.",
+  "info: [palace load] warm-begin 48 / 61 MeshStandardMaterial ARCH_R3-corridor-walls-fill",
+  "info: [palace load] warm-begin 49 / 61 MeshStandardMaterial PalaceR3-entrance-portal-occluder",
+  "warning: THREE.KTX2Loader: Multiple active KTX2 loaders may cause performance issues. Use a single KTX2Loader instance, or call .dispose() on old instances."
+ ],
+ "segments": [
+  {
+   "name": "walk-head",
+   "run": false,
+   "from": [
+    5.23,
+    0
+   ],
+   "to": [
+    9.99,
+    0.18,
+    -1.67
+   ],
+   "wallSeconds": 160.832,
+   "mem": {
+    "geometries": 68,
+    "textures": 84,
+    "programs": 32,
+    "calls": 89,
+    "triangles": 752226,
+    "est": {
+     "cpuMB": 43.6,
+     "gpuMB": 84.8
+    }
+   }
+  },
+  {
+   "name": "run-flight1",
+   "run": true,
+   "from": [
+    10.15,
+    0.19
+   ],
+   "to": [
+    28.16,
+    -0.29,
+    -8.3
+   ],
+   "wallSeconds": 87.481,
+   "mem": {
+    "geometries": 87,
+    "textures": 84,
+    "programs": 32,
+    "calls": 40,
+    "triangles": 331472,
+    "est": {
+     "cpuMB": 43.6,
+     "gpuMB": 85.8
+    }
+   }
+  },
+  {
+   "name": "walk-turn-landing",
+   "run": false,
+   "from": [
+    29.81,
+    -0.33
+   ],
+   "to": [
+    33.42,
+    -0.21,
+    -9
+   ],
+   "wallSeconds": 71.827,
+   "mem": {
+    "geometries": 102,
+    "textures": 84,
+    "programs": 33,
+    "calls": 44,
+    "triangles": 273382,
+    "est": {
+     "cpuMB": 43.6,
+     "gpuMB": 85.8
+    }
+   }
+  },
+  {
+   "name": "walk-flight2-head",
+   "run": false,
+   "from": [
+    33.52,
+    -0.21
+   ],
+   "to": [
+    33.87,
+    6.46,
+    -10.14
+   ],
+   "wallSeconds": 188.765,
+   "mem": {
+    "geometries": 106,
+    "textures": 84,
+    "programs": 33,
+    "calls": 59,
+    "triangles": 331795,
+    "est": {
+     "cpuMB": 43.6,
+     "gpuMB": 85.8
+    }
+   }
+  },
+  {
+   "name": "run-flight2",
+   "run": true,
+   "from": [
+    33.88,
+    6.62
+   ],
+   "to": [
+    33.9,
+    18.98,
+    -14.64
+   ],
+   "wallSeconds": 64.268,
+   "mem": {
+    "geometries": 107,
+    "textures": 84,
+    "programs": 33,
+    "calls": 40,
+    "triangles": 274455,
+    "est": {
+     "cpuMB": 43.6,
+     "gpuMB": 85.8
+    }
+   }
+  },
+  {
+   "name": "walk-lower-landing",
+   "run": false,
+   "from": [
+    33.9,
+    20.57
+   ],
+   "to": [
+    33.9,
+    23.04,
+    -15
+   ],
+   "wallSeconds": 55.44,
+   "mem": {
+    "geometries": 107,
+    "textures": 84,
+    "programs": 33,
+    "calls": 34,
+    "triangles": 247478,
+    "est": {
+     "cpuMB": 43.6,
+     "gpuMB": 85.8
+    }
+   }
+  },
+  {
+   "name": "walk-hall-arch",
+   "run": false,
+   "from": [
+    33.9,
+    23.26
+   ],
+   "to": [
+    37.09,
+    23.81,
+    -15
+   ],
+   "wallSeconds": 68.605,
+   "mem": {
+    "geometries": 107,
+    "textures": 84,
+    "programs": 33,
+    "calls": 27,
+    "triangles": 184132,
+    "est": {
+     "cpuMB": 43.6,
+     "gpuMB": 85.8
+    }
+   }
+  }
+ ],
+ "tourWallSeconds": 754.432,
+ "frames": {
+  "count": 686,
+  "callsMax": 91,
+  "callsMean": 56,
+  "trisMax": 754486,
+  "trisMean": 384470,
+  "wallFrameMsMean": 1093.2
+ },
+ "videoSpeedup": 21.864,
+ "track": [
+  [
+   5.23,
+   0,
+   0,
+   91,
+   709485
+  ],
+  [
+   5.23,
+   0,
+   0,
+   90,
+   708323
+  ],
+  [
+   5.23,
+   0,
+   0,
+   90,
+   708323
+  ],
+  [
+   5.23,
+   0,
+   0,
+   90,
+   708323
+  ],
+  [
+   5.23,
+   0,
+   0,
+   90,
+   708323
+  ],
+  [
+   5.528,
+   0.011,
+   0,
+   40,
+   378727
+  ],
+  [
+   5.911,
+   0.026,
+   -0.167,
+   28,
+   319117
+  ],
+  [
+   6.293,
+   0.04,
+   -0.333,
+   52,
+   547184
+  ],
+  [
+   6.676,
+   0.055,
+   -0.5,
+   40,
+   474554
+  ],
+  [
+   7.058,
+   0.069,
+   -0.666,
+   90,
+   721463
+  ],
+  [
+   7.441,
+   0.084,
+   -0.83,
+   90,
+   721463
+  ],
+  [
+   7.823,
+   0.098,
+   -0.833,
+   90,
+   721463
+  ],
+  [
+   8.206,
+   0.113,
+   -1,
+   90,
+   721463
+  ],
+  [
+   8.588,
+   0.127,
+   -1.167,
+   90,
+   721463
+  ],
+  [
+   8.971,
+   0.142,
+   -1.333,
+   90,
+   721463
+  ],
+  [
+   9.354,
+   0.156,
+   -1.499,
+   90,
+   754486
+  ],
+  [
+   9.736,
+   0.171,
+   -1.663,
+   90,
+   754486
+  ],
+  [
+   10.103,
+   0.185,
+   -1.667,
+   89,
+   752226
+  ],
+  [
+   10.151,
+   0.187,
+   -1.833,
+   86,
+   706990
+  ],
+  [
+   10.151,
+   0.187,
+   -1.833,
+   86,
+   706990
+  ],
+  [
+   10.151,
+   0.187,
+   -1.833,
+   86,
+   706990
+  ],
+  [
+   10.151,
+   0.187,
+   -1.833,
+   86,
+   706990
+  ],
+  [
+   10.151,
+   0.187,
+   -1.833,
+   86,
+   706990
+  ],
+  [
+   10.258,
+   0.184,
+   -1.833,
+   86,
+   706990
+  ],
+  [
+   12.631,
+   0.121,
+   -2.637,
+   76,
+   622572
+  ],
+  [
+   15.454,
+   0.047,
+   -3.637,
+   73,
+   664949
+  ],
+  [
+   18.277,
+   -0.028,
+   -4.637,
+   66,
+   596943
+  ],
+  [
+   21.099,
+   -0.102,
+   -5.637,
+   56,
+   521518
+  ],
+  [
+   23.922,
+   -0.177,
+   -6.803,
+   46,
+   286455
+  ],
+  [
+   26.745,
+   -0.251,
+   -7.804,
+   51,
+   323688
+  ],
+  [
+   29.29,
+   -0.318,
+   -8.662,
+   40,
+   331472
+  ],
+  [
+   29.792,
+   -0.331,
+   -8.833,
+   37,
+   316173
+  ],
+  [
+   29.807,
+   -0.332,
+   -8.833,
+   37,
+   316173
+  ],
+  [
+   29.807,
+   -0.332,
+   -8.833,
+   39,
+   323296
+  ],
+  [
+   29.807,
+   -0.332,
+   -8.833,
+   39,
+   323296
+  ],
+  [
+   29.807,
+   -0.332,
+   -8.833,
+   39,
+   323296
+  ],
+  [
+   29.914,
+   -0.328,
+   -8.975,
+   38,
+   323248
+  ],
+  [
+   30.296,
+   -0.316,
+   -9,
+   49,
+   305644
+  ],
+  [
+   30.679,
+   -0.303,
+   -9,
+   48,
+   299199
+  ],
+  [
+   31.062,
+   -0.29,
+   -9,
+   46,
+   277305
+  ],
+  [
+   31.444,
+   -0.278,
+   -9,
+   46,
+   286822
+  ],
+  [
+   31.827,
+   -0.265,
+   -9,
+   46,
+   286822
+  ],
+  [
+   32.21,
+   -0.253,
+   -9,
+   45,
+   273478
+  ],
+  [
+   32.592,
+   -0.24,
+   -9,
+   45,
+   273478
+  ],
+  [
+   32.975,
+   -0.227,
+   -9,
+   45,
+   273478
+  ],
+  [
+   33.357,
+   -0.215,
+   -9,
+   44,
+   273382
+  ],
+  [
+   33.517,
+   -0.209,
+   -9,
+   44,
+   273382
+  ],
+  [
+   33.517,
+   -0.209,
+   -9,
+   44,
+   273382
+  ],
+  [
+   33.517,
+   -0.209,
+   -9,
+   47,
+   280601
+  ],
+  [
+   33.517,
+   -0.209,
+   -9,
+   53,
+   297724
+  ],
+  [
+   33.517,
+   -0.209,
+   -9,
+   55,
+   313401
+  ],
+  [
+   33.517,
+   -0.209,
+   -9,
+   65,
+   341799
+  ],
+  [
+   33.517,
+   -0.209,
+   -9,
+   73,
+   374855
+  ],
+  [
+   33.517,
+   -0.209,
+   -9,
+   76,
+   402511
+  ],
+  [
+   33.517,
+   -0.209,
+   -9,
+   75,
+   402507
+  ],
+  [
+   33.522,
+   -0.103,
+   -9,
+   75,
+   402507
+  ],
+  [
+   33.543,
+   0.279,
+   -9,
+   75,
+   402507
+  ],
+  [
+   33.563,
+   0.661,
+   -9,
+   73,
+   381921
+  ],
+  [
+   33.583,
+   1.044,
+   -9,
+   71,
+   372115
+  ],
+  [
+   33.604,
+   1.426,
+   -9,
+   70,
+   372113
+  ],
+  [
+   33.624,
+   1.808,
+   -9,
+   70,
+   388738
+  ],
+  [
+   33.644,
+   2.191,
+   -9,
+   68,
+   379374
+  ],
+  [
+   33.665,
+   2.573,
+   -9,
+   66,
+   370284
+  ],
+  [
+   33.685,
+   2.955,
+   -9,
+   64,
+   346536
+  ],
+  [
+   33.705,
+   3.337,
+   -9,
+   63,
+   333192
+  ],
+  [
+   33.726,
+   3.72,
+   -9.142,
+   62,
+   333096
+  ],
+  [
+   33.746,
+   4.102,
+   -9.167,
+   62,
+   346888
+  ],
+  [
+   33.766,
+   4.484,
+   -9.333,
+   62,
+   346888
+  ],
+  [
+   33.787,
+   4.867,
+   -9.5,
+   61,
+   346792
+  ],
+  [
+   33.807,
+   5.249,
+   -9.666,
+   60,
+   325576
+  ],
+  [
+   33.827,
+   5.631,
+   -9.83,
+   60,
+   334186
+  ],
+  [
+   33.848,
+   6.014,
+   -9.975,
+   60,
+   334186
+  ],
+  [
+   33.868,
+   6.396,
+   -10,
+   59,
+   331795
+  ],
+  [
+   33.88,
+   6.619,
+   -10.167,
+   59,
+   331795
+  ],
+  [
+   33.88,
+   6.619,
+   -10.167,
+   59,
+   331795
+  ],
+  [
+   33.88,
+   6.619,
+   -10.167,
+   58,
+   331219
+  ],
+  [
+   33.88,
+   6.619,
+   -10.167,
+   58,
+   331219
+  ],
+  [
+   33.88,
+   6.619,
+   -10.167,
+   58,
+   331219
+  ],
+  [
+   33.88,
+   6.619,
+   -10.167,
+   58,
+   331219
+  ],
+  [
+   33.882,
+   8.159,
+   -10.638,
+   55,
+   307423
+  ],
+  [
+   33.887,
+   10.983,
+   -11.637,
+   54,
+   333785
+  ],
+  [
+   33.891,
+   13.806,
+   -12.637,
+   50,
+   305137
+  ],
+  [
+   33.896,
+   16.63,
+   -13.779,
+   44,
+   271280
+  ],
+  [
+   33.9,
+   19.454,
+   -14.804,
+   41,
+   291005
+  ],
+  [
+   33.902,
+   20.523,
+   -14.999,
+   40,
+   274455
+  ],
+  [
+   33.902,
+   20.571,
+   -15,
+   40,
+   274455
+  ],
+  [
+   33.902,
+   20.571,
+   -15,
+   40,
+   274455
+  ],
+  [
+   33.902,
+   20.571,
+   -15,
+   40,
+   274455
+  ],
+  [
+   33.902,
+   20.571,
+   -15,
+   40,
+   274455
+  ],
+  [
+   33.902,
+   20.589,
+   -15,
+   40,
+   274455
+  ],
+  [
+   33.902,
+   20.933,
+   -15,
+   40,
+   274455
+  ],
+  [
+   33.902,
+   21.316,
+   -15,
+   40,
+   274455
+  ],
+  [
+   33.901,
+   21.699,
+   -15,
+   40,
+   283972
+  ],
+  [
+   33.901,
+   22.081,
+   -15,
+   40,
+   283972
+  ],
+  [
+   33.901,
+   22.464,
+   -15,
+   38,
+   261608
+  ],
+  [
+   33.901,
+   22.847,
+   -15,
+   36,
+   248104
+  ],
+  [
+   33.9,
+   23.214,
+   -15,
+   34,
+   247478
+  ],
+  [
+   33.9,
+   23.262,
+   -15,
+   34,
+   247478
+  ],
+  [
+   33.9,
+   23.262,
+   -15,
+   38,
+   249412
+  ],
+  [
+   33.9,
+   23.262,
+   -15,
+   38,
+   249412
+  ],
+  [
+   33.9,
+   23.262,
+   -15,
+   38,
+   249412
+  ],
+  [
+   33.9,
+   23.262,
+   -15,
+   37,
+   249884
+  ],
+  [
+   33.9,
+   23.262,
+   -15,
+   36,
+   249876
+  ],
+  [
+   33.9,
+   23.262,
+   -15,
+   36,
+   230868
+  ],
+  [
+   33.9,
+   23.262,
+   -15,
+   38,
+   246490
+  ],
+  [
+   34.194,
+   23.312,
+   -15,
+   38,
+   246490
+  ],
+  [
+   34.571,
+   23.377,
+   -15,
+   38,
+   246490
+  ],
+  [
+   34.948,
+   23.443,
+   -15,
+   38,
+   246490
+  ],
+  [
+   35.325,
+   23.508,
+   -15,
+   38,
+   246490
+  ],
+  [
+   35.703,
+   23.573,
+   -15,
+   34,
+   222638
+  ],
+  [
+   36.08,
+   23.638,
+   -15,
+   31,
+   198882
+  ],
+  [
+   36.457,
+   23.703,
+   -15,
+   30,
+   193332
+  ],
+  [
+   36.834,
+   23.768,
+   -15,
+   28,
+   184148
+  ],
+  [
+   37.196,
+   23.83,
+   -15,
+   27,
+   184132
+  ],
+  [
+   37.243,
+   23.838,
+   -15,
+   27,
+   184132
+  ]
+ ],
+ "after": {
+  "geometries": 107,
+  "textures": 84,
+  "programs": 33,
+  "calls": 27,
+  "triangles": 184132,
+  "est": {
+   "cpuMB": 43.6,
+   "gpuMB": 85.8
+  }
+ },
+ "requestsAfterMount": [
+  "assets/ktx2/xfvm-1ou1ob1-1t1ndtj.ktx2",
+  "assets/ktx2/qa1z-1qc5lyg-107gytq.ktx2",
+  "assets/ktx2/1ldb6-6q93dp-qq1syc.ktx2",
+  "ارضيات وسقوف/optimized/اعمدة.glb",
+  "assets/r3/stair/ashlar_wall_albedo.jpg",
+  "assets/r3/stair/ashlar_wall_normal.jpg",
+  "assets/r3/stair/ashlar_wall_orm.jpg",
+  "assets/r3/stair/slab_landing_albedo.jpg",
+  "assets/r3/stair/slab_landing_normal.jpg",
+  "assets/r3/stair/slab_landing_orm.jpg",
+  "assets/r3/stair/eroded_vault_albedo.jpg",
+  "assets/r3/stair/eroded_vault_normal.jpg",
+  "assets/r3/stair/eroded_vault_orm.jpg",
+  "assets/r3/stair/worn_tread_albedo.jpg",
+  "assets/r3/stair/worn_tread_normal.jpg",
+  "assets/r3/stair/worn_tread_orm.jpg",
+  "assets/r3/stair/fluted_pier_albedo.jpg",
+  "assets/r3/stair/fluted_pier_normal.jpg",
+  "assets/r3/stair/fluted_pier_orm.jpg",
+  "assets/r3/stair/eroded_block_albedo.jpg",
+  "assets/r3/stair/eroded_block_normal.jpg",
+  "assets/r3/stair/eroded_block_orm.jpg",
+  "assets/r3/stair/dust_rubble_albedo.jpg",
+  "assets/r3/stair/dust_rubble_normal.jpg",
+  "assets/r3/stair/dust_rubble_orm.jpg",
+  "assets/r3/stair/frieze_offerings_albedo.jpg",
+  "assets/r3/stair/frieze_offerings_normal.jpg",
+  "assets/r3/stair/frieze_procession_albedo.jpg",
+  "assets/r3/stair/frieze_procession_normal.jpg",
+  "assets/r3/stair/band_rosettes_albedo.jpg",
+  "assets/r3/stair/band_rosettes_normal.jpg",
+  "assets/r3/stair/band_cuneiform_albedo.jpg",
+  "assets/r3/stair/band_cuneiform_normal.jpg",
+  "assets/r3/stair/moons_albedo.png",
+  "assets/r3/stair/moons_normal.jpg",
+  "assets/r3/stair/manifest.json",
+  "assets/اصول درج السنين.glb?v=20261125-r3-stair-final",
+  "assets/r3/stair/props_lod1.glb?v=20261125-r3-stair-final",
+  "vendor/basis/basis_transcoder.js",
+  "vendor/basis/basis_transcoder.wasm?v=20261125-r3-stair-final"
+ ],
+ "r3Memory": {
+  "before": {
+   "geometries": 244,
+   "textures": 105,
+   "programs": 0,
+   "calls": 34,
+   "triangles": 213648,
+   "cityReleased": true,
+   "cpuMB": 104.3,
+   "gpuMB": 180.5,
+   "heapMB": null,
+   "roots": [
+    "HemisphereLight",
+    "DirectionalLight",
+    "DirectionalLight",
+    "SinHeroRoot",
+    "PalaceInterior",
+    "SinLightRigPads",
+    "PalaceWings"
+   ]
+  },
+  "disposed": {
+   "geometries": 460,
+   "materials": 133,
+   "textures": 147
+  },
+  "released": {
+   "geometries": 4,
+   "textures": 13,
+   "programs": 0,
+   "calls": 3,
+   "triangles": 115684,
+   "cityReleased": true,
+   "cpuMB": 5.9,
+   "gpuMB": 15.8,
+   "heapMB": null,
+   "roots": [
+    "SinHeroRoot"
+   ]
+  },
+  "loaded": {
+   "geometries": 66,
+   "textures": 84,
+   "programs": 0,
+   "calls": 91,
+   "triangles": 709485,
+   "cityReleased": true,
+   "cpuMB": 43.6,
+   "gpuMB": 85.8,
+   "heapMB": null,
+   "roots": [
+    "SinHeroRoot",
+    "R3Stage"
+   ],
+   "budget": {
+    "geometryBytes": 2097152,
+    "textures": 0,
+    "batches": 40,
+    "stair": {
+     "textureMiB": 48,
+     "glbMiB": 24,
+     "drawCalls": 110,
+     "trianglesInView": 900000
+    }
+   },
+   "cost": {
+    "geometryBytes": 740736,
+    "batches": 30,
+    "textures": 0,
+    "stair": {
+     "textures": 31,
+     "textureMiB": 40.2,
+     "glbMiB": 22.1,
+     "triangles": 1864054,
+     "meshes": 221,
+     "ms": 12636
+    }
+   }
+  }
+ },
+ "stageCost": null
+}

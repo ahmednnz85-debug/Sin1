@@ -11,7 +11,14 @@
   const HALL_ENTRY = HALL_U - CHORD, SIDE_EXIT = HALL_V - CHORD;
   const TAU = Math.PI * 2, GALLERY_INNER = 16, STAIR_INNER = 12;
   const SEAL = 'passage-L0';
-  const budget = Object.freeze({ geometryBytes: 2 * 1024 * 1024, textures: 0, batches: 40 });
+  // Architecture budget (generated batches) plus the R3-01 dressing budget,
+  // re-evaluated on the final assets: stone sets / reliefs as decoded RGBA,
+  // the props GLB and its LOD file, and the in-view render envelope measured
+  // on the tour (lamassu at full detail beside the player included).
+  const budget = Object.freeze({
+    geometryBytes: 2 * 1024 * 1024, textures: 0, batches: 40,
+    stair: Object.freeze({ textureMiB: 48, glbMiB: 24, drawCalls: 110, trianglesInView: 900000 })
+  });
 
   function mount(THREE, passage, hall, origin) {
     const root = new THREE.Group();
@@ -37,6 +44,11 @@
       Platform: 0xababab, Shaft: 0x343434
     };
     let part = parts[0];
+    // R3-01 is dressed with PBR stone (r3-stair-dressing.js); the other two
+    // sections keep their baked greybox. Dressing failure keeps the greybox.
+    const Stair = window.SinR3Stair || null;
+    const dressed = () => !!Stair && part === parts[0];
+    const stairArches = [], stairTunnels = [];
 
     function section(id, name) {
       const group = new THREE.Group();
@@ -53,8 +65,28 @@
     }
 
     function geometry(slot, geo, strength = 1) {
-      const data = part.batches.get(slot) || { position: [], color: [], uv: [] };
+      const data = part.batches.get(slot) || { position: [], color: [], uv: [], normal: [] };
       part.batches.set(slot, data);
+      if (dressed()) {
+        // Lit stone: real normals and metric UVs projected on the dominant
+        // axis, so blocks keep their natural size on every surface.
+        const pos = geo.attributes.position, normal = geo.attributes.normal;
+        const count = geo.index ? geo.index.count : pos.count;
+        const scale = 1 / Stair.tileMetres(slot);
+        for (let i = 0; i < count; i++) {
+          const j = geo.index ? geo.index.getX(i) : i;
+          const x = pos.getX(j), y = pos.getY(j), z = pos.getZ(j);
+          const nx = normal.getX(j), ny = normal.getY(j), nz = normal.getZ(j);
+          data.position.push(x, y, z);
+          data.normal.push(nx, ny, nz);
+          const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+          if (ay >= ax && ay >= az) data.uv.push(x * scale, z * scale);
+          else if (ax >= az) data.uv.push(z * scale * Math.sign(nx || 1), y * scale);
+          else data.uv.push(-x * scale * Math.sign(nz || 1), y * scale);
+        }
+        geo.dispose();
+        return;
+      }
       const pos = geo.attributes.position, normal = geo.attributes.normal, uv = geo.attributes.uv;
       const count = geo.index ? geo.index.count : pos.count;
       for (let i = 0; i < count; i++) {
@@ -121,6 +153,20 @@
 
     function arch(frame, a, b, base, half, top, thickness) {
       const radius = half, spring = base + top - radius, n = 16;
+      if (dressed()) {
+        // Masonry archway asset replaces rib, piers, capitals and plinths.
+        // The pier and plinth collision volumes stay exactly as authored.
+        stairArches.push({ frame, a, b, base, half, top, thickness });
+        for (const sign of [-1, 1]) {
+          const edge = sign * (radius + thickness), inner = sign * radius;
+          const lo = Math.min(inner, edge), hi = Math.max(inner, edge);
+          const p = frame(a - 0.16, 0, lo), q = frame(b + 0.16, 0, hi);
+          collision(Math.min(p[0], q[0]), Math.max(p[0], q[0]), base - 0.42, spring, Math.min(p[2], q[2]), Math.max(p[2], q[2]), true);
+          const r = frame(a - 0.26, 0, lo), w = frame(b + 0.26, 0, hi);
+          collision(Math.min(r[0], w[0]), Math.max(r[0], w[0]), base - 0.64, base + 0.55, Math.min(r[2], w[2]), Math.max(r[2], w[2]), true);
+        }
+        return;
+      }
       for (let i = 0; i < n; i++) {
         const t0 = Math.PI * i / n, t1 = Math.PI * (i + 1) / n;
         const p = (d, t, r) => frame(d, spring + Math.sin(t) * r, Math.cos(t) * r);
@@ -150,6 +196,7 @@
       const p = frame(a, 0, -bound), q = frame(b, 0, bound);
       const transverse = frame === alongV || frame.isTransverse;
       const along = transverse ? (x, z) => z : x => x;
+      if (dressed()) stairTunnels.push({ frame, a, b, width, y0, y1, count, height, ribs, transverse, bound: width + 0.68, grade });
       rectangle(p[0], q[0], p[2], q[2], (x, z) => floor(along(x, z)),
         (x, z) => grade(along(x, z)) + height, count !== 0 || y0 !== y1);
       function plane(slot, a0, a1, t0, t1, y, reverse, strength) {
@@ -197,9 +244,10 @@
         for (let i = 0; i < ribs - 1; i++) {
           const d = a + (b - a) * (i + 0.5) / (ribs - 1);
           const lo = Math.min(t, t - side * 0.035), hi = Math.max(t, t - side * 0.035);
-          frameBox('MuralBays', frame, d - 1.55, d + 1.55, grade(d) + 1.05, grade(d) + 4.6, lo, hi);
           const bay = (transverse ? 'Lower' : 'Upper') + '_' + (side < 0 ? 'A' : 'B') + (i + 1);
           socket('Mural_' + bay, frame(d, grade(d) + 2.82, t - side * 0.05));
+          if (dressed()) continue;
+          frameBox('MuralBays', frame, d - 1.55, d + 1.55, grade(d) + 1.05, grade(d) + 4.6, lo, hi);
           if (i % 2 === 0) {
             const ledge = Math.min(t, t - side * 0.58), edge = Math.max(t, t - side * 0.58);
             frameBox('Plinths', frame, d - 0.95, d + 0.95, grade(d) - 0.8, grade(d) + 0.57, ledge, edge, true);
@@ -245,6 +293,24 @@
         Math.min(edge, edge + side * 0.68), Math.max(edge, edge + side * 0.68));
     }
     arch((u, y, t) => alongU(u, y, t + HALL_V), HALL_ENTRY - 1.14, HALL_ENTRY - 0.05, GALLERY, HALF, 7.7, 0.7);
+    // Dressing plan: placements, plinths and their collisions are decided
+    // here, synchronously, so the camera index below includes them.
+    let stairPlan = null;
+    if (Stair) {
+      const stairFloor = (u, v) => {
+        for (const f of floors) if (u >= f.x0 && u <= f.x1 && v >= f.z0 && v <= f.z1) return f.height(u, v);
+        return null;
+      };
+      try {
+        stairPlan = Stair.plan({
+          THREE, group: parts[0].group, box, solidBox, collision, socket, floorAt: stairFloor,
+          tunnels: stairTunnels, arches: stairArches, alongU, alongV, budget: budget.stair,
+          start, flightStart, flightEnd, TURN, HALF, turnEnd, lowerTurn, HALL_ENTRY, HALL_V, GALLERY
+        });
+      } catch (error) {
+        console.error('[R3-01] stair dressing plan failed', error);
+      }
+    }
 
     part = parts[1];
     const headings = [Math.PI, 1.5 * Math.PI];
@@ -423,16 +489,20 @@
     for (const { group, batches } of parts) {
       for (const [slot, data] of batches) {
         const g = new THREE.BufferGeometry();
+        const lit = data.normal.length > 0;
         g.setAttribute('position', new THREE.Float32BufferAttribute(data.position, 3));
-        g.setAttribute('color', new THREE.Float32BufferAttribute(data.color, 3));
+        if (lit) g.setAttribute('normal', new THREE.Float32BufferAttribute(data.normal, 3));
+        else g.setAttribute('color', new THREE.Float32BufferAttribute(data.color, 3));
         g.setAttribute('uv', new THREE.Float32BufferAttribute(data.uv, 2));
         g.computeBoundingSphere();
         geometryBytes += Object.values(g.attributes).reduce((total, attr) => total + attr.array.byteLength, 0);
         batchCount++;
-        const m = new THREE.MeshBasicMaterial({ color: slots[slot], vertexColors: true, fog: false, toneMapped: false, side: THREE.DoubleSide });
+        const m = lit ? Stair.material(THREE, slot) :
+          new THREE.MeshBasicMaterial({ color: slots[slot], vertexColors: true, fog: false, toneMapped: false, side: THREE.DoubleSide });
         m.name = group.name + '/' + slot;
         const mesh = new THREE.Mesh(g, m);
         mesh.name = slot;
+        if (lit) mesh.castShadow = mesh.receiveShadow = true;
         mesh.userData.materialSlot = m.name;
         group.add(mesh);
       }
@@ -496,7 +566,11 @@
       parts[0].group.visible = inHall || inside && u <= HALL_ENTRY;
       parts[1].group.visible = inside && u > TURN - 4 && v > -5;
       parts[2].group.visible = inHall || inside && u > HALL_U - 13;
+      // Stair look (lights, fog, dust) follows the hero through R3-01 and
+      // hands the shared stage lights back on the way into the hall.
+      stair?.update(u, y, v, parts[0].group.visible, inside && !inHall && u <= HALL_ENTRY);
     }
+    const stair = stairPlan && Stair.create(THREE, root, parts[0].group, stairPlan);
 
     // Index the boxes by camera-pivot cell, with enough padding for the
     // game's longest follow-camera ray. Unrelated wings get no R3 boxes.
@@ -512,8 +586,14 @@
       }
     }
     cameraBoxes.length = 0;
+    const stageCost = { geometryBytes, batches: batchCount, textures: 0 };
     return {
-      root, nearFloor, blocks, update, budget, cost: { geometryBytes, batches: batchCount, textures: 0 },
+      root, nearFloor, blocks, update, budget, cost: stageCost,
+      // Loads the R3-01 assets (stone sets, reliefs, the stair GLB) while the
+      // transition curtain is black. Resolves either way: a failed load
+      // keeps the lit architecture without props.
+      ready: renderer => stair ? stair.load(renderer).then(cost => { stageCost.stair = cost; return cost; }) : Promise.resolve(null),
+      stair,
       spawn: [passage.position[0] - start - 0.55, 0, passage.position[2]],
       cameraBoxesAt(x, z, y) {
         if (!nearFloor(x, z, y)) return null;

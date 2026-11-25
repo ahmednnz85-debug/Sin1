@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>R3-01 stair lab</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:100vw;height:100vh}#info{position:fixed;left:6px;bottom:4px;color:#ccc;font:11px monospace;white-space:pre}</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info"></div>
+<!-- Isolated R3-01 lab: the same three r187 + compatibility layer and the
+     same renderer settings as index.html, without booting the city/palace.
+     ?inspect=1          one shot per GLB node (asset audit)
+     ?cam=u,v,y,yaw,pitch free camera in stage space (u out of passage-L0)
+     The in-game check is tools/r3-stair-tour.cjs. -->
+<script src="../vendor/meshopt_decoder.js"></script>
+<script type="module">
+import '../three-compat.js';
+const THREE = window.THREE;
+const qs = new URLSearchParams(location.search);
+const load = src => new Promise((ok, err) => { const s = document.createElement('script'); s.src = src + '?lab=' + Date.now(); s.onload = ok; s.onerror = err; document.body.appendChild(s); });
+await load('../r3-stair-dressing.js');
+window.SinR3Stair.base = '../';
+await load('../r3-sealed-zone.js');
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+window.__R = renderer;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.02;
+renderer.shadowMap.enabled = qs.get('shadows') !== '0';
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.setPixelRatio(1);
+renderer.setSize(innerWidth, innerHeight, false);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0);
+const camera = new THREE.PerspectiveCamera(+(qs.get('fov') || 58), innerWidth / innerHeight, 0.05, 400);
+window.__lab = { THREE, renderer, scene, camera };
+
+if (qs.get('inspect') === '1') {
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const { KTX2Loader } = await import('three/addons/loaders/KTX2Loader.js');
+  const ktx = new KTX2Loader().setTranscoderPath('../vendor/basis/').detectSupport(renderer);
+  const gltf = await new GLTFLoader().setKTX2Loader(ktx).setMeshoptDecoder(window.MeshoptDecoder).loadAsync('../assets/' + encodeURIComponent('اصول درج السنين.glb'));
+  scene.add(new THREE.HemisphereLight(0xfff1dd, 0x3a2c20, 0.55));
+  const key = new THREE.DirectionalLight(0xffe2b8, 1.6); key.position.set(-3, 5, 6); scene.add(key);
+  const nodes = gltf.scene.children.slice();
+  const out = [];
+  for (const n of nodes) {
+    const box = new THREE.Box3().setFromObject(n);
+    const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+    let tris = 0, vcol = [];
+    n.traverse(o => { if (o.isMesh) { tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; vcol.push(o.material.name + (o.material.vertexColors ? '+vc' : '')); } });
+    out.push({ name: n.name, size: size.toArray().map(v => +v.toFixed(3)), center: c.toArray().map(v => +v.toFixed(3)), min: box.min.toArray().map(v => +v.toFixed(3)), tris, mats: vcol });
+  }
+  window.__inspect = { nodes: out, shoot(i) {
+    nodes.forEach((n, j) => { n.visible = i === j; if (!n.parent) scene.add(n); });
+    const n = nodes[i], box = new THREE.Box3().setFromObject(n), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+    const r = Math.max(size.x, size.y, size.z);
+    camera.position.set(c.x + r * 0.35, c.y + r * 0.15, c.z + r * 1.25); camera.lookAt(c);
+    renderer.render(scene, camera);
+  } };
+  nodes.forEach(n => scene.add(n));
+  window.__ready = true;
+} else {
+  const R3 = window.SinR3SealedZone;
+  const passage = { position: [-12.881019386649129, 0, 9.200728133320807] };
+  const hall = { wallThickness: +(qs.get('wt') || 2.5643261702223548), alcoveDepth: +(qs.get('ad') || 2.116167470663785) };
+  const origin = new THREE.Vector3(1, 3.75, 183.66);
+  const stage = R3.mount(THREE, passage, hall, origin);
+  const envelope = new THREE.Group();
+  envelope.name = 'R3Stage';
+  envelope.position.copy(origin);
+  // Same stage lights as palaceInterior.loadR3.
+  envelope.add(stage.root, new THREE.HemisphereLight(0xe9e9e9, 0x525252, 1.2));
+  const key = new THREE.DirectionalLight(0xffffff, 1.35); key.position.set(3, 9, -4); envelope.add(key);
+  scene.add(envelope);
+  if (stage.ready) window.__labCost = await stage.ready(renderer);
+  const toWorld = (u, y, v) => new THREE.Vector3(origin.x + passage.position[0] - u, origin.y + y, origin.z + passage.position[2] + v);
+  // Stand-in for Sîn (1.8 m) to judge scale and occlusion.
+  const dummy = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.2, 4, 12), new THREE.MeshStandardMaterial({ color: 0x6a4a35, roughness: 0.7 }));
+  dummy.castShadow = true;
+  scene.add(dummy);
+  window.__lab.stage = stage;
+  window.__lab.view = (u, v, eye, yaw, pitch, heroU, heroV) => {
+    const hit = stage.nearFloor(origin.x + passage.position[0] - u - origin.x, origin.z + passage.position[2] + v - origin.z, 99) ;
+    const floor = (uu, vv) => { for (let y = 2; y > -30; y -= 0.5) { const h = stage.nearFloor(passage.position[0] - uu, passage.position[2] + vv, y); if (h) return h.y; } return 0; };
+    const fy = floor(u, v);
+    camera.position.copy(toWorld(u, fy + eye, v));
+    const dir = new THREE.Vector3(-Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch));
+    camera.lookAt(camera.position.clone().add(dir));
+    if (heroU != null) { const hy = floor(heroU, heroV); dummy.position.copy(toWorld(heroU, hy + 0.9, heroV)); dummy.visible = true; } else dummy.visible = false;
+    const lp = toWorld(u, fy, v);
+    stage.update(lp.x - origin.x, lp.y - origin.y, lp.z - origin.z);
+    renderer.render(scene, camera);
+    return { floor: fy, calls: renderer.info.render.calls, tris: renderer.info.render.triangles };
+  };
+  window.__lab.pick = (x, y) => {
+    const rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), camera);
+    rc.params.Points.threshold = 0; return rc.intersectObjects(scene.children, true).filter(h => !h.object.isPoints).slice(0, 3).map(h => { const chain = []; for (let o = h.object; o; o = o.parent) chain.push(o.name || o.type); return { d: +h.distance.toFixed(2), chain: chain.slice(0, 5).join(' < '), mat: h.object.material && h.object.material.name }; });
+  };
+  window.__ready = true;
+  const c = (qs.get('cam') || '4,0,1.7,0,-0.12').split(',').map(Number);
+  window.__lab.view(c[0], c[1], c[2], c[3], c[4]);
+  document.getElementById('info').textContent = JSON.stringify(stage.cost);
+  console.log('R3 lab cost', JSON.stringify(stage.cost), JSON.stringify(stage.stair && stage.stair.report()));
+}
+</script>
+</body>
+</html>
