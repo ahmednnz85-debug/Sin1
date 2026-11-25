@@ -83,7 +83,8 @@ async function gate(browser) {
     await page.waitForSelector('#sin-dev-list .area');
     await page.screenshot({ path: path.join(OUT, `list-${tag}.png`) });
     const info = await page.evaluate(() => ({ areas: document.querySelectorAll('#sin-dev-list .area').length, groups: document.querySelectorAll('#sin-dev-list details').length,
-      overflowX: document.documentElement.scrollWidth > innerWidth + 1, registry: SinDevHub.areas().length }));
+      overflowX: document.documentElement.scrollWidth > innerWidth + 1 }));
+    info.registry = await page.evaluate(async () => (await SinAreas.list()).length);
     await page.fill('#sin-dev-list input', 'R3');
     const filtered = await page.evaluate(() => [...document.querySelectorAll('#sin-dev-list .area')].filter(b => b.style.display !== 'none').length);
     res[tag] = { glbRequestsBeforeChoice: before, ...info, searchR3: filtered, errors: log.errors };
