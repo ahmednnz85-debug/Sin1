@@ -50,9 +50,21 @@ const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/6
       if (state === 'ready' || state === 'resident' || state === 'failed') break;
       await page.waitForTimeout(500);
     }
-    await frames(4);
-    await page.waitForTimeout(1500);
-    await frames(2);
+    // Step into the room: 55 % of the way from the entrance to the centre,
+    // facing the centre, so the follow camera frames the room, not the door.
+    if (id !== 'Palace') await page.evaluate(id => {
+      const S = PalaceWings.state, r = S.regions.find(x => x.id === id);
+      if (!r || !r.bbox) return;
+      const d = (S.doors || []).filter(x => x.from === id || x.to === id).sort((a, b) => (/C|REAR|MP|Palace/.test(b.from === id ? b.to : b.from) ? 1 : 0) - (/C|REAR|MP|Palace/.test(a.from === id ? a.to : a.from) ? 1 : 0))[0];
+      const fx = d ? d.x : r.bbox.cx, fz = d ? d.z : r.bbox.z0;
+      const x = fx + (r.bbox.cx - fx) * 0.55, z = fz + (r.bbox.cz - fz) * 0.55;
+      const y = PalaceWings.floorAt(x, z) || 0, o = S.root.position;
+      S.ctx.hero.position.set(o.x + x, o.y + y, o.z + z);
+      S.ctx.setFacing(Math.atan2(r.bbox.cx - fx, r.bbox.cz - fz));
+    }, id);
+    await frames(6);
+    await page.waitForTimeout(2500);
+    await frames(3);
     const file = path.join(OUT, (id === 'Palace' ? '00-throne-hall' : id) + '.png');
     await page.screenshot({ path: file, timeout: 900000 });
     const row = { id, state, seconds: +((Date.now() - t0) / 1000).toFixed(1), file };
