@@ -133,6 +133,8 @@
   let wingDoorLoadStarted = false;
   const K2_LAZY = { reception: WING_FILES.k2Reception, meetings: WING_FILES.k2Meetings };
   const preloaded = new Map();   // path -> THREE.Texture | parsed gltf
+  let retired = false;
+  const stageAbort = typeof AbortController === 'function' ? new AbortController() : null;
   const deferredLoads = [];      // cached-model callbacks queued while build() runs
   function assetList() {
     // Entry-visible corridor models must parse during LOADING (already
@@ -155,7 +157,7 @@
     if (window.SinTempleDoors) for(const url of [SinTempleDoors.asset,SinTempleDoors.libraryAsset])list.push({url,kind:'draco',required:true});
     return list.filter((a, i, all) => all.findIndex(b => b.url === a.url) === i);
   }
-  function provideAsset(url, value) { if (url && value) preloaded.set(url, value); }
+  function provideAsset(url, value) { if (!retired && url && value) preloaded.set(url, value); }
   function preloadReport() {
     return assetList().map(a => ({ url: a.url, kind: a.kind, ready: preloaded.has(a.url) }));
   }
@@ -209,7 +211,11 @@
   // spike on iPhone when K2/K3 dressed several models together.
   let wingLoadChain = Promise.resolve();
   function enqueueWingLoad(task) {
-    const run = wingLoadChain.then(task, task);
+    const runTask = () => {
+      stageAbort?.signal.throwIfAborted();
+      return task();
+    };
+    const run = wingLoadChain.then(runTask, runTask);
     wingLoadChain = run.catch(function () {});
     return run;
   }
@@ -261,9 +267,11 @@
   // fresh clone (geometry, materials and textures shared, nothing downloaded);
   // otherwise it is fetched exactly as before — but never in parallel.
   function wingGLB(url, onLoad, onError) {
+    if (retired) return;
     const fail = onError || (e => console.warn('Wing model failed', url, e));
     if (!THREE.GLTFLoader) { fail(new Error('GLTFLoader not available')); return; }
     const deliver = gltf => {
+      if (retired) { discardStageAsset(gltf); return; }
       const t0 = performance.now();
       let p;
       try { p = Promise.resolve(onLoad(gltf)); } catch (e) { p = Promise.reject(e); }
@@ -290,7 +298,7 @@
     enqueueWingLoad(function () {
       return new Promise(function (resolve) {
         withMeshopt(function (dec) {
-          fetch(encodeURI(url)).then(function (res) {
+          fetch(encodeURI(url), { signal: stageAbort?.signal }).then(function (res) {
             if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url);
             return res.arrayBuffer();
           }).then(function (buf) {
@@ -327,6 +335,7 @@
               });
             };
             return waitToParse().then(function () {
+              stageAbort?.signal.throwIfAborted();
               return new Promise(function (resOk, resFail) {
                 const loader = new THREE.GLTFLoader();
                 if (dec) loader.setMeshoptDecoder(dec);
@@ -341,7 +350,7 @@
                       window.__palaceMaxSliceName = 'wing:' + file;
                     }
                   } catch (_) {}
-                  try { releaseGltfCpu(gltf); } catch (_) {}
+                  if (!retired) try { releaseGltfCpu(gltf); } catch (_) {}
                   Promise.resolve(deliver(gltf)).then(resOk, resFail);
                 }, resFail);
               });
@@ -2854,7 +2863,6 @@
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
     wingDoorLoadStarted = false;
-    state.r3 = null;
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null; state.k5Dress = null;
@@ -2862,6 +2870,29 @@
     dressedRooms.clear(); zoneDone.clear(); dressFailures.length = 0; state.deferredDress.clear(); state._streamSets = null; zoneDistKey = ''; zoneDist = null;
     regionDistances.clear();
     if (zoneStreamer) zoneStreamer.reset();
+  }
+  function discardStageAsset(asset) {
+    const r3 = window.SinR3SealedZone;
+    if (r3) r3.release(r3.resources([asset]), r3.resources([]));
+  }
+  async function retire() {
+    if (retired) return;
+    retired = true;
+    stageAbort?.abort();
+    const pending = wingLoadChain;
+    deferredLoads.length = 0;
+    for (const id of zoneStreamer?.zones() || []) zoneStreamer.unregister(id);
+    dispose();
+    zoneStreamer?.attach(null);
+    preloaded.clear();
+    triCache.clear();
+    roomManager = roomManaged = roomSight = null;
+    regionAtHit = regionAtRooms = null;
+    state.spatial.clear();
+    for (const key of Object.keys(state)) delete state[key];
+    await pending;
+    k3Draco?.dispose();
+    k3Draco = null;
   }
   function wingMark(msg) {
     try { if (window.PalaceInterior && PalaceInterior.mark) PalaceInterior.mark(msg); } catch (e) { /* marks are diagnostic only */ }
@@ -2882,6 +2913,7 @@
     });
   }
   async function build(ctx, hall) {
+    stageAbort?.signal.throwIfAborted();
     assertDeps(); dispose();
     state.building = true; deferredLoads.length = 0;
     try { return await buildNow(ctx, hall); }
@@ -3033,12 +3065,6 @@
       }
       rebuildDoorColliders();
     }
-    const R3 = window.SinR3SealedZone;
-    const sealedPassage = R3 && hall.passages.find(p => p.id === R3.passageId && p.state === 'sealed');
-    if (sealedPassage) {
-      state.r3 = R3.mount(THREE, sealedPassage, hall, state.root.position);
-      state.root.add(state.r3.root);
-    }
     rebuildSpatial(); loadRoomDoors(); phase('doors'); await yieldWing();
     try { console.info('[palace load] wings-after-doors'); } catch (_) {}
     state.built = true;
@@ -3063,13 +3089,7 @@
       triangleBudget: 750000
     };
   }
-  function r3At(x, z, y) {
-    const r3 = state.r3;
-    return r3 && r3.nearFloor(x, z, y ?? state.ctx.hero.position.y - state.root.position.y);
-  }
-  function contains(x, z) {
-    return state.built && (!!r3At(x, z) || pointInSolids(x, z, state.floorExtended));
-  }
+  function contains(x, z) { return state.built && pointInSolids(x, z, state.floorExtended); }
   // The culling / sight tests ask for the camera's region ~20 times per
   // frame with the same coordinates. Room polygons never change after
   // build, so the last answer is reused (cleared by build / dispose).
@@ -3167,8 +3187,7 @@
     const room = state.rooms.find(r => r.id === 'L1');
     const host = state.regionGroups.get('L1');
     if (!room || !host) { api.fail(new Error('Great Library room unavailable')); return; }
-    const loader = new THREE.GLTFLoader();
-    const loadModel = url => enqueueWingLoad(() => loader.loadAsync(encodeURI(url)));
+    const loadModel = url => loadRoomModel(url, stageAbort.signal);
     const doors = state.doors.filter(d => d.from === 'L1' || d.to === 'L1');
     const pending = window.SinGreatLibrary.build(room, doors, loadModel, deviceProfile.constrained);
     state.libraryLoad = pending;
@@ -3236,7 +3255,8 @@
     return enqueueWingLoad(async () => {
       signal.throwIfAborted();
       const fetchAt = performance.now();
-      const response = await fetch(encodeURI(url), { signal });
+      const requestSignal = stageAbort && AbortSignal.any ? AbortSignal.any([signal, stageAbort.signal]) : signal;
+      const response = await fetch(encodeURI(url), { signal: requestSignal });
       if (!response.ok) throw new Error(response.status + ' ' + url);
       const buffer = await response.arrayBuffer();
       record?.('modelFetchMs',performance.now()-fetchAt);
@@ -3253,6 +3273,7 @@
         loader.setMeshoptDecoder(decoder);
       }
       const model=await loader.parseAsync(buffer, '');
+      if (retired || signal.aborted) { discardStageAsset(model); signal.throwIfAborted(); stageAbort?.signal.throwIfAborted(); }
       record?.('modelDecodeMs',performance.now()-decodeAt);
       return model;
     });
@@ -4109,6 +4130,7 @@
     if (api.group) prepareRoomMaterials(api.group);
   }
   function registerZone(spec) {
+    if (retired) return;
     if (!zoneStreamer) return null;
     const userReady = spec.onReady, userPrepare = spec.prepare;
     return zoneStreamer.register(Object.assign({}, spec, {
@@ -4323,6 +4345,7 @@
   // as in play — so the first presented frame never looks into an empty
   // room. Rooms the device memory cannot hold yet do not hold the blackout.
   function prepareEntryLibrary(reclaim) {
+    if (retired) return Promise.resolve();
     if (!state.built || !zoneStreamer) return 'ready';
     if (!state.entryLibrary) {
       attachStreamer();
@@ -4466,9 +4489,7 @@
     if (_tr) _tr('updateCulling-enter force=' + !!force);
     if (!state.built || !state.ctx || !state.ctx.hero) return;
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
-    const y = p.y - state.root.position.y;
-    state.r3?.update(x, y, z);
-    const r = r3At(x, z, y) ? null : regionAt(x, z), id = r ? r.id : 'Palace';
+    const r = regionAt(x, z), id = r ? r.id : 'Palace';
     const regionChanged = !!force || state.current !== id;
     if (force) triCache.clear();
     if (regionChanged) {
@@ -4669,8 +4690,6 @@
     if (state.debug && state.ui && performance.now() - state.minimapAt > 120) { state.minimapAt = performance.now(); drawMinimap(); }
   }
   function floorAt(x, z, fromY) {
-    const r3 = r3At(x, z, fromY);
-    if (r3) return r3.y;
     if (!contains(x,z)) return null;
     if (state.sacredEntrance && zoneIsReady('T1')) {
       const y=state.sacredEntrance.floorAt(x,z);
@@ -4712,8 +4731,6 @@
     return 0;
   }
   function onEntranceSteps(position) {
-    const base = state.root?.position;
-    if (base && r3At(position.x - base.x, position.z - base.z, position.y - base.y)?.steps) return true;
     if (!state.sacredEntrance || !zoneIsReady('T1')) return false;
     const origin = state.root.position;
     return state.sacredEntrance.floorAt(position.x - origin.x, position.z - origin.z) > 0;
@@ -4732,7 +4749,6 @@
   function resolveCamera(cam) {
     if (!state.built || !cam) return;
     const x = cam.position.x - state.root.position.x, y = cam.position.y - state.root.position.y, z = cam.position.z - state.root.position.z;
-    if (r3At(x, z, y - 1.45)) return;
     for (const b of nearbyBoxes(x, z)) {
       if (x <= b.minx || x >= b.maxx || z <= b.minz || z >= b.maxz || y <= b.miny || y >= b.maxy) continue;
       const moves = [
@@ -4746,12 +4762,6 @@
   }
   function clampFollowTarget(want) {
     if (!want) return;
-    const base = state.root.position;
-    const r3 = r3At(want.x - base.x, want.z - base.z);
-    if (r3) {
-      want.y = Math.max(base.y + r3.y + 1.2, Math.min(base.y + r3.ceiling - 0.2, want.y));
-      return;
-    }
     const limit = state.current === 'L1' ? 10.65 : 6.5;
     want.y = Math.max(state.root.position.y + 1.2, Math.min(state.root.position.y + limit, want.y));
   }
@@ -5204,6 +5214,7 @@
   let metricsLast = null;
   function current() { return state.current || null; }
   function metrics() {
+    if (retired) return { retired: true, current: null };
     const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     const _tM = (_tr && performance.now) ? performance.now() : 0;
     if (metricsBusy) {
@@ -5291,6 +5302,7 @@
     k3DracoWait.push(cb);
     if (k3DracoWait.length > 1) return;
     const finish = loader => {
+      if (retired) { loader?.dispose(); loader = null; }
       k3Draco = loader;
       const q = k3DracoWait.splice(0);
       q.forEach(fn => fn(loader));
@@ -5323,7 +5335,7 @@
         k3EnsureDraco(function (draco) {
           if (!draco || !THREE.GLTFLoader) { fail(new Error('DRACOLoader unavailable')); resolve(); return; }
           withMeshopt(function (dec) {
-            fetch(encodeURI(url)).then(function (res) {
+            fetch(encodeURI(url), { signal: stageAbort?.signal }).then(function (res) {
               if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url);
               return res.arrayBuffer();
             }).then(function (buf) {
@@ -5332,8 +5344,9 @@
                 loader.setDRACOLoader(draco);
                 if (dec) loader.setMeshoptDecoder(dec);
                 loader.parse(buf, '', function (gltf) {
-                  try { releaseGltfCpu(gltf); } catch (_) {}
-                  if (state.root === root) onLoad(gltf); else onLoad(null);
+                  if (!retired) try { releaseGltfCpu(gltf); } catch (_) {}
+                  if (retired) discardStageAsset(gltf);
+                  else if (state.root === root) onLoad(gltf); else onLoad(null);
                   resOk();
                 }, resFail);
               });
@@ -6349,7 +6362,7 @@
     STREAM_EXPECT: STREAM_EXPECT,
     deviceProfile: deviceProfile,
     palaceVisible: function () { return state.palaceNear !== false; },
-    build, dispose, tick, contains, regionAt, r3At, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
+    build, dispose, retire, stageAssets: () => [...preloaded.values(), state.materials], tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
     teleport, overview, runTests, formatReport, cameraTour, current, metrics, corridorReport: () => state.corridorReport, corridorWallFill: () => state.corridorWallFill || 0,
     libraryCamera: () => state.library && state.library.ready ? state.library.camera : null,
     archiveCamera: () => state.archive && zoneIsReady('L2') ? state.archive.camera : null,
@@ -6377,7 +6390,7 @@
     groundLibraryHero: hero => { if (onLibraryStairs(hero.position)) state.library.groundHero(hero); },
     shortestPath,
     assetList, provideAsset, preloadReport,
-    provideBake: function (data) { state.bake = data; if (typeof window !== 'undefined') window.__palaceColliderBake = data; },
+    provideBake: function (data) { if (retired) return; state.bake = data; if (typeof window !== 'undefined') window.__palaceColliderBake = data; },
 
     get report() { return state.report; },
     get state() { return state; }

@@ -102,6 +102,10 @@
   let camBack = 3.6;
   let entranceLeft = 0;
   let state = 'IDLE';
+  let r3Entry = null, r3Stage = null, r3Curtain = null, r3Fade = 0;
+  const r3Memory = {};
+  const inR3 = () => r3Entry !== null;
+  const r3Locked = () => inR3() && state !== 'R3';
   let setupTask = null;
   let busy = false;
   let contextLost = false;
@@ -444,6 +448,7 @@
   }
 
   function onRetry() {
+    if (inR3()) return;
     if (state !== 'FAILED') return;
     if (contextLost) {
       note('retry after context loss — clean page reload');
@@ -825,6 +830,7 @@
   // decoder, the same bytes): a large room GLB no longer blocks the main
   // thread while it is decompressed during the room's preparation.
   function meshoptWorkers(D) {
+    if (inR3()) return D;
     try {
       if (D && !D.__sinWorkers && typeof D.useWorkers === 'function' && typeof Worker === 'function' && typeof Blob === 'function') {
         D.useWorkers(2);
@@ -1210,6 +1216,7 @@
   }
 
   function loadPalaceAssets() {
+    if (inR3()) return Promise.reject(new Error('Previous stage retired'));
     // Refuse to parse/create palace assets until outdoor teardown verified.
     if (teardownPhase < 4) {
       const err = new Error('palace load blocked until outdoor teardown (phase ' + teardownPhase + ')');
@@ -1673,6 +1680,7 @@
   }
 
   function holdCull(scene, hero) {
+    if (inR3()) return;
     const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     const _tHc = (_tr && performance.now) ? performance.now() : 0;
     if (!scene || !group) return;
@@ -4063,6 +4071,10 @@
       contextLost = true;
       window.__sinWebGLLost = true;
       runtimeErrors.push('webglcontextlost');
+      if (inR3()) {
+        failR3(new Error('فُقد سياق الرسم في مقام العهد المدفون'));
+        return;
+      }
       try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('error', 'webglcontextlost'); } catch (_) {}
       try { if (window.SinDevice) SinDevice.rememberCrash({ reason: 'webglcontextlost', phase: state }); } catch (_) {}
       const detail = new Error('فُقد سياق الرسم WebGL — اضغط لإعادة التحميل');
@@ -4082,6 +4094,7 @@
       runtimeErrors.push('webglcontextrestored');
       try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('info', 'webglcontextrestored'); } catch (_) {}
       note('webglcontextrestored');
+      if (inR3()) return;
       // GPU objects from the previous context are invalid. Do not auto-onRetry
       // (that left the palace unable to open). Offer one clean reload instead.
       if (statusEl) statusEl.textContent = 'تم استعادة الرسم — اضغط لإعادة التحميل';
@@ -4093,10 +4106,13 @@
     if (!Number.isFinite(x) || !Number.isFinite(z)) return floorY;
     const lx = x - portalX;
     const lz = z - portalFront;
+    if (inR3()) {
+      const y = fromY ?? lastContext.hero.position.y;
+      const support = r3Stage?.nearFloor(lx, lz, y - floorY);
+      return support ? floorY + support.y : y;
+    }
     if (wingRuntime && window.PalaceWings) {
-      const wh = PalaceWings.floorAt(lx, lz, fromY == null
-        ? (PalaceWings.state.r3?.preview ? PalaceWings.state.ctx.hero.position.y - floorY : 0)
-        : fromY - floorY);
+      const wh = PalaceWings.floorAt(lx, lz, fromY == null ? 0 : fromY - floorY);
       if (wh != null) return floorY + wh;
     }
     if (!ramp) return floorY;
@@ -4464,12 +4480,161 @@
     }
   }
 
+  function r3Snapshot(ctx, phase) {
+    const estimate = window.SinProcessMemory?.estimate({ scene: ctx.scene, renderer: ctx.renderer, phase, room: 'R3' });
+    return {
+      ...snapshotRendererInfo(ctx),
+      cpuMB: estimate?.cpuMB ?? null, gpuMB: estimate?.gpuMB ?? null,
+      heapMB: performance.memory ? performance.memory.usedJSHeapSize / 1048576 : null,
+      roots: ctx.scene.children.map(node => node.name || node.type)
+    };
+  }
+
+  function beginR3(ctx) {
+    const R3 = window.SinR3SealedZone;
+    const hall = wingRuntime && window.PalaceWings?.state.hall;
+    const passage = R3?.preview && hall?.passages.find(p => p.id === R3.passageId && p.state === 'sealed');
+    if (!passage) return false;
+    const p = ctx.hero.position;
+    const [x, , z] = passage.position;
+    if (portalX + x - p.x < 0.12 || portalX + x - p.x > 1.4 ||
+        Math.abs(p.z - portalFront - z) > passage.width / 2 - 0.32 ||
+        Math.abs(p.y - floorY) > 0.6) return false;
+    r3Entry = { passage: { position: [...passage.position] }, hall: { wallThickness: hall.wallThickness, alcoveDepth: hall.alcoveDepth } };
+    state = 'R3_FADING_OUT';
+    r3Fade = 0;
+    r3Curtain = document.createElement('div');
+    r3Curtain.id = 'r3-transition';
+    Object.assign(r3Curtain.style, {position:'fixed', inset:'0', zIndex:'12000', background:'#000', opacity:'0', pointerEvents:'auto'});
+    document.body.appendChild(r3Curtain);
+    r3Memory.before = r3Snapshot(ctx, 'R3-before');
+    return true;
+  }
+
+  async function retirePalaceForR3(ctx, R3) {
+    const {scene, hero, renderer} = ctx;
+    const previous = scene.children.filter(node => node !== hero);
+    const wingAssets = window.PalaceWings?.stageAssets() || [];
+    const lookResources = window.SinGfx?.retireStageLook?.() || [];
+    const previousResources = R3.resources([...previous, scene.environment, scene.background, palaceEnv,
+      assets, specs?.map(spec => spec.result), wingAssets, gpuUploadQ, flameSprite.mat, lodPacks,
+      instanceWallPacks, lookResources, window.__r3LegacyResources?.(),
+      renderer.properties?._map && Array.from(renderer.properties._map.keys()).filter(item => item?.isTexture)]);
+    const previousEnvironment = scene.environment;
+    hero.traverse(node => {
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      for (const m of materials) if (m?.envMap && (m.envMap === previousEnvironment || m.envMap === palaceEnv)) {
+        m.envMap = null;
+        m.needsUpdate = true;
+      }
+    });
+    const retained = R3.resources([hero]);
+    window.__releaseExteriorStage?.();
+    window.__retireRoyalDoor?.();
+    window.SinLightRig?.uninstall();
+    scene.environment = scene.background = scene.fog = null;
+    for (const node of previous) node.removeFromParent();
+    const stoppingWings = window.PalaceWings?.retire();
+    wingRuntime = null;
+    group = null; hallBuilt = false;
+    assets = specs = loadPromise = loadOk = setupTask = saved = colliderBakePromise = null;
+    palaceEnv = null;
+    colliders = []; lights = []; lightTargets = []; lightCandidates.length = 0;
+    ramp = null; flames = []; fireMats = []; fireList = []; flameSprite.mat = null;
+    lodPacks = []; instanceWallPacks = []; hallShellMeshes = []; hallDecorMeshes = []; propCullList = [];
+    gpuUploadQ.length = 0;
+    delete window.__palaceColliderBake;
+    // These buffers belong to the old hall; keeping the renderer and hero
+    // preserves the active WebGL context, current animation and equipment.
+    r3Memory.disposed = R3.release(previousResources, retained);
+    renderer.renderLists?.dispose();
+    THREE.Cache.clear();
+    await stoppingWings;
+    const draco = await dracoLoaderPromise?.catch(() => null);
+    draco?.dispose();
+    dracoLoaderPromise = null;
+    window.MeshoptDecoder?.disposeWorkers?.();
+    if (window.MeshoptDecoder) window.MeshoptDecoder.__sinWorkers = false;
+    window.SinProcessMemory?.purgeOrphanTextures(renderer, scene);
+    r3Memory.released = { ...flushReleasedGPU(ctx), ...r3Snapshot(ctx, 'R3-released') };
+  }
+
+  async function loadR3(ctx) {
+    const R3 = window.SinR3SealedZone;
+    await retirePalaceForR3(ctx, R3);
+    const origin = new THREE.Vector3(portalX, floorY, portalFront);
+    const stage = R3.mount(THREE, r3Entry.passage, r3Entry.hall, origin);
+    const envelope = new THREE.Group();
+    envelope.name = 'R3Stage';
+    envelope.position.copy(origin);
+    envelope.add(stage.root, new THREE.HemisphereLight(0xe9e9e9, 0x525252, 1.2));
+    const key = new THREE.DirectionalLight(0xffffff, 1.35);
+    key.position.set(3, 9, -4);
+    envelope.add(key);
+    ctx.scene.add(envelope);
+    r3Stage = stage;
+    ctx.hero.position.set(origin.x + stage.spawn[0], origin.y + stage.spawn[1], origin.z + stage.spawn[2]);
+    ctx.setFacing(-Math.PI / 2);
+    stage.update(...stage.spawn);
+    followCamera(ctx.camera, ctx.hero, -Math.PI / 2, FOLLOW_PITCH, FOLLOW_DIST, 0.016, true, true);
+    ctx.renderer.render(ctx.scene, ctx.camera);
+    r3Memory.loaded = { ...r3Snapshot(ctx, 'R3-loaded'), budget: stage.budget, cost: stage.cost };
+    r3Fade = 0;
+    state = 'R3_FADING_IN';
+  }
+
+  function failR3(error) {
+    state = 'R3_FAILED';
+    if (!r3Curtain) {
+      r3Curtain = document.createElement('div');
+      r3Curtain.id = 'r3-transition';
+      document.body.appendChild(r3Curtain);
+    }
+    r3Curtain.textContent = 'تعذّر عرض مقام العهد المدفون';
+    Object.assign(r3Curtain.style, {position:'fixed', inset:'0', zIndex:'12000', background:'#000', opacity:'1',
+      display:'grid', placeItems:'center', color:'#fff'});
+    console.error('[R3] transition failed', error);
+  }
+
+  function tickR3(dt, ctx) {
+    if (state === 'R3_FADING_OUT') {
+      r3Fade = Math.min(1, r3Fade + dt / 0.55);
+      r3Curtain.style.opacity = String(r3Fade);
+      if (r3Fade < 1) return;
+      state = 'R3_BLACK';
+      requestAnimationFrame(() => {
+        loadR3(ctx).catch(error => {
+          failR3(error);
+        });
+      });
+      return;
+    }
+    if (state === 'R3_FADING_IN') {
+      r3Fade = Math.min(1, r3Fade + dt / 0.55);
+      r3Curtain.style.opacity = String(1 - r3Fade);
+      if (r3Fade === 1) {
+        r3Curtain.remove();
+        r3Curtain = null;
+        state = 'R3';
+      }
+    }
+    if (state === 'R3' || state === 'R3_FADING_IN') {
+      const p = ctx.hero.position;
+      r3Stage.update(p.x - portalX, p.y - floorY, p.z - portalFront);
+    }
+  }
+
   function tick(dt, ctx) {
     rig.idle++; // frames since the camera rig last ran (a re-entry snaps instead of swinging)
-    try { tickInner(dt, ctx); }
+    try {
+      if (inR3()) { lastContext = ctx; lastDt = dt; tickR3(dt, ctx); return; }
+      if (state === 'DONE' && beginR3(ctx)) { lastContext = ctx; return; }
+      tickInner(dt, ctx);
+    }
     catch (err) {
       console.error(err);
       runtimeErrors.push('tick: ' + (err && (err.stack || err.message) || err));
+      if (inR3()) { failR3(err); return; }
       if (state !== 'IDLE' && state !== 'FAILED') {
         loadError = err;
         state = 'FAILED';
@@ -4849,6 +5014,7 @@
         try { console.info('[palace load] DONE'); } catch (_) {}
         setTimeout(function () {
           try {
+            if (inR3()) return;
             snapshotMeshBudget('post-palace-build', ctx);
             if (window.SinMemoryOverlay) {
               if (group) SinMemoryOverlay.reportHeaviest(group, 'post-palace-build');
@@ -4915,13 +5081,15 @@
   }
 
   function blocks(x, z) {
+    if (inR3()) {
+      if (r3Locked()) return true;
+      const p = lastContext.hero.position;
+      return r3Stage.blocks(x - portalX, z - portalFront, p.y - floorY, p.x - portalX, p.z - portalFront, 0.32);
+    }
     const active = state === 'FADING_IN' || state === 'REVEAL' || state === 'SETUP' || state === 'ENTRANCE' || state === 'SETTLE' || (state === 'DONE' && occupant);
     if (!active) return false;
     const hero = wingRuntime && window.PalaceWings && PalaceWings.state.ctx.hero;
     const fromY = hero ? hero.position.y : floorY;
-    const r3 = wingRuntime && PalaceWings.state.r3?.blocks(x - portalX, z - portalFront, fromY - floorY,
-      hero.position.x - portalX, hero.position.z - portalFront, 0.32);
-    if (r3 != null) return r3;
     if (wingRuntime && window.PalaceWings && PalaceWings.capsuleBlocked(x - portalX, z - portalFront, 0.32, fromY - floorY)) return true;
     // Height-aware: boxes entirely above the hero's head (arch lintels over the open wing
     // passages) or below the feet must not act as full-height walls in this 2D check.
@@ -4983,10 +5151,9 @@
 
   // Ceiling height (world y) above a point, or +Infinity when unknown.
   function ceilingAt(x, z, feetY) {
+    if (r3Stage) return floorY + (r3Stage.nearFloor(x - portalX, z - portalFront, feetY - floorY)?.ceiling ?? Infinity);
     if (wingRuntime && window.PalaceWings && PalaceWings.state && PalaceWings.state.root) {
       const root = PalaceWings.state.root.position, lx = x - root.x, lz = z - root.z;
-      const r3 = PalaceWings.r3At(lx, lz, feetY - root.y);
-      if (r3) return root.y + r3.ceiling;
       if (PalaceWings.contains(lx, lz)) {
         const r = PalaceWings.regionAt(lx, lz);
         if (r && r.height > 0) return root.y + r.height;
@@ -5038,7 +5205,7 @@
     const templeDoorCount=entranceCount+templeDoors.length,libraryDoorCount=templeDoorCount+libraryDoors.length;
     const studyCount=libraryDoorCount+studyBoxes.length;
     const kingCount = studyCount + kingBoxes.length;
-    const r3Boxes = wings?.r3?.cameraBoxesAt(px - portalX, pz - portalFront, feetY - floorY) || noCameraColliders;
+    const r3Boxes = r3Stage?.cameraBoxesAt(px - portalX, pz - portalFront, feetY - floorY) || noCameraColliders;
     for (let i = 0; i < kingCount + r3Boxes.length; i++) {
       const b = i < staticCount ? colliders[i] : i < libraryCount ? libraryBoxes[i - staticCount] :
         i < archiveCount ? archiveBoxes[i - libraryCount] : i < observatoryCount ? observatoryBoxes[i - archiveCount] :
@@ -5073,8 +5240,8 @@
 
   // Positions + aims the camera. Returns false when the rig is not in charge.
   function followCamera(cam, hero, yaw, pitch, dist, dt, snap, cinematic) {
-    if (!cam || !hero || !hallBuilt || colliders.length === 0) return false;
-    if (!cinematic && !(state === 'DONE' && occupant)) return false;
+    if (!cam || !hero || (!r3Stage && (!hallBuilt || colliders.length === 0))) return false;
+    if (!cinematic && !((state === 'DONE' && occupant) || state === 'R3')) return false;
     const p = hero.isObject3D ? hero.position : hero;
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return false;
     if (![yaw, pitch, dist].every(Number.isFinite)) return false;
@@ -5181,11 +5348,14 @@
     CONFIG: CONFIG,
     BUILD: BUILD,
     tick: tick,
-    locksControl: function () { return state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
-    ownsCamera: function () { return state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
+    locksControl: function () { return r3Locked() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
+    ownsCamera: function () { return r3Locked() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
+    inR3,
+    onR3Steps(p) { return !!r3Stage?.nearFloor(p.x - portalX, p.z - portalFront, p.y - floorY)?.steps; },
+    r3Memory: () => structuredClone(r3Memory),
     wantsWalk: function () { return state === 'ENTRANCE'; },
     clampFollowTarget: clampFollowTarget,
-    ownsGround: function () { return state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'FAILED' || (state === 'DONE' && occupant); },
+    ownsGround: function () { return inR3() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'FAILED' || (state === 'DONE' && occupant); },
     blocks: blocks,
     constrainCamera: constrainCamera,
     followCamera: function (cam, hero, yaw, pitch, dist, dt) { return followCamera(cam, hero, yaw, pitch, dist, dt, false, false); },
@@ -5208,7 +5378,7 @@
         || (window.PalaceWings && typeof PalaceWings.current === 'function' && PalaceWings.current())
         || (window.PalaceWings && PalaceWings.state && PalaceWings.state.current)
         || null;
-      const room = wingRoom || (hallBuilt || state === 'DONE' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' ? 'Palace' : (state === 'LOADING' || state === 'FADING_OUT' || state === 'FAILED' ? 'entry' : 'outside'));
+      const room = inR3() ? 'R3' : wingRoom || (hallBuilt || state === 'DONE' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' ? 'Palace' : (state === 'LOADING' || state === 'FADING_OUT' || state === 'FAILED' ? 'entry' : 'outside'));
       return {
         phase: state,
         room: room,

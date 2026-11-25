@@ -195,9 +195,10 @@
     },
     tier: { low: { envIntensity: 0.9 }, medium: {}, high: {} }
   };
-  let interiorEnv = null, wasInterior = false, lookScanAt = 0;
+  let interiorEnv = null, interiorTarget = null, stageLookRetired = false, wasInterior = false, lookScanAt = 0;
   const lookLights = [];
   function interiorEnvironment(renderer) {
+    if (stageLookRetired) return null;
     if (interiorEnv) return interiorEnv;
     try { if (typeof window !== 'undefined' && window.__sinTraceOn) console.info('[palace load] trace PMREM-begin'); } catch (_) {}
     const r = renderer || R; if (!r || !THREE.PMREMGenerator || !THREE.DataTexture) {
@@ -231,7 +232,8 @@
     tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
     const pm = new THREE.PMREMGenerator(r);
     const _tPm = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    interiorEnv = pm.fromEquirectangular(tex).texture;
+    interiorTarget = pm.fromEquirectangular(tex);
+    interiorEnv = interiorTarget.texture;
     try { if (typeof window !== 'undefined' && window.__sinTraceOn) console.info('[palace load] trace PMREM-fromEquirectangular', Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - _tPm) + 'ms'); } catch (_) {}
     pm.dispose(); tex.dispose();
     interiorEnv.name = 'SinInteriorHDR';
@@ -290,7 +292,7 @@
   }
   // Runs every rAF (also while the simulation is held), before rendering.
   function lookFrame() {
-    if (!R || !scene) return;
+    if (stageLookRetired || !R || !scene) return;
     const inside = !!ctx.interior() && LOOK.enabled !== false;
     if (inside) {
       if (!wasInterior) { outdoorEnv = scene.environment !== interiorEnv ? scene.environment : outdoorEnv; lookScanAt = 0; }
@@ -299,6 +301,7 @@
   }
 
   function updateAtmo(dt, info) {
+    if (stageLookRetired) { zoneName = 'r3'; return; }
     if (!baseAtmo) captureBase();
     if (ctx.interior()) {
       // Keep the HUD zone truthful, but leave exposure/fog exactly as the
@@ -580,7 +583,15 @@
     // it on the first DONE rAF stalled WebKit software GL for ~90 s before
     // the first present (and is the same spike on a real iPhone). The look
     // is unchanged: same texture, same applyInteriorLook, just earlier.
+    retireStageLook() {
+      const resources = [interiorTarget, interiorEnv, outdoorEnv];
+      stageLookRetired = true;
+      interiorTarget = interiorEnv = outdoorEnv = null;
+      lookLights.length = 0;
+      return resources;
+    },
     prepareInteriorLook() {
+      if (stageLookRetired) return;
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       try { console.info('[palace load] interior-look-begin'); } catch (_) {}
       try {

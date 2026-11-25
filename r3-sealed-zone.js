@@ -11,6 +11,7 @@
   const HALL_ENTRY = HALL_U - CHORD, SIDE_EXIT = HALL_V - CHORD;
   const TAU = Math.PI * 2, GALLERY_INNER = 16, STAIR_INNER = 12;
   const SEAL = 'passage-L0';
+  const budget = Object.freeze({ geometryBytes: 2 * 1024 * 1024, textures: 0, batches: 40 });
   const preview = new URLSearchParams(location.search).get('r3Preview') === '1';
 
   function mount(THREE, passage, hall, origin) {
@@ -20,7 +21,6 @@
     root.scale.x = -1;
     root.visible = false;
     const start = hall.wallThickness + hall.alcoveDepth;
-    const throat = passage.width / 2;
     const parts = [
       section('R3-01', 'BuriedYearsStair'),
       section('R3-02', 'FirstSealHall'),
@@ -226,12 +226,11 @@
     }
 
     // Keep the authored opening, floor and reveal. Widen only beyond the reveal.
-    rectangle(-0.55, start, -throat, throat, () => 0, () => passage.height);
+    // The independent stage starts beyond the old palace wall.
+    solidBox('Walls', start - 0.4, start, -0.45, 8.4, -3.68, 3.68);
     const flightStart = start + 0.86, flightEnd = TURN - HALF - 0.68;
     const turnEnd = HALF + 0.68, lowerTurn = HALL_V - HALF - 0.68;
     landing(start, flightStart, -3.68, 3.68, 0, 8.4, [false, false, true, true]);
-    box('Walls', start, start + 0.28, -0.42, passage.height, -3.68, -throat);
-    box('Walls', start, start + 0.28, -0.42, passage.height, throat, 3.68);
     tunnel(alongU, flightStart, flightEnd, HALF, 0, -9, 54, 8.4, [-1, 1], 5);
     landing(flightEnd, TURN + 3.68, -3.68, turnEnd, -9, 8.4, [false, true, true, false]);
     const cross = (d, y, t) => alongV(d, y, t + TURN);
@@ -421,6 +420,7 @@
     box('Shaft', rim, far, bottom - 1, bottom, -30, -4, 0.48);
     box('Shaft', bridge, far + 1, top, top + 0.5, -30, -4, 0.54);
 
+    let geometryBytes = 0, batchCount = 0;
     for (const { group, batches } of parts) {
       for (const [slot, data] of batches) {
         const g = new THREE.BufferGeometry();
@@ -428,6 +428,8 @@
         g.setAttribute('color', new THREE.Float32BufferAttribute(data.color, 3));
         g.setAttribute('uv', new THREE.Float32BufferAttribute(data.uv, 2));
         g.computeBoundingSphere();
+        geometryBytes += Object.values(g.attributes).reduce((total, attr) => total + attr.array.byteLength, 0);
+        batchCount++;
         const m = new THREE.MeshBasicMaterial({ color: slots[slot], vertexColors: true, fog: false, toneMapped: false, side: THREE.DoubleSide });
         m.name = group.name + '/' + slot;
         const mesh = new THREE.Mesh(g, m);
@@ -438,10 +440,15 @@
       batches.clear();
     }
 
+    if (geometryBytes > budget.geometryBytes || batchCount > budget.batches) {
+      const live = resources([root]);
+      release(live, resources([]));
+      throw new Error('R3 architecture exceeded its independent stage budget');
+    }
     const uAt = x => passage.position[0] - x;
     const vAt = z => z - passage.position[2];
     function sample(u, v) {
-      if (u < -0.55 || u > rim || v < -22 || v > HALL_V + RADIUS) return null;
+      if (u < start || u > rim || v < -22 || v > HALL_V + RADIUS) return null;
       const h = hallFloor(u, v);
       if (h !== null) {
         return { y: h, ceiling: domeY(Math.hypot(u - HALL_U, v - HALL_V)), steps: true };
@@ -455,24 +462,18 @@
     }
 
     function nearFloor(x, z, y) {
-      if (!preview) return null;
       const hit = sample(uAt(x), vAt(z));
       return hit && Math.abs(hit.y - y) < 1.8 ? hit : null;
     }
 
     const probes = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.707, 0.707], [0.707, -0.707], [-0.707, 0.707], [-0.707, -0.707]];
     function blocks(x, z, y, px, pz, radius) {
-      if (!preview) return null;
-      const u = uAt(x), v = vAt(z), prevU = uAt(px), prevV = vAt(pz);
-      if (Math.max(u, prevU) < -1 || Math.min(u, prevU) > rim + 1) return null;
+      const u = uAt(x), v = vAt(z);
       const previous = nearFloor(px, pz, y);
       const target = sample(u, v);
-      if (!previous && !(prevU < -0.55 && u >= -0.55 && target && Math.abs(y) < 1)) return null;
-      if (u < -0.55 && prevU < 0) return null;
-      if (!target || Math.abs(target.y - (previous?.y ?? 0)) > 0.37) return true;
+      if (!previous || !target || Math.abs(target.y - previous.y) > 0.37) return true;
       for (const [du, dv] of probes) {
         const su = u + du * radius, sv = v + dv * radius;
-        if (su < -0.55) continue;
         const probe = sample(su, sv);
         if (!probe || Math.abs(probe.y - target.y) > 0.47) return true;
       }
@@ -491,10 +492,9 @@
     function update(x, y, z) {
       const u = uAt(x), v = vAt(z);
       const inside = !!nearFloor(x, z, y);
-      const approach = Math.abs(v) < throat + 5 && u > -12 && u < 6 && y > -1.8;
-      root.visible = approach || inside;
+      root.visible = inside;
       const inHall = inside && hallFloor(u, v) !== null;
-      parts[0].group.visible = approach || inHall || inside && u <= HALL_ENTRY;
+      parts[0].group.visible = inHall || inside && u <= HALL_ENTRY;
       parts[1].group.visible = inside && u > TURN - 4 && v > -5;
       parts[2].group.visible = inHall || inside && u > HALL_U - 13;
     }
@@ -503,7 +503,7 @@
     // game's longest follow-camera ray. Unrelated wings get no R3 boxes.
     const cellSize = 6, rayReach = 6;
     const cameraCells = new Map();
-    for (const box of preview ? cameraBoxes : []) {
+    for (const box of cameraBoxes) {
       for (let x = Math.floor((box.minx - rayReach) / cellSize); x <= Math.floor((box.maxx + rayReach) / cellSize); x++) {
         for (let z = Math.floor((box.minz - rayReach) / cellSize); z <= Math.floor((box.maxz + rayReach) / cellSize); z++) {
           const key = x + ',' + z;
@@ -514,14 +514,78 @@
     }
     cameraBoxes.length = 0;
     return {
-      root, preview, nearFloor, blocks, update,
+      root, nearFloor, blocks, update, budget, cost: { geometryBytes, batches: batchCount, textures: 0 },
+      spawn: [passage.position[0] - start - 0.55, 0, passage.position[2]],
       cameraBoxesAt(x, z, y) {
-        const approach = preview && uAt(x) > -4 && uAt(x) < 1 && Math.abs(vAt(z)) < throat + 1;
-        if (!approach && !nearFloor(x, z, y)) return null;
+        if (!nearFloor(x, z, y)) return null;
         return cameraCells.get(Math.floor((x + origin.x) / cellSize) + ',' + Math.floor((z + origin.z) / cellSize));
       }
     };
   }
 
-  window.SinR3SealedZone = { mount, preview, passageId: SEAL };
+  // Collect owned resources from live roots and detached asset caches. Use
+  // identity sets because authored meshes, clones and render targets share data.
+  function resources(values) {
+    const seen = new Set(), geometry = new Set(), material = new Set(), textures = new Set(), targets = new Set(), instances = new Set();
+    function visit(value) {
+      if (!value || typeof value !== 'object' || seen.has(value)) return;
+      seen.add(value);
+      if (value.isObject3D) {
+        value.traverse(node => {
+          if (node.isInstancedMesh) instances.add(node);
+          visit(node.geometry);
+          visit(node.material);
+          visit(node.shadow?.map);
+          visit(node.shadow?.mapPass);
+          if (node.isSkinnedMesh) visit(node.skeleton?.boneTexture);
+        });
+      } else if (value.isTexture) textures.add(value);
+      else if (value.isBufferGeometry) geometry.add(value);
+      else if (value.isWebGLRenderTarget || value.isRenderTarget) {
+        targets.add(value);
+        visit(value.textures || value.texture);
+        visit(value.depthTexture);
+      } else if (value.isMaterial) {
+        material.add(value);
+        for (const field of Object.values(value)) if (field?.isTexture) visit(field);
+        for (const uniform of Object.values(value.uniforms || {})) {
+          if (uniform.value?.isTexture) visit(uniform.value);
+        }
+      } else if (Array.isArray(value)) value.forEach(visit);
+      else if (value.constructor === Object) {
+        for (const [key, field] of Object.entries(value)) if (key !== 'parser') visit(field);
+      }
+    }
+    values.forEach(visit);
+    return { geometry, material, textures, targets, instances };
+  }
+
+  function release(drop, keep) {
+    const keptSources = new Set([...keep.textures].map(t => t.source));
+    const counts = { geometries: 0, materials: 0, textures: 0 };
+    for (const node of drop.instances) if (!keep.instances.has(node)) node.dispose();
+    for (const g of drop.geometry) {
+      if (keep.geometry.has(g)) continue;
+      g.dispose();
+      for (const name of Object.keys(g.attributes)) g.deleteAttribute(name);
+      g.setIndex(null);
+      g.morphAttributes = {};
+      counts.geometries++;
+    }
+    for (const m of drop.material) if (!keep.material.has(m)) { m.dispose(); counts.materials++; }
+    for (const target of drop.targets) if (!keep.targets.has(target)) target.dispose();
+    for (const texture of drop.textures) {
+      if (keep.textures.has(texture)) continue;
+      // Keep the source identity until the renderer releases its GPU ref.
+      // Prevent the memory hook from clearing pixels shared with the hero.
+      const shared = keptSources.has(texture.source);
+      texture.userData.sinKeepCpu = shared;
+      texture.dispose();
+      if (shared) texture.source = new (THREE.TextureSource || THREE.Source)(null);
+      counts.textures++;
+    }
+    return counts;
+  }
+
+  window.SinR3SealedZone = { mount, preview, resources, release, passageId: SEAL };
 })();

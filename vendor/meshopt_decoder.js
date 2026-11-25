@@ -149,6 +149,12 @@ var MeshoptDecoder = (function() {
 		useWorkers: function(count) {
 			initWorkers(count);
 		},
+		disposeWorkers: function() {
+			for (var worker of workers.splice(0)) {
+				worker.object.terminate();
+				for (var id in worker.requests) worker.requests[id].reject(new Error("Meshopt worker disposed"));
+			}
+		},
 		decodeVertexBuffer: function(target, count, size, source, filter) {
 			decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, instance.exports[filters[filter]]);
 		},
