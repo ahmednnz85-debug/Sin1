@@ -4386,7 +4386,11 @@
     // A door the hero is standing at and pushing comes first.
     const demand = state.templeDoors?.waiting() || state.libraryDoors?.waiting() || null;
     if (demand) { approach.add(demand); rank.set(demand, 0); }
-    const retained = new Set([...(state.templeDoors?.retainZones()||[]),...(state.libraryDoors?.retainZones()||[])]);
+    // An open temple / library door holds its rooms only while they are
+    // within their release radius: a door left open far behind the hero no
+    // longer pins a room in memory (what is on screen stays protected).
+    const retained = new Set([...(state.templeDoors?.retainZones()||[]),...(state.libraryDoors?.retainZones()||[])]
+      .filter(id => keep.has(id) || id === demand));
     // A door that is moving, or that the hero stands at, keeps both of its
     // rooms resident: readiness can never drop during the swing.
     const heroAt=state.ctx&&state.ctx.hero&&state.ctx.hero.position;
