@@ -30,6 +30,10 @@ const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/6
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e).slice(0, 300)));
+  // --budget N lifts the phone memory budget (to photograph a build that cannot
+  // hold a room otherwise, e.g. a baseline before texture compression).
+  const BUDGET = +(opt('budget') || 0);
+  if (BUDGET) await page.addInitScript(b => { let D; Object.defineProperty(window, 'SinDevice', { configurable: true, get() { return D; }, set(v) { const det = v.detect; v.detect = function () { const p = det.apply(this, arguments); p.processBudgetMB = b; p.gpuBudgetMB = b; p.cpuBudgetMB = b; return p; }; D = v; } }); }, BUDGET);
   // iPhone: Safari has no performance.memory and reports navigator.platform 'iPhone'.
   await page.addInitScript(() => { try { Object.defineProperty(Performance.prototype, 'memory', { get() { return undefined; }, configurable: true }); Object.defineProperty(Navigator.prototype, 'platform', { get() { return 'iPhone'; }, configurable: true }); } catch (e) {} });
   if (THREE_DIR) await page.route(/cdn\.jsdelivr\.net\/npm\/three@0\.187\.0\/(.*)$/, r => r.fulfill({ path: path.join(THREE_DIR, r.request().url().replace(/^.*three@0\.187\.0\//, '').split('?')[0]), contentType: 'text/javascript' }));
@@ -50,7 +54,7 @@ const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/6
     await page.waitForTimeout(1500);
     await frames(2);
     const file = path.join(OUT, (id === 'Palace' ? '00-throne-hall' : id) + '.png');
-    await page.screenshot({ path: file });
+    await page.screenshot({ path: file, timeout: 900000 });
     const row = { id, state, seconds: +((Date.now() - t0) / 1000).toFixed(1), file };
     report.push(row);
     console.log(JSON.stringify(row));

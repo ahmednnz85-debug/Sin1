@@ -122,6 +122,16 @@ At runtime, `PalaceInterior` fetches the JSON during palace asset load and `Pala
 - Add the object through `api.add(obj)`, or call `hideUntilReady(obj)` and then `group.add(obj)` inside the existing `dressK2/K3/K4` builders.
 - If the room's completeness predicate (`isComplete`) has to wait for the new asset, extend it. Otherwise the reveal can happen before the asset arrives. A late asset is then shown the moment it arrives, with its textures queued for upload, which is a small pop.
 
+## 3.1 Phone texture twins (KTX2 → ASTC)
+
+On a phone with an ASTC GPU, every palace image that has a twin in `assets/ktx2/manifest.json` is loaded as that twin (`ktx2-textures.js`): the same picture at the size the phone shows (≤ 1024 px, the K4 kit 512), encoded as UASTC (transcoded losslessly to ASTC 4×4 on the device: a quarter of the GPU memory, no CPU decode, no main-thread resize). Images are matched by content, so a twin is found whatever GLB or loader carries the image. Desktop, other GPUs, `?ktx2=off` or a missing/failed twin take the original path, so a new room works before it has twins.
+
+When you add or change a room's images:
+
+1. Record what the palace loads: run the game with `?ktxcapture=1`, visit the room, and save `window.__sinKtxSeen` (the capture script used for the shipped set teleports through every room; see the report).
+2. `node tools/ktx2-pack.cjs --capture capture.json --basisu /path/to/basisu` (Basis Universal 1.16.4 built from the official source). It skips images that already have a twin.
+3. Commit `assets/ktx2/`. `tests/ktx2-textures.test.cjs` checks every manifest entry.
+
 ## 4. LOD
 
 Use `THREE.LOD` (instant level switch, no cross-fade or dither) or the existing palace prop LOD in `palaceInterior.js` (`lodDistanceH`, `cullDistanceH`). Keep `cullDistanceH` at or above the room diagonal so nothing the player can see is culled by distance. Register every LOD level in the zone (add the whole `LOD` object through `api.add`). That way all levels are uploaded and compiled before the reveal, and a level switch never compiles or uploads.
