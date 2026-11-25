@@ -189,7 +189,9 @@
     }
     try { console.info('[palace load] deferred-end', n, 'chain', Math.round(performance.now() - tChain) + 'ms'); } catch (_) {}
   }
-  function withMeshopt(go) {
+  function withMeshopt(go0) {
+    // Decode in background workers when palaceInterior enabled them.
+    const go = d => go0(d && window.__sinMeshoptWorkers ? window.__sinMeshoptWorkers(d) : d);
     const D = window.MeshoptDecoder;
     if (D && D.ready) { D.ready.then(() => go(D), () => go(null)); return; }
     setTimeout(() => {
@@ -4218,27 +4220,32 @@
   const roomDebugWanted = (() => { try { return /[?&]roomdebug=1/.test(location.search); } catch (_) { return false; } })();
   function manageRooms(heroId, origin, view, drawn) {
     if (!window.SinPalaceRoomManager || !zoneStreamer || !state.routes) return null;
-    if (!roomManager) roomManager = SinPalaceRoomManager.create({ streamed: streamedRooms, constrained: !!deviceProfile.constrained });
+    // Load radius = run speed x (measured preparation + pad) + doorway slack,
+    // capped per device; release radius = load radius + hysteresis.
+    if (!roomManager) roomManager = SinPalaceRoomManager.create({ streamed: streamedRooms, constrained: !!deviceProfile.constrained,
+      maxLoadM: deviceProfile.constrained ? 75 : 95 });
     const now = performance.now();
     const camId = view ? viewerRegion(view) : null;
     // Geometric sight through physically open portals (8 hops), refreshed
     // at ~15 Hz: rooms enter it long before they are reachable.
-    if (view && (!roomSight || now - roomSightAt > 66)) {
+    // Diagnostics only (?roomdebug=1): what the camera could see never drives loading.
+    if (roomDebugWanted && view && (!roomSight || now - roomSightAt > 66)) {
       roomSightAt = now;
       try { roomSight = state.routes.connectedView(camId || heroId, view, SinWingVisibility.throughOpenings, portalPhysicallyOpen); }
       catch (_) { roomSight = null; }
     }
+    // Walking distance from the HERO (not the camera) to every room's doorway.
     const move = state.archiveMotion;
     let distances = null;
     if (move && state.routes.pathDistances) {
       const key = origin + ':' + Math.round(move.x) + ':' + Math.round(move.z);
-      if (state._roomDistKey !== key) { state._roomDistKey = key; state._roomDist = state.routes.pathDistances(origin, move.x, move.z); }
+      if (state._roomDistKey !== key) { state._roomDistKey = key; state._roomDist = state.routes.pathDistances(origin, move.x, move.z, 200); }
       distances = state._roomDist;
     }
     const level = (zoneStreamer.memoryState && zoneStreamer.memoryState().level) || 'normal';
     roomManaged = roomManager.update({
       now, heroRegion: heroId, camRegion: camId, origin, motion: move, drawn,
-      sight: roomSight || [], predicted: state._predictedRooms || [], distances,
+      sight: roomSight || [], distances, pvs: ensurePvs(),
       status: id => zoneStreamer.status(id), leadSec: id => zoneStreamer.leadTime(id), memoryLevel: level
     });
     return roomManaged;
@@ -4287,7 +4294,6 @@
       heapMB: mem ? Math.round(mem.usedJSHeapSize / 1048576) : null
     });
   }
-  const entryLibraryOnly = new Set(['L1']);
   function registerLibraryFailure(id) {
     const failures = state.libraryFailures || (state.libraryFailures = new Map());
     const prior = failures.get(id);
@@ -4303,95 +4309,91 @@
       SinProcessMemory.estimate({ renderer, scene });
     }
   }
+  // Potentially visible set of the palace (static): computed once, behind the
+  // entry blackout. Doors are gates (they open only onto a ready room), so
+  // only doorless arches and passages carry sight lines.
+  function ensurePvs() {
+    if (state.pvs || !state.routes || !state.routes.potentiallyVisible || !window.SinWingVisibility) return state.pvs || null;
+    const t0 = performance.now();
+    const gated = portal => !(portal._roomDoor || state.templeDoorIds?.has(portal.id) || state.libraryDoorIds?.has(portal.id));
+    state.pvs = state.routes.potentiallyVisible(SinWingVisibility.throughOpenings, gated,
+      deviceProfile.constrained ? { step: 4, yaws: 12 } : { step: 3, yaws: 16 });
+    try { console.info('[palace load] pvs', Math.round(performance.now() - t0) + 'ms'); } catch (_) {}
+    return state.pvs;
+  }
+  // Palace entry (still behind the blackout): prepare every room the hero
+  // could see or reach first from the spawn point — the same distance plan
+  // as in play — so the first presented frame never looks into an empty
+  // room. Rooms the device memory cannot hold yet do not hold the blackout.
   function prepareEntryLibrary(reclaim) {
     if (!state.built || !zoneStreamer) return 'ready';
     if (!state.entryLibrary) {
       attachStreamer();
       sampleEntryMemory();
+      ensurePvs();
       state.entryLibrary = { started: performance.now() };
     }
     const entry = state.entryLibrary, now = performance.now();
     if (entry.done) return 'ready';
-    // From the throne hall only L1 can be seen through R1. Rooms behind
-    // the six library doors go through the ordinary approach prediction.
-    zoneStreamer.update({current:'Palace',only:entryLibraryOnly,approach:entryLibraryOnly,
-      retained:entryLibraryOnly,allowBackgroundWarm:false});
-    const status=zoneStreamer.status('L1');
-    if(status==='ready'){
-      entry.done=true;entry.keepReadyUntil=now+45000;
-      return 'ready';
-    }
-    if(status==='cold' && !entry.reclaimed && reclaim){
-      entry.reclaimed=true;
+    const hero = state.ctx.hero.position, root = state.root.position;
+    const x = hero.x - root.x, z = hero.z - root.z;
+    const origin = viewerRegion({ x, z }) || 'Palace';
+    const plan = window.SinPalaceRoomManager && state.routes && SinPalaceRoomManager.create({ streamed: streamedRooms,
+      constrained: !!deviceProfile.constrained, maxLoadM: deviceProfile.constrained ? 75 : 95 }).update({
+      now, heroRegion: origin, origin, distances: state.routes.pathDistances(origin, x, z, 200), pvs: state.pvs,
+      status: id => zoneStreamer.status(id), leadSec: id => zoneStreamer.leadTime(id) });
+    const plannedRooms = plan ? new Set(plan.approach) : new Set(['L1']);
+    zoneStreamer.update({ metric: true, current: origin, approach: plannedRooms, keep: plan ? plan.keep : plannedRooms,
+      rank: plan ? plan.rank : new Map([['L1', 0]]), visible: new Set(), retained: new Set(), allowBackgroundWarm: false });
+    // The blackout waits only for what the first frames can show: rooms seen
+    // from the spawn region. The rest of the plan keeps loading in play.
+    const seen = state.pvs && state.pvs.get(origin);
+    const wanted = new Set([...plannedRooms].filter(id => !seen || seen.has(id)));
+    const states = [...wanted].map(id => zoneStreamer.status(id));
+    const busy = states.some(st => st === 'loading' || st === 'uploading' || st === 'compiling');
+    const r = zoneStreamer.report();
+    const waitingMemory = [...wanted].filter(id => r.zones[id] && r.zones[id].state === 'cold' && r.zones[id].deferred);
+    if (!busy && waitingMemory.length && !entry.reclaimed && reclaim) {
+      entry.reclaimed = true;
       reclaim();
       sampleEntryMemory();
       return 'pending';
     }
-    const elapsed=now-entry.started;
-    entry.done=status==='failed'||elapsed>60000||(status==='cold'&&elapsed>3000);
-    return entry.done?'ready':'pending';
+    const settled = !busy && [...wanted].every(id => { const st = zoneStreamer.status(id); return st === 'ready' || st === 'failed' || waitingMemory.includes(id); });
+    entry.done = settled || now - entry.started > 60000;
+    if (entry.done) {
+      entry.keepReadyUntil = now + 45000;
+      try { console.info('[palace load] entry rooms', JSON.stringify(Object.fromEntries([...wanted].map(id => [id, zoneStreamer.status(id)])))); } catch (_) {}
+    }
+    return entry.done ? 'ready' : 'pending';
   }
+  // Room streaming is decided by WALKING DISTANCE (palace-room-manager.js):
+  // every streamed room has a load radius sized so it is ready before the
+  // hero, running, can reach its doorway, and a larger release radius.
+  // The camera never starts or stops a load; what it draws is only
+  // protected from eviction (nothing disappears on screen). The streamer
+  // prepares the nearest wanted room first and makes memory only by
+  // unloading rooms FARTHER away than the one it needs.
   function streamZones(origin, visibleIds) {
     if (!zoneStreamer) return 0;
     if (zoneDistKey !== origin || !zoneDist) { zoneDistKey = origin; zoneDist = distancesFrom(origin); }
     attachStreamer();
     const level = (zoneStreamer.sample(state.ctx.renderer) || {}).level || 'normal';
-    const move=state.archiveMotion;
-    const readyTime=id=>zoneStreamer.leadTime(id);
-    const next=state.routes.nextRoom(origin,move,streamedRooms,readyTime);
-    const upcoming=next && zoneIsReady(next.id) &&
-      state.routes.nextRoom(origin,move,streamedRooms,readyTime,zoneIsReady);
-    const nearby=state.routes.nearRoom(origin,move,streamedRooms,()=>false);
-    const demand=state.templeDoors?.waiting()||state.libraryDoors?.waiting()||
-      (nearby&&!zoneIsReady(nearby)?nearby:null);
-    state._predictedRooms=[next&&next.id,upcoming&&upcoming.id,nearby].filter(Boolean);
-    const approach=new Set();
-    if(next) approach.add(next.id);
-    if(upcoming)approach.add(upcoming.id);
-    if(nearby) approach.add(nearby);
-    if(demand) approach.add(demand);
-    state.nextStreamRoom = demand || upcoming?.id || next?.id || null;
-
-    const retained=new Set([...(state.templeDoors?.retainZones()||[]),...(state.libraryDoors?.retainZones()||[])]);
-    if(upcoming)retained.add(next.id);
-    const now=performance.now();
-    // A short stop to push the first door must not evict the room being
-    // prepared beyond its corridor. Only an actual approach can set this.
-    if(state.nextStreamRoom && state.nextStreamRoom!==origin){
-      state.approachedStreamRoom={id:state.nextStreamRoom,until:now+7500};
-    }
-    const approached=state.approachedStreamRoom;
-    if(approached && now<approached.until && zoneDist.get(approached.id)<=4)retained.add(approached.id);
-    if(state.lastStreamOrigin!==origin){
-      if(streamedRooms.has(state.lastStreamOrigin))state.recentStreamRoom={id:state.lastStreamOrigin,until:now+11000};
-      state.lastStreamOrigin=origin;
-    }
-    const recent=state.recentStreamRoom;
-    if(recent && now<recent.until && zoneDist.get(recent.id)<=2 && level==='normal' && !approach.size)retained.add(recent.id);
-    if(origin==='Palace' && level==='normal' && !approach.size && zoneIsReady('L1') &&
-      now<(state.entryLibrary?.keepReadyUntil||0))retained.add('L1');
-    // A failed preparation is retried once the back-off passed. The room
-    // the hero stands in is included (it used to stay 'failed' for good,
-    // leaving its placeholder in place), with two retries at most.
-    for(const id of [...approach,origin]){
-      const failure=state.libraryFailures?.get(id);
-      const limit=id===origin?2:1;
-      if(failure && failure.count<=limit && now>=failure.retryAt && zoneStreamer.status(id)==='failed') zoneStreamer.forceEvict(id);
-    }
-    // Room manager: rooms already in the camera's sight line come first,
-    // then graph / heading prefetch; rooms just left stay in cooldown.
-    // Any door that is moving keeps both of its rooms resident.
-    const managed=roomManaged;
-    let demandRoom=demand;
-    if(managed){
-      for(const id of managed.sight){approach.add(id);retained.add(id);if(!demandRoom)demandRoom=id;}
-      for(const id of managed.approach)approach.add(id);
-      for(const id of managed.retained)retained.add(id);
-    }
+    const managed = roomManaged;
+    const approach = new Set(managed ? managed.approach : []);
+    const keep = new Set(managed ? managed.keep : []);
+    const rank = new Map(managed ? managed.rank : []);
+    // A door the hero is standing at and pushing comes first.
+    const demand = state.templeDoors?.waiting() || state.libraryDoors?.waiting() || null;
+    if (demand) { approach.add(demand); rank.set(demand, 0); }
+    // An open temple / library door holds its rooms only while the hero is
+    // at it (rooms within 12 m): a door left open behind the hero no longer
+    // pins a room in memory or blocks a nearer room (what is on screen
+    // stays protected anyway).
+    const retained = new Set([...(state.templeDoors?.retainZones()||[]),...(state.libraryDoors?.retainZones()||[])]
+      .filter(id => id === demand || (rank.has(id) && rank.get(id) <= 12)));
     // A door that is moving, or that the hero stands at, keeps both of its
-    // rooms resident: readiness can never drop during the swing. (Open
-    // royal doors stay open for good, so "not Closed" alone would pin
-    // their rooms forever and starve the memory budget.)
+    // rooms resident: readiness can never drop during the swing.
     const heroAt=state.ctx&&state.ctx.hero&&state.ctx.hero.position;
     for(const d of state.doors){
       if(!d._roomDoor||d.state==='Closed')continue;
@@ -4400,13 +4402,25 @@
       if(!moving&&!near)continue;
       for(const id of [d.from,d.to])if(streamedRooms.has(id))retained.add(id);
     }
+    // A failed preparation is retried once the back-off passed (the room the
+    // hero stands in twice).
+    const now=performance.now();
+    for(const id of [...approach,origin]){
+      const failure=state.libraryFailures?.get(id);
+      const limit=id===origin?2:1;
+      if(failure && failure.count<=limit && now>=failure.retryAt && zoneStreamer.status(id)==='failed') zoneStreamer.forceEvict(id);
+    }
+    let next=null;
+    approach.forEach(id=>{ if(!zoneIsReady(id)&&(next===null||(rank.get(id)??1e6)<(rank.get(next)??1e6)))next=id; });
+    state.nextStreamRoom = demand || next;
+    state._predictedRooms = next ? [next] : [];
     const pendingApproach=[...approach].some(id=>!zoneIsReady(id));
+    const move=state.archiveMotion;
     const allowBackgroundWarm=level==='normal'&&!pendingApproach&&(!move||Math.hypot(move.vx,move.vz)<.3);
     const warmGroups=allowBackgroundWarm?[...visibleIds]
       .filter(id=>!streamedRooms.has(id)).map(id=>state.regionGroups.get(id)).filter(Boolean):[];
-    return zoneStreamer.update({current:origin,distances:zoneDist,visible:visibleIds,
-      memoryLevel:level,warmGroups,approach,retained,allowBackgroundWarm,demand:demandRoom,motionPrefetch:true,
-      keep:managed?managed.keep:null,rank:managed?managed.rank:null});
+    return zoneStreamer.update({metric:true,current:origin,visible:visibleIds,memoryLevel:level,warmGroups,
+      approach,keep,rank,retained,demand,allowBackgroundWarm,distances:zoneDist});
   }
   // After LRU eviction a streamed room (K4 in particular) can sit complete=false
   // with its dress refs nulled. If the player is standing in it, re-issue the
@@ -5426,7 +5440,8 @@
         if (!material) return;
         keys.forEach(function (key) {
           const texture = material[key];
-          if (!texture || seen.has(texture)) return;
+          // A compressed twin (ktx2-textures.js) is already encoded at the K4 size.
+          if (!texture || seen.has(texture) || texture.isCompressedTexture) return;
           seen.add(texture);
           const image = texture.image || (texture.source && texture.source.data);
           const width = image && (image.naturalWidth || image.videoWidth || image.width || 0);

@@ -117,6 +117,32 @@
       return dist;
     }
     function neighbours(id){return (routes.get(id)||[]).map(r=>r.to);}
+    // Potentially visible set (PVS): for every region, every region that can
+    // be seen from ANY point inside it, looking in ANY direction, through the
+    // openings `pass` accepts (doorless arches and passages — a door only
+    // opens once the room behind it is ready, so doors are a gate, not a
+    // sight line). The layout is static, so this is computed once; it lets
+    // streaming prepare a room before the hero can stand anywhere it could
+    // be seen from, without reading the live camera.
+    function potentiallyVisible(through,pass,opts={}) {
+      const step=opts.step||3, yaws=opts.yaws||16, halfFov=opts.halfFov||1.05, inset=opts.inset==null?.35:opts.inset;
+      const out=new Map();
+      for(const r of regions){
+        const b=r.bbox;if(!b)continue;
+        const seen=new Set([r.id]);
+        const w=Math.max(.01,b.x1-b.x0-2*inset),h=Math.max(.01,b.z1-b.z0-2*inset);
+        const nx=Math.max(1,Math.ceil(w/step)),nz=Math.max(1,Math.ceil(h/step));
+        for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){
+          const x=b.x0+inset+(i+.5)*w/nx,z=b.z0+inset+(j+.5)*h/nz;
+          for(let k=0;k<yaws;k++){
+            const a=k*2*Math.PI/yaws;
+            connectedView(r.id,{x,z,dirX:Math.sin(a),dirZ:Math.cos(a),halfFov},through,pass).forEach(id=>seen.add(id));
+          }
+        }
+        out.set(r.id,seen);
+      }
+      return out;
+    }
     // Regions directly behind a CLOSED opening the camera looks at from
     // `origin`. Their door reveals / jambs sit inside that region, so it
     // must still be drawn (the leaf itself hides everything further on).
@@ -136,7 +162,7 @@
       }
       return out;
     }
-    return {nextRoom,nearRoom,connectedView,pathDistances,neighbours,closedFrames};
+    return {nextRoom,nearRoom,connectedView,pathDistances,neighbours,closedFrames,potentiallyVisible};
   }
   return {create};
 });

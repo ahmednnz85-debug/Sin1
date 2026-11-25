@@ -1,0 +1,1652 @@
+{
+ "version": 1,
+ "items": {
+  "2iks-1l0g4sa-112kjox": {
+   "file": "assets/ktx2/2iks-1l0g4sa-112kjox.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/marble.webp"
+   ]
+  },
+  "w4vj-1mv1n7j-14yv5w9": {
+   "file": "assets/ktx2/w4vj-1mv1n7j-14yv5w9.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/اثاث المدخل المقدس.glb"
+   ]
+  },
+  "1aqui-1p56yj6-osfb39": {
+   "file": "assets/ktx2/1aqui-1p56yj6-osfb39.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/اثاث المدخل المقدس.glb"
+   ]
+  },
+  "t82v-1nujrou-1rgfmte": {
+   "file": "assets/ktx2/t82v-1nujrou-1rgfmte.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/اثاث المدخل المقدس.glb"
+   ]
+  },
+  "ncmm-12vhmgl-r50x0j": {
+   "file": "assets/ktx2/ncmm-12vhmgl-r50x0j.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/اثاث_الخرائط.glb"
+   ]
+  },
+  "11fc8-7h8fkz-1xle9hf": {
+   "file": "assets/ktx2/11fc8-7h8fkz-1xle9hf.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/اثاث_الخرائط.glb"
+   ]
+  },
+  "e02j-qnvby9-quumd": {
+   "file": "assets/ktx2/e02j-qnvby9-quumd.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/اثاث_الخرائط.glb"
+   ]
+  },
+  "17s7r-bm3fnr-ouv5ts": {
+   "file": "assets/ktx2/17s7r-bm3fnr-ouv5ts.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/اجتماعات .glb"
+   ]
+  },
+  "1z4lq-rb7ai7-t1u02d": {
+   "file": "assets/ktx2/1z4lq-rb7ai7-t1u02d.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/اجتماعات .glb"
+   ]
+  },
+  "j4yy-14arkji-1gzn5pv": {
+   "file": "assets/ktx2/j4yy-14arkji-1gzn5pv.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/اجتماعات .glb"
+   ]
+  },
+  "sx93-1kv8jyv-1vfr5ie": {
+   "file": "assets/ktx2/sx93-1kv8jyv-1vfr5ie.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/المكتبة الكبرى l1 2.glb"
+   ]
+  },
+  "1tus8-g7b99c-1qzotju": {
+   "file": "assets/ktx2/1tus8-g7b99c-1qzotju.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/المكتبة الكبرى l1 2.glb"
+   ]
+  },
+  "aoo8-o7up9d-1jbenb": {
+   "file": "assets/ktx2/aoo8-o7up9d-1jbenb.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/المكتبة الكبرى l1 2.glb"
+   ]
+  },
+  "scu4-1nk6vxl-st924w": {
+   "file": "assets/ktx2/scu4-1nk6vxl-st924w.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/المكتبة الكبرى l1.glb"
+   ]
+  },
+  "1unfn-zervej-1i1m7mo": {
+   "file": "assets/ktx2/1unfn-zervej-1i1m7mo.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/المكتبة الكبرى l1.glb"
+   ]
+  },
+  "gcl4-aq30re-vfw5z5": {
+   "file": "assets/ktx2/gcl4-aq30re-vfw5z5.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/المكتبة الكبرى l1.glb"
+   ]
+  },
+  "1ltu-19cbpm5-1jonxt1": {
+   "file": "assets/ktx2/1ltu-19cbpm5-1jonxt1.ktx2",
+   "w": 768,
+   "h": 768,
+   "role": "color",
+   "src": [
+    "assets/سجل القمر .glb"
+   ]
+  },
+  "ny9-1ss8kkx-28l1bq": {
+   "file": "assets/ktx2/ny9-1ss8kkx-28l1bq.ktx2",
+   "w": 768,
+   "h": 768,
+   "role": "data",
+   "src": [
+    "assets/سجل القمر .glb"
+   ]
+  },
+  "s51-1l2vdg4-aeb2n8": {
+   "file": "assets/ktx2/s51-1l2vdg4-aeb2n8.ktx2",
+   "w": 768,
+   "h": 768,
+   "role": "normal",
+   "src": [
+    "assets/سجل القمر .glb"
+   ]
+  },
+  "2b63-oqrz3k-dy7kg0": {
+   "file": "assets/ktx2/2b63-oqrz3k-dy7kg0.ktx2",
+   "w": 768,
+   "h": 768,
+   "role": "color",
+   "src": [
+    "assets/لوح المحاق.glb"
+   ]
+  },
+  "1ssy-wkgyr5-1uyccc5": {
+   "file": "assets/ktx2/1ssy-wkgyr5-1uyccc5.ktx2",
+   "w": 768,
+   "h": 768,
+   "role": "data",
+   "src": [
+    "assets/لوح المحاق.glb"
+   ]
+  },
+  "14a1-jk9zs4-no20i2": {
+   "file": "assets/ktx2/14a1-jk9zs4-no20i2.ktx2",
+   "w": 768,
+   "h": 768,
+   "role": "normal",
+   "src": [
+    "assets/لوح المحاق.glb"
+   ]
+  },
+  "7wer-1i7nxqf-18ileh4": {
+   "file": "assets/ktx2/7wer-1i7nxqf-18ileh4.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/مجسم الباب.glb",
+    "ارضيات وسقوف/optimized/مجسم الباب.glb"
+   ]
+  },
+  "l6a8-ur2vl1-18wd21l": {
+   "file": "assets/ktx2/l6a8-ur2vl1-18wd21l.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/مجسم الباب.glb",
+    "ارضيات وسقوف/optimized/مجسم الباب.glb"
+   ]
+  },
+  "eysw-1j64ulh-qv5d9c": {
+   "file": "assets/ktx2/eysw-1j64ulh-qv5d9c.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/مجسم الباب.glb",
+    "ارضيات وسقوف/optimized/مجسم الباب.glb"
+   ]
+  },
+  "1cb7n-hlllgf-1q43349": {
+   "file": "assets/ktx2/1cb7n-hlllgf-1q43349.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/مجموعة غراض غير متلاصقة.glb",
+    "ارضيات وسقوف/optimized/props-set.glb"
+   ]
+  },
+  "2jno0-fa3shu-17gqzey": {
+   "file": "assets/ktx2/2jno0-fa3shu-17gqzey.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/مجموعة غراض غير متلاصقة.glb",
+    "ارضيات وسقوف/optimized/props-set.glb"
+   ]
+  },
+  "blic-ybw2m5-1uf6nji": {
+   "file": "assets/ktx2/blic-ybw2m5-1uf6nji.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/مجموعة غراض غير متلاصقة.glb",
+    "ارضيات وسقوف/optimized/props-set.glb"
+   ]
+  },
+  "1ay-1wvpi1a-1gt0b56": {
+   "file": "assets/ktx2/1ay-1wvpi1a-1gt0b56.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/floor-orm.webp"
+   ]
+  },
+  "8fz4-1r4n3yz-ud2j5y": {
+   "file": "assets/ktx2/8fz4-1r4n3yz-ud2j5y.ktx2",
+   "w": 900,
+   "h": 900,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/library/archive-furniture.glb"
+   ]
+  },
+  "2ful-15odia9-8jrmkw": {
+   "file": "assets/ktx2/2ful-15odia9-8jrmkw.ktx2",
+   "w": 480,
+   "h": 480,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/library/archive-furniture.glb"
+   ]
+  },
+  "whi-1b693gm-1t7lv38": {
+   "file": "assets/ktx2/whi-1b693gm-1t7lv38.ktx2",
+   "w": 256,
+   "h": 256,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/library/archive-furniture.glb"
+   ]
+  },
+  "8j4i-4r3vw9-thmgfc": {
+   "file": "assets/ktx2/8j4i-4r3vw9-thmgfc.ktx2",
+   "w": 900,
+   "h": 900,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/library/archive-ornaments.glb"
+   ]
+  },
+  "3nyi-bw0af4-mzfgc5": {
+   "file": "assets/ktx2/3nyi-bw0af4-mzfgc5.ktx2",
+   "w": 480,
+   "h": 480,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/library/archive-ornaments.glb"
+   ]
+  },
+  "mkv-17bltip-1v8eegz": {
+   "file": "assets/ktx2/mkv-17bltip-1v8eegz.ktx2",
+   "w": 256,
+   "h": 256,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/library/archive-ornaments.glb"
+   ]
+  },
+  "6w1o-1epz8ff-1i70lsf": {
+   "file": "assets/ktx2/6w1o-1epz8ff-1i70lsf.ktx2",
+   "w": 900,
+   "h": 900,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/library/archive-shelves.glb"
+   ]
+  },
+  "3cb4-8dvual-1010u6o": {
+   "file": "assets/ktx2/3cb4-8dvual-1010u6o.ktx2",
+   "w": 480,
+   "h": 480,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/library/archive-shelves.glb"
+   ]
+  },
+  "flu-1e5dq4p-t6dyij": {
+   "file": "assets/ktx2/flu-1e5dq4p-t6dyij.ktx2",
+   "w": 256,
+   "h": 256,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/library/archive-shelves.glb"
+   ]
+  },
+  "750e-91zcqz-jkp4ch": {
+   "file": "assets/ktx2/750e-91zcqz-jkp4ch.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/ارضية.webp"
+   ]
+  },
+  "fipe-r45qog-1dy1cc2": {
+   "file": "assets/ktx2/fipe-r45qog-1dy1cc2.ktx2",
+   "w": 1024,
+   "h": 683,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/جدار-خلف-العرش.webp"
+   ]
+  },
+  "9qe2-hihadc-1d7zk3s": {
+   "file": "assets/ktx2/9qe2-hihadc-1d7zk3s.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/جدران-الباب.webp"
+   ]
+  },
+  "8no8-yvk9ki-i5bnjx": {
+   "file": "assets/ktx2/8no8-yvk9ki-i5bnjx.ktx2",
+   "w": 604,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/سجاد-الارضية.webp"
+   ]
+  },
+  "771c-19lhmdn-11wsesg": {
+   "file": "assets/ktx2/771c-19lhmdn-11wsesg.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/سقف-القصر.webp"
+   ]
+  },
+  "gaz6-14tbnlz-ted7h4": {
+   "file": "assets/ktx2/gaz6-14tbnlz-ted7h4.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/عمود-المجلس.glb"
+   ]
+  },
+  "f562-1p9fj9w-x3brkh": {
+   "file": "assets/ktx2/f562-1p9fj9w-x3brkh.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/عمود-المجلس.glb"
+   ]
+  },
+  "3btf-ftri56-1ooudrh": {
+   "file": "assets/ktx2/3btf-ftri56-1ooudrh.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/عمود-المجلس.glb"
+   ]
+  },
+  "9q9t-1uznd8u-1hsq3o8": {
+   "file": "assets/ktx2/9q9t-1uznd8u-1hsq3o8.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/Sin_combat_FINAL3_axe.glb",
+    "assets/Sin_hero_runtime.glb"
+   ]
+  },
+  "5v26-17oijkg-1cjfyjm": {
+   "file": "assets/ktx2/5v26-17oijkg-1cjfyjm.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/Sin_combat_FINAL3_axe.glb",
+    "assets/Sin_hero_runtime.glb"
+   ]
+  },
+  "k2nu-6irt01-41jg04": {
+   "file": "assets/ktx2/k2nu-6irt01-41jg04.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/Sin_combat_FINAL3_axe.glb",
+    "assets/Sin_hero_runtime.glb"
+   ]
+  },
+  "4irg-7n6051-1aid0kh": {
+   "file": "assets/ktx2/4irg-7n6051-1aid0kh.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/Sin_combat_FINAL3_axe.glb",
+    "assets/Sin_hero_runtime.glb"
+   ]
+  },
+  "kyaf-107tleb-1ahwk5s": {
+   "file": "assets/ktx2/kyaf-107tleb-1ahwk5s.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/Sin_combat_FINAL3_axe.glb",
+    "assets/Sin_hero_runtime.glb"
+   ]
+  },
+  "4cv0-rx5sve-1r31vq4": {
+   "file": "assets/ktx2/4cv0-rx5sve-1r31vq4.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/Sin_combat_FINAL3_axe.glb",
+    "assets/Sin_hero_runtime.glb"
+   ]
+  },
+  "rrj2-tph4bz-1dv1ow9": {
+   "file": "assets/ktx2/rrj2-tph4bz-1dv1ow9.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/palace.glb"
+   ]
+  },
+  "19ta-o4cyup-1he37fi": {
+   "file": "assets/ktx2/19ta-o4cyup-1he37fi.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "data",
+   "src": [
+    "assets/palace.glb"
+   ]
+  },
+  "123su-lb5c8a-o1n05x": {
+   "file": "assets/ktx2/123su-lb5c8a-o1n05x.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/palace.glb"
+   ]
+  },
+  "yeul-s44kre-c5jorz": {
+   "file": "assets/ktx2/yeul-s44kre-c5jorz.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/اثاث التطهير.glb"
+   ]
+  },
+  "1mgn0-b4gjik-yzt472": {
+   "file": "assets/ktx2/1mgn0-b4gjik-yzt472.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/اثاث التطهير.glb"
+   ]
+  },
+  "ptu4-1vfh4d5-1b5ce6d": {
+   "file": "assets/ktx2/ptu4-1vfh4d5-1b5ce6d.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/اثاث التطهير.glb"
+   ]
+  },
+  "1195r-p94s0p-8sxfnv": {
+   "file": "assets/ktx2/1195r-p94s0p-8sxfnv.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/اثاث الحرم المقدس.glb"
+   ]
+  },
+  "1pff6-sb2ri4-a7xepr": {
+   "file": "assets/ktx2/1pff6-sb2ri4-a7xepr.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/اثاث الحرم المقدس.glb"
+   ]
+  },
+  "hlt9-uqi09l-bmcgbs": {
+   "file": "assets/ktx2/hlt9-uqi09l-bmcgbs.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/اثاث الحرم المقدس.glb"
+   ]
+  },
+  "90ww-j3f592-l8n0pm": {
+   "file": "assets/ktx2/90ww-j3f592-l8n0pm.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/اثاث الخزانة 2.glb"
+   ]
+  },
+  "essy-1h93ipx-1l97wnj": {
+   "file": "assets/ktx2/essy-1h93ipx-1l97wnj.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/اثاث الخزانة 2.glb"
+   ]
+  },
+  "4omu-1cd9l5g-11k6dgs": {
+   "file": "assets/ktx2/4omu-1cd9l5g-11k6dgs.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/اثاث الخزانة 2.glb"
+   ]
+  },
+  "z6ai-16vjyz8-10w4ivd": {
+   "file": "assets/ktx2/z6ai-16vjyz8-10w4ivd.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/اثاث القرابين.glb"
+   ]
+  },
+  "1rw8f-1jcpbk3-ib2p69": {
+   "file": "assets/ktx2/1rw8f-1jcpbk3-ib2p69.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/اثاث القرابين.glb"
+   ]
+  },
+  "8n8p-12vlq5z-1w3tn0r": {
+   "file": "assets/ktx2/8n8p-12vlq5z-1w3tn0r.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/اثاث القرابين.glb"
+   ]
+  },
+  "wmdg-1q27cgz-ixt77r": {
+   "file": "assets/ktx2/wmdg-1q27cgz-ixt77r.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/اثاث المرصد.glb"
+   ]
+  },
+  "1ul07-1ip3c7s-2boo7h": {
+   "file": "assets/ktx2/1ul07-1ip3c7s-2boo7h.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/اثاث المرصد.glb"
+   ]
+  },
+  "93n7-1udzbpv-zxrp3o": {
+   "file": "assets/ktx2/93n7-1udzbpv-zxrp3o.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/اثاث المرصد.glb"
+   ]
+  },
+  "xfvm-1ou1ob1-1t1ndtj": {
+   "file": "assets/ktx2/xfvm-1ou1ob1-1t1ndtj.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/اثاث غرفة المكتبة.glb"
+   ]
+  },
+  "1ldb6-6q93dp-qq1syc": {
+   "file": "assets/ktx2/1ldb6-6q93dp-qq1syc.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/اثاث غرفة المكتبة.glb"
+   ]
+  },
+  "qa1z-1qc5lyg-107gytq": {
+   "file": "assets/ktx2/qa1z-1qc5lyg-107gytq.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/اثاث غرفة المكتبة.glb"
+   ]
+  },
+  "zwuk-1jk5xe8-1huhumn": {
+   "file": "assets/ktx2/zwuk-1jk5xe8-1huhumn.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/اثاث قاعة الاعمدة.glb"
+   ]
+  },
+  "1sxgx-2h0aui-ljv4sn": {
+   "file": "assets/ktx2/1sxgx-2h0aui-ljv4sn.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/اثاث قاعة الاعمدة.glb"
+   ]
+  },
+  "atzk-1okozn-1xjz99w": {
+   "file": "assets/ktx2/atzk-1okozn-1xjz99w.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/اثاث قاعة الاعمدة.glb"
+   ]
+  },
+  "1ein3-1bm3l0e-18s84mo": {
+   "file": "assets/ktx2/1ein3-1bm3l0e-18s84mo.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/ثريا المجلس .glb"
+   ]
+  },
+  "kv8k-1qzm2e2-ys3hdg": {
+   "file": "assets/ktx2/kv8k-1qzm2e2-ys3hdg.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/ثريا المجلس .glb"
+   ]
+  },
+  "1fxjo-hpmt0f-1m8qnvx": {
+   "file": "assets/ktx2/1fxjo-hpmt0f-1m8qnvx.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/ثريا المجلس .glb"
+   ]
+  },
+  "128px-3iw37f-18q2q29": {
+   "file": "assets/ktx2/128px-3iw37f-18q2q29.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/ستارة الشرفة.glb"
+   ]
+  },
+  "1wmnw-1pgqap0-1lzcdlk": {
+   "file": "assets/ktx2/1wmnw-1pgqap0-1lzcdlk.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/ستارة الشرفة.glb"
+   ]
+  },
+  "us66-1akbjrm-1xb3vkv": {
+   "file": "assets/ktx2/us66-1akbjrm-1xb3vkv.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/ستارة الشرفة.glb"
+   ]
+  },
+  "6kwl-42n4kn-134kg4h": {
+   "file": "assets/ktx2/6kwl-42n4kn-134kg4h.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/سرير الملك.glb"
+   ]
+  },
+  "gywo-tseiqd-2e9wof": {
+   "file": "assets/ktx2/gywo-tseiqd-2e9wof.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/سرير الملك.glb"
+   ]
+  },
+  "6nig-ab4tqc-1suxz70": {
+   "file": "assets/ktx2/6nig-ab4tqc-1suxz70.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/سرير الملك.glb"
+   ]
+  },
+  "6myi-5btqv3-1xql5s1": {
+   "file": "assets/ktx2/6myi-5btqv3-1xql5s1.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/باب الاجنحة.glb"
+   ]
+  },
+  "1dgqw-1rklw2y-szu7zq": {
+   "file": "assets/ktx2/1dgqw-1rklw2y-szu7zq.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/باب الاجنحة.glb"
+   ]
+  },
+  "skhy-1tzca30-wlzep6": {
+   "file": "assets/ktx2/skhy-1tzca30-wlzep6.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/باب الاجنحة.glb"
+   ]
+  },
+  "n4rk-1o48gze-ygu4b0": {
+   "file": "assets/ktx2/n4rk-1o48gze-ygu4b0.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/K1_RoyalReceptionHall.glb",
+    "ارضيات وسقوف/optimized/K1_RoyalReceptionHall_lod25.glb"
+   ]
+  },
+  "kea6-1yoj6mn-107dx5c": {
+   "file": "assets/ktx2/kea6-1yoj6mn-107dx5c.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/K1_RoyalReceptionHall.glb",
+    "ارضيات وسقوف/optimized/K1_RoyalReceptionHall_lod25.glb"
+   ]
+  },
+  "2p7y-1b9jib0-v93xlt": {
+   "file": "assets/ktx2/2p7y-1b9jib0-v93xlt.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/K1_RoyalReceptionHall.glb",
+    "ارضيات وسقوف/optimized/K1_RoyalReceptionHall_lod25.glb"
+   ]
+  },
+  "flv4-1q6f5mp-v299j4": {
+   "file": "assets/ktx2/flv4-1q6f5mp-v299j4.ktx2",
+   "w": 668,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/K1_RoyalReceptionHall.glb",
+    "ارضيات وسقوف/optimized/K1_RoyalReceptionHall_lod25.glb"
+   ]
+  },
+  "424u-ej5892-tnz17n": {
+   "file": "assets/ktx2/424u-ej5892-tnz17n.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/lion_winged-lod1.glb"
+   ]
+  },
+  "5hw4-1i0c7qu-1kwc697": {
+   "file": "assets/ktx2/5hw4-1i0c7qu-1kwc697.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/lion_winged-lod1.glb"
+   ]
+  },
+  "1oy4-l2lgj3-5vo3ji": {
+   "file": "assets/ktx2/1oy4-l2lgj3-5vo3ji.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/lion_winged-lod1.glb"
+   ]
+  },
+  "c900-ecp3xg-vrjxih": {
+   "file": "assets/ktx2/c900-ecp3xg-vrjxih.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/lion_winged.glb"
+   ]
+  },
+  "hcyk-91o7p2-1wzuffi": {
+   "file": "assets/ktx2/hcyk-91o7p2-1wzuffi.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/lion_winged.glb"
+   ]
+  },
+  "4nku-dcf3l6-2jrj58": {
+   "file": "assets/ktx2/4nku-dcf3l6-2jrj58.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/lion_winged.glb"
+   ]
+  },
+  "5cci-10ft5lb-18j7de7": {
+   "file": "assets/ktx2/5cci-10ft5lb-18j7de7.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/اعمدة-lod1.glb"
+   ]
+  },
+  "5qge-1nk8ue2-16ge5ps": {
+   "file": "assets/ktx2/5qge-1nk8ue2-16ge5ps.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/اعمدة-lod1.glb"
+   ]
+  },
+  "tmm-5jl4u7-8d3fyh": {
+   "file": "assets/ktx2/tmm-5jl4u7-8d3fyh.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/اعمدة-lod1.glb"
+   ]
+  },
+  "e0wu-1ajudpq-1n1ssyf": {
+   "file": "assets/ktx2/e0wu-1ajudpq-1n1ssyf.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/اعمدة.glb"
+   ]
+  },
+  "fh32-s558oo-mxmnh3": {
+   "file": "assets/ktx2/fh32-s558oo-mxmnh3.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/اعمدة.glb"
+   ]
+  },
+  "255y-yrbgxj-mgo5iy": {
+   "file": "assets/ktx2/255y-yrbgxj-mgo5iy.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/اعمدة.glb"
+   ]
+  },
+  "kvom-1rsew5g-150yhqw": {
+   "file": "assets/ktx2/kvom-1rsew5g-150yhqw.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/الجدارية.glb"
+   ]
+  },
+  "rwik-2gyrr1-1ocqqo9": {
+   "file": "assets/ktx2/rwik-2gyrr1-1ocqqo9.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/الجدارية.glb"
+   ]
+  },
+  "9jdy-10ep2lp-m8v5bc": {
+   "file": "assets/ktx2/9jdy-10ep2lp-m8v5bc.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/الجدارية.glb"
+   ]
+  },
+  "4zu6-1f7eyy6-actz3y": {
+   "file": "assets/ktx2/4zu6-1f7eyy6-actz3y.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/المباخر-lod1.glb"
+   ]
+  },
+  "66ky-8juguy-15g2nrq": {
+   "file": "assets/ktx2/66ky-8juguy-15g2nrq.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/المباخر-lod1.glb"
+   ]
+  },
+  "2yxy-1s5gepi-ectqdv": {
+   "file": "assets/ktx2/2yxy-1s5gepi-ectqdv.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/المباخر-lod1.glb"
+   ]
+  },
+  "hp1w-4ohw1a-a69p1y": {
+   "file": "assets/ktx2/hp1w-4ohw1a-a69p1y.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/المباخر.glb"
+   ]
+  },
+  "f1cy-bbc5ug-2gk8tf": {
+   "file": "assets/ktx2/f1cy-bbc5ug-2gk8tf.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/المباخر.glb"
+   ]
+  },
+  "7qne-yq23fu-1qq9s1k": {
+   "file": "assets/ktx2/7qne-yq23fu-1qq9s1k.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/المباخر.glb"
+   ]
+  },
+  "ecc-1asn3bq-16pmum3": {
+   "file": "assets/ktx2/ecc-1asn3bq-16pmum3.ktx2",
+   "w": 512,
+   "h": 185,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/درج.glb"
+   ]
+  },
+  "8va-mvhgkr-1nnwl7i": {
+   "file": "assets/ktx2/8va-mvhgkr-1nnwl7i.ktx2",
+   "w": 512,
+   "h": 128,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/درج.glb"
+   ]
+  },
+  "f2k-kztx06-1ylg1n6": {
+   "file": "assets/ktx2/f2k-kztx06-1ylg1n6.ktx2",
+   "w": 512,
+   "h": 185,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/درج.glb"
+   ]
+  },
+  "6ao-73w6e6-1pbj0qw": {
+   "file": "assets/ktx2/6ao-73w6e6-1pbj0qw.ktx2",
+   "w": 512,
+   "h": 256,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/درج.glb"
+   ]
+  },
+  "7qe-14elwue-1530f9o": {
+   "file": "assets/ktx2/7qe-14elwue-1530f9o.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/درج.glb"
+   ]
+  },
+  "6ei-1qulfrh-1ae8onh": {
+   "file": "assets/ktx2/6ei-1qulfrh-1ae8onh.ktx2",
+   "w": 512,
+   "h": 256,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/درج.glb"
+   ]
+  },
+  "7a0-kk1zzm-1ove4mr": {
+   "file": "assets/ktx2/7a0-kk1zzm-1ove4mr.ktx2",
+   "w": 512,
+   "h": 256,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/درج.glb"
+   ]
+  },
+  "4kq-av3ehe-1q3q6z2": {
+   "file": "assets/ktx2/4kq-av3ehe-1q3q6z2.ktx2",
+   "w": 512,
+   "h": 256,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/درج.glb"
+   ]
+  },
+  "aw4-m0ppu8-18zecc7": {
+   "file": "assets/ktx2/aw4-m0ppu8-18zecc7.ktx2",
+   "w": 256,
+   "h": 256,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/درج.glb"
+   ]
+  },
+  "dym2-x7bytq-180m02z": {
+   "file": "assets/ktx2/dym2-x7bytq-180m02z.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/شتله.glb"
+   ]
+  },
+  "51w2-j4gdrs-1g9gfuc": {
+   "file": "assets/ktx2/51w2-j4gdrs-1g9gfuc.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/شتله.glb"
+   ]
+  },
+  "4feo-lj11g2-1gagy29": {
+   "file": "assets/ktx2/4feo-lj11g2-1gagy29.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/شتله.glb"
+   ]
+  },
+  "19re-srh0g9-1y77rng": {
+   "file": "assets/ktx2/19re-srh0g9-1y77rng.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "1v7o-eiy745-nvc2c0": {
+   "file": "assets/ktx2/1v7o-eiy745-nvc2c0.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "zmo-100y9p6-1hzqa7r": {
+   "file": "assets/ktx2/zmo-100y9p6-1hzqa7r.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "1w28-myjnk-1pt6m0q": {
+   "file": "assets/ktx2/1w28-myjnk-1pt6m0q.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "xxc-unj469-tccp4l": {
+   "file": "assets/ktx2/xxc-unj469-tccp4l.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "jyw-19sndxn-1plezsz": {
+   "file": "assets/ktx2/jyw-19sndxn-1plezsz.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "r5y-8r0ei9-kq8z05": {
+   "file": "assets/ktx2/r5y-8r0ei9-kq8z05.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "1cvi-1buoi0g-1vwehrr": {
+   "file": "assets/ktx2/1cvi-1buoi0g-1vwehrr.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "ypk-1gs2rcr-vjkpz0": {
+   "file": "assets/ktx2/ypk-1gs2rcr-vjkpz0.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "1dbw-126w419-wrs6s4": {
+   "file": "assets/ktx2/1dbw-126w419-wrs6s4.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "357y-hbwjn9-1ptces6": {
+   "file": "assets/ktx2/357y-hbwjn9-1ptces6.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "1slm-bjufsk-1obpicf": {
+   "file": "assets/ktx2/1slm-bjufsk-1obpicf.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "4sd6-10dwtp8-189m1pk": {
+   "file": "assets/ktx2/4sd6-10dwtp8-189m1pk.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "p56-10n131o-pgw11l": {
+   "file": "assets/ktx2/p56-10n131o-pgw11l.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "4wg-1ktqm0o-1qjkgi6": {
+   "file": "assets/ktx2/4wg-1ktqm0o-1qjkgi6.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "e14-sa8u0c-1z0eagd": {
+   "file": "assets/ktx2/e14-sa8u0c-1z0eagd.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/مشعل اسود.glb"
+   ]
+  },
+  "16ke-uzpup4-vw12dg": {
+   "file": "assets/ktx2/16ke-uzpup4-vw12dg.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/عرش البطل.glb"
+   ]
+  },
+  "m8m-1d41eun-17ha89z": {
+   "file": "assets/ktx2/m8m-1d41eun-17ha89z.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/مشعل اسود.glb"
+   ]
+  },
+  "2f2w-tslsst-94j6xd": {
+   "file": "assets/ktx2/2f2w-tslsst-94j6xd.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/مشعل اسود.glb"
+   ]
+  },
+  "4i4g-c6fgcl-kmncwl": {
+   "file": "assets/ktx2/4i4g-c6fgcl-kmncwl.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/مشعل خشب.glb"
+   ]
+  },
+  "55zu-1neswsb-11mx2hi": {
+   "file": "assets/ktx2/55zu-1neswsb-11mx2hi.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/مشعل خشب.glb"
+   ]
+  },
+  "ol2-1osvcjl-1ei4n3m": {
+   "file": "assets/ktx2/ol2-1osvcjl-1ei4n3m.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/مشعل خشب.glb"
+   ]
+  },
+  "24uo-llv3n0-ruhg1s": {
+   "file": "assets/ktx2/24uo-llv3n0-ruhg1s.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/مشعل خشب.glb"
+   ]
+  },
+  "vec-1crgje0-1r2ttzj": {
+   "file": "assets/ktx2/vec-1crgje0-1r2ttzj.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/مشعل خشب.glb"
+   ]
+  },
+  "4n72-b5t5b7-rs24ob": {
+   "file": "assets/ktx2/4n72-b5t5b7-rs24ob.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/مشعل خشب.glb"
+   ]
+  },
+  "2j5e-qsqqk8-s92a2q": {
+   "file": "assets/ktx2/2j5e-qsqqk8-s92a2q.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/جدار الامامي للقرابين.glb"
+   ]
+  },
+  "27iw-pet8gu-sciso": {
+   "file": "assets/ktx2/27iw-pet8gu-sciso.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/جدار الامامي للقرابين.glb"
+   ]
+  },
+  "4xe0-1f5e2kz-1eoirka": {
+   "file": "assets/ktx2/4xe0-1f5e2kz-1eoirka.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/جدار الامامي للقرابين.glb"
+   ]
+  },
+  "45y6-meklji-n2zrj1": {
+   "file": "assets/ktx2/45y6-meklji-n2zrj1.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/درج السرير.glb"
+   ]
+  },
+  "63vi-z7pref-7ju09c": {
+   "file": "assets/ktx2/63vi-z7pref-7ju09c.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/درج السرير.glb"
+   ]
+  },
+  "1slk-por5yo-4ehet8": {
+   "file": "assets/ktx2/1slk-por5yo-4ehet8.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/درج السرير.glb"
+   ]
+  },
+  "23ok-1bubijc-1o9q79z": {
+   "file": "assets/ktx2/23ok-1bubijc-1o9q79z.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "assets/طاولة الخرائط.glb"
+   ]
+  },
+  "demq-r6tnzh-dz0m61": {
+   "file": "assets/ktx2/demq-r6tnzh-dz0m61.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "assets/طاولة الخرائط.glb"
+   ]
+  },
+  "aepi-ge0ddm-1erchjx": {
+   "file": "assets/ktx2/aepi-ge0ddm-1erchjx.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "assets/طاولة الخرائط.glb"
+   ]
+  },
+  "3iyo-1oityam-1ogoj6z": {
+   "file": "assets/ktx2/3iyo-1oityam-1ogoj6z.ktx2",
+   "w": 512,
+   "h": 288,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_front_mural.glb"
+   ]
+  },
+  "6lxs-c7hkbm-f50xda": {
+   "file": "assets/ktx2/6lxs-c7hkbm-f50xda.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_a.glb"
+   ]
+  },
+  "6yz2-15c5e3y-1l7om6f": {
+   "file": "assets/ktx2/6yz2-15c5e3y-1l7om6f.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_a.glb"
+   ]
+  },
+  "1tyy-u1ccnz-13uexq3": {
+   "file": "assets/ktx2/1tyy-u1ccnz-13uexq3.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_a.glb"
+   ]
+  },
+  "6mx8-1wd7kpt-p0m7n5": {
+   "file": "assets/ktx2/6mx8-1wd7kpt-p0m7n5.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_b.glb"
+   ]
+  },
+  "7w0s-u8jvj3-7541mt": {
+   "file": "assets/ktx2/7w0s-u8jvj3-7541mt.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_b.glb"
+   ]
+  },
+  "2mwo-hjatmk-lowidc": {
+   "file": "assets/ktx2/2mwo-hjatmk-lowidc.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_b.glb"
+   ]
+  },
+  "48m0-13svedp-12mdn9g": {
+   "file": "assets/ktx2/48m0-13svedp-12mdn9g.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_c.glb"
+   ]
+  },
+  "1xd4-wa4ykp-1nt0val": {
+   "file": "assets/ktx2/1xd4-wa4ykp-1nt0val.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_c.glb"
+   ]
+  },
+  "368g-19ehqxw-169aljd": {
+   "file": "assets/ktx2/368g-19ehqxw-169aljd.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_c.glb"
+   ]
+  },
+  "4hfc-m6ogpd-1767lqi": {
+   "file": "assets/ktx2/4hfc-m6ogpd-1767lqi.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_c.glb"
+   ]
+  },
+  "1m6q-18yznt5-1nxhvcz": {
+   "file": "assets/ktx2/1m6q-18yznt5-1nxhvcz.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_c.glb"
+   ]
+  },
+  "3jck-1ilpo49-ssbgb2": {
+   "file": "assets/ktx2/3jck-1ilpo49-ssbgb2.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_c.glb"
+   ]
+  },
+  "14oo-1gp8ci1-114bx7t": {
+   "file": "assets/ktx2/14oo-1gp8ci1-114bx7t.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_c.glb"
+   ]
+  },
+  "3jju-6v9lyc-hoen9i": {
+   "file": "assets/ktx2/3jju-6v9lyc-hoen9i.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_c.glb"
+   ]
+  },
+  "16rc-3hequ0-irb5cr": {
+   "file": "assets/ktx2/16rc-3hequ0-irb5cr.ktx2",
+   "w": 512,
+   "h": 512,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/k4/k4_kit_c.glb"
+   ]
+  },
+  "cvt2-1dygrg5-tfbtby": {
+   "file": "assets/ktx2/cvt2-1dygrg5-tfbtby.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/ثريا-المجلس.glb"
+   ]
+  },
+  "jwt8-149itwr-7gylqb": {
+   "file": "assets/ktx2/jwt8-149itwr-7gylqb.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/ثريا-المجلس.glb"
+   ]
+  },
+  "88ws-rz1d7b-bmj5p1": {
+   "file": "assets/ktx2/88ws-rz1d7b-bmj5p1.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/ثريا-المجلس.glb"
+   ]
+  },
+  "oq8c-nbnrro-1iixsnd": {
+   "file": "assets/ktx2/oq8c-nbnrro-1iixsnd.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "color",
+   "src": [
+    "ارضيات وسقوف/optimized/سقف-المجلس.glb"
+   ]
+  },
+  "kkce-yn6aoq-q70hwm": {
+   "file": "assets/ktx2/kkce-yn6aoq-q70hwm.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "normal",
+   "src": [
+    "ارضيات وسقوف/optimized/سقف-المجلس.glb"
+   ]
+  },
+  "6bro-bcc2z8-6gniru": {
+   "file": "assets/ktx2/6bro-bcc2z8-6gniru.ktx2",
+   "w": 1024,
+   "h": 1024,
+   "role": "data",
+   "src": [
+    "ارضيات وسقوف/optimized/سقف-المجلس.glb"
+   ]
+  }
+ },
+ "generated": "2026-11-25T04:13:33.517Z",
+ "encoder": "Basis Universal GPU Texture Compressor v1.16.4"
+}

@@ -497,7 +497,8 @@
     if (!tex) return tex;
     tex.encoding = THREE.sRGBEncoding;
     tex.anisotropy = aniso.v;
-    tex.generateMipmaps = true;
+    // A GPU-compressed twin carries its own mip levels.
+    tex.generateMipmaps = !tex.isCompressedTexture;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
     // Never bump version if the CPU image is already gone — that would
@@ -820,18 +821,52 @@
     })();
   }
 
+  // Meshopt buffers are decoded by two background workers (the same WASM
+  // decoder, the same bytes): a large room GLB no longer blocks the main
+  // thread while it is decompressed during the room's preparation.
+  function meshoptWorkers(D) {
+    try {
+      if (D && !D.__sinWorkers && typeof D.useWorkers === 'function' && typeof Worker === 'function' && typeof Blob === 'function') {
+        D.useWorkers(2);
+        D.__sinWorkers = true;
+      }
+    } catch (_) {}
+    return D;
+  }
+  window.__sinMeshoptWorkers = meshoptWorkers;
   function installDecoder(buf) {
-    if (window.MeshoptDecoder && MeshoptDecoder.ready) return MeshoptDecoder.ready.then(function () { return MeshoptDecoder; });
+    if (window.MeshoptDecoder && MeshoptDecoder.ready) return MeshoptDecoder.ready.then(function () { return meshoptWorkers(MeshoptDecoder); });
     const code = new TextDecoder().decode(new Uint8Array(buf));
     (0, eval)(code);
     if (!window.MeshoptDecoder) throw new Error('MeshoptDecoder لم يعمل على هذا المتصفح');
     return MeshoptDecoder.ready.then(function () {
       if (MeshoptDecoder.supported === false) throw new Error('MeshoptDecoder غير مدعوم على هذا الجهاز');
-      return MeshoptDecoder;
+      return meshoptWorkers(MeshoptDecoder);
     });
   }
 
+  // Phones with ASTC: the hall surface's pre-encoded twin (ktx2-textures.js)
+  // replaces the decoded image — same picture, same size, a quarter of the
+  // GPU memory. It was encoded upside down, so flipY stays off.
   function textureFromBytes(buf, name, linear) {
+    const twin = window.SinKtx && SinKtx.textureFromBytes(buf, linear);
+    if (twin) {
+      return twin.then(function (tex) {
+        if (!tex) return decodeTextureBytes(buf, name, linear);
+        tex.flipY = false;
+        tex.colorSpace = linear ? THREE.NoColorSpace : THREE.SRGBColorSpace;
+        tex.anisotropy = aniso.v;
+        tex.generateMipmaps = false;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.name = tex.name || name;
+        keepHallTex(tex);
+        return tex;
+      });
+    }
+    return decodeTextureBytes(buf, name, linear);
+  }
+  function decodeTextureBytes(buf, name, linear) {
     const mime = /\.png$/i.test(name) ? 'image/png' : /\.jpe?g$/i.test(name) ? 'image/jpeg' : 'image/webp';
     const blob = new Blob([buf], { type: mime });
     const url = URL.createObjectURL(blob);
@@ -2333,6 +2368,10 @@
     group.position.set(portal.x, gy, portal.frontZ);
     ctx.scene.add(group);
     if (ctx.renderer && ctx.renderer.shadowMap) ctx.renderer.shadowMap.enabled = false;
+    // Fixed light budget from here on (light-rig.js): rooms appearing or
+    // leaving the view never change the light layout, so no shader program
+    // has to be rebuilt in front of the player.
+    try { if (window.SinLightRig) SinLightRig.install(ctx.scene, ctx.renderer); } catch (e) { console.warn('[light-rig] install', e); }
     // Release the exterior once the palace is ready; holdCull already hides it
     // during the transition, and the palace/wings remain retained.
     if (CONFIG.disposeExteriorAfterEntry) {
@@ -4669,7 +4708,10 @@
           // compiled hall shaders against the full graph — a multi-minute
           // software-GL stall at REVEAL-warm-n. Lights are cloned so the
           // compiled program matches the first real hall frame.
-          warmScene = new THREE.Scene();
+          // With the light rig the compile scene carries exactly the fixed
+          // layout every palace frame uses (no lights copied from the hall).
+          const rigScene = window.SinLightRig && SinLightRig.active() ? SinLightRig.compileScene(ctx.scene) : null;
+          warmScene = rigScene || new THREE.Scene();
           warmScene.environment = ctx.scene.environment;
           if (ctx.scene.environmentIntensity != null) warmScene.environmentIntensity = ctx.scene.environmentIntensity;
           if (ctx.scene.fog) warmScene.fog = ctx.scene.fog;
@@ -4686,8 +4728,10 @@
               } catch (_) {}
             });
           };
-          addLights(group);
-          addLights(wingRuntime && wingRuntime.root);
+          if (!rigScene) {
+            addLights(group);
+            addLights(wingRuntime && wingRuntime.root);
+          }
           warmScene.add(warmProxy);
           warmScene.add(warmProxyI);
           warmIndex = 0;

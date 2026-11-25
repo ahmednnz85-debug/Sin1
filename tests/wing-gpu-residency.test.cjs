@@ -109,11 +109,11 @@ test('palace hall group stays visible while the player is an occupant (never cor
   assert.doesNotMatch(pi, /group\.visible = wingRuntime \? \(inHall \|\| palaceSeen\)/);
   const wings = fs.readFileSync(path.join(__dirname, '..', 'wings.js'), 'utf8');
   assert.match(wings, /, d, state\.root\)/);
-  assert.match(wings, /state\.routes\.nearRoom/);
-  assert.match(wings, /motionPrefetch:true/);
-  assert.match(wings, /state\.routes\.nextRoom/);
+  assert.match(wings, /metric:true/);
+  assert.match(wings, /pathDistances\(origin, move\.x, move\.z/);
+  assert.doesNotMatch(wings, /state\.routes\.nextRoom|state\.routes\.nearRoom/);
   assert.match(wings, /st !== 'DONE' && !occ/);
   const zs = fs.readFileSync(path.join(__dirname, '..', 'zone-streamer.js'), 'utf8');
   assert.match(zs, /isPersistentVisible/);
-  assert.match(zs, /approaching/);
+  assert.match(zs, /function updateMetric\(/);
 });

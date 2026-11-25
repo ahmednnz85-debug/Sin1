@@ -21,9 +21,23 @@ test('watch pressure is reported so LRU cache shrinks (does not drop visible/adj
   assert.equal(last.level, 'watch');
 });
 
-test('critical pressure is reported from frame-time spikes, without touching resolution', () => {
+test('frame-time spikes never raise memory pressure (a slow frame must not unload rooms)', () => {
   const s = Z.create();
   let last;
   for (let i = 0; i < 20; i++) last = s.sample({ info: { memory: { geometries: 10, textures: 10 } } }, 50);
-  assert.equal(last.level, 'critical');
+  assert.equal(last.level, 'normal');
+});
+
+test('pressure follows the process estimate against the device budget, not object counts', () => {
+  const g = globalThis;
+  const prev = g.SinProcessMemory;
+  try {
+    let mb = 300;
+    g.SinProcessMemory = { last: () => ({ processMB: mb, gpuMB: 100, cpuMB: 10, t: Date.now() }) };
+    const s = Z.create({ processBudgetMB: 650, gpuBudgetMB: 480, textureBudget: 72 });
+    // 103 textures against a 72-texture "budget" used to pin a phone in critical.
+    assert.equal(s.sample({ info: { memory: { geometries: 100, textures: 103 } } }, 16).level, 'normal');
+    mb = 600; assert.equal(s.sample({ info: { memory: { geometries: 100, textures: 103 } } }, 16).level, 'watch');
+    mb = 640; assert.equal(s.sample({ info: { memory: { geometries: 100, textures: 103 } } }, 16).level, 'critical');
+  } finally { g.SinProcessMemory = prev; }
 });

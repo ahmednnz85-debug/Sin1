@@ -152,6 +152,9 @@ ThreeModule.WebGLRenderer.prototype.render = function (scene, camera) {
     return this;
   };
 }
+// KTX2 (Basis UASTC) loader for the phone's compressed palace textures
+// (ktx2-textures.js). Imported on demand so desktop never downloads it.
+THREE.loadKTX2Loader = () => import('three/addons/loaders/KTX2Loader.js');
 window.THREE = THREE;
 window.__SIN_THREE_VERSION__ = ThreeModule.REVISION;
 

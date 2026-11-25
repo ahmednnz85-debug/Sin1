@@ -37,9 +37,16 @@
     return { w: w, h: h };
   }
 
+  function mipBytes(tex) {
+    let n = 0;
+    (tex.mipmaps || []).forEach(function (m) { if (m && m.data && m.data.byteLength) n += m.data.byteLength; });
+    return n;
+  }
   function cpuImageBytes(tex) {
     if (!tex) return 0;
     if (tex.userData && tex.userData.sinCpuReleased) return 0;
+    // GPU-compressed (KTX2 twin): the CPU copy is the compressed mip chain.
+    if (tex.isCompressedTexture) return mipBytes(tex);
     const img = tex.image || (tex.source && tex.source.data);
     if (!img) return 0;
     // Cube / array
@@ -66,6 +73,11 @@
     // capTexture ran. When a renderer is provided, only count a live GPU copy.
     if (renderer && !(tex.userData && tex.userData.sinGpuW) && !textureUploaded(renderer, tex)) {
       return 0;
+    }
+    // Compressed blocks (ASTC 4x4: 1 byte per texel) — not 4 bytes per texel.
+    if (tex.isCompressedTexture) {
+      if (renderer && !textureUploaded(renderer, tex)) return 0;
+      return (tex.userData && tex.userData.sinGpuBytes) || mipBytes(tex);
     }
     let w = tex.image && (tex.image.width || tex.image.videoWidth) || 0;
     let h = tex.image && (tex.image.height || tex.image.videoHeight) || 0;

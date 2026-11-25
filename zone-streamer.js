@@ -132,6 +132,15 @@
       estimate: null,            // optional () => { processMB, gpuMB, cpuMB }
       deferStallMs: 3000,        // after this, evict harder rather than wait forever
       onBudgetStall: null,       // (rec, report) => void  — release city / purge
+      // Distance (metric) policy — used when the host passes view.metric:
+      // a room no longer inside its release radius is unloaded after this
+      // linger (hysteresis against a step back across the radius).
+      releaseMs: 2500,
+      // Off-screen shader preparation: at most this many ms of compile()
+      // calls per frame, and a fresh program is let finish on the GPU
+      // (fence) before the next one starts, so a reveal never links
+      // programs and no frame links more than one.
+      compileMsPerFrame: 4,
       log: null                  // function(kind, msg) for the memory overlay
     }, options || {});
 
@@ -309,14 +318,66 @@
       } catch (_) {}
       return { processMB: 0, gpuMB: 0, cpuMB: 0 };
     }
+    // Cost of a room: what it measured the last time it was prepared (process
+    // estimate after its reveal minus before its start, taken only when no
+    // other room loaded or unloaded meanwhile), else the authored estimate.
     function incoming(rec) {
       const s = (rec && rec.spec) || {};
       if (s.estimateIncoming) return s.estimateIncoming(usage());
-      return {
+      const est = {
         processMB: s.estProcessMB != null ? +s.estProcessMB : o.defaultZoneProcessMB,
         gpuMB: s.estGpuMB != null ? +s.estGpuMB : o.defaultZoneGpuMB,
         cpuMB: s.estCpuMB != null ? +s.estCpuMB : o.defaultZoneCpuMB
       };
+      const m = rec && rec.measured;
+      if (!m) return est;
+      // Never trust a measurement below a quarter of the authored figure.
+      return {
+        processMB: Math.max(m.processMB * 1.1, est.processMB * 0.25),
+        gpuMB: Math.max(m.gpuMB * 1.1, est.gpuMB * 0.25),
+        cpuMB: est.cpuMB
+      };
+    }
+    function measureStart(rec) {
+      const u = usage();
+      rec._measure = { t: sampleTime(), processMB: u.processMB, gpuMB: u.gpuMB, evictions: stats.evictions, reveals: stats.reveals, starts: stats.starts || 0 };
+    }
+    // Called from update(): once a sample newer than the reveal exists.
+    function measureFinish(rec) {
+      const a = rec._measure;
+      if (!a || !rec.revealedWall) return;
+      const t = sampleTime();
+      if (!t || t < rec.revealedWall + 400) return;
+      rec._measure = null;
+      if (stats.evictions !== a.evictions || stats.reveals !== a.reveals + 1 || (stats.starts || 0) !== a.starts + 1) return;
+      const u = usage();
+      const dp = u.processMB - a.processMB, dg = u.gpuMB - a.gpuMB;
+      if (dp > 1 && dg >= 0) rec.measured = { processMB: dp, gpuMB: dg, at: Date.now() };
+    }
+    // Memory that is committed but not yet in the last usage sample: rooms
+    // still being prepared, and rooms revealed after that sample was taken
+    // (the estimate is refreshed on a ~500 ms cadence). Counting them stops
+    // a second admission from stacking on a stale figure — the reason the
+    // old 650 MB path needed "no-stack" / "swap" special cases.
+    function sampleTime() {
+      try {
+        const PM = (typeof window !== 'undefined' && window.SinProcessMemory) || (typeof globalThis !== 'undefined' && globalThis.SinProcessMemory);
+        const u = PM && PM.last && PM.last();
+        return u && u.t ? u.t : 0;
+      } catch (_) { return 0; }
+    }
+    function committed(except) {
+      const out = { processMB: 0, gpuMB: 0, cpuMB: 0 };
+      const sampledAt = sampleTime();
+      zones.forEach(function (r) {
+        if (r === except) return;
+        const preparing = r.state === 'loading' || r.state === 'uploading' || r.state === 'compiling';
+        const unsampled = r.state === 'ready' && r.revealedWall && sampledAt && sampledAt < r.revealedWall;
+        if (!preparing && !unsampled) return;
+        const e = incoming(r);
+        out.processMB += e.processMB; out.gpuMB += e.gpuMB; out.cpuMB += preparing ? e.cpuMB : 0;
+      });
+      return out;
     }
     function wouldExceed(extra, transientCpu) {
       extra = extra || { processMB: 0, gpuMB: 0, cpuMB: 0 };
@@ -530,6 +591,125 @@
       }
       return false;
     }
+    // ---- distance (metric) admission ----------------------------------------
+    // rank = walking distance in metres from the hero (current room 0). The
+    // nearest wanted room is prepared first; to make memory for it, only
+    // rooms FARTHER than it may be unloaded (farthest first). A nearer room
+    // is never dropped for a farther one, so there is no swap thrash, and
+    // the room the hero stands in can take memory from every other room
+    // that is not on screen.
+    function rankOf(r) { return r.isCurrent ? 0 : (r.rank == null ? 1e6 : r.rank); }
+    function fitsWith(extra, rec) {
+      const c = committed(rec);
+      return !wouldExceed({ processMB: extra.processMB + c.processMB, gpuMB: extra.gpuMB + c.gpuMB, cpuMB: extra.cpuMB + c.cpuMB }, !!rec.spec.serialPreparation);
+    }
+    // Resident / preparing rooms that may be unloaded to make memory for rec:
+    // never the current, demanded, on-screen or door-held ones, and (unless
+    // rec is where the hero is) only rooms farther than rec. Farthest first.
+    function victimsFor(rec, skip) {
+      const victims = [];
+      zones.forEach(function (r) {
+        if (r === rec || r === skip || r.state === 'cold' || r.state === 'failed') return;
+        if (r.isCurrent || r.isDemand || r.visible || r.retained) return;
+        if (rankOf(r) <= rankOf(rec) && !(rec.isCurrent || rec.isDemand)) return;
+        victims.push(r);
+      });
+      return victims.sort(function (a, b) { return rankOf(b) - rankOf(a); });
+    }
+    function freedBy(list) {
+      return list.reduce(function (sum, v) { const e = incoming(v); return { processMB: sum.processMB + e.processMB, gpuMB: sum.gpuMB + e.gpuMB, cpuMB: sum.cpuMB + e.cpuMB }; }, { processMB: 0, gpuMB: 0, cpuMB: 0 });
+    }
+    function busySerial(rec) {
+      let busy = null;
+      zones.forEach(function (other) {
+        if (other !== rec && other.spec.serialPreparation &&
+          (other.state === 'loading' || other.state === 'uploading' || other.state === 'compiling')) busy = other;
+      });
+      return busy;
+    }
+    // True when no serial preparation stands in rec's way (any that did has
+    // been abandoned for it). A speculative preparation yields when the hero
+    // is in, or about to reach, a room that is much nearer (its work
+    // restarts later) — at whatever step it is, including the GLB load
+    // itself. A nearer room that would still be waiting for memory does not
+    // abandon it (that would only churn the farther preparation every frame).
+    // (A preparation is never on screen, so a door holding its room does not
+    // stop it from yielding: only finished rooms are held.)
+    function yieldFor(rec) {
+      const busy = busySerial(rec);
+      if (!busy) return true;
+      if (busy.isCurrent || busy.isDemand || busy.visible) return false;
+      if (!(rec.isCurrent || rec.isDemand || (rankOf(rec) < 24 && rankOf(rec) + 15 < rankOf(busy)))) return false;
+      if (!rec.isCurrent && !rec.isDemand) {
+        const need = incoming(rec), freed = freedBy([busy].concat(victimsFor(rec, busy)));
+        if (!fitsWith({ processMB: need.processMB - freed.processMB, gpuMB: need.gpuMB - freed.gpuMB, cpuMB: need.cpuMB - freed.cpuMB }, rec)) return false;
+      }
+      evict(busy, rec.isCurrent ? 'yield-to-current' : 'yield-to-nearer');
+      stats.budgetEvictions++;
+      return true;
+    }
+    function canStartMetric(rec) {
+      if (rec.spec.serialPreparation && !yieldFor(rec)) return false;
+      const need = incoming(rec);
+      if (!fitsWith(need, rec)) {
+        const victims = victimsFor(rec);
+        // Unload only when that actually makes room: dropping a farther room
+        // that frees too little would just reload it a moment later (thrash).
+        const freed = freedBy(victims);
+        freed.cpuMB = 0;
+        const enough = fitsWith({ processMB: need.processMB - freed.processMB, gpuMB: need.gpuMB - freed.gpuMB, cpuMB: need.cpuMB }, rec);
+        for (let i = 0; enough && i < victims.length && !fitsWith(need, rec); i++) {
+          evict(victims[i], 'farther (' + Math.round(rankOf(victims[i])) + ' m > ' + Math.round(rankOf(rec)) + ' m)');
+          stats.budgetEvictions++;
+        }
+      }
+      if (fitsWith(need, rec)) { rec.deferred = false; rec.deferredAt = 0; return true; }
+      // The room the hero stands in (or the closed door he is pushing) must
+      // never wait on leftovers the estimate still carries (city / orphans):
+      // ask the host once per stall window, then admit when the room fits
+      // the device alone.
+      if (rec.isCurrent || rec.isDemand) {
+        const t = now();
+        if (!rec.deferredAt) rec.deferredAt = t;
+        if (t - rec.deferredAt >= (o.deferStallMs != null ? o.deferStallMs : 3000) && !stallBusy) {
+          stallBusy = true;
+          try { if (typeof o.onBudgetStall === 'function') o.onBudgetStall(rec, report()); } catch (e) { console.warn('onBudgetStall', e); }
+          finally { stallBusy = false; }
+          rec.stallAttempts = (rec.stallAttempts || 0) + 1;
+          rec.deferredAt = t;
+          // A room only kept for a nearby door (not on screen) yields too.
+          const held = [];
+          zones.forEach(function (r) {
+            if (r !== rec && r.state !== 'cold' && r.state !== 'failed' && !r.isCurrent && !r.isDemand && !r.visible) held.push(r);
+          });
+          held.sort(function (a, b) { return rankOf(b) - rankOf(a); });
+          for (let i = 0; i < held.length && !fitsWith(need, rec); i++) {
+            const v = held[i];
+            v.retained = false;
+            evict(v, 'yield-to-waiting-hero'); stats.budgetEvictions++;
+          }
+          // Last resort for the room the hero is in / at: admit slightly over
+          // the soft budget (never past the hard ceiling) rather than leave
+          // him at a closed door; everything else that is not on screen has
+          // already been unloaded for it.
+          const u = usage(), c = committed(rec);
+          const ceiling = o.processBudgetMB > 0 ? o.processBudgetMB * (o.hardCeiling || 1.1) : Infinity;
+          if (fitsWith(need, rec) || (rec.stallAttempts >= 2 && roomFitsAlone(rec) && u.processMB + c.processMB + need.processMB <= ceiling)) {
+            if (!fitsWith(need, rec)) note('load', rec.id + ' admitted over the soft budget (hero waiting)');
+            rec.deferred = false; rec.deferredAt = 0; return true;
+          }
+        }
+      }
+      if (!rec.deferred) {
+        rec.deferred = true;
+        if (!rec.deferredAt) rec.deferredAt = now();
+        stats.deferred++;
+        stats.lastDefer = { id: rec.id, at: now(), usage: usage(), incoming: need, committed: committed(rec), rank: rankOf(rec) };
+        note('load', rec.id + ' waiting for memory at ' + Math.round(rankOf(rec)) + ' m (' + JSON.stringify(stats.lastDefer.usage) + ')');
+      }
+      return false;
+    }
+
     // A door must never wait forever. After deferStallMs, evict every
     // non-visible, non-current zone (adjacent included) and ask the host
     // to drop the city / orphans. If the room itself fits the device
@@ -578,7 +758,8 @@
       const waiting = rec.firstWait ? t-rec.firstWait : 0;
       rec.timing={ waitMs:Math.max(0,waiting), assetsMs:0, uploadMs:0, compileMs:0, totalMs:0 };
       rec.firstWait=0;
-      rec.state = 'loading'; rec.startedAt = t; rec.done = false; rec.failed = null; rec.pending.clear();
+      rec.state = 'loading'; rec.startedAt = t; rec.done = false; rec.failed = null; rec.pending.clear(); rec.loadTicks = 0; rec.prepFrames = 0;
+      measureStart(rec); stats.starts = (stats.starts || 0) + 1;
       note('load', rec.id + ' stream start');
       try { rec.spec.load(apiFor(rec)); } catch (e) { rec.failed = e; rec.done = true; console.warn('zone load failed', rec.id, e); }
     }
@@ -603,6 +784,7 @@
     }
     function step(rec, t, rank) {
       if (rec.state === 'failed') return;
+      rec.prepFrames = (rec.prepFrames || 0) + 1;
       const g = group(rec);
       if (rec.spec.requireComplete && rec.failed) { failStrict(rec, rec.failed); return; }
       if (rec.state === 'loading') {
@@ -614,7 +796,10 @@
         // A short timeoutMs (legacy 14 s) must NOT reveal a still-loading room:
         // on a phone the 6.8 MB K2 table often arrives after that, which was
         // the visible pop-in. Only complete, fail(), or a long abandon reveal.
-        const abandon = elapsed > abandonAt;
+        // ...and only after enough frames: a slow frame rate must not fail a
+        // healthy room (at 30 fps the time limit is always the one that hits).
+        rec.loadTicks = (rec.loadTicks || 0) + 1;
+        const abandon = elapsed > abandonAt && rec.loadTicks > Math.min(600, abandonAt / 100);
         if (rec.spec.requireComplete && !done && abandon) {
           failStrict(rec, new Error('Room preparation timed out'));
           return;
@@ -637,39 +822,161 @@
         }
         rec.state = 'compiling'; rec.timing.uploadMs=now()-rec.startedAt-rec.timing.assetsMs;
         const r = ctx && ctx.renderer;
-        let p = null;
-        if (g && r && ctx.camera) {
-          const was = g.visible;
-          try {
-            // Compile against the real scene so the programs match what the
-            // renderer will use (lights, fog, env): no compile at reveal.
-            const content = rec.spec.requireComplete && rec.spec.keepShell && dressOf(g);
-            if (content) g.visible = false; // include content lights exactly once
-            if (typeof r.compileAsync === 'function') p = r.compileAsync(content || g, ctx.camera, ctx.scene || null);
-            else if (typeof r.compile === 'function') r.compile(content || g, ctx.camera, ctx.scene || null);
-            stats.compiles++;
-          } catch (error) {
-            if (rec.spec.requireComplete) { failStrict(rec, error); return; }
-            p = null;
-          } finally {
-            g.visible = was;
-          }
-        }
-        const fin = function () { if (rec.state === 'compiling') rec.compileDone = true; };
         rec.compileDone = false;
-        if (p && typeof p.then === 'function') {
-          const attempt = rec.startedAt;
-          p.then(() => { if (rec.startedAt === attempt) fin(); }, error => {
-            if (rec.startedAt !== attempt || rec.state !== 'compiling') return;
-            if (rec.spec.requireComplete) failStrict(rec, error); else fin();
-          });
-        } else fin();
+        rec.compileJob = null;
+        if (g && r && ctx.camera && slicedCompileSupported(r)) {
+          // Sliced, off-screen: one fresh program at a time, each finished on
+          // the GPU before the next, uniforms fetched before the reveal.
+          const content = (rec.spec.keepShell && dressOf(g)) || g;
+          rec.compileJob = { list: drawables(content), i: 0, fence: null, waiting: [], uniforms: [], attempt: rec.startedAt };
+          stats.compiles++;
+        } else {
+          let p = null;
+          if (g && r && ctx.camera) {
+            const was = g.visible;
+            try {
+              // Compile against the real scene so the programs match what the
+              // renderer will use (lights, fog, env): no compile at reveal.
+              const content = rec.spec.requireComplete && rec.spec.keepShell && dressOf(g);
+              if (content) g.visible = false; // include content lights exactly once
+              p = compileWith(r, content || g, true);
+              stats.compiles++;
+            } catch (error) {
+              if (rec.spec.requireComplete) { failStrict(rec, error); return; }
+              p = null;
+            } finally {
+              g.visible = was;
+            }
+          }
+          const fin = function () { if (rec.state === 'compiling') rec.compileDone = true; };
+          if (p && typeof p.then === 'function') {
+            const attempt = rec.startedAt;
+            p.then(() => { if (rec.startedAt === attempt) fin(); }, error => {
+              if (rec.startedAt !== attempt || rec.state !== 'compiling') return;
+              if (rec.spec.requireComplete) failStrict(rec, error); else fin();
+            });
+          } else fin();
+        }
+      }
+      if (rec.state === 'compiling' && rec.compileJob && !rec.compileDone) {
+        try { if (pumpCompile(rec)) rec.compileDone = true; }
+        catch (error) { if (rec.spec.requireComplete) { failStrict(rec, error); return; } rec.compileDone = true; }
       }
       if (rec.state === 'compiling' && rec.compileDone) reveal(rec);
       // Gate: a room is never world-visible before the atomic reveal, even
       // if a mesh was added without hideUntilReady or a leftover shell
       // stayed visible after eviction. The door waits on state === 'ready'.
       if (rec.state !== 'ready' && g) hideZone(rec, g);
+    }
+    // ---- off-screen shader preparation ----------------------------------------
+    // With the palace light rig active the layout is fixed, so compiling
+    // against the rig's configuration yields exactly the programs the real
+    // frame uses. Without it, the old path compiles against the live scene.
+    function lightRig() {
+      const L = (typeof window !== 'undefined' && window.SinLightRig) || null;
+      return L && L.active && L.active() ? L : null;
+    }
+    function compileWith(r, root, wantAsync) {
+      const rig = lightRig();
+      if (rig) return wantAsync ? rig.compileAsync(r, root, ctx.camera) : rig.compile(r, root, ctx.camera);
+      if (wantAsync && typeof r.compileAsync === 'function') return r.compileAsync(root, ctx.camera, ctx.scene || null);
+      if (typeof r.compile === 'function') return r.compile(root, ctx.camera, ctx.scene || null);
+      return null;
+    }
+    function slicedCompileSupported(r) {
+      return typeof r.compile === 'function' && r.info && Array.isArray(r.info.programs) &&
+        typeof r.getContext === 'function' && !!lightRig();
+    }
+    function drawables(root) {
+      const list = [];
+      root.traverse(function (x) { if ((x.isMesh || x.isPoints || x.isLine || x.isSprite) && x.material) list.push(x); });
+      return list;
+    }
+    function parallelCompile(r) {
+      try { return !!(r.extensions && r.extensions.has && r.extensions.has('KHR_parallel_shader_compile')); } catch (_) { return false; }
+    }
+    // Returns true when every program of the room is linked and its uniform
+    // locations are cached (so the reveal frame issues no blocking query).
+    function pumpCompile(rec) {
+      const job = rec.compileJob, r = ctx.renderer, gl = r.getContext();
+      if (job.fence) {
+        const st = gl.clientWaitSync(job.fence, 0, 0);
+        if (st === gl.TIMEOUT_EXPIRED) return false;
+        gl.deleteSync(job.fence); job.fence = null;
+      }
+      if (job.waiting.length) {
+        job.waiting = job.waiting.filter(p => { try { return !p.isReady(); } catch (_) { return false; } });
+        if (job.waiting.length) return false;
+      }
+      // First use of a linked program queries every uniform location (a
+      // blocking round trip per uniform on WebKit). Do it here, one program
+      // per frame, instead of in the reveal frame.
+      if (job.uniforms.length) {
+        const p = job.uniforms.shift();
+        try { p.getUniforms(); p.getAttributes(); } catch (_) {}
+        if (job.uniforms.length) return false;
+      }
+      const t0 = now(), par = parallelCompile(r);
+      if (job.i >= job.list.length && !job.fence && !job.waiting.length) return warmDraw(job);
+      while (job.i < job.list.length && now() - t0 < o.compileMsPerFrame) {
+        const obj = job.list[job.i++];
+        if (!obj.parent) continue;
+        const before = r.info.programs.length;
+        compileWith(r, obj, false);
+        const fresh = r.info.programs.slice(before);
+        if (fresh.length) {
+          fresh.forEach(p => job.uniforms.push(p));
+          if (par) job.waiting.push.apply(job.waiting, fresh);
+          else { try { job.fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); } catch (_) { job.fence = null; } }
+          stats.programsLinked = (stats.programsLinked || 0) + fresh.length;
+          return false;
+        }
+      }
+      return false;
+    }
+    // Last step before the reveal: draw every mesh of the room once, with its
+    // real material and the fixed light layout, but collapsed to a point
+    // (zero scale: nothing is rasterised, nothing shows). The driver uploads
+    // the vertex buffers and builds the GPU pipeline state now, a few meshes
+    // per frame, instead of in the reveal frame.
+    let warmCam = null;
+    function warmDraw(job) {
+      const T = (typeof window !== 'undefined' && window.THREE) || null;
+      const rig = lightRig(), r = ctx.renderer;
+      if (!T || !rig || !rig.compileScene || typeof r.render !== 'function') return true;
+      if (!job.warm) job.warm = job.list.filter(x => (x.isMesh && !x.isSkinnedMesh && !x.isBatchedMesh) && x.parent && x.geometry);
+      if (!job.warm.length) return true;
+      if (!warmCam) { warmCam = new T.OrthographicCamera(-1, 1, 1, -1, 0.1, 10); warmCam.position.set(0, -1e5, 0); warmCam.updateMatrixWorld(true); }
+      const stage = rig.compileScene(ctx.scene);
+      const proxies = [];
+      const t0 = now();
+      while (job.warm.length && proxies.length < 8 && now() - t0 < o.compileMsPerFrame) {
+        const src = job.warm.shift();
+        let p;
+        if (src.isInstancedMesh) {
+          p = new T.InstancedMesh(src.geometry, src.material, 0);
+          p.instanceMatrix = src.instanceMatrix; p.instanceColor = src.instanceColor; p.count = src.count;
+          if (src.morphTexture) p.morphTexture = src.morphTexture;
+        } else {
+          p = new T.Mesh(src.geometry, src.material);
+          if (src.morphTargetInfluences) p.morphTargetInfluences = src.morphTargetInfluences;
+        }
+        p.matrixAutoUpdate = false; p.matrix.makeScale(0, 0, 0); p.matrixWorld.makeScale(0, 0, 0); p.matrixWorldNeedsUpdate = true;
+        p.frustumCulled = false; p.renderOrder = src.renderOrder;
+        stage.add(p); proxies.push(p);
+      }
+      const clear = r.autoClear, target = r.getRenderTarget ? r.getRenderTarget() : null;
+      try {
+        r.autoClear = false;
+        if (target && r.setRenderTarget) r.setRenderTarget(null);
+        r.render(stage, warmCam);
+      } catch (_) {
+      } finally {
+        r.autoClear = clear;
+        if (target && r.setRenderTarget) r.setRenderTarget(target);
+        proxies.forEach(p => { stage.remove(p); if (p.isInstancedMesh) { p.instanceMatrix = null; p.instanceColor = null; } });
+      }
+      return !job.warm.length;
     }
     function reveal(rec) {
       const g = group(rec);
@@ -678,10 +985,11 @@
       rec.timing.compileMs=Math.max(0,elapsed-rec.timing.assetsMs-rec.timing.uploadMs);
       rec.timing.totalMs=elapsed;
       rec.leadMs=rec.leadMs?rec.leadMs*.6+elapsed*.4:elapsed;
+      rec.revealedWall = Date.now();
       const n = g ? revealObject(g) : 0;
       if (g) g.userData.dressReady = true;
       stats.reveals++;
-      note('load', rec.id + ' ready (' + n + ' meshes, ' + Math.round(now() - rec.startedAt) + ' ms)');
+      note('load', rec.id + ' ready (' + n + ' meshes, ' + Math.round(now() - rec.startedAt) + ' ms, ' + (rec.prepFrames || 0) + ' frames)');
       if (rec.spec.onReady) try { rec.spec.onReady(apiFor(rec)); } catch (_) {}
       const w = rec.waiters.splice(0); w.forEach(fn => { try { fn(rec.id); } catch (_) {} });
     }
@@ -771,6 +1079,10 @@
         // next load cannot show an incomplete room.
         hideZone(rec, g);
       }
+      if (rec.compileJob && rec.compileJob.fence && ctx && ctx.renderer && ctx.renderer.getContext) {
+        try { ctx.renderer.getContext().deleteSync(rec.compileJob.fence); } catch (_) {}
+      }
+      rec.compileJob = null;
       rec.state = 'cold'; rec.leftAt = 0; rec.done = false; rec.failed = null;
       stats.evictions++;
       note('unload', rec.id + ' evicted (' + why + ', ' + doomed.length + ' objects)');
@@ -781,21 +1093,31 @@
     // ---- memory pressure (migrated from smart-memory-manager.js) -----------
     // Never changes render resolution. Only informs LRU cache size.
     let memLevel = 'normal', memStableMs = 0, memFrameEma = 16.7, memLast = { level: 'normal', geometryRatio: 0, textureRatio: 0, frameMs: 16.7 };
-    const memOpt = { geometryBudget: o.geometryBudget || 420, textureBudget: o.textureBudget || 180, watchRatio: 0.82, criticalRatio: 0.96, frameWatchMs: 24, frameCriticalMs: 40, recoveryMs: 2500 };
+    const memOpt = { geometryBudget: o.geometryBudget || 420, textureBudget: o.textureBudget || 180, watchRatio: 0.88, criticalRatio: 0.97, recoveryMs: 2500 };
+    // Pressure is MEMORY: the process estimate against the device budget.
+    // It used to be the renderer's texture COUNT against a 72-texture phone
+    // budget (the throne hall alone holds ~100 textures, so a phone sat in
+    // "critical" for good and evicted L1 the moment it was ready) and the
+    // frame time (a busy frame unloaded rooms, causing more loading). Object
+    // counts are only a fallback when no process estimate exists.
     function sample(renderer, frameMs) {
       const memory = renderer && renderer.info && renderer.info.memory || {};
       const gr = Math.max(0, Number(memory.geometries) || 0) / memOpt.geometryBudget;
       const tr = Math.max(0, Number(memory.textures) || 0) / memOpt.textureBudget;
       const ms = Number.isFinite(frameMs) && frameMs > 0 ? frameMs : memFrameEma;
       memFrameEma = memFrameEma * 0.88 + ms * 0.12;
-      const pressure = Math.max(gr, tr);
-      const critical = pressure >= memOpt.criticalRatio || memFrameEma >= memOpt.frameCriticalMs;
-      const watch = pressure >= memOpt.watchRatio || memFrameEma >= memOpt.frameWatchMs;
+      const u = usage();
+      let pressure = 0;
+      if (u.processMB > 0 && o.processBudgetMB > 0) pressure = Math.max(pressure, u.processMB / o.processBudgetMB);
+      if (u.gpuMB > 0 && o.gpuBudgetMB > 0) pressure = Math.max(pressure, u.gpuMB / o.gpuBudgetMB);
+      if (!(u.processMB > 0)) pressure = Math.max(gr, tr);
+      const critical = pressure >= memOpt.criticalRatio;
+      const watch = pressure >= memOpt.watchRatio;
       if (critical) { memLevel = 'critical'; memStableMs = 0; }
       else if (watch) { memLevel = 'watch'; memStableMs = 0; }
       else if (memLevel !== 'normal') { memStableMs += Math.max(0, ms); if (memStableMs >= memOpt.recoveryMs) memLevel = 'normal'; }
       else memStableMs = Math.min(memOpt.recoveryMs, memStableMs + Math.max(0, ms));
-      memLast = { level: memLevel, geometryRatio: gr, textureRatio: tr, frameMs: memFrameEma };
+      memLast = { level: memLevel, pressure: +pressure.toFixed(3), geometryRatio: gr, textureRatio: tr, frameMs: memFrameEma };
       return memLast;
     }
     function memoryState() { return Object.assign({}, memLast); }
@@ -824,8 +1146,7 @@
       try {
         g.visible = true;
         try {
-          if (typeof r.compileAsync === 'function') pending = r.compileAsync(g, ctx.camera, ctx.scene || null);
-          else if (typeof r.compile === 'function') r.compile(g, ctx.camera, ctx.scene || null);
+          pending = compileWith(r, g, true);
           stats.compiles++;
         } finally { g.visible = was; }
       } catch (_) { g.visible = was; warmBusy = false; return; }
@@ -833,11 +1154,88 @@
       if (pending && typeof pending.then === 'function') pending.then(fin, fin); else fin();
     }
 
+    // ---- distance (metric) policy -------------------------------------------
+    // view = { metric:true, current, rank: Map(id -> metres), approach: Set
+    //   (inside the load radius), keep: Set (inside the release radius),
+    //   visible: Set (drawn this frame), retained: Set (moving doors),
+    //   demand (a door the hero waits at), memoryLevel, warmGroups }
+    // Loading is decided by walking distance only. What the camera sees only
+    // PROTECTS rooms from eviction (nothing disappears on screen); it never
+    // starts a load.
+    let lastMetric = false;
+    function has(set, k) { return !!(set && (set.has ? set.has(k) : set.indexOf(k) >= 0)); }
+    function updateMetric(view, t, level) {
+      lastMetric = true;
+      const visible = view.visible || new Set(), retained = view.retained || new Set();
+      const rankMap = view.rank || new Map();
+      const wanted = [];
+      order.forEach(function (id) {
+        const rec = zones.get(id);
+        const isCurrent = id === view.current;
+        const resident = rec.state !== 'cold' && rec.state !== 'failed';
+        const want = (!view.only || view.only.has(id)) && (isCurrent || id === view.demand || has(view.approach, id) ||
+          (resident && (has(view.keep, id) || visible.has(id) || retained.has(id))));
+        rec.rank = isCurrent ? 0 : (rankMap.has(id) ? rankMap.get(id) : 1e6);
+        rec.hops = rec.rank;
+        rec.visible = visible.has(id); rec.retained = retained.has(id); rec.isCurrent = isCurrent;
+        rec.isDemand = id === view.demand;
+        rec.protected = isCurrent || rec.isDemand || rec.visible || rec.retained;
+        if (isCurrent) rec._currentUntil = t + ((rec.state !== 'cold' && rec.state !== 'ready') ? 15000 : 2000);
+        if (want) { rec.lastWanted = t; rec.wantedAt = t; rec.leftAt = 0; wanted.push(rec); }
+        else if (rec.state === 'cold') rec.firstWait = 0;
+        else if (!rec.leftAt) rec.leftAt = t;
+      });
+      wanted.sort((a, b) => Number(b.id === view.demand) - Number(a.id === view.demand) ||
+        rankOf(a) - rankOf(b) || (a.spec.priority - b.spec.priority));
+      const countLoading = () => { let n = 0; zones.forEach(r => { if (r.state === 'loading') n++; }); return n; };
+      let loading = countLoading();
+      wanted.forEach(function (rec, i) {
+        // The nearest wanted room does not wait for a farther speculative
+        // preparation to get through its load step (the one-load gate):
+        // wanted is sorted nearest first, so it decides before any other.
+        if (rec.state === 'cold' && loading >= o.maxConcurrentLoads && !rec.isCurrent && rec.spec.serialPreparation && busySerial(rec) && yieldFor(rec)) loading = countLoading();
+        if (rec.state === 'cold' && (loading < o.maxConcurrentLoads || rec.isCurrent)) {
+          if (canStartMetric(rec)) { start(rec, t); loading++; }
+          else if (!rec.firstWait) rec.firstWait = t;
+        }
+        if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, t, i);
+      });
+      // Unload what is no longer within its release radius, after a short
+      // linger (desktop keeps a small LRU of finished rooms while memory is
+      // normal). A preparation that is no longer wanted is abandoned too.
+      const idle = [];
+      zones.forEach(function (rec) {
+        if (rec.state === 'cold' || rec.state === 'failed' || rec.protected || rec.lastWanted === t || !rec.leftAt) return;
+        idle.push(rec);
+      });
+      idle.sort((a, b) => (b.lastWanted || 0) - (a.lastWanted || 0));
+      const cache = level === 'normal' && o.cacheZones[level] != null ? o.cacheZones[level] : 0;
+      const linger = level === 'critical' ? 0 : (o.releaseMs != null ? o.releaseMs : 2500);
+      let kept = 0, evicted = 0;
+      idle.forEach(function (rec) {
+        if (rec.state === 'ready' && kept < cache && t - rec.leftAt < o.graceMs) { kept++; return; }
+        if (t - rec.leftAt >= linger) { evict(rec, level === 'critical' ? 'critical memory' : 'beyond release radius'); evicted++; }
+      });
+      zones.forEach(function (rec) {
+        if (rec.state === 'ready') { if (rec._measure) measureFinish(rec); return; }
+        const gg = group(rec);
+        if (gg && !gg.userData.dressReady) hideZone(rec, gg);
+      });
+      pumpUploads();
+      sweepReleasable();
+      (view.warmGroups || []).forEach(enqueueWarm);
+      if (view.allowBackgroundWarm !== false) pumpWarm();
+      return evicted;
+    }
+
     // view = { current, distances: Map(id->hops), visible:Set, prepared:Set, memoryLevel, warmGroups }
     let lastUpdateAt = 0;
     function update(view) {
       const t = now();
       lastUpdateAt = t;
+      // Metric policy: a room the hero just left is still a few metres away,
+      // so distance alone keeps it wanted — no "current" pinning needed.
+      if (view && view.metric) return updateMetric(view, t, view.memoryLevel || memLevel || 'normal');
       // A flicker of view.current must not evict or de-prioritize a mid-load
       // room the player just entered (playthrough-6 first K3).
       let midId = null;
@@ -852,6 +1250,7 @@
       const retained = view.retained || new Set();
       const level = view.memoryLevel || memLevel || 'normal';
       const wanted = [];
+      lastMetric = false;
       order.forEach(function (id) {
         const rec = zones.get(id);
         const hops = distances.has(id) ? distances.get(id) : Infinity;
@@ -1019,6 +1418,14 @@
     function forceLoad(id) {
       const rec = zones.get(id);
       if (!rec) return 'unregistered';
+      if (lastMetric) {
+        markCurrent(id);
+        rec.rank = 0;
+        if (rec.state === 'cold' && canStartMetric(rec)) start(rec, now());
+        rec.lastWanted = now();
+        if (rec.state !== 'cold' && rec.state !== 'ready' && rec.state !== 'failed') step(rec, now(), 0);
+        return rec.state;
+      }
       if (rec.spec.requireComplete && rec.state === 'cold' && !canStart(rec)) return rec.state;
       // A region flicker (ensure-dress K2 while the harness is visiting K3)
       // must not steal a mid-load current room. Playthrough-6 evicted K3
@@ -1075,7 +1482,7 @@
         overBudget: wouldExceed({ processMB: 0, gpuMB: 0, cpuMB: 0 }),
         stats: Object.assign({}, stats)
       };
-      zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected, deferred: !!r.deferred, timing:r.timing&&Object.fromEntries(
+      zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected, deferred: !!r.deferred, measuredMB: r.measured ? Math.round(r.measured.processMB) : null, timing:r.timing&&Object.fromEntries(
           Object.entries(r.timing).map(([stage,ms])=>[stage,Math.round(ms)])) }; });
       return out;
     }
