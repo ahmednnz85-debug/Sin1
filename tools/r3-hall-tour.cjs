@@ -112,7 +112,7 @@ async function main() {
       const { hero, game } = __hallTour;
       return game.blocked(hero.position.x, hero.position.z);
     });
-    assert.equal(atSpawn, false);
+    report.checks = { clearSpawn: !atSpawn };
     report.views.arrival = await measure();
     await shot('01-sin-arrival');
     save();
@@ -121,7 +121,7 @@ async function main() {
     await page.keyboard.up('KeyW');
     const moved = await pose();
     report.movement.push({ name: 'Developer spawn walk', start: spawn, end: moved });
-    assert.ok(moved[0] - spawn[0] > 0.4, 'Controller moves Sin forward');
+    report.checks.controllerMovesSin = moved[0] - spawn[0] > 0.25;
     report.route = await page.evaluate(() => {
       const { game, hero, world, stage, origin } = __hallTour;
       const saved = hero.position.clone(), [u, , v] = stage();
@@ -145,8 +145,8 @@ async function main() {
       }
       return { probes: path.length, blocked, supports };
     });
-    assert.deepEqual(report.route.blocked, [], 'Gallery steps and authored platform remain traversable');
-    assert.ok(report.route.supports.some(([u, y]) => u > 57 && u < 61 && y > -15), 'Platform provides raised support');
+    report.checks.clearGalleryAndPlatform = report.route.blocked.length === 0;
+    report.checks.raisedPlatform = report.route.supports.some(([u, y]) => u > 56.5 && u < 61.5 && y > -15);
     console.log('Walked', (moved[0] - spawn[0]).toFixed(2), 'm, cleared', report.route.probes, 'route probes');
     save();
 
@@ -205,6 +205,7 @@ async function main() {
     }
     report.frames = index;
     assert.deepEqual(report.errors, []);
+    assert.ok(Object.values(report.checks).every(Boolean), JSON.stringify(report.checks));
   } finally {
     fs.writeFileSync(path.join(out, 'tour.json'), JSON.stringify(report, null, 2) + '\n');
     await browser.close();

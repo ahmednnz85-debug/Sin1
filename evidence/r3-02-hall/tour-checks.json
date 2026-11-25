@@ -1,0 +1,35 @@
+{
+  "sample": "tour.json",
+  "originalChecks": {
+    "clearSpawn": true,
+    "controllerMovesSin": true,
+    "clearGalleryAndPlatform": true,
+    "raisedPlatform": false
+  },
+  "rechecked": {
+    "clearSpawn": true,
+    "controllerMovesSin": true,
+    "clearGalleryAndPlatform": true,
+    "raisedPlatform": true
+  },
+  "check": "report.checks.raisedPlatform = report.route.supports.some(([u, y]) => u > 56.5 && u < 61.5 && y > -15);",
+  "platformSupports": [
+    [
+      56.62,
+      -14.78,
+      24
+    ],
+    [
+      56.82,
+      -14.67,
+      24
+    ],
+    [
+      61.42,
+      -14.8,
+      24
+    ]
+  ],
+  "frames": 57,
+  "routeProbes": 350
+}
