@@ -12,7 +12,6 @@
   const TAU = Math.PI * 2, GALLERY_INNER = 16, STAIR_INNER = 12;
   const SEAL = 'passage-L0';
   const budget = Object.freeze({ geometryBytes: 2 * 1024 * 1024, textures: 0, batches: 40 });
-  const preview = new URLSearchParams(location.search).get('r3Preview') === '1';
 
   function mount(THREE, passage, hall, origin) {
     const root = new THREE.Group();
@@ -587,5 +586,5 @@
     return counts;
   }
 
-  window.SinR3SealedZone = { mount, preview, resources, release, passageId: SEAL };
+  window.SinR3SealedZone = { mount, resources, release, passageId: SEAL };
 })();

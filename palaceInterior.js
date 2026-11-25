@@ -104,6 +104,7 @@
   let state = 'IDLE';
   let r3Entry = null, r3Stage = null, r3Curtain = null, r3Fade = 0;
   const r3Memory = {};
+  const R3_CLEARANCE = 0.32;
   const inR3 = () => r3Entry !== null;
   const r3Locked = () => inR3() && state !== 'R3';
   let setupTask = null;
@@ -207,6 +208,11 @@
   }
   function wingArchOpen(side, index) {
     return CONFIG.useWings && ((side < 0 && index === 2) || (side > 0 && (index === 0 || index === 2)));
+  }
+
+  function r3Passage(passages) {
+    const id = window.SinR3SealedZone?.passageId;
+    return passages?.find(p => p.id === id && p.state === 'sealed');
   }
 
   function note(msg) {
@@ -2522,7 +2528,7 @@
           const span = 0.22 * H;
           const x0 = Math.min(inner, inner - side * span);
           const x1 = Math.max(inner, inner - side * span);
-          if (!r3?.preview) extras.push({ min: new THREE.Vector3(x0, 0, zc - archW / 2), max: new THREE.Vector3(x1, archH, zc + archW / 2) });
+          if (!r3) extras.push({ min: new THREE.Vector3(x0, 0, zc - archW / 2), max: new THREE.Vector3(x1, archH, zc + archW / 2) });
         }
         CONFIG.PASSAGES.push({
           id: 'passage-' + (side < 0 ? 'L' : 'R') + i,
@@ -3880,8 +3886,13 @@
         return;
       }
       const cuts = [];
-      for (let i = 0; i < 3; i++) if (wingArchOpen(side, i) ||
-          (side < 0 && i === 0 && wingRuntime && window.SinR3SealedZone?.preview)) {
+      const entry = side < 0 && wingRuntime && r3Passage(CONFIG.PASSAGES);
+      if (entry) {
+        const z = entry.position[2];
+        const half = entry.width / 2 - R3_CLEARANCE;
+        cuts.push({ z0: z - half, z1: z + half });
+      }
+      for (let i = 0; i < 3; i++) if (wingArchOpen(side, i)) {
         const zc = (i + 0.5) * (L / 3);
         cuts.push({ z0: zc - archW / 2, z1: zc + archW / 2 });
       }
@@ -4491,14 +4502,13 @@
   }
 
   function beginR3(ctx) {
-    const R3 = window.SinR3SealedZone;
     const hall = wingRuntime && window.PalaceWings?.state.hall;
-    const passage = R3?.preview && hall?.passages.find(p => p.id === R3.passageId && p.state === 'sealed');
+    const passage = r3Passage(hall?.passages);
     if (!passage) return false;
     const p = ctx.hero.position;
     const [x, , z] = passage.position;
     if (portalX + x - p.x < 0.12 || portalX + x - p.x > 1.4 ||
-        Math.abs(p.z - portalFront - z) > passage.width / 2 - 0.32 ||
+        Math.abs(p.z - portalFront - z) > passage.width / 2 - R3_CLEARANCE ||
         Math.abs(p.y - floorY) > 0.6) return false;
     r3Entry = { passage: { position: [...passage.position] }, hall: { wallThickness: hall.wallThickness, alcoveDepth: hall.alcoveDepth } };
     state = 'R3_FADING_OUT';
