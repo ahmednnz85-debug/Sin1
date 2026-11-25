@@ -1,4 +1,4 @@
-/* R3 — architectural greybox. Dimensions are in PalaceInterior metres.
+/* R3 — sealed zone architecture. Dimensions are in PalaceInterior metres.
    u points out of passage-L0 (-X); v follows the hall (+Z). */
 (function () {
   'use strict';
@@ -17,7 +17,8 @@
   // the props GLB and its LOD file, and the in-view render envelope measured
   // on the tour (lamassu at full detail beside the player included).
   const budget = Object.freeze({
-    geometryBytes: 2 * 1024 * 1024, textures: 0, batches: 40,
+    geometryBytes: 3 * 1024 * 1024, textures: 0, batches: 52,
+    hall: Object.freeze({ textureMiB: 42, glbMiB: 18, drawCalls: 100, trianglesInView: 850000 }),
     stair: Object.freeze({ textureMiB: 48, glbMiB: 24, drawCalls: 110, trianglesInView: 900000 })
   });
 
@@ -45,9 +46,9 @@
       Platform: 0xababab, Shaft: 0x343434
     };
     let part = parts[0];
-    // R3-01 is dressed with PBR stone (r3-stair-dressing.js); the other two
-    // sections keep their baked greybox. Dressing failure keeps the greybox.
     const Stair = window.SinR3Stair || null;
+    const Hall = window.SinR3Hall || null;
+    const hallDressed = () => !!Hall && part === parts[1];
     const dressed = () => !!Stair && part === parts[0];
     const stairArches = [], stairTunnels = [];
 
@@ -68,12 +69,13 @@
     function geometry(slot, geo, strength = 1) {
       const data = part.batches.get(slot) || { position: [], color: [], uv: [], normal: [] };
       part.batches.set(slot, data);
-      if (dressed()) {
+      if (dressed() || hallDressed()) {
+        const hall = hallDressed();
         // Lit stone: real normals and metric UVs projected on the dominant
         // axis, so blocks keep their natural size on every surface.
         const pos = geo.attributes.position, normal = geo.attributes.normal;
         const count = geo.index ? geo.index.count : pos.count;
-        const scale = 1 / Stair.tileMetres(slot);
+        const scale = hall ? 0 : 1 / Stair.tileMetres(slot);
         for (let i = 0; i < count; i++) {
           const j = geo.index ? geo.index.getX(i) : i;
           const x = pos.getX(j), y = pos.getY(j), z = pos.getZ(j);
@@ -81,7 +83,22 @@
           data.position.push(x, y, z);
           data.normal.push(nx, ny, nz);
           const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
-          if (ay >= ax && ay >= az) data.uv.push(x * scale, z * scale);
+          if (hall) {
+            const uv = geo.attributes.uv;
+            if (uv && geo.userData.hallUV) data.uv.push(uv.getX(j), uv.getY(j));
+            else {
+              const mapped = Hall.uv({ HALL_U, HALL_V, RADIUS }, slot, x, y, z, nx, ny, nz);
+              data.uv.push(...mapped);
+              if (i % 3 === 2 && ['Walls', 'MuralBays', 'Guardstones'].includes(slot) && ay < Math.max(ax, az)) {
+                const end = data.uv.length - 2, start = end - 4;
+                const values = [data.uv[start], data.uv[start + 2], data.uv[end]];
+                if (Math.max(...values) - Math.min(...values) > 22) {
+                  const period = Math.round(TAU * RADIUS / 2.6);
+                  for (let k = start; k <= end; k += 2) if (data.uv[k] < 4) data.uv[k] += period;
+                }
+              }
+            }
+          } else if (ay >= ax && ay >= az) data.uv.push(x * scale, z * scale);
           else if (ax >= az) data.uv.push(z * scale * Math.sign(nx || 1), y * scale);
           else data.uv.push(-x * scale * Math.sign(nz || 1), y * scale);
         }
@@ -111,11 +128,15 @@
       geometry(slot, g, strength);
     }
 
-    function surface(slot, points, strength) {
+    function surface(slot, points, strength, uv) {
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(points.flat(), 3));
       g.setIndex(points.length === 3 ? [0, 1, 2] : [0, 1, 2, 0, 2, 3]);
       g.computeVertexNormals();
+      if (uv) {
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(uv.flat(), 2));
+        g.userData.hallUV = true;
+      }
       geometry(slot, g, strength);
     }
 
@@ -125,14 +146,14 @@
       geometry(slot, g);
     }
 
-    function collision(x0, x1, y0, y1, z0, z1, solid = false) {
+    function collision(x0, x1, y0, y1, z0, z1, solid = false, enabled = null) {
       cameraBoxes.push({
         minx: origin.x + passage.position[0] - x1, maxx: origin.x + passage.position[0] - x0,
         miny: origin.y + y0, maxy: origin.y + y1,
         minz: origin.z + passage.position[2] + z0, maxz: origin.z + passage.position[2] + z1,
-        _wing: true
+        _wing: true, enabled
       });
-      if (solid) obstacles.push({ x0, x1, y0, y1, z0, z1 });
+      if (solid) obstacles.push({ x0, x1, y0, y1, z0, z1, enabled });
     }
 
     function solidBox(slot, x0, x1, y0, y1, z0, z1) {
@@ -346,6 +367,33 @@
       return BASIN + Math.floor((r - STAIR_INNER) * 2) * 0.15;
     };
     const domeY = r => CROWN - (CROWN - SPRING) * (r / RADIUS) ** 1.35;
+    const columns = [17, 51, 90, 129, 157, 206, 236, 303, 334];
+    const apertures = [
+      { r: 2.1, a: 0.42, radial: 1.84, chord: 1.50, glow: 920, width: 1.35 },
+      { r: 11.1, a: 0.89, radial: 1.19, chord: 0.68, glow: 520, width: 0.62 },
+      { r: 13.6, a: -0.65, radial: 1.14, chord: 0.72, glow: 590, width: 0.74 },
+      { r: 15.7, a: -0.28, radial: 1.15, chord: 0.63, glow: 375, width: 0.60 }
+    ];
+    const hallLook = Hall?.create({
+      THREE, root, group: parts[1].group, HALL_U, HALL_V, RADIUS, BASIN, GALLERY, SPRING,
+      columns: columns.map(degrees => degrees * Math.PI / 180),
+      surface, box, point, domeY, opening, inStair, apertures,
+      propCollision: (...bounds) => collision(...bounds, true, () => hallLook.ready()),
+      fallbackSlots: ['Columns', 'Dais', 'Plinths'],
+      url: path => window.__sinAsset?.(path) || path
+    });
+    const domeSteps = hallLook ? 24 : 8;
+    const domeAngles = hallLook ? Array.from({ length: 169 }, (_, i) => i * TAU / 168) : angles;
+    function roofDamage(i, j) {
+      if (!hallLook || j < 0 || j >= domeSteps) return false;
+      const mid = (domeAngles[i] + domeAngles[i + 1]) / 2;
+      const midRadius = (j + 0.5) * RADIUS / domeSteps;
+      return apertures.some(h => {
+        const dr = (midRadius - h.r) / h.radial;
+        const dw = angleDistance(h.a, mid) * midRadius / h.chord;
+        return dr * dr + dw * dw < 1.06 + 0.22 * Math.sin(17 * i + 19 * j);
+      });
+    }
     for (let i = 0; i < angles.length - 1; i++) {
       const a = angles[i], b = angles[i + 1], mid = (a + b) / 2;
       const port = opening(mid);
@@ -353,8 +401,25 @@
         annulus('Gallery', GALLERY_INNER, RADIUS, a, b, GALLERY);
         face('Gallery', GALLERY_INNER, a, b, BASIN, GALLERY);
         annulus('Guardstones', 15.8, 16.16, a, b, GALLERY + 0.95);
-        face('Guardstones', 15.8, a, b, GALLERY, GALLERY + 0.95);
-        face('Guardstones', 16.16, a, b, GALLERY, GALLERY + 0.95);
+        if (hallLook) {
+          for (const [bottom, top] of [[0, 0.17], [0.78, 0.95]]) {
+            face('Guardstones', 15.8, a, b, GALLERY + bottom, GALLERY + top);
+            face('Guardstones', 16.16, a, b, GALLERY + bottom, GALLERY + top);
+          }
+          annulus('Guardstones', 15.8, 16.16, a, b, GALLERY + 0.17);
+          annulus('Guardstones', 15.8, 16.16, a, b, GALLERY + 0.78);
+          const post = (b - a) * 0.16;
+          const low = GALLERY + 0.12, high = GALLERY + 0.82;
+          face('Guardstones', 15.81, mid - post, mid + post, low, high);
+          face('Guardstones', 16.15, mid - post, mid + post, low, high);
+          for (const angle of [mid - post, mid + post]) {
+            surface('RailAshlar', [point(15.81, angle, low), point(16.15, angle, low),
+              point(16.15, angle, high), point(15.81, angle, high)]);
+          }
+        } else {
+          face('Guardstones', 15.8, a, b, GALLERY, GALLERY + 0.95);
+          face('Guardstones', 16.16, a, b, GALLERY, GALLERY + 0.95);
+        }
         const guard = [point(15.8, a, 0), point(15.8, b, 0), point(16.16, a, 0), point(16.16, b, 0)];
         const gx = guard.map(p => p[0]), gz = guard.map(p => p[2]);
         collision(Math.min(...gx), Math.max(...gx), BASIN, GALLERY + 0.95, Math.min(...gz), Math.max(...gz));
@@ -370,17 +435,60 @@
       }
       face('Walls', RADIUS, a, b, port ? GALLERY + 8.4 : GALLERY, SPRING + 0.08);
       if (!port) {
-        face('MuralBays', RADIUS - 0.06, a, b, GALLERY + 2.15, GALLERY + 6.15, 0.81);
-        face('Capitals', RADIUS - 0.23, a, b, GALLERY + 6.25, GALLERY + 6.67);
+        if (!hallLook) {
+          face('MuralBays', RADIUS - 0.06, a, b, GALLERY + 2.15, GALLERY + 6.15, 0.81);
+          face('Capitals', RADIUS - 0.23, a, b, GALLERY + 6.25, GALLERY + 6.67);
+        }
         face('Capitals', RADIUS - 0.42, a, b, SPRING - 0.27, SPRING + 0.02);
         const p0 = point(RADIUS, a, 0), p1 = point(RADIUS, b, 0), q = point(RADIUS + 0.5, mid, 0);
         collision(Math.min(p0[0], p1[0], q[0]), Math.max(p0[0], p1[0], q[0]), GALLERY - 0.35, SPRING,
           Math.min(p0[2], p1[2], q[2]), Math.max(p0[2], p1[2], q[2]));
       }
-      for (let j = 0; j < 8; j++) {
-        const inner = j * RADIUS / 8, outer = (j + 1) * RADIUS / 8;
-        surface(j === 7 ? 'ArchRibs' : 'Vault', [point(inner, a, domeY(inner)), point(outer, a, domeY(outer)),
-          point(outer, b, domeY(outer)), point(inner, b, domeY(inner))], j % 2 === 0 ? 1 : 0.95);
+    }
+    for (let i = 0; i < domeAngles.length - 1; i++) {
+      const a = domeAngles[i], b = domeAngles[i + 1];
+      for (let j = 0; j < domeSteps; j++) {
+        const inner = j * RADIUS / domeSteps, outer = (j + 1) * RADIUS / domeSteps;
+        if (roofDamage(i, j)) {
+          // Closed recessed stone above the damaged inner shell. This
+          // silhouette shows lit roof thickness from every camera angle.
+          const shape = [point(inner, a, domeY(inner)), point(outer, a, domeY(outer)),
+            point(outer, b, domeY(outer)), point(inner, b, domeY(inner))];
+          const lid = shape.map(([x, y, z]) => [x, y + 0.75, z]);
+          surface('RoofGlow', lid);
+          const spans = domeAngles.length - 1;
+          const neighbours = [[(i + spans - 1) % spans, j], [i, j + 1], [(i + 1) % spans, j], [i, j - 1]];
+          for (let k = 0; k < 4; k++) {
+            if (roofDamage(...neighbours[k]) || (k === 3 && j === 0)) continue;
+            const next = (k + 1) % 4;
+            surface('RoofEdge', [shape[k], shape[next], lid[next], lid[k]]);
+          }
+        } else {
+          surface(j === domeSteps - 1 ? 'ArchRibs' : 'Vault', [point(inner, a, domeY(inner)), point(outer, a, domeY(outer)),
+            point(outer, b, domeY(outer)), point(inner, b, domeY(inner))], j % 2 === 0 ? 1 : 0.95);
+        }
+      }
+    }
+    if (hallLook) {
+      for (const [heading, frame] of [
+        [Math.PI, (depth, y, t) => [HALL_ENTRY + depth, y, HALL_V - t]],
+        [1.5 * Math.PI, (depth, y, t) => [HALL_U + t, y, SIDE_EXIT + depth]]
+      ]) {
+        const crown = GALLERY + 8.4, impost = crown - HALF;
+        // This lintel only occupies the shoulders of the existing port
+        // above head height. The full six-metre path below remains clear.
+        const curve = (depth, theta, width) => frame(depth, impost + Math.sin(theta) * width, Math.cos(theta) * width);
+        for (let i = 0; i < 14; i++) {
+          const a = i * Math.PI / 14, b = (i + 1) * Math.PI / 14;
+          surface('ArchRibs', [curve(0.18, a, HALF), curve(0.18, b, HALF),
+            curve(0.18, b, HALF + 0.40), curve(0.18, a, HALF + 0.40)]);
+          surface('RoofEdge', [curve(0.0, a, HALF), curve(0.18, a, HALF),
+            curve(0.18, b, HALF), curve(0.0, b, HALF)]);
+        }
+        for (const side of [-1, 1]) {
+          const a = heading + side * PORT;
+          face('Buttresses', RADIUS - 0.32, a, a + side * 0.024, GALLERY, impost);
+        }
       }
     }
     for (const a of stairAngles.flatMap(a => [a - STAIR_HALF, a + STAIR_HALF])) {
@@ -389,15 +497,14 @@
         if (j) surface('Gallery', [point(r, a, BASIN), point(r + 0.5, a, BASIN), point(r + 0.5, a, y), point(r, a, y)]);
       }
     }
-    const columns = [17, 51, 90, 129, 157, 206, 236, 303, 334];
     for (const degrees of columns) {
       const a = degrees * Math.PI / 180;
       const [x, , z] = point(19.25, a, 0);
       cylinder('Plinths', x, z, GALLERY, 0.42, 1.2, 1.2, 12);
       cylinder('Columns', x, z, GALLERY + 0.42, 7.58, 0.98, 0.8, 16);
-      cylinder('Capitals', x, z, GALLERY + 8, 0.53, 0.82, 1.22, 12);
-      cylinder('Capitals', x, z, GALLERY + 8.53, 0.53, 1.22, 1.05, 12);
-      collision(x - 0.92, x + 0.92, GALLERY, GALLERY + 9.06, z - 0.92, z + 0.92, true);
+      cylinder(hallLook ? 'Columns' : 'Capitals', x, z, GALLERY + 8, 0.53, 0.82, 1.22, 12);
+      cylinder(hallLook ? 'Columns' : 'Capitals', x, z, GALLERY + 8.53, 0.53, 1.22, 1.05, 12);
+      collision(x - 0.92, x + 0.92, GALLERY, GALLERY + 9.06, z - 0.92, z + 0.92, true, () => !hallLook?.ready());
       // Recesses in the upper arcade, backed by the cylindrical shell.
       if (!headings.some(h => angleDistance(a + 0.22, h) < PORT + 0.11)) {
         const tangent = a + 0.22;
@@ -410,11 +517,14 @@
           frame(depth, high, half), frame(depth, high, -half)
         ], strength);
         const low = GALLERY + 2.18, high = GALLERY + 6.14;
-        panel('Buttresses', 19.56, low - 0.19, high + 0.19, 2.2);
-        panel('MuralBays', 19.52, low, high, 2.0, 0.83);
+        if (!hallLook) {
+          panel('Buttresses', 19.56, low - 0.19, high + 0.19, 2.2);
+          panel('MuralBays', 19.52, low, high, 2.0, 0.83);
+        }
         socket('HallMural_' + degrees, frame(19.49, (low + high) / 2, 0));
 
-        const arcadeBase = GALLERY + 6.72, arcadeSpring = GALLERY + 8.24;
+        if (hallLook && angleDistance(tangent, 0) < 0.36) continue;
+        const arcadeBase = GALLERY + (hallLook ? 7.72 : 6.72), arcadeSpring = GALLERY + (hallLook ? 8.80 : 8.24);
         const reveal = 19.37, backing = 19.9, inside = 1.67, outside = 2.08;
         for (const side of [-1, 1]) {
           const t = side * inside, edge = side * outside;
@@ -438,9 +548,13 @@
     const daisRadii = [4, 3.45, 2.88];
     daisRadii.forEach((r, i) => cylinder('Dais', HALL_U, HALL_V, BASIN + 0.15 * i, 0.15, r, r, 48));
     socket('FirstSealCore', [HALL_U, BASIN + 0.45, HALL_V]);
+    hallLook?.shell();
+    hallLook?.stairs();
+    hallLook?.plan();
     const hallFloor = (x, z) => {
       const u = x - HALL_U, v = z - HALL_V, r = Math.hypot(u, v), a = Math.atan2(v, u);
       if (r > wallLimit(a)) return null;
+      if (hallLook?.ready() && r < 8) return BASIN + Hall.platformFloor(r, a);
       for (let i = daisRadii.length - 1; i >= 0; i--) {
         if (r <= daisRadii[i]) return BASIN + (i + 1) * 0.15;
       }
@@ -498,12 +612,16 @@
         g.computeBoundingSphere();
         geometryBytes += Object.values(g.attributes).reduce((total, attr) => total + attr.array.byteLength, 0);
         batchCount++;
-        const m = lit ? Stair.material(THREE, slot) :
+        const m = lit ? (group === parts[1].group ? hallLook.stone(slot) : Stair.material(THREE, slot)) :
           new THREE.MeshBasicMaterial({ color: slots[slot], vertexColors: true, fog: false, toneMapped: false, side: THREE.DoubleSide });
         m.name = group.name + '/' + slot;
         const mesh = new THREE.Mesh(g, m);
         mesh.name = slot;
         if (lit) mesh.castShadow = mesh.receiveShadow = true;
+        if (group === parts[1].group) {
+          mesh.castShadow = ['Plinths', 'Columns', 'Guardstones', 'ArchRibs', 'PlatformSteps'].includes(slot);
+          if (slot === 'PlatformSteps') mesh.visible = false;
+        }
         mesh.userData.materialSlot = m.name;
         group.add(mesh);
       }
@@ -548,6 +666,7 @@
         if (!probe || Math.abs(probe.y - target.y) > 0.47) return true;
       }
       for (const b of obstacles) {
+        if (b.enabled && !b.enabled()) continue;
         if (b.y0 >= target.y + 1.9 || b.y1 <= target.y + 0.08) continue;
         const dx = u - Math.max(b.x0, Math.min(u, b.x1));
         const dz = v - Math.max(b.z0, Math.min(v, b.z1));
@@ -570,6 +689,7 @@
       // Stair look (lights, fog, dust) follows the hero through R3-01 and
       // hands the shared stage lights back on the way into the hall.
       stair?.update(u, y, v, parts[0].group.visible, inside && !inHall && u <= HALL_ENTRY);
+      hallLook?.update(u, v, inHall, parts[1].group.visible);
     }
     const stair = stairPlan && Stair.create(THREE, root, parts[0].group, stairPlan);
 
@@ -590,15 +710,22 @@
     const stageCost = { geometryBytes, batches: batchCount, textures: 0 };
     return {
       root, nearFloor, blocks, update, budget, cost: stageCost,
-      // Loads the R3-01 assets (stone sets, reliefs, the stair GLB) while the
-      // transition curtain is black. Resolves either way: a failed load
-      // keeps the lit architecture without props.
-      ready: renderer => stair ? stair.load(renderer).then(cost => { stageCost.stair = cost; return cost; }) : Promise.resolve(null),
+      // Prepare the independent stage while the transition curtain is black.
+      async ready(renderer) {
+        if (stair) stageCost.stair = await stair.load(renderer).catch(error => {
+          console.error('[R3-01] stair assets', error);
+          return { error: error.message };
+        });
+        if (hallLook) stageCost.hall = await hallLook.load(renderer);
+        return stageCost;
+      },
       stair,
       spawn: [passage.position[0] - start - 0.55, 0, passage.position[2]],
       cameraBoxesAt(x, z, y) {
         if (!nearFloor(x, z, y)) return null;
-        return cameraCells.get(Math.floor((x + origin.x) / cellSize) + ',' + Math.floor((z + origin.z) / cellSize));
+        const boxes = cameraCells.get(Math.floor((x + origin.x) / cellSize) + ',' + Math.floor((z + origin.z) / cellSize));
+        return hallLook && boxes?.some(box => box.enabled)
+          ? boxes.filter(box => !box.enabled || box.enabled()) : boxes;
       }
     };
   }
