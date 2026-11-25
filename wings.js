@@ -850,22 +850,6 @@
       futureZone(T4, tg, 'ALTAR', T4.bbox.x1 - 4, T4.bbox.cz, 4, 3);
     }
     // K5 has no procedural props: dressK5 uses only the supplied assets.
-    const sealed = state.hall.passages.find(p => p.id === 'passage-L0');
-    if (sealed) {
-      const sg = new THREE.Group(); sg.name = 'L1-sealed-arch'; state.root.add(sg);
-      const x = sealed.position[0] - 0.16, z = sealed.position[2], w = sealed.width, h = sealed.height;
-      mesh(boxAt(0.34, h, w, x, h * 0.5, z), stone, 'L1-stone-seal', sg);
-      const disc = new THREE.CylinderGeometry(0.5, 0.5, 0.12, 24); disc.rotateZ(Math.PI / 2);
-      const inst = new THREE.InstancedMesh(disc, state.sealMat, 8); inst.name = 'L1-eight-discs';
-      const dummy = new THREE.Object3D();
-      dummy.position.set(x + 0.22, h * 0.53, z); dummy.scale.set(1, Math.min(2.1, w * 0.3), Math.min(2.1, w * 0.3)); dummy.updateMatrix(); inst.setMatrixAt(0, dummy.matrix);
-      for (let i = 0; i < 7; i++) {
-        const a = i * Math.PI * 2 / 7, rad = Math.min(w * 0.34, h * 0.31);
-        dummy.position.set(x + 0.23, h * 0.53 + Math.sin(a) * rad, z + Math.cos(a) * rad);
-        dummy.scale.set(1, 0.55, 0.55); dummy.updateMatrix(); inst.setMatrixAt(i + 1, dummy.matrix);
-      }
-      inst.instanceMatrix.needsUpdate = true; sg.add(inst);
-    }
   }
   function addFutureZones(r, parent) {
     const b = r.bbox;
@@ -2870,6 +2854,7 @@
     if (state.ui) { state.ui.remove(); state.ui = null; }
     if (state.label) { state.label.remove(); state.label = null; }
     wingDoorLoadStarted = false;
+    state.r3 = null;
     state.built = false; state.root = null; state.regionGroups.clear(); state.colliders = []; state.dynamicDoorBoxes = []; state.activeDoor = null; state.interactDoor = null; state.fires = []; state.torchFireMats = null; state.corridorTorches = [];
     state.k2Lights = null; state.k2LightBase = null; state.k2FloorSolids = null;
     state.k3Lights = null; state.k3LightBase = null; state.k3FloorSolids = null; state.k4Dress = null; state.k5Dress = null;
@@ -3048,6 +3033,12 @@
       }
       rebuildDoorColliders();
     }
+    const R3 = window.SinR3SealedZone;
+    const sealedPassage = R3 && hall.passages.find(p => p.id === R3.passageId && p.state === 'sealed');
+    if (sealedPassage) {
+      state.r3 = R3.mount(THREE, sealedPassage, hall, state.root.position);
+      state.root.add(state.r3.root);
+    }
     rebuildSpatial(); loadRoomDoors(); phase('doors'); await yieldWing();
     try { console.info('[palace load] wings-after-doors'); } catch (_) {}
     state.built = true;
@@ -3072,7 +3063,13 @@
       triangleBudget: 750000
     };
   }
-  function contains(x, z) { return state.built && pointInSolids(x, z, state.floorExtended); }
+  function r3At(x, z, y) {
+    const r3 = state.r3;
+    return r3 && r3.nearFloor(x, z, y ?? state.ctx.hero.position.y - state.root.position.y);
+  }
+  function contains(x, z) {
+    return state.built && (!!r3At(x, z) || pointInSolids(x, z, state.floorExtended));
+  }
   // The culling / sight tests ask for the camera's region ~20 times per
   // frame with the same coordinates. Room polygons never change after
   // build, so the last answer is reused (cleared by build / dispose).
@@ -4469,7 +4466,9 @@
     if (_tr) _tr('updateCulling-enter force=' + !!force);
     if (!state.built || !state.ctx || !state.ctx.hero) return;
     const p = state.ctx.hero.position, x = p.x - state.root.position.x, z = p.z - state.root.position.z;
-    const r = regionAt(x, z), id = r ? r.id : 'Palace';
+    const y = p.y - state.root.position.y;
+    state.r3?.update(x, y, z);
+    const r = r3At(x, z, y) ? null : regionAt(x, z), id = r ? r.id : 'Palace';
     const regionChanged = !!force || state.current !== id;
     if (force) triCache.clear();
     if (regionChanged) {
@@ -4670,6 +4669,8 @@
     if (state.debug && state.ui && performance.now() - state.minimapAt > 120) { state.minimapAt = performance.now(); drawMinimap(); }
   }
   function floorAt(x, z, fromY) {
+    const r3 = r3At(x, z, fromY);
+    if (r3) return r3.y;
     if (!contains(x,z)) return null;
     if (state.sacredEntrance && zoneIsReady('T1')) {
       const y=state.sacredEntrance.floorAt(x,z);
@@ -4711,6 +4712,8 @@
     return 0;
   }
   function onEntranceSteps(position) {
+    const base = state.root?.position;
+    if (base && r3At(position.x - base.x, position.z - base.z, position.y - base.y)?.steps) return true;
     if (!state.sacredEntrance || !zoneIsReady('T1')) return false;
     const origin = state.root.position;
     return state.sacredEntrance.floorAt(position.x - origin.x, position.z - origin.z) > 0;
@@ -4729,6 +4732,7 @@
   function resolveCamera(cam) {
     if (!state.built || !cam) return;
     const x = cam.position.x - state.root.position.x, y = cam.position.y - state.root.position.y, z = cam.position.z - state.root.position.z;
+    if (r3At(x, z, y - 1.45)) return;
     for (const b of nearbyBoxes(x, z)) {
       if (x <= b.minx || x >= b.maxx || z <= b.minz || z >= b.maxz || y <= b.miny || y >= b.maxy) continue;
       const moves = [
@@ -4742,6 +4746,12 @@
   }
   function clampFollowTarget(want) {
     if (!want) return;
+    const base = state.root.position;
+    const r3 = r3At(want.x - base.x, want.z - base.z);
+    if (r3) {
+      want.y = Math.max(base.y + r3.y + 1.2, Math.min(base.y + r3.ceiling - 0.2, want.y));
+      return;
+    }
     const limit = state.current === 'L1' ? 10.65 : 6.5;
     want.y = Math.max(state.root.position.y + 1.2, Math.min(state.root.position.y + limit, want.y));
   }
@@ -6339,7 +6349,7 @@
     STREAM_EXPECT: STREAM_EXPECT,
     deviceProfile: deviceProfile,
     palaceVisible: function () { return state.palaceNear !== false; },
-    build, dispose, tick, contains, regionAt, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
+    build, dispose, tick, contains, regionAt, r3At, floorAt, capsuleBlocked, resolveCamera, clampFollowTarget, interact, canInteract, locked: doorLocked, doorReport,
     teleport, overview, runTests, formatReport, cameraTour, current, metrics, corridorReport: () => state.corridorReport, corridorWallFill: () => state.corridorWallFill || 0,
     libraryCamera: () => state.library && state.library.ready ? state.library.camera : null,
     archiveCamera: () => state.archive && zoneIsReady('L2') ? state.archive.camera : null,

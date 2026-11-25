@@ -2486,32 +2486,35 @@
         const inner = side * (W / 2);
         const outer = inner + side * wallThick;
         const backX = outer + side * depth;
+        const r3 = CONFIG.useWings && side < 0 && i === 0 && window.SinR3SealedZone;
         if (!wingArchOpen(side, i)) {
-        const back = new THREE.Mesh(new THREE.PlaneGeometry(archW, archH), alcoveMat);
-        back.position.set(backX, archH * 0.5, zc);
-        back.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-        back.name = 'passage-back';
-        group.add(back);
-        const sideGeo = new THREE.BoxGeometry(depth, archH, 0.08 * H);
-        [-1, 1].forEach(function (k) {
-          const jamb = new THREE.Mesh(sideGeo, alcoveMat);
-          jamb.position.set((outer + backX) / 2, archH * 0.5, zc + k * (archW / 2));
-          jamb.name = 'passage-jamb';
-          group.add(jamb);
-        });
-        const ceilGeo = new THREE.BoxGeometry(depth, 0.06 * H, archW);
-        const cl = new THREE.Mesh(ceilGeo, alcoveMat);
-        cl.position.set((outer + backX) / 2, archH, zc);
-        cl.name = 'passage-slab';
-        const floorSpan = Math.abs(backX - inner) + 0.2 * H;
-        const fl = new THREE.Mesh(new THREE.BoxGeometry(floorSpan, 0.1 * H, archW + 0.2 * H), alcoveMat);
-        fl.position.set((inner + backX) / 2, -0.02, zc);
-        fl.name = 'passage-slab';
-        group.add(fl, cl);
-        const span = 0.22 * H;
-        const x0 = Math.min(inner, inner - side * span);
-        const x1 = Math.max(inner, inner - side * span);
-        extras.push({ min: new THREE.Vector3(x0, 0, zc - archW / 2), max: new THREE.Vector3(x1, archH, zc + archW / 2) });
+          if (!r3) {
+            const back = new THREE.Mesh(new THREE.PlaneGeometry(archW, archH), alcoveMat);
+            back.position.set(backX, archH * 0.5, zc);
+            back.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+            back.name = 'passage-back';
+            group.add(back);
+          }
+          const sideGeo = new THREE.BoxGeometry(depth, archH, 0.08 * H);
+          [-1, 1].forEach(function (k) {
+            const jamb = new THREE.Mesh(sideGeo, alcoveMat);
+            jamb.position.set((outer + backX) / 2, archH * 0.5, zc + k * (archW / 2));
+            jamb.name = 'passage-jamb';
+            group.add(jamb);
+          });
+          const ceilGeo = new THREE.BoxGeometry(depth, 0.06 * H, archW);
+          const cl = new THREE.Mesh(ceilGeo, alcoveMat);
+          cl.position.set((outer + backX) / 2, archH, zc);
+          cl.name = 'passage-slab';
+          const floorSpan = Math.abs(backX - inner) + 0.2 * H;
+          const fl = new THREE.Mesh(new THREE.BoxGeometry(floorSpan, 0.1 * H, archW + 0.2 * H), alcoveMat);
+          fl.position.set((inner + backX) / 2, -0.02, zc);
+          fl.name = 'passage-slab';
+          group.add(fl, cl);
+          const span = 0.22 * H;
+          const x0 = Math.min(inner, inner - side * span);
+          const x1 = Math.max(inner, inner - side * span);
+          if (!r3?.preview) extras.push({ min: new THREE.Vector3(x0, 0, zc - archW / 2), max: new THREE.Vector3(x1, archH, zc + archW / 2) });
         }
         CONFIG.PASSAGES.push({
           id: 'passage-' + (side < 0 ? 'L' : 'R') + i,
@@ -3869,7 +3872,8 @@
         return;
       }
       const cuts = [];
-      for (let i = 0; i < 3; i++) if (wingArchOpen(side, i)) {
+      for (let i = 0; i < 3; i++) if (wingArchOpen(side, i) ||
+          (side < 0 && i === 0 && wingRuntime && window.SinR3SealedZone?.preview)) {
         const zc = (i + 0.5) * (L / 3);
         cuts.push({ z0: zc - archW / 2, z1: zc + archW / 2 });
       }
@@ -4090,7 +4094,9 @@
     const lx = x - portalX;
     const lz = z - portalFront;
     if (wingRuntime && window.PalaceWings) {
-      const wh = PalaceWings.floorAt(lx, lz, fromY == null ? 0 : fromY - floorY);
+      const wh = PalaceWings.floorAt(lx, lz, fromY == null
+        ? (PalaceWings.state.r3?.preview ? PalaceWings.state.ctx.hero.position.y - floorY : 0)
+        : fromY - floorY);
       if (wh != null) return floorY + wh;
     }
     if (!ramp) return floorY;
@@ -4913,6 +4919,9 @@
     if (!active) return false;
     const hero = wingRuntime && window.PalaceWings && PalaceWings.state.ctx.hero;
     const fromY = hero ? hero.position.y : floorY;
+    const r3 = wingRuntime && PalaceWings.state.r3?.blocks(x - portalX, z - portalFront, fromY - floorY,
+      hero.position.x - portalX, hero.position.z - portalFront, 0.32);
+    if (r3 != null) return r3;
     if (wingRuntime && window.PalaceWings && PalaceWings.capsuleBlocked(x - portalX, z - portalFront, 0.32, fromY - floorY)) return true;
     // Height-aware: boxes entirely above the hero's head (arch lintels over the open wing
     // passages) or below the feet must not act as full-height walls in this 2D check.
@@ -4973,9 +4982,11 @@
   function insideBox(x, y, z, b) { return x >= b.minx && x <= b.maxx && y >= b.miny && y <= b.maxy && z >= b.minz && z <= b.maxz; }
 
   // Ceiling height (world y) above a point, or +Infinity when unknown.
-  function ceilingAt(x, z) {
+  function ceilingAt(x, z, feetY) {
     if (wingRuntime && window.PalaceWings && PalaceWings.state && PalaceWings.state.root) {
       const root = PalaceWings.state.root.position, lx = x - root.x, lz = z - root.z;
+      const r3 = PalaceWings.r3At(lx, lz, feetY - root.y);
+      if (r3) return root.y + r3.ceiling;
       if (PalaceWings.contains(lx, lz)) {
         const r = PalaceWings.regionAt(lx, lz);
         if (r && r.height > 0) return root.y + r.height;
@@ -5026,7 +5037,9 @@
     const entranceCount = purificationCount + entranceBoxes.length;
     const templeDoorCount=entranceCount+templeDoors.length,libraryDoorCount=templeDoorCount+libraryDoors.length;
     const studyCount=libraryDoorCount+studyBoxes.length;
-    for (let i = 0; i < studyCount+kingBoxes.length; i++) {
+    const kingCount = studyCount + kingBoxes.length;
+    const r3Boxes = wings?.r3?.cameraBoxesAt(px - portalX, pz - portalFront, feetY - floorY) || noCameraColliders;
+    for (let i = 0; i < kingCount + r3Boxes.length; i++) {
       const b = i < staticCount ? colliders[i] : i < libraryCount ? libraryBoxes[i - staticCount] :
         i < archiveCount ? archiveBoxes[i - libraryCount] : i < observatoryCount ? observatoryBoxes[i - archiveCount] :
         i < sacredHallCount ? sacredHallBoxes[i - observatoryCount] :
@@ -5035,7 +5048,7 @@
         i < purificationCount ? purificationBoxes[i - sanctuaryCount] :
         i < entranceCount ? entranceBoxes[i - purificationCount] :
         i < templeDoorCount ? templeDoors[i-entranceCount] : i < libraryDoorCount ? libraryDoors[i-templeDoorCount] :
-        i < studyCount ? studyBoxes[i-libraryDoorCount] : kingBoxes[i-studyCount];
+        i < studyCount ? studyBoxes[i-libraryDoorCount] : i < kingCount ? kingBoxes[i-studyCount] : r3Boxes[i-kingCount];
       if (b.maxx < lox || b.minx > hix || b.maxy < loy || b.miny > hiy || b.maxz < loz || b.minz > hiz) continue;
       if (isProp(b) !== !!props) continue;
       let box = padBox(b, r);
@@ -5052,7 +5065,7 @@
     }
     if (props) return best;
     // Ceiling / floor planes (rooms and corridors have different heights).
-    const ceil = Math.min(ceilingAt(px, pz), ceilingAt(ex, ez));
+    const ceil = Math.min(ceilingAt(px, pz, feetY), ceilingAt(ex, ez, feetY));
     if (uy > 1e-4 && Number.isFinite(ceil)) best = Math.min(best, Math.max(0, (ceil - r - py) / uy));
     if (uy < -1e-4) best = Math.min(best, Math.max(0, (feetY + r - py) / uy));
     return Math.max(0, best - 0.03);
