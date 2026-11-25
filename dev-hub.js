@@ -292,9 +292,11 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     const d = doors.find(x => /Palace|C|REAR|MP/.test(x.from === id ? x.to : x.from)) || doors[0];
     const fx = d ? d.x : r.bbox.cx, fz = d ? d.z : r.bbox.z0, cx = r.bbox.cx, cz = r.bbox.cz;
     let x = null, z = null;
-    for (const k of [0.55, 0.45, 0.65, 0.35, 0.75, 0.25]) {
+    for (const k of [0.55, 0.45, 0.65, 0.35, 0.75, 0.25, 0.85, 0.15]) {
       const px = fx + (cx - fx) * k, pz = fz + (cz - fz) * k;
-      if (!PalaceWings.capsuleBlocked(px, pz, 0.5)) { x = px; z = pz; break; }
+      // Free for the wing colliders AND for the hero's own collision query.
+      const o0 = S.root.position;
+      if (!PalaceWings.capsuleBlocked(px, pz, 0.5) && !game.blocked(o0.x + px, o0.z + pz)) { x = px; z = pz; break; }
     }
     if (x == null) return;                 // keep the game's own teleport pose
     const y = PalaceWings.floorAt(x, z) || 0, o = S.root.position, hero = game.hero(), cam = game.camera;
