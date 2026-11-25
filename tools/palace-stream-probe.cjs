@@ -108,7 +108,13 @@ function summarize(rows) {
   const nowMs = () => page.evaluate(() => performance.now());
   const zone = id => page.evaluate(id => { const z = PalaceWings.zones().zones[id]; return z ? z.state : 'none'; }, id);
   const mem = () => page.evaluate(() => { const m = SinProcessMemory.last() || {}; return { processMB: m.processMB, gpuTexMB: m.gpuTexMB, programs: m.programs }; });
-  const waitReady = async (id, maxS) => { const t0 = Date.now(); for (;;) { const s = await zone(id); if (s === 'ready' || s === 'failed' || (Date.now() - t0) / 1000 > maxS) return { state: s, s: +((Date.now() - t0) / 1000).toFixed(1) }; await page.waitForTimeout(400); } };
+  // Stops early when the room is waiting for memory (it cannot be prepared here).
+  const waitReady = async (id, maxS, memoryWaitS) => { const t0 = Date.now(); for (;;) {
+    const z = await page.evaluate(id => { const z = PalaceWings.zones().zones[id]; return z ? { state: z.state, deferred: !!z.deferred } : { state: 'none' }; }, id);
+    const el = (Date.now() - t0) / 1000;
+    if (z.state === 'ready' || z.state === 'failed' || el > maxS || (memoryWaitS && z.state === 'cold' && z.deferred && el > memoryWaitS))
+      return { state: z.state, deferred: !!z.deferred, s: +el.toFixed(1) };
+    await page.waitForTimeout(400); } };
   const tp = id => page.evaluate(id => PalaceWings.teleport(id), id);
   const approachOf = id => page.evaluate(id => {
     const S = PalaceWings.state, z = PalaceWings.zones().zones;
@@ -130,9 +136,9 @@ function summarize(rows) {
     for (const pass of ['first', 'return']) {
       const near = await approachOf(id);
       let t = await nowMs(); await tp(near);
-      const a = await waitReady(id, 150);
+      const a = await waitReady(id, 150, 20);
       await page.waitForTimeout(1500);
-      const approach = Object.assign({ at: near, readyBeforeEntering: a.state === 'ready', waitS: a.s, state: a.state }, summarize(await since(t)));
+      const approach = Object.assign({ at: near, readyBeforeEntering: a.state === 'ready', waitingForMemory: a.deferred, waitS: a.s, state: a.state }, summarize(await since(t)));
       t = await nowMs(); await tp(id);
       const e = await waitReady(id, 150);
       await page.waitForTimeout(2500);
@@ -143,7 +149,7 @@ function summarize(rows) {
         t = await nowMs(); await tp(far); await waitReady(far, 150); await page.waitForTimeout(4500);
         R.leave = Object.assign({ to: far, unloaded: (await zone(id)) === 'cold', mem: await mem() }, summarize(await since(t)));
       }
-      console.log(id, pass, JSON.stringify({ approach: { at: near, ready: approach.readyBeforeEntering, waitS: approach.waitS, holes: approach.holeFrames, maxGap: approach.maxGap, revealLinks: approach.revealLinks, maxRevealGap: approach.maxRevealGap },
+      console.log(id, pass, JSON.stringify({ approach: { at: near, ready: approach.readyBeforeEntering, memoryWait: approach.waitingForMemory, waitS: approach.waitS, holes: approach.holeFrames, maxGap: approach.maxGap, revealLinks: approach.revealLinks, maxRevealGap: approach.maxRevealGap },
         enter: { waitS: enter.waitS, inside: enter.insideUnready, holes: enter.holeFrames, maxGap: enter.maxGap, links: enter.links, revealLinks: enter.revealLinks, mem: enter.mem.processMB },
         leave: pass === 'first' ? { unloaded: R.leave.unloaded, mem: R.leave.mem.processMB } : undefined }));
       if (OUT) fs.writeFileSync(OUT, JSON.stringify(Object.assign(out, { logs: logs.slice(-300) }), null, 1));

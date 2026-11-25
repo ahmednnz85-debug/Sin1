@@ -189,7 +189,9 @@
     }
     try { console.info('[palace load] deferred-end', n, 'chain', Math.round(performance.now() - tChain) + 'ms'); } catch (_) {}
   }
-  function withMeshopt(go) {
+  function withMeshopt(go0) {
+    // Decode in background workers when palaceInterior enabled them.
+    const go = d => go0(d && window.__sinMeshoptWorkers ? window.__sinMeshoptWorkers(d) : d);
     const D = window.MeshoptDecoder;
     if (D && D.ready) { D.ready.then(() => go(D), () => go(null)); return; }
     setTimeout(() => {

@@ -820,14 +820,27 @@
     })();
   }
 
+  // Meshopt buffers are decoded by two background workers (the same WASM
+  // decoder, the same bytes): a large room GLB no longer blocks the main
+  // thread while it is decompressed during the room's preparation.
+  function meshoptWorkers(D) {
+    try {
+      if (D && !D.__sinWorkers && typeof D.useWorkers === 'function' && typeof Worker === 'function' && typeof Blob === 'function') {
+        D.useWorkers(2);
+        D.__sinWorkers = true;
+      }
+    } catch (_) {}
+    return D;
+  }
+  window.__sinMeshoptWorkers = meshoptWorkers;
   function installDecoder(buf) {
-    if (window.MeshoptDecoder && MeshoptDecoder.ready) return MeshoptDecoder.ready.then(function () { return MeshoptDecoder; });
+    if (window.MeshoptDecoder && MeshoptDecoder.ready) return MeshoptDecoder.ready.then(function () { return meshoptWorkers(MeshoptDecoder); });
     const code = new TextDecoder().decode(new Uint8Array(buf));
     (0, eval)(code);
     if (!window.MeshoptDecoder) throw new Error('MeshoptDecoder لم يعمل على هذا المتصفح');
     return MeshoptDecoder.ready.then(function () {
       if (MeshoptDecoder.supported === false) throw new Error('MeshoptDecoder غير مدعوم على هذا الجهاز');
-      return MeshoptDecoder;
+      return meshoptWorkers(MeshoptDecoder);
     });
   }
 
