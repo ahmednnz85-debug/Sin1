@@ -342,8 +342,8 @@
     P.shafts.push({ from: [A.TURN - 0.6, turnY + 8.35, -0.8], to: [A.TURN + 0.6, turnY - 0.1, 0.4], r0: 0.55, r1: 1.5, color: 0x9fb8ff, power: 0.8 });
     P.shafts.push({ from: at(F2, 0.5, 8.35, 0.6), to: at(F2, 0.58, -0.2, -0.4), r0: 0.35, r1: 1.05, color: 0x93adff, power: 0.65 });
     P.lights = [
-      { type: 'point', color: 0xffcf9e, intensity: 5.0, distance: 24, decay: 1.4, pos: at(F1, 0.04, 4.2, 0.6), warm: 1 },
-      { type: 'point', color: 0xffd2a8, intensity: 3.2, distance: 18, decay: 1.4, pos: at(F1, 0.3, 3.4, -1.2), warm: 1 },
+      { type: 'point', color: 0xffd8b0, intensity: 2.9, distance: 24, decay: 1.4, pos: at(F1, 0.04, 4.2, 0.6), warm: 1 },
+      { type: 'point', color: 0xffdcbc, intensity: 2.6, distance: 18, decay: 1.4, pos: at(F1, 0.3, 3.4, -1.2), warm: 1 },
       { type: 'spot', color: 0xe6ebff, intensity: 6.5, distance: 22, decay: 1.0, angle: 0.3, penumbra: 0.65, pos: P.shafts[0].from, target: P.shafts[0].to, shadow: true },
       { type: 'spot', color: 0xd2dcff, intensity: 5.0, distance: 20, decay: 1.0, angle: 0.28, penumbra: 0.65, pos: P.shafts[1].from, target: P.shafts[1].to },
       { type: 'spot', color: 0x7f9dff, intensity: 2.6, distance: 15, decay: 1.1, angle: 0.62, penumbra: 0.6, pos: [A.TURN - 1.6, turnY + 6.2, 0.4], target: [east, turnY + 3.0, -0.2] },
@@ -835,7 +835,7 @@
     // Near-neutral light: the reference keeps the stone's own ochre ratio,
     // so the warmth comes from the albedo, not from orange light.
     const warmFog = new THREE.Color(0x5b4b3e), coldFog = new THREE.Color(0x2b3850);
-    const hemiWarm = new THREE.Color(0xc4bab0), hemiCold = new THREE.Color(0x8696bd), groundWarm = new THREE.Color(0xa08a76), groundCold = new THREE.Color(0x5a6079);
+    const hemiWarm = new THREE.Color(0xbcbcbc), hemiCold = new THREE.Color(0x8696bd), groundWarm = new THREE.Color(0x9c9082), groundCold = new THREE.Color(0x5a6079);
     function progress(u, v) {
       const F1 = P.F1, F2 = P.F2;
       if (u <= F1.b && Math.abs(v) <= F1.bound + 0.5) return Math.max(0, (u - F1.a) / (F1.b - F1.a)) * 0.55;
