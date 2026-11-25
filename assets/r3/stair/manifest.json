@@ -1,0 +1,450 @@
+{
+ "source": {
+  "tiles": "assets/خامات درج السنين.JPG",
+  "reliefs": "assets/نقوش درج السنين .JPG"
+ },
+ "tiles": {
+  "ashlar_wall": {
+   "albedo": {
+    "file": "assets/r3/stair/ashlar_wall_albedo.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 64643
+   },
+   "normal": {
+    "file": "assets/r3/stair/ashlar_wall_normal.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 267739
+   },
+   "orm": {
+    "file": "assets/r3/stair/ashlar_wall_orm.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 58733
+   },
+   "sheet": [
+    164,
+    27,
+    489,
+    351
+   ]
+  },
+  "frieze_band": {
+   "albedo": {
+    "file": "assets/r3/stair/frieze_band_albedo.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 71832
+   },
+   "normal": {
+    "file": "assets/r3/stair/frieze_band_normal.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 283744
+   },
+   "orm": {
+    "file": "assets/r3/stair/frieze_band_orm.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 68905
+   },
+   "sheet": [
+    562,
+    27,
+    887,
+    351
+   ]
+  },
+  "slab_landing": {
+   "albedo": {
+    "file": "assets/r3/stair/slab_landing_albedo.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 64771
+   },
+   "normal": {
+    "file": "assets/r3/stair/slab_landing_normal.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 263215
+   },
+   "orm": {
+    "file": "assets/r3/stair/slab_landing_orm.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 60298
+   },
+   "sheet": [
+    959,
+    27,
+    1284,
+    351
+   ]
+  },
+  "fluted_pier": {
+   "albedo": {
+    "file": "assets/r3/stair/fluted_pier_albedo.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 61708
+   },
+   "normal": {
+    "file": "assets/r3/stair/fluted_pier_normal.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 250714
+   },
+   "orm": {
+    "file": "assets/r3/stair/fluted_pier_orm.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 54146
+   },
+   "sheet": [
+    164,
+    377,
+    489,
+    701
+   ]
+  },
+  "eroded_vault": {
+   "albedo": {
+    "file": "assets/r3/stair/eroded_vault_albedo.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 64738
+   },
+   "normal": {
+    "file": "assets/r3/stair/eroded_vault_normal.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 287490
+   },
+   "orm": {
+    "file": "assets/r3/stair/eroded_vault_orm.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 60172
+   },
+   "sheet": [
+    562,
+    377,
+    887,
+    701
+   ]
+  },
+  "coursed_rib": {
+   "albedo": {
+    "file": "assets/r3/stair/coursed_rib_albedo.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 58757
+   },
+   "normal": {
+    "file": "assets/r3/stair/coursed_rib_normal.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 263379
+   },
+   "orm": {
+    "file": "assets/r3/stair/coursed_rib_orm.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 57244
+   },
+   "sheet": [
+    959,
+    377,
+    1284,
+    701
+   ]
+  },
+  "dust_rubble": {
+   "albedo": {
+    "file": "assets/r3/stair/dust_rubble_albedo.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 70432
+   },
+   "normal": {
+    "file": "assets/r3/stair/dust_rubble_normal.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 276525
+   },
+   "orm": {
+    "file": "assets/r3/stair/dust_rubble_orm.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 72502
+   },
+   "sheet": [
+    164,
+    727,
+    489,
+    1051
+   ]
+  },
+  "worn_tread": {
+   "albedo": {
+    "file": "assets/r3/stair/worn_tread_albedo.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 41125
+   },
+   "normal": {
+    "file": "assets/r3/stair/worn_tread_normal.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 236352
+   },
+   "orm": {
+    "file": "assets/r3/stair/worn_tread_orm.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 53348
+   },
+   "sheet": [
+    562,
+    727,
+    887,
+    1051
+   ]
+  },
+  "eroded_block": {
+   "albedo": {
+    "file": "assets/r3/stair/eroded_block_albedo.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 61171
+   },
+   "normal": {
+    "file": "assets/r3/stair/eroded_block_normal.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 288609
+   },
+   "orm": {
+    "file": "assets/r3/stair/eroded_block_orm.jpg",
+    "w": 512,
+    "h": 512,
+    "bytes": 63156
+   },
+   "sheet": [
+    959,
+    727,
+    1284,
+    1051
+   ]
+  }
+ },
+ "reliefs": {
+  "relief_sin_moon": {
+   "albedo": {
+    "file": "assets/r3/stair/relief_sin_moon_albedo.jpg",
+    "w": 1024,
+    "h": 512,
+    "bytes": 243664
+   },
+   "normal": {
+    "file": "assets/r3/stair/relief_sin_moon_normal.jpg",
+    "w": 1024,
+    "h": 512,
+    "bytes": 665577
+   },
+   "aspect": 2.0466,
+   "repeat": false,
+   "sheet": [
+    20,
+    17,
+    863,
+    433
+   ]
+  },
+  "relief_lamassu_court": {
+   "albedo": {
+    "file": "assets/r3/stair/relief_lamassu_court_albedo.jpg",
+    "w": 1024,
+    "h": 512,
+    "bytes": 244600
+   },
+   "normal": {
+    "file": "assets/r3/stair/relief_lamassu_court_normal.jpg",
+    "w": 1024,
+    "h": 512,
+    "bytes": 664325
+   },
+   "aspect": 2.0416,
+   "repeat": false,
+   "sheet": [
+    911,
+    16,
+    1754,
+    433
+   ]
+  },
+  "frieze_offerings": {
+   "albedo": {
+    "file": "assets/r3/stair/frieze_offerings_albedo.jpg",
+    "w": 1024,
+    "h": 224,
+    "bytes": 110060
+   },
+   "normal": {
+    "file": "assets/r3/stair/frieze_offerings_normal.jpg",
+    "w": 1024,
+    "h": 224,
+    "bytes": 299931
+   },
+   "aspect": 4.8125,
+   "repeat": false,
+   "sheet": [
+    13,
+    452,
+    868,
+    636
+   ]
+  },
+  "frieze_procession": {
+   "albedo": {
+    "file": "assets/r3/stair/frieze_procession_albedo.jpg",
+    "w": 1024,
+    "h": 224,
+    "bytes": 107953
+   },
+   "normal": {
+    "file": "assets/r3/stair/frieze_procession_normal.jpg",
+    "w": 1024,
+    "h": 224,
+    "bytes": 304300
+   },
+   "aspect": 4.8457,
+   "repeat": false,
+   "sheet": [
+    904,
+    451,
+    1760,
+    634
+   ]
+  },
+  "band_rosettes": {
+   "albedo": {
+    "file": "assets/r3/stair/band_rosettes_albedo.jpg",
+    "w": 1024,
+    "h": 144,
+    "bytes": 70276
+   },
+   "normal": {
+    "file": "assets/r3/stair/band_rosettes_normal.jpg",
+    "w": 1024,
+    "h": 144,
+    "bytes": 186372
+   },
+   "aspect": 6.9091,
+   "repeat": true,
+   "sheet": [
+    20,
+    666,
+    846,
+    784
+   ]
+  },
+  "band_cuneiform": {
+   "albedo": {
+    "file": "assets/r3/stair/band_cuneiform_albedo.jpg",
+    "w": 1024,
+    "h": 80,
+    "bytes": 38844
+   },
+   "normal": {
+    "file": "assets/r3/stair/band_cuneiform_normal.jpg",
+    "w": 1024,
+    "h": 80,
+    "bytes": 107275
+   },
+   "aspect": 14.1296,
+   "repeat": true,
+   "sheet": [
+    21,
+    805,
+    850,
+    867
+   ]
+  },
+  "moons": {
+   "albedo": {
+    "file": "assets/r3/stair/moons_albedo.png",
+    "w": 2048,
+    "h": 256,
+    "bytes": 456707
+   },
+   "normal": {
+    "file": "assets/r3/stair/moons_normal.jpg",
+    "w": 2048,
+    "h": 256,
+    "bytes": 230180
+   },
+   "pieces": [
+    [
+     0.01416,
+     0.01562,
+     0.11084,
+     0.98438,
+     0.7984
+    ],
+    [
+     0.14502,
+     0.01953,
+     0.22949,
+     0.98438,
+     0.7004
+    ],
+    [
+     0.2666,
+     0.01562,
+     0.3584,
+     0.98438,
+     0.7581
+    ],
+    [
+     0.39795,
+     0.01562,
+     0.47656,
+     0.98438,
+     0.6492
+    ],
+    [
+     0.51514,
+     0.01562,
+     0.60938,
+     0.98438,
+     0.7782
+    ],
+    [
+     0.62744,
+     0.01562,
+     0.74707,
+     0.98438,
+     0.9879
+    ],
+    [
+     0.76758,
+     0.01953,
+     0.85742,
+     0.98438,
+     0.7449
+    ],
+    [
+     0.89502,
+     0.01562,
+     0.97998,
+     0.98438,
+     0.7016
+    ]
+   ],
+   "note": "piece 0 is the large crescent, then the phases left to right; uv = [u0, v0, u1, v1, aspect]"
+  }
+ },
+ "bytes": 7255512
+}
