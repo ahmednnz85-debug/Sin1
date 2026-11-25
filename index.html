@@ -218,6 +218,9 @@ body.lunar-cinematic #touch{pointer-events:none}
 
 
 
+<!-- Temporary developer hub (dev-hub.js): remove these two tags to remove it. -->
+<script type="text/plain" data-legacy-script data-src="dev-hub.js?v=devhub1"></script>
+<script type="text/plain" data-legacy-script data-src="dev-hub-areas.js?v=devhub1"></script>
 <script type="text/plain" data-legacy-script data-src="device-profile.js?v=20261112ios6"></script>
   <script type="text/plain" data-legacy-script data-src="process-memory.js?v=20261113c3"></script>
   <script type="text/plain" data-legacy-script data-src="light-rig.js?v=20261125-rig3"></script>
@@ -1961,7 +1964,9 @@ if(!window.__sinCityReleased&&sky){sky.position.copy(camera.position);updateSkyl
   if(!window.__sinCityReleased&&sun&&sun.target){sun.target.position.set(0,0,93);sun.position.set(0,0,93).addScaledVector(SUN,80);sun.target.updateMatrixWorld();}
   if(window.__sinTraceOn)__sinTrace('pre-SinGfx.update');if(window.SinGfx)SinGfx.update(dt,{babylon:skyTransition.started,courtyard:hp.z>PL_Z0+4&&!isInteriorNow()&&!window.__sinEntryBlackout&&!(scene.userData&&scene.userData.cityReleased),running:!!run&&moving&&!window.__sinEntryBlackout});if(window.__sinTraceOn)__sinTrace('SinGfx.update');
   if(!window.__sinEntryBlackout&&!window.PalaceInterior?.inR3()){if(window.__sinTraceOn)__sinTrace('pre-updateDust');updateDust(tAcc);if(window.__sinTraceOn)__sinTrace('updateDust');updateWater(tAcc);if(window.__sinTraceOn)__sinTrace('updateWater');if(!(window.PalaceInterior&&PalaceInterior.ownsGround&&PalaceInterior.ownsGround()))updateExtras();if(window.__sinTraceOn)__sinTrace('updateExtras');}}if(window.__sinTraceOn)__sinTrace('sim-loop-done steps-done');if(window.PalaceInterior&&PalaceInterior.holdCull)PalaceInterior.holdCull(scene,heroRoot);if(window.__sinTraceOn)__sinTrace('holdCull');const palaceState=window.PalaceInterior&&PalaceInterior.state?PalaceInterior.state():'';if(palaceState!=='FADING_OUT'&&palaceState!=='LOADING'&&palaceState!=='SETUP'&&palaceState!=='FAILED'&&palaceState!=='REVEAL'){if(palaceState==='DONE'&&!window.__sinFirstPresentLogged){window.__sinFirstPresentLogged=true;window.__sinPresentFrames=0;const _tP=performance.now();try{console.info('[palace load] first-present-begin');}catch(_e){}try{if(renderer.info&&renderer.info.reset)renderer.info.reset();}catch(_e){}renderer.render(scene,camera);try{const _inf=renderer.info&&renderer.info.render||{};console.info('[palace load] first-present-end',Math.round(performance.now()-_tP)+'ms','calls',_inf.calls||0,'tris',_inf.triangles||0);}catch(_e){}}else{renderer.render(scene,camera);if(palaceState==='DONE'){window.__sinPresentFrames=(window.__sinPresentFrames||0)+1;if(window.__sinPresentFrames>=2)window.__sinTraceOn=false;if(window.__sinPresentFrames===12){try{const _inf=renderer.info&&renderer.info.render||{};console.info('[palace load] steady-present','calls',_inf.calls||0,'tris',_inf.triangles||0);}catch(_e){}}}}}}catch(e){lunar.cancel();console.error('loop',e);}}
-init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);});
+// Developer hub (temporary): without dev-hub.js this is the original init() call.
+const startGame=()=>init().catch(e=>{$('st').textContent='حدث خطأ أثناء التحميل';showErr(e);});
+if(window.SinDevHub&&SinDevHub.enabled){SinDevHub.bind({hero:()=>heroRoot,camera,scene,renderer,phase:()=>state,start:()=>$('go').click(),blocked:(x,z)=>blocked(x,z),ground:(x,z,y)=>palGround(x,z,y),setFacing:v=>{heroYaw=v;yaw=v;ctrlYaw=v;ctrlStick=null;},yaws:()=>[heroYaw,yaw,ctrlYaw],setYaws:a=>{heroYaw=a[0];yaw=a[1];ctrlYaw=a[2];}});SinDevHub.boot(startGame);}else startGame();
 window.__r3LegacyResources=()=>[ground,panel,slabT,panelT,outdoorEnvironmentTarget];
 window.__retireRoyalDoor=()=>{
   unregisterRoyalDoor?.();
