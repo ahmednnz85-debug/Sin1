@@ -5435,7 +5435,8 @@
         if (!material) return;
         keys.forEach(function (key) {
           const texture = material[key];
-          if (!texture || seen.has(texture)) return;
+          // A compressed twin (ktx2-textures.js) is already encoded at the K4 size.
+          if (!texture || seen.has(texture) || texture.isCompressedTexture) return;
           seen.add(texture);
           const image = texture.image || (texture.source && texture.source.data);
           const width = image && (image.naturalWidth || image.videoWidth || image.width || 0);

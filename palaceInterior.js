@@ -497,7 +497,8 @@
     if (!tex) return tex;
     tex.encoding = THREE.sRGBEncoding;
     tex.anisotropy = aniso.v;
-    tex.generateMipmaps = true;
+    // A GPU-compressed twin carries its own mip levels.
+    tex.generateMipmaps = !tex.isCompressedTexture;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
     // Never bump version if the CPU image is already gone — that would
@@ -844,7 +845,28 @@
     });
   }
 
+  // Phones with ASTC: the hall surface's pre-encoded twin (ktx2-textures.js)
+  // replaces the decoded image — same picture, same size, a quarter of the
+  // GPU memory. It was encoded upside down, so flipY stays off.
   function textureFromBytes(buf, name, linear) {
+    const twin = window.SinKtx && SinKtx.textureFromBytes(buf, linear);
+    if (twin) {
+      return twin.then(function (tex) {
+        if (!tex) return decodeTextureBytes(buf, name, linear);
+        tex.flipY = false;
+        tex.colorSpace = linear ? THREE.NoColorSpace : THREE.SRGBColorSpace;
+        tex.anisotropy = aniso.v;
+        tex.generateMipmaps = false;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.name = tex.name || name;
+        keepHallTex(tex);
+        return tex;
+      });
+    }
+    return decodeTextureBytes(buf, name, linear);
+  }
+  function decodeTextureBytes(buf, name, linear) {
     const mime = /\.png$/i.test(name) ? 'image/png' : /\.jpe?g$/i.test(name) ? 'image/jpeg' : 'image/webp';
     const blob = new Blob([buf], { type: mime });
     const url = URL.createObjectURL(blob);

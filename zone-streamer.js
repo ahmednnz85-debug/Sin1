@@ -318,14 +318,41 @@
       } catch (_) {}
       return { processMB: 0, gpuMB: 0, cpuMB: 0 };
     }
+    // Cost of a room: what it measured the last time it was prepared (process
+    // estimate after its reveal minus before its start, taken only when no
+    // other room loaded or unloaded meanwhile), else the authored estimate.
     function incoming(rec) {
       const s = (rec && rec.spec) || {};
       if (s.estimateIncoming) return s.estimateIncoming(usage());
-      return {
+      const est = {
         processMB: s.estProcessMB != null ? +s.estProcessMB : o.defaultZoneProcessMB,
         gpuMB: s.estGpuMB != null ? +s.estGpuMB : o.defaultZoneGpuMB,
         cpuMB: s.estCpuMB != null ? +s.estCpuMB : o.defaultZoneCpuMB
       };
+      const m = rec && rec.measured;
+      if (!m) return est;
+      // Never trust a measurement below a quarter of the authored figure.
+      return {
+        processMB: Math.max(m.processMB * 1.1, est.processMB * 0.25),
+        gpuMB: Math.max(m.gpuMB * 1.1, est.gpuMB * 0.25),
+        cpuMB: est.cpuMB
+      };
+    }
+    function measureStart(rec) {
+      const u = usage();
+      rec._measure = { t: sampleTime(), processMB: u.processMB, gpuMB: u.gpuMB, evictions: stats.evictions, reveals: stats.reveals, starts: stats.starts || 0 };
+    }
+    // Called from update(): once a sample newer than the reveal exists.
+    function measureFinish(rec) {
+      const a = rec._measure;
+      if (!a || !rec.revealedWall) return;
+      const t = sampleTime();
+      if (!t || t < rec.revealedWall + 400) return;
+      rec._measure = null;
+      if (stats.evictions !== a.evictions || stats.reveals !== a.reveals + 1 || (stats.starts || 0) !== a.starts + 1) return;
+      const u = usage();
+      const dp = u.processMB - a.processMB, dg = u.gpuMB - a.gpuMB;
+      if (dp > 1 && dg >= 0) rec.measured = { processMB: dp, gpuMB: dg, at: Date.now() };
     }
     // Memory that is committed but not yet in the last usage sample: rooms
     // still being prepared, and rooms revealed after that sample was taken
@@ -709,6 +736,7 @@
       rec.timing={ waitMs:Math.max(0,waiting), assetsMs:0, uploadMs:0, compileMs:0, totalMs:0 };
       rec.firstWait=0;
       rec.state = 'loading'; rec.startedAt = t; rec.done = false; rec.failed = null; rec.pending.clear(); rec.loadTicks = 0;
+      measureStart(rec); stats.starts = (stats.starts || 0) + 1;
       note('load', rec.id + ' stream start');
       try { rec.spec.load(apiFor(rec)); } catch (e) { rec.failed = e; rec.done = true; console.warn('zone load failed', rec.id, e); }
     }
@@ -1161,7 +1189,7 @@
         if (t - rec.leftAt >= linger) { evict(rec, level === 'critical' ? 'critical memory' : 'beyond release radius'); evicted++; }
       });
       zones.forEach(function (rec) {
-        if (rec.state === 'ready') return;
+        if (rec.state === 'ready') { if (rec._measure) measureFinish(rec); return; }
         const gg = group(rec);
         if (gg && !gg.userData.dressReady) hideZone(rec, gg);
       });
@@ -1426,7 +1454,7 @@
         overBudget: wouldExceed({ processMB: 0, gpuMB: 0, cpuMB: 0 }),
         stats: Object.assign({}, stats)
       };
-      zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected, deferred: !!r.deferred, timing:r.timing&&Object.fromEntries(
+      zones.forEach(r => { out.zones[r.id] = { state: r.state, hops: r.hops, pending: r.pending.size, protected: !!r.protected, deferred: !!r.deferred, measuredMB: r.measured ? Math.round(r.measured.processMB) : null, timing:r.timing&&Object.fromEntries(
           Object.entries(r.timing).map(([stage,ms])=>[stage,Math.round(ms)])) }; });
       return out;
     }

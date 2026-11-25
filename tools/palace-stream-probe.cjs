@@ -43,7 +43,8 @@ const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/6
 const FAR = { L: 'K4', T: 'L3', K: 'T5' };      // a room at the other end of the palace, per wing
 
 const INSTRUMENT = `(() => {
-  try { Object.defineProperty(Performance.prototype, 'memory', { get() { return undefined; }, configurable: true }); } catch (e) {}
+  // iPhone: Safari has no performance.memory and reports navigator.platform 'iPhone'.
+  try { Object.defineProperty(Performance.prototype, 'memory', { get() { return undefined; }, configurable: true }); Object.defineProperty(Navigator.prototype, 'platform', { get() { return 'iPhone'; }, configurable: true }); } catch (e) {}
   const F = window.__probe = { rows: [], mark: null };
   let cur = null; const reset = () => { cur = { link: 0, q: 0, qMs: 0, buf: 0, tex: 0, texMs: 0 }; }; reset();
   const p = WebGL2RenderingContext.prototype;
