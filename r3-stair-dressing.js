@@ -563,7 +563,7 @@
     fx.add(dust);
 
     // ---- load: stone sets, reliefs, GLB ----------------------------------
-    const cost = { textures: 0, textureMiB: 0, glbMiB: 0, triangles: 0, meshes: 0, drawCalls: 0, ms: 0 };
+    const cost = { textures: 0, textureMiB: 0, glbMiB: 0, triangles: 0, meshes: 0, ms: 0 };
     const report = { cost, layout: P.layout, warnings: [] };
     async function load(renderer) {
       const t0 = performance.now();

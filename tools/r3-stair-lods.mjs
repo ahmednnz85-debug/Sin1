@@ -64,7 +64,8 @@ for (const node of root.listNodes()) {
   if (!TARGETS[node.getName()]) { node.dispose(); continue; }
   node.setName(node.getName() + '_LOD1');
 }
-await doc.transform(prune(), dequantize(), weld());
+// keepAttributes: UVs and tangents must survive although textures are removed here.
+await doc.transform(prune({ keepAttributes: true }), dequantize(), weld());
 const report = {};
 for (const node of root.listNodes()) {
   const name = node.getName().replace(/_LOD1$/, '');
@@ -81,7 +82,7 @@ for (const node of root.listNodes()) {
   }
   report[name] = { source: a, lod1: b };
 }
-await doc.transform(prune(), quantize(), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+await doc.transform(prune({ keepAttributes: true }), quantize(), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
 await io.write(out, doc);
 console.log(JSON.stringify(report, null, 1));
 console.log('wrote', path.relative(ROOT, out), (fs.statSync(out).size / 1024).toFixed(0) + ' KiB');
