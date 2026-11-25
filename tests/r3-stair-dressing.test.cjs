@@ -17,7 +17,7 @@ async function mount() {
   const ctx = vm.createContext({ window, console, performance, Math, Set, Map, Promise, JSON, Object, Array, Float32Array, Uint8Array, Error });
   for (const f of ['r3-stair-dressing.js', 'r3-sealed-zone.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
   const passage = { position: [-12.881019386649129, 0, 9.200728133320807] };
-  const hall = { wallThickness: 0.9, alcoveDepth: 2.07 };
+  const hall = { wallThickness: 2.5643261702223548, alcoveDepth: 2.116167470663785 };
   const origin = new THREE.Vector3(1, 3.75, 183.66);
   const stage = window.SinR3SealedZone.mount(THREE, passage, hall, origin);
   return { THREE, stage, window, passage };
@@ -30,10 +30,12 @@ test('R3-01 dressing: plan, walkable path, collisions', { skip }, async () => {
   assert.ok(plan.items >= 30 && plan.roots >= 10, JSON.stringify(plan));
   assert.ok(stage.cost.geometryBytes <= stage.budget.geometryBytes);
   assert.ok(stage.cost.batches <= stage.budget.batches);
+  assert.ok(stage.budget.stair && stage.budget.stair.textureMiB >= 40);
   // Walk the centre line of both flights and the landings in 0.25 m steps:
   // nothing may block Sîn (capsule 0.32 m) on the authored route.
   const x = u => passage.position[0] - u, z = v => passage.position[2] + v;
-  const route = [[4.0, 0], [29.8, 0], [33.9, 0], [33.9, 19.8], [33.9, 23.8], [38.2, 23.8]];
+  const u0 = passage.position[0] - stage.spawn[0];
+  const route = [[u0, 0], [29.8, 0], [33.9, 0], [33.9, 19.8], [33.9, 23.8], [38.2, 23.8]];
   let y = 0, steps = 0;
   for (let i = 0; i < route.length - 1; i++) {
     const [u0, v0] = route[i], [u1, v1] = route[i + 1];
@@ -59,7 +61,7 @@ test('R3-01 dressing: plan, walkable path, collisions', { skip }, async () => {
     }
   };
   for (const t of [-1.4, 1.4]) {
-    lane(Array.from({ length: 100 }, (_, i) => [4.5 + i * 0.25, t, 0]));
+    lane(Array.from({ length: 94 }, (_, i) => [u0 + 0.3 + i * 0.25, t, 0]));
     lane(Array.from({ length: 64 }, (_, i) => [33.9 + t, 4 + i * 0.25, -9]));
   }
   // Lights and shafts exist; fog/light blending is bounded.

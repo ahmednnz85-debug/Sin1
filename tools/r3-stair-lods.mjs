@@ -24,7 +24,7 @@ const req = createRequire(deps ? path.join(deps, 'noop.js') : import.meta.url);
 const load = name => import(pathToFileURL(req.resolve(name)).href);
 const { NodeIO } = await load('@gltf-transform/core');
 const { ALL_EXTENSIONS } = await load('@gltf-transform/extensions');
-const { dequantize, weld, quantize, meshopt, prune, dedup } = await load('@gltf-transform/functions');
+const { dequantize, weld, quantize, meshopt, prune } = await load('@gltf-transform/functions');
 const { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } = await load('meshoptimizer');
 
 // node -> [ratio, error]: kept detail is decided per asset by its role.
@@ -38,7 +38,15 @@ const TARGETS = {
   Hanging_Roots_Wide_Long: [0.35, 0.01],
   Hanging_Roots_Central_Tapered: [0.35, 0.01],
   Hanging_Roots_Wide_Forked: [0.35, 0.01],
-  Hanging_Roots_Narrow: [0.35, 0.01]
+  Hanging_Roots_Narrow: [0.35, 0.01],
+  Fluted_Stone_Column_Tall: [0.3, 0.004],
+  Fluted_Stone_Column_Short: [0.3, 0.004],
+  Stone_Balustrade_With_Carved_Plinth: [0.35, 0.004],
+  Collapsed_Masonry_Rubble_Cluster: [0.35, 0.006],
+  Carved_Rosette_Frieze_Block: [0.4, 0.004],
+  Inscribed_Broken_Column_Drum: [0.4, 0.004],
+  Fractured_Inscribed_Slab_Large: [0.4, 0.005],
+  Fractured_Inscribed_Slab_Small: [0.45, 0.005]
 };
 
 await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready, MeshoptSimplifier.ready]);
@@ -73,7 +81,7 @@ for (const node of root.listNodes()) {
   }
   report[name] = { source: a, lod1: b };
 }
-await doc.transform(dedup(), prune(), quantize(), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+await doc.transform(prune(), quantize(), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
 await io.write(out, doc);
 console.log(JSON.stringify(report, null, 1));
 console.log('wrote', path.relative(ROOT, out), (fs.statSync(out).size / 1024).toFixed(0) + ' KiB');

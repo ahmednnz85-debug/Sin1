@@ -11,7 +11,14 @@
   const HALL_ENTRY = HALL_U - CHORD, SIDE_EXIT = HALL_V - CHORD;
   const TAU = Math.PI * 2, GALLERY_INNER = 16, STAIR_INNER = 12;
   const SEAL = 'passage-L0';
-  const budget = Object.freeze({ geometryBytes: 2 * 1024 * 1024, textures: 0, batches: 40 });
+  // Architecture budget (generated batches) plus the R3-01 dressing budget,
+  // re-evaluated on the final assets: stone sets / reliefs as decoded RGBA,
+  // the props GLB and its LOD file, and the in-view render envelope measured
+  // on the tour (lamassu at full detail beside the player included).
+  const budget = Object.freeze({
+    geometryBytes: 2 * 1024 * 1024, textures: 0, batches: 40,
+    stair: Object.freeze({ textureMiB: 48, glbMiB: 24, drawCalls: 110, trianglesInView: 900000 })
+  });
 
   function mount(THREE, passage, hall, origin) {
     const root = new THREE.Group();
@@ -297,7 +304,7 @@
       try {
         stairPlan = Stair.plan({
           THREE, group: parts[0].group, box, solidBox, collision, socket, floorAt: stairFloor,
-          tunnels: stairTunnels, arches: stairArches, alongU, alongV,
+          tunnels: stairTunnels, arches: stairArches, alongU, alongV, budget: budget.stair,
           start, flightStart, flightEnd, TURN, HALF, turnEnd, lowerTurn, HALL_ENTRY, HALL_V, GALLERY
         });
       } catch (error) {

@@ -69,7 +69,7 @@ if (qs.get('inspect') === '1') {
 } else {
   const R3 = window.SinR3SealedZone;
   const passage = { position: [-12.881019386649129, 0, 9.200728133320807] };
-  const hall = { wallThickness: +(qs.get('wt') || 0.9), alcoveDepth: +(qs.get('ad') || 2.07) };
+  const hall = { wallThickness: +(qs.get('wt') || 2.5643261702223548), alcoveDepth: +(qs.get('ad') || 2.116167470663785) };
   const origin = new THREE.Vector3(1, 3.75, 183.66);
   const stage = R3.mount(THREE, passage, hall, origin);
   const envelope = new THREE.Group();

@@ -107,13 +107,15 @@ const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/6
       // Keep the heading on the waypoint (small corrections only).
       const want = Math.atan2(-(u - p.u), (v - p.v));
       const err = Math.atan2(Math.sin(want - heading), Math.cos(want - heading));
-      if (Math.abs(err) > 0.06) { heading += err * 0.35; await page.evaluate(y => window.__tourFacing(y), heading); }
+      // Re-aim rarely and only far from the waypoint: every facing call
+      // resets the stick, and near the target small offsets read as big angles.
+      if (dist > 2.5 && guard % 8 === 0 && Math.abs(err) > 0.08) { heading += err * 0.5; await page.evaluate(y => window.__tourFacing(y), heading); }
     }
     await page.keyboard.up('KeyW');
     if (run) await page.keyboard.up('ShiftLeft');
     const seg = { name, run: !!run, from: [+p0.u.toFixed(2), +p0.v.toFixed(2)], to: [+p.u.toFixed(2), +p.v.toFixed(2), +p.y.toFixed(2)], wallSeconds: (Date.now() - t0) / 1000, mem: await mem() };
     segments.push(seg); console.log(JSON.stringify(seg));
-    if (!VIDEO) await page.screenshot({ path: path.join(OUT, String(segments.length).padStart(2, '0') + '-' + name + '.png') });
+    await page.screenshot({ path: path.join(OUT, String(segments.length).padStart(2, '0') + '-' + name + '.png') });
   }
   const tTour = Date.now();
   const gameT0 = await page.evaluate(() => performance.now());
@@ -133,6 +135,9 @@ const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/6
     callsMax: Math.max(...fr.map(f => f.calls)), callsMean: +(fr.reduce((a, f) => a + f.calls, 0) / fr.length).toFixed(1),
     trisMax: Math.max(...fr.map(f => f.tris)), trisMean: Math.round(fr.reduce((a, f) => a + f.tris, 0) / fr.length),
     wallFrameMsMean: +(fr.reduce((a, f) => a + f.dt, 0) / fr.length).toFixed(1) };
+  // Game time advances min(50 ms, frame gap) per frame: the video speed-up.
+  const wall = fr.reduce((a, f) => a + f.dt, 0), game = fr.reduce((a, f) => a + Math.min(50, f.dt), 0);
+  tour.videoSpeedup = +(wall / game).toFixed(3);
   tour.track = fr.filter((f, i) => i % 6 === 0).map(f => [f.u, f.v, f.y, f.calls, f.tris]);
   tour.after = await mem();
   tour.requestsAfterMount = requests.filter(r => r.t > tEnter && !/^data:|jsdelivr/.test(r.url)).map(r => r.url).slice(0, 80);

@@ -23,7 +23,7 @@
   const SET_ROUGH = { worn_tread: 0.93, slab_landing: 0.94, ashlar_wall: 0.95, eroded_vault: 0.97, coursed_rib: 0.95, fluted_pier: 0.95, eroded_block: 0.96, frieze_band: 0.95, dust_rubble: 1 };
   // Albedo gain per set: the sheet's tread flags are darker than the dusty
   // treads of the reference picture.
-  const SET_GAIN = { worn_tread: 1.6, slab_landing: 1.12, eroded_vault: 0.92 };
+  const SET_GAIN = { worn_tread: 1.85, slab_landing: 1.12, eroded_vault: 0.92 };
   const SET_NORMAL = { worn_tread: 1.15, slab_landing: 1.0, ashlar_wall: 1.25, eroded_vault: 1.1, coursed_rib: 1.2, fluted_pier: 1.2, eroded_block: 1.2, frieze_band: 1.3 };
   const MAP_RES = 0.2; // metres per stage-map texel
 
@@ -342,10 +342,10 @@
     P.shafts.push({ from: [A.TURN - 0.6, turnY + 8.35, -0.8], to: [A.TURN + 0.6, turnY - 0.1, 0.4], r0: 0.55, r1: 1.5, color: 0x9fb8ff, power: 0.8 });
     P.shafts.push({ from: at(F2, 0.5, 8.35, 0.6), to: at(F2, 0.58, -0.2, -0.4), r0: 0.35, r1: 1.05, color: 0x93adff, power: 0.65 });
     P.lights = [
-      { type: 'point', color: 0xffb27a, intensity: 3.2, distance: 22, decay: 1.3, pos: at(F1, 0.0, 4.6, 0.8), warm: 1 },
-      { type: 'point', color: 0xf0a878, intensity: 1.8, distance: 16, decay: 1.3, pos: at(F1, 0.32, 3.6, -1.4), warm: 1 },
-      { type: 'spot', color: 0xe6ebff, intensity: 4.2, distance: 22, decay: 1.0, angle: 0.3, penumbra: 0.65, pos: P.shafts[0].from, target: P.shafts[0].to, shadow: true },
-      { type: 'spot', color: 0xd2dcff, intensity: 3.2, distance: 20, decay: 1.0, angle: 0.28, penumbra: 0.65, pos: P.shafts[1].from, target: P.shafts[1].to },
+      { type: 'point', color: 0xffcf9e, intensity: 5.0, distance: 24, decay: 1.4, pos: at(F1, 0.04, 4.2, 0.6), warm: 1 },
+      { type: 'point', color: 0xffd2a8, intensity: 3.2, distance: 18, decay: 1.4, pos: at(F1, 0.3, 3.4, -1.2), warm: 1 },
+      { type: 'spot', color: 0xe6ebff, intensity: 6.5, distance: 22, decay: 1.0, angle: 0.3, penumbra: 0.65, pos: P.shafts[0].from, target: P.shafts[0].to, shadow: true },
+      { type: 'spot', color: 0xd2dcff, intensity: 5.0, distance: 20, decay: 1.0, angle: 0.28, penumbra: 0.65, pos: P.shafts[1].from, target: P.shafts[1].to },
       { type: 'spot', color: 0x7f9dff, intensity: 2.6, distance: 15, decay: 1.1, angle: 0.62, penumbra: 0.6, pos: [A.TURN - 1.6, turnY + 6.2, 0.4], target: [east, turnY + 3.0, -0.2] },
       { type: 'point', color: 0x7390e8, intensity: 3.0, distance: 20, decay: 1.2, pos: at(F2, 0.62, 3.6, 0), cold: 1 },
       { type: 'spot', color: 0x88a4ff, intensity: 3.0, distance: 16, decay: 1.0, angle: 0.7, penumbra: 0.6, pos: [A.TURN, lowY + 6.8, A.HALL_V - 1.5], target: [A.TURN, lowY + 2.6, A.HALL_V + A.HALF + 0.68] }
@@ -406,7 +406,7 @@
       const k = j * W + i, u = u0 + (i + 0.5) * MAP_RES, v = v0 + (j + 0.5) * MAP_RES, d = dist[k];
       const patch = noise(u * 0.55, v * 0.55) * 0.65 + noise(u * 1.7 + 9, v * 1.7) * 0.35;
       let dust = 0.95 * Math.exp(-d / 0.62) + 0.42 * Math.max(0, patch - 0.42);
-      if (steps[k]) dust *= 0.72; else dust += 0.08;
+      if (steps[k]) dust = dust * 0.8 + 0.2 + 0.25 * patch; else dust += 0.1;
       data[k * 4] = Math.round(255 * Math.min(1, dust));
       data[k * 4 + 1] = Math.round(255 * Math.min(1, Math.max(0, (heights[k] + 17) / 18)));
       data[k * 4 + 2] = Math.round(255 * Math.exp(-d / 0.38));
@@ -612,24 +612,50 @@
       group.traverse(o => { if (o.isMesh || o.isPoints) { cost.meshes++; const g = o.geometry; const n = (g.index ? g.index.count : g.attributes.position.count) / 3; if (o.isMesh) cost.triangles += n * (o.isInstancedMesh ? o.count : 1); } });
       cost.textureMiB = +cost.textureMiB.toFixed(1); cost.glbMiB = +cost.glbMiB.toFixed(1);
       cost.ms = Math.round(performance.now() - t0);
+      const B = P.A.budget;
+      if (B && (cost.textureMiB > B.textureMiB || cost.glbMiB > B.glbMiB)) report.warnings.push('stair dressing over budget');
       return cost;
     }
 
     function standard(params) { const m = new THREE.MeshStandardMaterial(params); owned.push(m); return m; }
     // Carved friezes: a relief image with its normal map, flush on the wall.
-    function buildPanels(T, manifest) {
-      const mats = {};
-      for (const p of P.panels) {
-        const t = T[p.tex], aspect = manifest.reliefs[p.tex].aspect;
-        const mat = mats[p.tex] || (mats[p.tex] = patchStone(THREE, standard({ map: t.map, normalMap: t.normal, roughness: 0.93, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 0.55, 0.12));
-        mat.normalScale.set(1.6, 1.6);
-        const h = p.w / aspect;
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(p.w, h), mat);
-        mesh.position.copy(toDress(p.u, p.y + h / 2, p.v));
-        mesh.rotation.y = yawZ(...p.face);
-        mesh.receiveShadow = true; mesh.name = 'Frieze_' + p.tex;
-        sector(p.u, p.v).add(mesh);
+    // Merged per texture and sector: one draw call each.
+    function mergeInto(groups, key, geo, matrix) {
+      const g = geo.clone().applyMatrix4(matrix); geo.dispose();
+      (groups[key] || (groups[key] = [])).push(g);
+    }
+    function flush(groups, material, name) {
+      for (const [key, list] of Object.entries(groups)) {
+        const [tex, where] = key.split('|');
+        const pos = [], nor = [], uv = [], index = []; let base = 0;
+        for (const g of list) {
+          pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); uv.push(...g.attributes.uv.array);
+          index.push(...Array.from(g.index.array, i => i + base)); base += g.attributes.position.count; g.dispose();
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        g.setIndex(index); g.computeBoundingSphere();
+        const mesh = new THREE.Mesh(g, material(tex)); mesh.name = name + tex; mesh.receiveShadow = true;
+        sectors[where].add(mesh);
       }
+    }
+    const placement = (u, y, v, face) => new THREE.Matrix4().compose(toDress(u, y, v),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawZ(...face)), new THREE.Vector3(1, 1, 1));
+    // Carved friezes: a relief image with its normal map, flush on the wall.
+    function buildPanels(T, manifest) {
+      const mats = {}, groups = {};
+      for (const p of P.panels) {
+        const h = p.w / manifest.reliefs[p.tex].aspect;
+        mergeInto(groups, p.tex + '|' + sectorOf(p.u, p.v), new THREE.PlaneGeometry(p.w, h), placement(p.u, p.y + h / 2, p.v, p.face));
+      }
+      flush(groups, tex => {
+        if (mats[tex]) return mats[tex];
+        const m = mats[tex] = patchStone(THREE, standard({ map: T[tex].map, normalMap: T[tex].normal, roughness: 0.93, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 0.55, 0.12);
+        m.normalScale.set(1.6, 1.6);
+        return m;
+      }, 'Frieze_');
     }
     // Sloped registers along both flights (cuneiform dado, rosette cornice).
     function buildBands(T, manifest) {
@@ -674,17 +700,15 @@
       const mat = patchStone(THREE, standard({ map, normalMap: normal, alphaTest: 0.5, roughness: 0.82, metalness: 0, emissive: 0x18306a, emissiveIntensity: 0.0, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), 0.3, 0.05);
       mat.normalScale.set(1.8, 1.8);
       const strong = mat.clone(); strong.onBeforeCompile = mat.onBeforeCompile; strong.customProgramCacheKey = mat.customProgramCacheKey; strong.emissiveIntensity = 0.22; owned.push(strong);
+      const groups = {};
       for (const d of P.decals) {
         const [u0, v0, u1, v1, aspect] = pieces[d.piece];
         const g = new THREE.PlaneGeometry(d.h * aspect, d.h);
         const uv = g.attributes.uv;
         for (let i = 0; i < uv.count; i++) uv.setXY(i, u0 + (u1 - u0) * uv.getX(i), v0 + (v1 - v0) * uv.getY(i));
-        const mesh = new THREE.Mesh(g, d.glow >= 1 ? strong : mat);
-        mesh.position.copy(toDress(d.u, d.y + d.h / 2, d.v));
-        mesh.rotation.y = yawZ(...d.face);
-        mesh.name = 'Moon_' + d.piece; mesh.receiveShadow = true;
-        sector(d.u, d.v).add(mesh);
+        mergeInto(groups, (d.glow >= 1 ? 'strong' : 'soft') + '|' + sectorOf(d.u, d.v), g, placement(d.u, d.y + d.h / 2, d.v, d.face));
       }
+      flush(groups, kind => kind === 'strong' ? strong : mat, 'Moons_');
     }
 
     async function loadGLB(renderer) {
@@ -753,7 +777,7 @@
         const shift = new THREE.Matrix4().makeTranslation(-c.x, -box.min.y, -c.z);
         s.levels[1].forEach(l => { l.matrix = shift.clone().multiply(l.world); });
       }
-      const LOD_AT = { Lamassu: 11, Relief: 9, Masonry_Archway: 15, Hanging_Roots: 8 };
+      const LOD_AT = { Lamassu: 11, Relief: 9, Masonry_Archway: 12, Hanging_Roots: 8, Fluted: 10, Stone_Balustrade: 9, Collapsed: 8, Carved_Rosette: 8, Inscribed_Broken: 7, Fractured: 7 };
       const lodDistance = name => { for (const [k, d] of Object.entries(LOD_AT)) if (name.startsWith(k)) return d; return 0; };
       const add = (name, position, quaternion, scale, opts = {}) => {
         const s = src[name]; if (!s) { report.warnings.push('missing ' + name); return null; }
@@ -773,7 +797,7 @@
           // Distance is measured in world units: scale by the instance size.
           holder = new THREE.LOD();
           holder.addLevel(level(s.levels[0]), 0);
-          holder.addLevel(level(s.levels[1]), far * Math.max(1, Math.abs(scale.x)));
+          holder.addLevel(level(s.levels[1]), far * Math.min(1.5, Math.max(1, Math.abs(scale.x))));
         } else holder = level(s.levels[0]);
         holder.name = name;
         holder.position.copy(position); holder.quaternion.copy(quaternion); holder.scale.copy(scale);
@@ -807,8 +831,11 @@
     // ---- per frame -------------------------------------------------------
     const scene = () => { let n = root; while (n.parent) n = n.parent; return n.isScene ? n : null; };
     let shared = null, fog = null, blend = 0, last = performance.now();
-    const warmFog = new THREE.Color(0x3b2b1f), coldFog = new THREE.Color(0x172238);
-    const hemiWarm = new THREE.Color(0x8c7a68), hemiCold = new THREE.Color(0x5d7096), groundWarm = new THREE.Color(0x7a5434), groundCold = new THREE.Color(0x3a3c4a);
+    const HEMI = 3.3;
+    // Near-neutral light: the reference keeps the stone's own ochre ratio,
+    // so the warmth comes from the albedo, not from orange light.
+    const warmFog = new THREE.Color(0x5b4b3e), coldFog = new THREE.Color(0x2b3850);
+    const hemiWarm = new THREE.Color(0xc4bab0), hemiCold = new THREE.Color(0x8696bd), groundWarm = new THREE.Color(0xa08a76), groundCold = new THREE.Color(0x5a6079);
     function progress(u, v) {
       const F1 = P.F1, F2 = P.F2;
       if (u <= F1.b && Math.abs(v) <= F1.bound + 0.5) return Math.max(0, (u - F1.a) / (F1.b - F1.a)) * 0.55;
@@ -835,7 +862,7 @@
       if (shared) for (const s of shared) {
         if (s.l.isHemisphereLight) {
           const cool = Math.min(1, Math.max(0, (p - 0.35) * 1.6));
-          s.l.intensity = s.i + (2.05 - s.i) * k;
+          s.l.intensity = s.i + (HEMI - s.i) * k;
           s.l.color.copy(s.c).lerp(hemiWarm.clone().lerp(hemiCold, cool), k);
           s.l.groundColor.copy(s.g).lerp(groundWarm.clone().lerp(groundCold, cool), k);
         } else {
