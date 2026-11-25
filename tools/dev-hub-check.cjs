@@ -122,7 +122,11 @@ async function direct(browser, levels) {
       await page.waitForTimeout(3000);
       // Walk a second forward with the controller: movement, camera, collisions.
       const a = await snapshot(page);
-      await page.keyboard.down('KeyW'); await page.waitForTimeout(2500); await page.keyboard.up('KeyW');
+      // Hold W for 40 rendered frames (game time is capped at 50 ms per frame,
+      // so software rendering plays slower than real time).
+      await page.keyboard.down('KeyW');
+      await page.evaluate(() => new Promise(r => { let k = 0; (function f() { if (++k >= 40) r(); else requestAnimationFrame(f); })(); }));
+      await page.keyboard.up('KeyW');
       await page.waitForTimeout(800);
       const b = await snapshot(page);
       await page.screenshot({ path: path.join(OUT, `level-${id}.png`) });

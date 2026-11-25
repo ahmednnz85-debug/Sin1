@@ -266,8 +266,33 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     if (!PalaceWings.teleport(id)) throw new Error('teleport ' + id);
     if (id !== 'Palace') {
       await waitFor(() => { const z = PalaceWings.zones && PalaceWings.zones().zones[id]; const s = z ? z.state : 'resident'; return s === 'ready' || s === 'resident' || s === 'failed'; }, 600000, 250);
+      stepInside(id);
     }
     await frames(4);
+  }
+  // The game's teleport stands in the doorway with the lens on the door
+  // leaf. Step in from the entrance toward the room centre (the framing of
+  // tools/palace-room-shots.cjs) to the first spot the wing colliders allow.
+  function stepInside(id) {
+    const S = PalaceWings.state, r = S.regions.find(x => x.id === id);
+    if (!r || !r.bbox) return;
+    const doors = (S.doors || []).filter(d => d.from === id || d.to === id);
+    const d = doors.find(x => /Palace|C|REAR|MP/.test(x.from === id ? x.to : x.from)) || doors[0];
+    const fx = d ? d.x : r.bbox.cx, fz = d ? d.z : r.bbox.z0, cx = r.bbox.cx, cz = r.bbox.cz;
+    let x = null, z = null;
+    for (const k of [0.55, 0.45, 0.65, 0.35, 0.75, 0.25]) {
+      const px = fx + (cx - fx) * k, pz = fz + (cz - fz) * k;
+      if (!PalaceWings.capsuleBlocked(px, pz, 0.5)) { x = px; z = pz; break; }
+    }
+    if (x == null) return;                 // keep the game's own teleport pose
+    const y = PalaceWings.floorAt(x, z) || 0, o = S.root.position, hero = game.hero(), cam = game.camera;
+    const yaw = Math.atan2(cx - fx, cz - fz);
+    hero.position.set(o.x + x, o.y + y, o.z + z);
+    face(yaw);
+    cam.position.set(hero.position.x - Math.sin(yaw) * 3.6, hero.position.y + 2.0, hero.position.z - Math.cos(yaw) * 3.6);
+    cam.lookAt(hero.position.x, hero.position.y + 1.3, hero.position.z);
+    if (root.PalaceInterior && PalaceInterior.constrainCamera) PalaceInterior.constrainCamera(cam, hero);
+    if (PalaceWings.resolveCamera) PalaceWings.resolveCamera(cam);
   }
   async function enterR3(a) {
     await hallReady();
