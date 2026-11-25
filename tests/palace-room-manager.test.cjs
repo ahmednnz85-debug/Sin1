@@ -181,6 +181,37 @@ test('streamer (metric): nearest room first; memory is made only from farther ro
   assert.ok(mb <= 650);
 });
 
+test('streamer (metric): a much nearer room takes over from a farther preparation still in its load step', () => {
+  // Tour on the phone profile: the hero reached the L2 corridor while L4
+  // (30 m away) was still loading its GLB; L2 (5 m) waited behind the
+  // one-load gate until L4 had finished loading.
+  const Z = require('../zone-streamer.js');
+  const s = Z.create({ processBudgetMB: 650, gpuBudgetMB: 0, cpuBudgetMB: 0, estimate: () => ({ processMB: 300, gpuMB: 0, cpuMB: 0 }) });
+  const started = [];
+  for (const id of ['L2', 'L4']) s.register({ id, requireComplete: true, serialPreparation: true, estProcessMB: 90, estGpuMB: 0, estCpuMB: 0, load() { started.push(id); } });
+  const view = rank => ({ metric: true, current: 'X', approach: new Set(rank.keys()), keep: new Set(rank.keys()), rank, visible: new Set() });
+  s.update(view(new Map([['L4', 20], ['L2', 30]])));
+  assert.equal(s.status('L4'), 'loading');
+  s.update(view(new Map([['L4', 30], ['L2', 5]])));
+  assert.equal(s.status('L4'), 'cold', 'the farther preparation is abandoned');
+  assert.equal(s.status('L2'), 'loading', 'the nearer room starts in the same frame');
+  // Only a much nearer room: 12 m vs 20 m is not worth restarting L4.
+  const t = Z.create({ processBudgetMB: 0 });
+  for (const id of ['A', 'B']) t.register({ id, requireComplete: true, serialPreparation: true, load() {} });
+  t.update(view(new Map([['A', 20], ['B', 30]])));
+  t.update(view(new Map([['A', 20], ['B', 12]])));
+  assert.equal(t.status('A'), 'loading');
+  assert.equal(t.status('B'), 'cold');
+  // A nearer room that could not fit anyway does not churn the farther one.
+  const u = Z.create({ processBudgetMB: 650, gpuBudgetMB: 0, cpuBudgetMB: 0, estimate: () => ({ processMB: 400, gpuMB: 0, cpuMB: 0 }) });
+  u.register({ id: 'A', requireComplete: true, serialPreparation: true, estProcessMB: 60, estGpuMB: 0, estCpuMB: 0, load() {} });
+  u.register({ id: 'B', requireComplete: true, serialPreparation: true, estProcessMB: 400, estGpuMB: 0, estCpuMB: 0, load() {} });
+  u.update(view(new Map([['A', 30], ['B', 40]])));
+  assert.equal(u.status('A'), 'loading');
+  u.update(view(new Map([['A', 30], ['B', 5]])));
+  assert.equal(u.status('A'), 'loading', 'B (400 MB) cannot fit even without A: A keeps going');
+});
+
 test('streamer (metric): a room beyond its release radius is unloaded after a short linger, never while drawn', () => {
   const Z = require('../zone-streamer.js');
   let t = 0; const real = performance.now.bind(performance); performance.now = () => t;

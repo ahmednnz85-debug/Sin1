@@ -603,39 +603,60 @@
       const c = committed(rec);
       return !wouldExceed({ processMB: extra.processMB + c.processMB, gpuMB: extra.gpuMB + c.gpuMB, cpuMB: extra.cpuMB + c.cpuMB }, !!rec.spec.serialPreparation);
     }
-    function canStartMetric(rec) {
-      const serial = rec.spec.serialPreparation;
-      if (serial) {
-        let busy = null;
-        zones.forEach(function (other) {
-          if (other !== rec && other.spec.serialPreparation &&
-            (other.state === 'loading' || other.state === 'uploading' || other.state === 'compiling')) busy = other;
-        });
-        // A speculative preparation yields when the hero is in, or about to
-        // reach, a room that is much nearer (its work restarts later).
-        // (A preparation is never on screen, so a door holding its room
-        // does not stop it from yielding: only finished rooms are held.)
-        if (busy && !busy.isCurrent && !busy.isDemand && !busy.visible &&
-          (rec.isCurrent || rec.isDemand || (rankOf(rec) < 24 && rankOf(rec) + 15 < rankOf(busy)))) {
-          evict(busy, rec.isCurrent ? 'yield-to-current' : 'yield-to-nearer');
-          stats.budgetEvictions++;
-          busy = null;
-        }
-        if (busy) return false;
+    // Resident / preparing rooms that may be unloaded to make memory for rec:
+    // never the current, demanded, on-screen or door-held ones, and (unless
+    // rec is where the hero is) only rooms farther than rec. Farthest first.
+    function victimsFor(rec, skip) {
+      const victims = [];
+      zones.forEach(function (r) {
+        if (r === rec || r === skip || r.state === 'cold' || r.state === 'failed') return;
+        if (r.isCurrent || r.isDemand || r.visible || r.retained) return;
+        if (rankOf(r) <= rankOf(rec) && !(rec.isCurrent || rec.isDemand)) return;
+        victims.push(r);
+      });
+      return victims.sort(function (a, b) { return rankOf(b) - rankOf(a); });
+    }
+    function freedBy(list) {
+      return list.reduce(function (sum, v) { const e = incoming(v); return { processMB: sum.processMB + e.processMB, gpuMB: sum.gpuMB + e.gpuMB, cpuMB: sum.cpuMB + e.cpuMB }; }, { processMB: 0, gpuMB: 0, cpuMB: 0 });
+    }
+    function busySerial(rec) {
+      let busy = null;
+      zones.forEach(function (other) {
+        if (other !== rec && other.spec.serialPreparation &&
+          (other.state === 'loading' || other.state === 'uploading' || other.state === 'compiling')) busy = other;
+      });
+      return busy;
+    }
+    // True when no serial preparation stands in rec's way (any that did has
+    // been abandoned for it). A speculative preparation yields when the hero
+    // is in, or about to reach, a room that is much nearer (its work
+    // restarts later) — at whatever step it is, including the GLB load
+    // itself. A nearer room that would still be waiting for memory does not
+    // abandon it (that would only churn the farther preparation every frame).
+    // (A preparation is never on screen, so a door holding its room does not
+    // stop it from yielding: only finished rooms are held.)
+    function yieldFor(rec) {
+      const busy = busySerial(rec);
+      if (!busy) return true;
+      if (busy.isCurrent || busy.isDemand || busy.visible) return false;
+      if (!(rec.isCurrent || rec.isDemand || (rankOf(rec) < 24 && rankOf(rec) + 15 < rankOf(busy)))) return false;
+      if (!rec.isCurrent && !rec.isDemand) {
+        const need = incoming(rec), freed = freedBy([busy].concat(victimsFor(rec, busy)));
+        if (!fitsWith({ processMB: need.processMB - freed.processMB, gpuMB: need.gpuMB - freed.gpuMB, cpuMB: need.cpuMB - freed.cpuMB }, rec)) return false;
       }
+      evict(busy, rec.isCurrent ? 'yield-to-current' : 'yield-to-nearer');
+      stats.budgetEvictions++;
+      return true;
+    }
+    function canStartMetric(rec) {
+      if (rec.spec.serialPreparation && !yieldFor(rec)) return false;
       const need = incoming(rec);
       if (!fitsWith(need, rec)) {
-        const victims = [];
-        zones.forEach(function (r) {
-          if (r === rec || r.state === 'cold' || r.state === 'failed') return;
-          if (r.isCurrent || r.isDemand || r.visible || r.retained) return;
-          if (rankOf(r) <= rankOf(rec) && !(rec.isCurrent || rec.isDemand)) return;
-          victims.push(r);
-        });
-        victims.sort(function (a, b) { return rankOf(b) - rankOf(a); });
+        const victims = victimsFor(rec);
         // Unload only when that actually makes room: dropping a farther room
         // that frees too little would just reload it a moment later (thrash).
-        const freed = victims.reduce(function (sum, v) { const e = incoming(v); return { processMB: sum.processMB + e.processMB, gpuMB: sum.gpuMB + e.gpuMB, cpuMB: 0 }; }, { processMB: 0, gpuMB: 0, cpuMB: 0 });
+        const freed = freedBy(victims);
+        freed.cpuMB = 0;
         const enough = fitsWith({ processMB: need.processMB - freed.processMB, gpuMB: need.gpuMB - freed.gpuMB, cpuMB: need.cpuMB }, rec);
         for (let i = 0; enough && i < victims.length && !fitsWith(need, rec); i++) {
           evict(victims[i], 'farther (' + Math.round(rankOf(victims[i])) + ' m > ' + Math.round(rankOf(rec)) + ' m)');
@@ -1165,9 +1186,13 @@
       });
       wanted.sort((a, b) => Number(b.id === view.demand) - Number(a.id === view.demand) ||
         rankOf(a) - rankOf(b) || (a.spec.priority - b.spec.priority));
-      let loading = 0;
-      zones.forEach(r => { if (r.state === 'loading') loading++; });
+      const countLoading = () => { let n = 0; zones.forEach(r => { if (r.state === 'loading') n++; }); return n; };
+      let loading = countLoading();
       wanted.forEach(function (rec, i) {
+        // The nearest wanted room does not wait for a farther speculative
+        // preparation to get through its load step (the one-load gate):
+        // wanted is sorted nearest first, so it decides before any other.
+        if (rec.state === 'cold' && loading >= o.maxConcurrentLoads && !rec.isCurrent && rec.spec.serialPreparation && busySerial(rec) && yieldFor(rec)) loading = countLoading();
         if (rec.state === 'cold' && (loading < o.maxConcurrentLoads || rec.isCurrent)) {
           if (canStartMetric(rec)) { start(rec, t); loading++; }
           else if (!rec.firstWait) rec.firstWait = t;
