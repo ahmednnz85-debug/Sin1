@@ -105,7 +105,8 @@ async function play(browser, disable) {
   await page.waitForFunction("document.getElementById('main-menu') && getComputedStyle(document.getElementById('main-menu')).display !== 'none'", null, { timeout: 1200000, polling: 1000 });
   const menuSeconds = (Date.now() - t0) / 1000;
   const state = await page.evaluate(() => ({ gate: !!document.getElementById('sin-dev-gate'), tool: !!document.getElementById('sin-dev-tool'), devSession: window.SinDevHub ? SinDevHub.devSession : null, hub: !!window.SinDevHub, enabled: window.SinDevHub ? SinDevHub.enabled : null, storagePatched: !!Storage.prototype.__sinDevIsolated }));
-  await page.click('#go');
+  // Busy software-GL frames make Playwright's actionability wait time out.
+  await page.evaluate(() => document.getElementById('go').click());
   await page.waitForTimeout(4000);
   const after = await snapshot(page);
   await page.screenshot({ path: path.join(OUT, (disable ? 'disabled' : 'play') + '-started.png') });
