@@ -1,0 +1,28 @@
+{
+  "source": "report.json",
+  "mode": "post-handoff scene observed during actual Developer Hub play-through",
+  "checks": {
+    "onlyRegisteredR3Sections": true
+  },
+  "sceneRoots": [
+    "SinHeroRoot",
+    "R3Stage"
+  ],
+  "observedGroupIds": [
+    "R3-01",
+    "R3-01",
+    "R3-02",
+    "R3-03"
+  ],
+  "uniquePlayableAreaIds": [
+    "R3-01",
+    "R3-02",
+    "R3-03"
+  ],
+  "registeredAreaIds": [
+    "R3-01",
+    "R3-02",
+    "R3-03"
+  ],
+  "note": "The first enumeration included the authored R3-01 lighting group. The corrected runner selects architecture groups with material slots."
+}
