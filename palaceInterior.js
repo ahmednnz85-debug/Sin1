@@ -5497,6 +5497,8 @@
       return !!(r3Stage?.nearFloor(x, z, p.y - floorY) || r3Entrance?.floorAt(x, z))?.steps;
     },
     r3Memory: () => structuredClone(r3Memory),
+    // Deferred R3 dressing (R3-03 streams in after arrival): resolves when complete.
+    r3Settled: () => (r3Stage?.settled ? r3Stage.settled() : Promise.resolve('none')),
     wantsWalk: function () { return state === 'ENTRANCE'; },
     clampFollowTarget: clampFollowTarget,
     ownsGround: function () { return inR3() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'FAILED' || (state === 'DONE' && occupant); },

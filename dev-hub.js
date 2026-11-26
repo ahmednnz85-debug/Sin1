@@ -323,6 +323,23 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     face(-Math.PI / 2);
     await waitFor(() => PalaceInterior.state() === 'R3' || PalaceInterior.state() === 'R3_FAILED');
     if (PalaceInterior.state() === 'R3_FAILED') throw new Error('R3 failed');
+    // Areas past R3-01 are dressed in the background after arrival. Keep the
+    // screen covered until that dressing is complete so the area never shows
+    // its untextured first pass (the game streams it long before a player
+    // walks there; only a direct jump can outrun it).
+    if (!a.spawn.stageSpawn && PalaceInterior.r3Settled) {
+      const cover = el('div', { id: 'sin-dev-cover' });
+      cover.style.cssText = 'position:fixed;inset:0;z-index:11999;background:#000;display:grid;place-items:center;color:#cbb994;font:15px system-ui';
+      cover.textContent = 'وضع المطور: تجهيز ' + a.ar;
+      doc.body.appendChild(cover);
+      try { await PalaceInterior.r3Settled(); }
+      finally {
+        spawnR3(a);
+        await frames(3);
+        cover.remove();
+      }
+      return;
+    }
     await frames(3);
     spawnR3(a);
   }

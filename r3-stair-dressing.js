@@ -581,6 +581,7 @@
     // ---- load: stone sets, reliefs, GLB ----------------------------------
     const cost = { textures: 0, textureMiB: 0, glbMiB: 0, triangles: 0, meshes: 0, ms: 0 };
     const report = { cost, layout: P.layout, warnings: [] };
+    const shareable = { nodes: null, reliefs: null };
     async function load(renderer) {
       const t0 = performance.now();
       root.updateWorldMatrix(true, false);
@@ -612,6 +613,7 @@
 
       // Relief sheet: friezes, bands and moons.
       const reliefTex = {};
+      shareable.reliefs = reliefTex;
       for (const n of ['frieze_offerings', 'frieze_procession', 'band_rosettes', 'band_cuneiform']) {
         const [map, normal] = await Promise.all([tex(n + '_albedo.jpg', true), tex(n + '_normal.jpg', false)]);
         reliefTex[n] = { map, normal };
@@ -768,6 +770,7 @@
           }
         }
         src[node.name] = { size, levels: [list.map(o => ({ geometry: o.geometry, material: o.material, matrix: shift.clone().multiply(o.matrixWorld) }))] };
+        shareable.nodes = src;
       }
       if (lod) {
         lod.scene.updateMatrixWorld(true);
@@ -903,6 +906,10 @@
 
     return {
       load, update, report: () => JSON.parse(JSON.stringify(report)),
+      // Read-only view of the resident props and relief maps. The R3-03
+      // approach reuses them (shared GPU data, own materials) instead of
+      // loading a second copy of the same stair kit.
+      kit: () => (shareable.nodes ? shareable : null),
       lights, dress, fx
     };
   }

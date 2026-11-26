@@ -1,0 +1,392 @@
+{
+  "url": "http://127.0.0.1:8080/index.html?dev=1&level=R3-03",
+  "environment": "iPhone landscape viewport and UA, Chromium/SwiftShader on Linux",
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "checks": {
+    "completeOnEntry": true,
+    "directR3": true,
+    "freeSpawn": true,
+    "composition": true,
+    "solidCanyon": true,
+    "referenceLayout": true,
+    "controller": true,
+    "walksOntoDeck": true,
+    "edgeAndHardwareBlock": true,
+    "renderEnvelope": true
+  },
+  "views": {
+    "reference": {
+      "synchronizedFrameMs": 1989.23,
+      "worstMs": 2019.3,
+      "draws": 63,
+      "triangles": 437862,
+      "geometries": 121,
+      "textures": 114,
+      "resourceCpuMiB": 125.2,
+      "resourceGpuMiB": 144.6
+    },
+    "wide": {
+      "synchronizedFrameMs": 2057.1,
+      "worstMs": 2287.8,
+      "draws": 59,
+      "triangles": 434622,
+      "geometries": 121,
+      "textures": 114,
+      "resourceCpuMiB": 125.2,
+      "resourceGpuMiB": 144.6
+    },
+    "down": {
+      "synchronizedFrameMs": 921.07,
+      "worstMs": 942.2,
+      "draws": 18,
+      "triangles": 192968,
+      "geometries": 121,
+      "textures": 114,
+      "resourceCpuMiB": 125.2,
+      "resourceGpuMiB": 144.6
+    },
+    "left": {
+      "synchronizedFrameMs": 1415.3,
+      "worstMs": 1420.4,
+      "draws": 46,
+      "triangles": 424566,
+      "geometries": 121,
+      "textures": 114,
+      "resourceCpuMiB": 125.2,
+      "resourceGpuMiB": 144.6
+    },
+    "approach": {
+      "synchronizedFrameMs": 1796.2,
+      "worstMs": 1803.2,
+      "draws": 57,
+      "triangles": 432682,
+      "geometries": 121,
+      "textures": 114,
+      "resourceCpuMiB": 125.2,
+      "resourceGpuMiB": 144.6
+    },
+    "deck": {
+      "synchronizedFrameMs": 1546.77,
+      "worstMs": 1556.8,
+      "draws": 42,
+      "triangles": 305168,
+      "geometries": 121,
+      "textures": 114,
+      "resourceCpuMiB": 125.2,
+      "resourceGpuMiB": 144.6
+    },
+    "rim": {
+      "synchronizedFrameMs": 1206.73,
+      "worstMs": 1214.4,
+      "draws": 27,
+      "triangles": 294432,
+      "geometries": 121,
+      "textures": 114,
+      "resourceCpuMiB": 125.2,
+      "resourceGpuMiB": 144.6
+    }
+  },
+  "errors": [],
+  "firstFrame": {
+    "phase": "ready",
+    "roomVisible": true,
+    "approach": "ready"
+  },
+  "area": "R3-03",
+  "status": {
+    "phase": "ready",
+    "selected": [
+      "Elevator_Platform",
+      "Elevator_Mechanism",
+      "Elevator_Anchor_Lower",
+      "Elevator_Anchor_Upper",
+      "Elevator_Chain_Link_01",
+      "Lamassu_Left_Facing_Guardian_On_Inscribed_Plinth",
+      "Abyss_Cliff_Ruins",
+      "Abyss_Bridge_Ruined",
+      "Abyss_Rock_Spire"
+    ],
+    "anchors": [
+      {
+        "x": 9.6798357156,
+        "z": -4.6201642843999995,
+        "bottom": 2.16,
+        "top": 10,
+        "links": 20
+      },
+      {
+        "x": 9.6798357156,
+        "z": 1.8201642844,
+        "bottom": 2.16,
+        "top": 10,
+        "links": 20
+      },
+      {
+        "x": 16.1201642844,
+        "z": -4.6201642843999995,
+        "bottom": 2.16,
+        "top": 10,
+        "links": 20
+      },
+      {
+        "x": 16.1201642844,
+        "z": 1.8201642844,
+        "bottom": 2.16,
+        "top": 10,
+        "links": 20
+      }
+    ],
+    "budget": {
+      "glbMiB": 22,
+      "drawCalls": 85,
+      "trianglesInView": 515000
+    },
+    "ruins": [
+      {
+        "site": "Promontory",
+        "source": "Abyss_Cliff_Ruins",
+        "position": [
+          58.1,
+          -3.55,
+          3.4
+        ]
+      },
+      {
+        "site": "RightLower",
+        "source": "Abyss_Bridge_Ruined",
+        "position": [
+          55.9,
+          11.45,
+          -30
+        ]
+      },
+      {
+        "site": "RightUpper",
+        "source": "Abyss_Bridge_Ruined",
+        "position": [
+          71.4,
+          22.35,
+          -43.1
+        ]
+      },
+      {
+        "site": "DistantSpan",
+        "source": "Abyss_Bridge_Ruined",
+        "position": [
+          90,
+          20,
+          -22.9
+        ]
+      }
+    ],
+    "guardian": {
+      "x": 8.86,
+      "z": 5.89,
+      "size": 5.18,
+      "yaw": -1.7307963267948965
+    },
+    "approach": {
+      "phase": "ready",
+      "props": 19,
+      "missing": []
+    },
+    "loadMs": 55241
+  },
+  "spawnClear": true,
+  "position": [
+    0.7999999999999972,
+    0,
+    0.5999999999999943
+  ],
+  "counts": {
+    "lamassu": 1,
+    "supports": 4,
+    "platform": 1,
+    "chainLinks": 80,
+    "fire": 0
+  },
+  "composition": {
+    "guardian": [
+      0.231,
+      0.551
+    ],
+    "Promontory": [
+      0.535,
+      0.64
+    ],
+    "RightLower": [
+      0.862,
+      0.362
+    ],
+    "RightUpper": [
+      0.894,
+      0.263
+    ],
+    "DistantSpan": [
+      0.695,
+      0.368
+    ]
+  },
+  "gorge": {
+    "surfaces": 13,
+    "dimensions": [
+      147.51608276367188,
+      233,
+      316
+    ]
+  },
+  "roots": [
+    "SinHeroRoot",
+    "R3Stage"
+  ],
+  "bootSeconds": 197.935,
+  "motion": [
+    2.230303703772705,
+    0,
+    0.5999999999999943
+  ],
+  "path": {
+    "tested": [],
+    "heights": [
+      0,
+      0.19,
+      0.38,
+      0.58,
+      0.38,
+      0.19,
+      0
+    ],
+    "abyssBlocked": true,
+    "anchorBlocked": true
+  },
+  "corridors": [
+    "corridor-01-from-hall.jpg",
+    "corridor-02-first-landing.jpg",
+    "corridor-03-second-landing.jpg",
+    "corridor-04-drop.jpg",
+    "corridor-05-abyss-reveal.jpg"
+  ],
+  "heapMiB": 18.6,
+  "transition": {
+    "before": {
+      "geometries": 209,
+      "textures": 91,
+      "programs": 0,
+      "calls": 139,
+      "triangles": 1241615,
+      "cityReleased": true,
+      "cpuMB": 126.3,
+      "gpuMB": 182.5,
+      "heapMB": null,
+      "roots": [
+        "HemisphereLight",
+        "DirectionalLight",
+        "DirectionalLight",
+        "SinHeroRoot",
+        "PalaceInterior",
+        "SinLightRigPads",
+        "PalaceWings"
+      ]
+    },
+    "disposed": {
+      "geometries": 475,
+      "materials": 138,
+      "textures": 151
+    },
+    "released": {
+      "geometries": 4,
+      "textures": 13,
+      "programs": 0,
+      "calls": 2,
+      "triangles": 115174,
+      "cityReleased": true,
+      "cpuMB": 5.9,
+      "gpuMB": 14.8,
+      "heapMB": null,
+      "roots": [
+        "SinHeroRoot"
+      ]
+    },
+    "loaded": {
+      "geometries": 56,
+      "textures": 80,
+      "programs": 0,
+      "calls": 69,
+      "triangles": 508624,
+      "cityReleased": true,
+      "cpuMB": 117.6,
+      "gpuMB": 100.8,
+      "heapMB": null,
+      "roots": [
+        "SinHeroRoot",
+        "R3Stage"
+      ],
+      "budget": {
+        "geometryBytes": 3145728,
+        "textures": 0,
+        "batches": 52,
+        "hall": {
+          "textureMiB": 42,
+          "glbMiB": 18,
+          "drawCalls": 100,
+          "trianglesInView": 850000
+        },
+        "stair": {
+          "textureMiB": 48,
+          "glbMiB": 24,
+          "drawCalls": 110,
+          "trianglesInView": 900000
+        }
+      },
+      "cost": {
+        "geometryBytes": 1783008,
+        "batches": 35,
+        "textures": 0,
+        "stair": {
+          "textures": 31,
+          "textureMiB": 40.2,
+          "glbMiB": 22.1,
+          "triangles": 1864054,
+          "meshes": 221,
+          "ms": 4773
+        },
+        "hall": {
+          "glbBytes": 17628956,
+          "props": {
+            "platform": {
+              "instances": 1,
+              "triangles": 178774,
+              "lodTriangles": 178774
+            },
+            "guardian": {
+              "instances": 2,
+              "triangles": 121594,
+              "lodTriangles": 27963
+            },
+            "column": {
+              "instances": 9,
+              "triangles": 44888,
+              "lodTriangles": 8729
+            },
+            "stele": {
+              "instances": 4,
+              "triangles": 29824,
+              "lodTriangles": 9244
+            },
+            "rubble": {
+              "instances": 15,
+              "triangles": 29700,
+              "lodTriangles": 7280
+            }
+          },
+          "maps": 30,
+          "propTextures": 21,
+          "propTextureBytes": 16515856,
+          "loadMs": 2066,
+          "mapBytesWithMipmaps": 20938752
+        }
+      }
+    }
+  },
+  "frames": 43
+}

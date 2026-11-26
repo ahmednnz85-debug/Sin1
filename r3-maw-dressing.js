@@ -5,9 +5,21 @@
   const DECK_RADIUS = 4.86, ARCH = 8.18, SPRING = 5.9, RISE = 6.9, ARCH_Z = -1.3;
   const FAR_RIM = 20.4, HALF = 9.55, SHOULDER = 13.4;
   const geology = root.SinR3MawGeology;
+  const Approach = root.SinR3MawApproach || null;
+  // Cheap analytic lights for the Maw stone shader only: [x, y, z, radius, r, g, b].
+  // The overlook keys the guardian, the arch reveal and the elevator; the
+  // approach module contributes the corridor pools.
+  const ROOM_LIGHTS = [
+    [7.4, 6.2, 3.6, 9.5, 0.20, 0.24, 0.30],
+    [3.2, 4.6, -1.0, 10.0, 0.17, 0.20, 0.25],
+    [12.9, 9.5, -1.4, 9.0, 0.16, 0.21, 0.27],
+    [16.5, 2.5, -1.4, 8.0, 0.08, 0.15, 0.22],
+    [11.0, 4.8, 0.4, 14.5, 0.16, 0.19, 0.235]
+  ];
+  const LIGHTS = ROOM_LIGHTS.concat(Approach ? Approach.lights : []);
   const GUARDIAN = { x: 8.86, z: 5.89, size: 5.18, yaw: -Math.PI / 2 - 0.16 };
   const RUINS = [
-    ['Promontory', 'Abyss_Cliff_Ruins', [47.1, 8.05, 1.72], [0.60, 0.42, 0.61], 0.69],
+    ['Promontory', 'Abyss_Cliff_Ruins', [58.1, -3.55, 3.4], [0.66, 0.42, 0.66], 0.69],
     ['RightLower', 'Abyss_Bridge_Ruined', [55.9, 11.45, -30.0], [1.49, 0.98, 0.96], -1.36],
     ['RightUpper', 'Abyss_Bridge_Ruined', [71.4, 22.35, -43.1], [1.10, 1.05, 1.03], -1.29],
     ['DistantSpan', 'Abyss_Bridge_Ruined', [90, 20.0, -22.9], [1.91, 1.06, 1.1], 1.58]
@@ -26,15 +38,18 @@
     return radius <= DECK_RADIUS ? DECK : radius <= 5.12 ? 0.38 : radius <= 5.46 ? 0.19 : 0;
   }
 
-  function create({ THREE: T, group, entry, lane, level, collision }) {
+  function create({ THREE: T, group, entry, lane, level, collision, kit = () => null, floorAt = () => null }) {
     const room = new T.Group();
     room.name = 'MawOfTheAbyss_Dressing';
     room.position.set(entry, level, lane);
     group.add(room);
     room.visible = false;
     const status = room.userData.maw = { phase: 'idle', selected: [], anchors: [], budget: BUDGET };
+    Object.defineProperty(room.userData, 'mawLinks', { value: { kit, floorAt }, enumerable: false });
     let renderer, pending;
     const transform = { value: new T.Matrix4() }, clock = { value: 0 };
+    const lightSpots = { value: LIGHTS.map(l => new T.Vector4(l[0], l[1], l[2], l[3])) };
+    const lightColors = { value: LIGHTS.map(l => new T.Vector3(l[4], l[5], l[6])) };
 
     // Local world-space attenuation keeps the cliff mist and the entrance
     // contact shade independent of the fog/lights used in the neighbouring rooms.
@@ -42,7 +57,7 @@
       material.fog = false;
       material.customProgramCacheKey = () => 'r3-maw-stone-' + kind;
       material.onBeforeCompile = shader => {
-        Object.assign(shader.uniforms, { mawW2L: transform, mawTime: clock });
+        Object.assign(shader.uniforms, { mawW2L: transform, mawTime: clock, mawSpots: lightSpots, mawSpotColors: lightColors });
         shader.vertexShader = shader.vertexShader.replace('#include <common>',
           '#include <common>\nuniform mat4 mawW2L; varying vec3 vMaw;')
           .replace('#include <project_vertex>', `
@@ -56,8 +71,22 @@
         shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `
           #include <common>
           uniform mat4 mawW2L;
+          uniform vec4 mawSpots[${LIGHTS.length}];
+          uniform vec3 mawSpotColors[${LIGHTS.length}];
           varying vec3 vMaw;
           float mawSquare(float n) { return n*n; }
+          vec3 mawLocal(vec3 n, vec3 at, vec3 albedo) {
+            vec3 lit = vec3(0.0);
+            for (int i = 0; i < ${LIGHTS.length}; i++) {
+              vec3 d = mawSpots[i].xyz - at;
+              float dist = length(d);
+              if (dist > mawSpots[i].w) continue;
+              float fall = 1.0 - smoothstep(0.0, mawSpots[i].w, dist);
+              float wrap = max(dot(n, d / max(dist, 0.001)), 0.0) * 0.78 + 0.22;
+              lit += mawSpotColors[i] * wrap * fall * fall;
+            }
+            return albedo * lit;
+          }
           ${kind >= 2 ? geology.scattering : ''}
         `)
           .replace('#include <color_fragment>', `
@@ -81,19 +110,34 @@
               (0.45 + 0.55 * exp(-mawSquare((vMaw.z+1.1)*0.12)));
             ${kind >= 2 ? `
               vec3 eye=(mawW2L * vec4(cameraPosition,1.0)).xyz;
+              vec3 mawN = normalize(mat3(mawW2L) * inverseTransformDirection(normal, viewMatrix));
               float cracks=mNoise(vec3(vMaw.x*1.8,vMaw.y*0.22,vMaw.z*1.4));
               float strata=0.58 + 0.41*smoothstep(0.12,0.72,cracks);
               float crest=smoothstep(-17.0,24.0,vMaw.y);
-              float depthShade=0.56+0.44*smoothstep(-54.0,7.0,vMaw.y);
+              float depthShade=0.62+0.38*smoothstep(-60.0,7.0,vMaw.y);
+              // Cool skylight from the cavern openings catches ledges and crests;
+              // the luminous mist below bounces cyan onto low, side and under faces.
+              float ledge=smoothstep(0.2,0.85,mawN.y);
+              float lowGorge=1.0-smoothstep(-42.0,2.0,vMaw.y);
+              vec3 sky=diffuseColor.rgb*vec3(0.30,0.42,0.54)*(0.30+0.70*ledge)*(0.55+0.45*crest);
+              vec3 mist=diffuseColor.rgb*vec3(0.12,0.34,0.46)*lowGorge*(0.55+0.45*max(-mawN.y,0.0));
+              float struck=mawShaftLight(vMaw);
+              vec3 beam=diffuseColor.rgb*vec3(0.62,0.80,0.98)*struck*(0.45+0.55*max(mawN.y,0.0));
               vec3 bounce=diffuseColor.rgb*vec3(0.023,0.052,0.073)*(0.71+crest*0.41);
-              vec3 charcoal=(outgoingLight*${kind === 3 ? 'vec3(0.31,0.34,0.38)' : 'vec3(0.24,0.28,0.31)'}*
-                strata+bounce)*depthShade;
+              // Bedding ledges catch the skylight; joints between them stay dark.
+              float bedding=fract(vMaw.y*0.21+mNoise(vec3(vMaw.x*0.07,0.0,vMaw.z*0.07))*1.7);
+              strata*=0.82+0.30*smoothstep(0.70,0.93,bedding)-0.16*smoothstep(0.08,0.0,bedding);
+              vec3 charcoal=(outgoingLight*${kind === 3 ? 'vec3(0.55,0.58,0.63)' : 'vec3(0.46,0.50,0.55)'}*
+                strata+bounce+sky+mist+beam)*depthShade;
+              ${kind === 2 ? 'charcoal+=mawFalls(vMaw)*vec3(0.30,0.52,0.62);' : ''}
               outgoingLight=mawScatter(charcoal,eye,vMaw);
             ` : `
-              outgoingLight *= mao * mix(vec3(0.58,0.59,0.61),vec3(0.86,0.94,1.02),topLight);
+              outgoingLight *= mao * mix(vec3(0.66,0.67,0.70),vec3(0.88,0.95,1.03),topLight);
               float bounceKey=exp(-mawSquare((vMaw.x-12.75)*0.14)-mawSquare((vMaw.z+1.5)*0.15));
               bounceKey*=1.0-0.58*smoothstep(4.8,10.0,vMaw.y);
               float bounceLeft=exp(-mawSquare((vMaw.x-9.2)*0.29)-mawSquare((vMaw.z-6.0)*0.19));
+              vec3 mawN = normalize(mat3(mawW2L) * inverseTransformDirection(normal, viewMatrix));
+              outgoingLight += mao * mawLocal(mawN, vMaw, diffuseColor.rgb);
               outgoingLight += diffuseColor.rgb * mao * (vec3(0.032,0.046,0.066) * topLight +
                 vec3(0.16,0.20,0.24) * bounceKey + vec3(0.055,0.063,0.08)*bounceLeft +
                 vec3(0.072,0.081,0.10) * smoothstep(7.0,11.0,vMaw.y));
@@ -233,6 +277,16 @@
     }
 
     driftDust(T, room, clock);
+    // Arches, reliefs, columns and fallen masonry along the approach legs.
+    const approachLook = Approach?.create({ T, kit, finish, hit, floorAt: (x, z) => {
+      const y = floorAt(entry + x, lane + z);
+      return y == null ? null : y - level;
+    } });
+    if (approachLook) {
+      approachLook.group.position.copy(room.position);
+      approachLook.group.visible = false;
+      group.add(approachLook.group);
+    }
     const approach = new Map();
     function material(slot) {
       const walk = slot === 'Landings' || slot === 'Treads';
@@ -370,6 +424,11 @@
         place('Abyss_Rock_Spire', 2.45, 0.18, 6.45, [0.47, 0.11, 0.37], 0.68);
         place('Abyss_Rock_Spire', 2.12, 0.05, 5.04, [0.22, 0.089, 0.23], -0.82);
         place('Abyss_Rock_Spire', 3.92, -0.07, 7.51, [0.37, 0.105, 0.23], -0.76);
+        approachLook?.build();
+        status.approach = approachLook?.status;
+        // Upload and link everything while the area is still hidden, so the
+        // first visible frame is the finished one (no grey/untextured pass).
+        await warm();
         status.phase = 'ready';
         status.loadMs = Math.round(performance.now() - started);
       } finally {
@@ -377,21 +436,69 @@
       }
     }
 
-    return {
-      room, material, status,
-      configure(value) { renderer = value; },
-      update(u, v, inside) {
-        const near = inside && u > entry - 9 && Math.abs(v - lane) < 11;
-        room.visible = inside && u > entry - 4 && Math.abs(v - lane) < 11;
-        if (!near) return;
+    async function warm() {
+      if (!renderer?.compileAsync) return;
+      let scene = room;
+      while (scene.parent) scene = scene.parent;
+      const camera = new T.PerspectiveCamera(60, 1.6, 0.1, 400);
+      room.updateWorldMatrix(true, true);
+      camera.position.setFromMatrixPosition(room.matrixWorld);
+      camera.updateMatrixWorld();
+      const shown = [room.visible, approachLook?.group.visible];
+      room.visible = true;
+      if (approachLook) approachLook.group.visible = true;
+      try {
+        await renderer.compileAsync(room, camera, scene);
+        if (approachLook) await renderer.compileAsync(approachLook.group, camera, scene);
+        // Push the textures to the GPU now rather than on the first frame.
+        const textures = new Set();
+        const visit = o => {
+          for (const m of [].concat(o.material || [])) {
+            for (const key of ['map', 'normalMap', 'roughnessMap', 'aoMap']) if (m[key]) textures.add(m[key]);
+          }
+        };
+        room.traverse(visit);
+        approachLook?.group.traverse(visit);
+        for (const t of approach.values()) visit({ material: t });
+        textures.forEach(t => renderer.initTexture?.(t));
+      } catch (error) {
+        console.warn('[R3-03] warm-up skipped', error);
+      } finally {
+        room.visible = shown[0];
+        if (approachLook) approachLook.group.visible = shown[1];
+      }
+    }
+    function start() {
+      if (!pending && renderer) {
         room.updateWorldMatrix(true, false);
         transform.value.copy(room.matrixWorld).invert();
-        clock.value = performance.now() / 1000;
-        if (!pending && renderer) pending = load().catch(error => {
+        pending = load().catch(error => {
           status.phase = 'failed';
           status.error = String(error.message || error);
           console.error('[R3-03] ' + status.error);
         });
+      }
+      return pending || Promise.resolve();
+    }
+
+    return {
+      room, material, status,
+      configure(value) { renderer = value; },
+      // Streams the Maw in the background (stage arrival, long before the
+      // hero reaches it); resolves when the overlook is fully built.
+      prefetch: start,
+      update(u, v, inside) {
+        const near = inside && u > entry - 9 && Math.abs(v - lane) < 11;
+        const ready = status.phase === 'ready';
+        // From the third landing the mouth already frames the overlook.
+        room.visible = ready && inside && (u > entry - 4 && Math.abs(v - lane) < 11 ||
+          u > entry - 13 && Math.abs(v - lane) < 4);
+        approachLook?.update(u - entry, ready && inside);
+        if (!inside) return;
+        room.updateWorldMatrix(true, false);
+        transform.value.copy(room.matrixWorld).invert();
+        clock.value = performance.now() / 1000;
+        if (near) start();
       }
     };
   }
