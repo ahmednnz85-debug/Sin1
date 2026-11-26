@@ -5396,6 +5396,168 @@
     return Math.max(0, best - 0.03);
   }
 
+  const sealedRig = { yaw: 0, pitch: FOLLOW_PITCH, goalYaw: 0, goalPitch: FOLLOW_PITCH, distance: 0, hold: 0 };
+  const SEALED_HEAD = 2.62;
+  const SEALED_RADIUS = CAM_RADIUS + 0.012;
+  const SEALED_BODY = 0.91;
+  const sealedOrbits = [0, 0.62, -0.62, 1.22, -1.22, 1.90, -1.90, 2.57, -2.57, Math.PI];
+  const sealedElevations = [0.63, 0.94, 1.21, -0.28];
+  const sealedView = { x: 0, y: 0, z: 0, length: 0, clearBody: false };
+  const stageAim = { x: 0, y: 0, z: 0 };
+  const pivotNeighbors = [];
+  function pointBoxDistance(x, y, z, b) {
+    return Math.hypot(Math.max(0, b.minx - x, x - b.maxx),
+      Math.max(0, b.miny - y, y - b.maxy), Math.max(0, b.minz - z, z - b.maxz));
+  }
+
+  // Sweep a lens sphere against the rounded faces, edges and corners of an
+  // obstacle. Distance to the box is a lower bound on safe forward travel.
+  function sweepLens(x, y, z, ux, uy, uz, length, b) {
+    const first = rayHit(x, y, z, ux * length, uy * length, uz * length, padBox(b, SEALED_RADIUS));
+    if (first === null) return length;
+    let travel = first * length;
+    for (let i = 0; i < 10; i++) {
+      const gap = pointBoxDistance(x + ux * travel, y + uy * travel, z + uz * travel, b) - SEALED_RADIUS;
+      if (gap < 0.004) return travel;
+      travel += gap;
+      if (travel > length) return length;
+    }
+    return travel;
+  }
+
+  function testSealedView(p, yaw, pitch, distance, boxes, view) {
+    const cp = Math.cos(pitch);
+    const ux = -Math.sin(yaw) * cp, uy = Math.sin(pitch), uz = -Math.cos(yaw) * cp;
+    const x = p.x, y = p.y + CAM_PIVOT, z = p.z;
+    const ex = x + ux * distance, ey = y + uy * distance, ez = z + uz * distance;
+    const pad = CAM_RADIUS + 0.02;
+    let clear = distance;
+    pivotNeighbors.length = 0;
+    for (const b of boxes) {
+      if (b.minx > Math.max(x, ex) + pad || b.maxx < Math.min(x, ex) - pad ||
+          b.miny > Math.max(y, ey) + pad || b.maxy < Math.min(y, ey) - pad ||
+          b.minz > Math.max(z, ez) + pad || b.maxz < Math.min(z, ez) - pad) continue;
+      const bx = x - Math.max(b.minx, Math.min(x, b.maxx));
+      const by = y - Math.max(b.miny, Math.min(y, b.maxy));
+      const bz = z - Math.max(b.minz, Math.min(z, b.maxz));
+      if (bx * bx + by * by + bz * bz < SEALED_RADIUS * SEALED_RADIUS) {
+        // A legal player position can put the shoulder pivot just inside an
+        // inflated collider. Allow an outward cast, but still test its lens.
+        if (bx * ux + by * uy + bz * uz <= 0) { clear = 0; break; }
+        pivotNeighbors.push(b);
+      } else clear = sweepLens(x, y, z, ux, uy, uz, clear, b);
+      if (clear < 0.01) break;
+    }
+    // Traversal surfaces are sampled along the cast so short landings, stair
+    // treads and the curved seal-hall vault work between collider boxes too.
+    const dx = x - portalX, dz = z - portalFront, feet = p.y - floorY;
+    for (let ahead = Math.min(0.36, clear); ahead > 0; ahead = Math.min(ahead + 0.36, clear)) {
+      const surface = r3Stage.cameraSurfaceAt(dx + ux * ahead, dz + uz * ahead, feet);
+      const probeY = feet + CAM_PIVOT + uy * ahead;
+      if (surface && (probeY < surface.y + pad || probeY > surface.ceiling - pad)) {
+        clear = Math.max(0, ahead - 0.36);
+        break;
+      }
+      if (ahead >= clear) break;
+    }
+    for (const b of pivotNeighbors) {
+      if (pointBoxDistance(x + ux * clear, y + uy * clear, z + uz * clear, b) < SEALED_RADIUS) {
+        clear = 0;
+        break;
+      }
+    }
+    view.x = ux;
+    view.y = uy;
+    view.z = uz;
+    view.length = clear;
+    view.clearBody = cp * clear >= SEALED_BODY || CAM_PIVOT + uy * clear >= SEALED_HEAD;
+    return view;
+  }
+
+  function followSealedCamera(cam, p, dt, snap) {
+    const s = sealedRig;
+    const boxes = r3Stage.cameraBoxesAt(p.x - portalX, p.z - portalFront, p.y - floorY) || noCameraColliders;
+    // Off-centre lens and target preserve the shoulder framing. The orbit
+    // itself is the sphere-cast path; no untested lateral motion follows it.
+    const baseYaw = rig.yaw - 0.12;
+    const basePitch = Math.max(-0.20, Math.min(1.16, rig.pitch));
+    const distance = rig.ds;
+    const direct = testSealedView(p, baseYaw, basePitch, distance, boxes, sealedView);
+    s.hold = snap ? 0 : Math.max(0, s.hold - dt);
+    if (direct.clearBody && direct.length >= Math.min(1.18, distance - 0.14)) {
+      s.goalYaw = baseYaw;
+      s.goalPitch = basePitch;
+      s.hold = 0;
+    } else {
+      const retained = testSealedView(p, s.goalYaw, s.goalPitch, distance, boxes, sealedView);
+      if (s.hold === 0 || !retained.clearBody) {
+        let bestScore = -Infinity;
+        const priorYaw = s.goalYaw, elevations = [basePitch, ...sealedElevations];
+        for (const offset of sealedOrbits) {
+          for (const elevation of elevations) {
+            const y = baseYaw + offset;
+            const v = testSealedView(p, y, elevation, distance, boxes, sealedView);
+            // Bias toward the input, with a small preference for the previous
+            // side so nearly identical candidates do not alternate.
+            const score = (v.clearBody ? 4 : 0) + v.length - 0.86 * Math.abs(offset)
+              - 0.60 * Math.abs(elevation - basePitch) - 0.20 * Math.abs(wrapAngle(y - priorYaw));
+            if (score > bestScore) {
+              bestScore = score;
+              s.goalYaw = y;
+              s.goalPitch = elevation;
+            }
+          }
+        }
+        s.hold = 0.26;
+      }
+    }
+    const factor = 1 - Math.exp(-dt * 8), maxTurn = 3.9 * dt;
+    const dy = wrapAngle(s.goalYaw - s.yaw);
+    const yawStep = snap ? dy : Math.max(-maxTurn, Math.min(maxTurn, dy * factor));
+    const dp = s.goalPitch - s.pitch;
+    const pitchStep = snap ? dp : Math.max(-maxTurn * 0.7, Math.min(maxTurn * 0.7, dp * factor));
+    const retract = Math.max(0, s.distance - 7.5 * dt);
+    let angle = s.yaw + yawStep, elevation = s.pitch + pitchStep;
+    let chosen = testSealedView(p, angle, elevation, distance, boxes, sealedView);
+    let tucked = false;
+    if (!snap && (!chosen.clearBody || chosen.length < retract)) {
+      // Swing through a shorter arc first. When the shoulder cannot turn
+      // yet, retract on the safe heading before attempting the corner again.
+      for (let step = 0.5; step >= 0.125; step /= 2) {
+        angle = s.yaw + yawStep * step;
+        elevation = s.pitch + pitchStep * step;
+        chosen = testSealedView(p, angle, elevation, distance, boxes, sealedView);
+        if (chosen.clearBody && chosen.length >= retract) break;
+      }
+      if (!chosen.clearBody || chosen.length < retract) {
+        angle = s.yaw;
+        elevation = s.pitch;
+        chosen = testSealedView(p, angle, elevation, distance, boxes, sealedView);
+        tucked = true;
+      }
+    }
+    if (!chosen.clearBody) {
+      angle = s.goalYaw;
+      elevation = s.goalPitch;
+      chosen = testSealedView(p, angle, elevation, distance, boxes, sealedView);
+    }
+    s.yaw = angle;
+    s.pitch = elevation;
+    const horizontal = Math.hypot(chosen.x, chosen.z);
+    const safeBody = Math.min(SEALED_BODY / horizontal, chosen.y > 0 ? (SEALED_HEAD - CAM_PIVOT) / chosen.y : Infinity);
+    const eased = s.distance + (chosen.length - s.distance) * (1 - Math.exp(-dt * CAM_OUT));
+    s.distance = Math.min(chosen.length, snap ? chosen.length : Math.max(safeBody, tucked ? retract : eased));
+    cam.position.set(p.x + chosen.x * s.distance, p.y + CAM_PIVOT + chosen.y * s.distance, p.z + chosen.z * s.distance);
+    const shoulder = Math.min(0.27, Math.max(0, s.distance - 0.75) * 0.17);
+    stageAim.x = p.x - Math.cos(s.yaw) * shoulder;
+    stageAim.y = p.y + CAM_PIVOT;
+    stageAim.z = p.z + Math.sin(s.yaw) * shoulder;
+    cam.lookAt(stageAim.x, stageAim.y, stageAim.z);
+    rig.d = s.distance;
+    rig.fresh = true;
+    return true;
+  }
+
   // Positions + aims the camera. Returns false when the rig is not in charge.
   function followCamera(cam, hero, yaw, pitch, dist, dt, snap, cinematic) {
     if (!cam || !hero || (!r3Stage && (!hallBuilt || colliders.length === 0))) return false;
@@ -5410,6 +5572,7 @@
     rig.yaw += wrapAngle(yaw - rig.yaw) * turn;
     rig.pitch += (pitch - rig.pitch) * turn;
     rig.ds += (dist - rig.ds) * (1 - Math.exp(-dt * CAM_ZOOM));
+    if (r3Stage) return followSealedCamera(cam, p, dt, snap);
     const px = p.x, py = p.y + CAM_PIVOT, pz = p.z;
     const now = performance.now();
     const basePitch = Math.max(-0.1, Math.min(1.2, rig.pitch));

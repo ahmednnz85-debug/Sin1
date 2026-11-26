@@ -648,8 +648,8 @@
     deep.visible = false;
     if (Under) root.add(deep);
     const under = Under ? Under.create({ T: THREE, group: deep, lift: Maw.lift,
-      hit: (x0, x1, y0, y1, z0, z1) => collision(bridge + x0, bridge + x1, ledge + y0, ledge + y1,
-        MAW_LANE + z0, MAW_LANE + z1, true) }) : null;
+      hit: (x0, x1, y0, y1, z0, z1, solid) => collision(bridge + x0, bridge + x1, ledge + y0, ledge + y1,
+        MAW_LANE + z0, MAW_LANE + z1, solid) }) : null;
     if (under) deep.userData.finish = material => under.finish(material, 'lift');
     const mawLook = Maw?.create({ THREE, group: part.group, entry: bridge, lane: MAW_LANE, level: ledge, collision,
       deep: under ? deep : null,
@@ -732,8 +732,9 @@
     }
     function sample(u, v, y = 0) {
       if (under && y < DEEP) {
-        const h = under.floor(u - bridge, v - MAW_LANE);
-        return h == null ? null : { y: ledge + h, ceiling: Infinity, steps: true };
+        const x = u - bridge, z = v - MAW_LANE;
+        const h = under.floor(x, z);
+        return h == null ? null : { y: ledge + h, ceiling: ledge + under.ceiling(x, z), steps: true };
       }
       const left = mawLook ? MAW_LANE - Maw.limits.half : -22;
       if (u < start || u > rim || v < left || v > HALL_V + RADIUS) return null;
@@ -771,7 +772,7 @@
       if (under) {
         const below = inside && y < DEEP;
         deep.visible = below;
-        under.update(below);
+        under.update(below, u - bridge, v - MAW_LANE);
         if (below) {
           for (const section of parts) section.group.visible = false;
           stair?.update(u, y, v, false, false);
@@ -812,7 +813,11 @@
       let shift = null;
       if (ride.state === 'idle') {
         if (!cab) { ride.armed = true; ride.wait = 0; }
-        else if (ride.armed && (ride.wait += dt) > 1.1) { ride.state = 'closing'; ride.from = cab; }
+        else if (ride.armed && (ride.wait += dt) > 1.1) {
+          ride.state = 'closing';
+          ride.from = cab;
+          if (cab > 0 && stageRenderer) under.ready(stageRenderer);
+        }
       } else if (ride.state === 'closing') {
         if (cab !== ride.from) ride.state = 'opening';
         else if ((ride.fade = Math.min(1, ride.fade + dt / 0.7)) === 1) {
@@ -820,7 +825,7 @@
           ride.state = 'travel';
           ride.wait = 0;
           // Riding up from a U1 chapter start: the veil holds until R3 is dressed.
-          ride.hold = ride.from < 0 ? loadUpper() : null;
+          ride.hold = ride.from < 0 ? loadUpper() : stageRenderer && under.ready(stageRenderer);
           ride.held = false;
           ride.hold?.then(() => { ride.held = true; });
         }
@@ -861,6 +866,7 @@
     }
     return {
       root, nearFloor, blocks, update, lift, budget, cost: stageCost, underworld: under,
+      cameraSurfaceAt: (x, z, feet) => sample(uAt(x), vAt(z), feet),
       // Prepare the independent stage while the transition curtain is black.
       // options.chapter 'u1': a direct start in the underworld layer (developer
       // chapter entry). Only the lift and U1 are prepared; R3-01..R3-03 load
@@ -870,6 +876,7 @@
         stageRenderer = renderer;
         if (options.chapter === 'u1' && under) {
           upper = null;
+          await under.ready(renderer);
           mawPending = mawLook?.prefetch({ liftOnly: true });
           stageCost.chapter = 'u1';
           return stageCost;
