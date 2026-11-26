@@ -31,7 +31,7 @@
   const api = window.SinR3Stair = {
     base: '',
     tileMetres: slot => (SLOT_SETS[slot] || SLOT_SETS.Walls)[1],
-    material, plan, create
+    material, entranceMaterial, plan, create
   };
 
   // ---- stone shader ------------------------------------------------------
@@ -96,6 +96,22 @@
     patchStone(THREE, m, slot === 'Vault' ? 0 : 1, 0.3);
     pendingMaterials.push(m);
     return m;
+  }
+
+  function entranceMaterial(THREE, slot, maps) {
+    const [set] = SLOT_SETS[slot] || SLOT_SETS.Walls;
+    if (!maps.has(set)) {
+      let settle;
+      const ready = new Promise(resolve => { settle = resolve; });
+      const image = api.base + DIR + set + '_albedo.jpg';
+      const texture = new THREE.TextureLoader().load(image, () => settle(true), undefined, () => settle(false));
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      texture.name = 'R3-door/' + set;
+      maps.set(set, { texture, ready });
+    }
+    return new THREE.MeshBasicMaterial({ map: maps.get(set).texture, color: new THREE.Color().setScalar(SET_GAIN[set] || 1),
+      vertexColors: true, side: THREE.DoubleSide, fog: false, toneMapped: false });
   }
 
   // ---- helpers -----------------------------------------------------------

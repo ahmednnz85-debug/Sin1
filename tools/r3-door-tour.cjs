@@ -13,7 +13,7 @@ url.searchParams.set('dev', '1');
 url.searchParams.set('level', 'HALL');
 url.searchParams.set('r3DoorTest', '1');
 const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
-const frequency = 10;
+const frequency = 8;
 
 async function main() {
   fs.mkdirSync(output, { recursive: true });
@@ -29,6 +29,7 @@ async function main() {
       viewport: { width: 852, height: 393 }, isMobile: true, hasTouch: true,
       deviceScaleFactor: 1, userAgent: ua
     });
+    const cdp = await page.context().newCDPSession(page);
     page.on('pageerror', error => report.errors.push(error.message));
     page.on('console', msg => {
       if (/WebGLProgram: Shader Error|Invalid sealed door|Incompatible sealed door/.test(msg.text())) report.errors.push(msg.text().slice(0, 700));
@@ -88,7 +89,7 @@ async function main() {
     report.checks.sharedFloorDatum = Math.abs(info.closed.columnBase - info.hallFloor) < 0.002;
     report.checks.authoredEdgeFinishes = info.edgeFinishes.length === 2 &&
       info.edgeFinishes.every(([name]) => ['SideStone', 'ArchSide'].includes(name));
-    report.checks.stoneCourses = info.stoneCourses.length === 5 && info.stoneCourses.every(courses => courses > 6);
+    report.checks.stoneCourses = info.stoneCourses.length === 4 && info.stoneCourses.every(courses => courses > 6);
     report.checks.sourceTriangles = info.baked.reduce((sum, [, count]) => sum + count, 0) === 86206;
     report.checks.sharedPng = info.textures.length === 4 &&
       info.textures.filter(([w, h]) => w === 1122 && h === 1402).length === 2;
@@ -114,7 +115,8 @@ async function main() {
     async function capture(file, dt) {
       const frame = await page.evaluate(dt => {
         const { scene, camera, render } = __doorTour;
-        if (dt) __r3DoorTest.step(dt);
+        const slices = Math.ceil(dt / 0.1);
+        for (let i = 0; i < slices; i++) __r3DoorTest.step(dt / slices);
         render(scene, camera);
         return { jpg: window.__R.domElement.toDataURL('image/jpeg', 0.91).split(',')[1], state: __r3DoorTest.state() };
       }, dt);
@@ -132,7 +134,7 @@ async function main() {
       window.__holdSim = true;
       window.__R.render = () => {};
       window.__R.setSize(720, 332, false);
-      __doorTour.camera.far = 18;
+      __doorTour.camera.far = 26;
     });
     await camera('front');
     await capture('front-closed.jpg', 0);
@@ -157,6 +159,7 @@ async function main() {
       __r3DoorTest.open();
       for (let i = 0; i < 100; i++) __r3DoorTest.step(1 / 30);
     });
+    report.checks.stairTextures = (await page.evaluate(() => __r3DoorTest.entranceReady())).every(Boolean);
     report.checks.sweepPausesForHero = await page.evaluate(() => {
       const { game, hero, x, y, z } = __doorTour;
       const gate = __r3DoorTest.state();
@@ -201,25 +204,42 @@ async function main() {
       save();
     }
 
+    report.walk = await page.evaluate(() => {
+      const { game, hero, passage, scene, camera, x, y, z } = __doorTour;
+      const hall = PalaceWings.state.hall;
+      const plane = PalaceInterior.metrics().x + passage.position[0];
+      const start = plane - hall.wallThickness - hall.alcoveDepth;
+      hero.position.set(x + 0.85, y, z);
+      const goal = start - 3.35;
+      let blockedAt = null, steps = 0;
+      while (hero.position.x > goal) {
+        const nx = hero.position.x - 0.06;
+        if (game.blocked(nx, z)) { blockedAt = nx; break; }
+        hero.position.set(nx, PalaceInterior.floorAt(nx, z, hero.position.y), z);
+        steps++;
+      }
+      const stair = scene.getObjectByName('R3DoorStairEntrance');
+      camera.position.set(x + 1.35, y + 2.45, z + 0.15);
+      camera.fov = 66;
+      camera.lookAt(start - 4.8, y - 1.9, z);
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld();
+      return { position: hero.position.toArray(), steps, blockedAt, start, datum: y,
+        stair: stair?.visible && !!stair.getObjectByName('Treads') && !!stair.getObjectByName('Vault') };
+    });
+    report.checks.walksDirectlyDownStair = report.walk.stair && report.walk.blockedAt === null &&
+      report.walk.position[0] < report.walk.start - 3 && report.walk.position[1] < report.walk.datum - 0.5;
+    await capture('into-stair.jpg', 0);
+    console.log('Direct walk', JSON.stringify(report.walk));
+    save();
+
     await page.evaluate(() => {
-      const { render, hero, x, y, z, size, far, camera } = __doorTour;
+      const { render, size, far, camera } = __doorTour;
       window.__R.setSize(...size, false);
       camera.far = far;
       camera.updateProjectionMatrix();
       window.__R.render = render;
-      hero.position.set(x - 0.93, y, z);
-      window.__holdSim = false;
     });
-    await raf(12);
-    report.checks.centerClearAndNoTransition = await page.evaluate(() => {
-      const { game, hero, x, z, passage } = __doorTour;
-      const back = PalaceInterior.metrics().x + passage.position[0]
-        - PalaceWings.state.hall.wallThickness - PalaceWings.state.hall.alcoveDepth;
-      return !game.blocked(x, z) && !game.blocked(hero.position.x, hero.position.z) &&
-        game.blocked(back + 0.12, z) && PalaceInterior.state() === 'DONE' &&
-        PalaceInterior.ownsGround() && __doorTour.gate.parent.visible && !PalaceInterior.inR3();
-    });
-    await page.evaluate(() => { window.__holdSim = true; });
     for (const side of ['front', 'back']) {
       await camera(side);
       report.views[side] = await page.evaluate(async () => {
@@ -239,6 +259,47 @@ async function main() {
           cpuMB: estimate.cpuMB, gpuMB: estimate.gpuMB };
       });
     }
+    await cdp.send('HeapProfiler.collectGarbage');
+    const heapBefore = (await cdp.send('Runtime.getHeapUsage')).usedSize;
+    await page.evaluate(start => {
+      const { game, hero, scene, render, z } = __doorTour;
+      const target = start - 1.66;
+      hero.position.set(target, PalaceInterior.floorAt(target, z, hero.position.y), z);
+      game.setFacing(-Math.PI / 2);
+      window.__doorTour = { hero, scene };
+      window.__R.render = (...args) => { if (PalaceInterior.inR3()) render(...args); };
+      window.__holdSim = false;
+      window.__qaFast = true;
+    }, report.walk.start);
+    await page.keyboard.down('KeyW');
+    await page.waitForFunction(() => PalaceInterior.inR3(), null, { timeout: 120000, polling: 100 });
+    await page.keyboard.up('KeyW');
+    const arrival = await page.evaluate(() => __doorTour.hero.position.toArray());
+    await page.waitForFunction(() => ['R3', 'R3_FAILED'].includes(PalaceInterior.state()), null, { timeout: 420000, polling: 500 });
+    await cdp.send('HeapProfiler.collectGarbage');
+    const heapAfter = (await cdp.send('Runtime.getHeapUsage')).usedSize;
+    report.retirement = await page.evaluate(async ({ arrival, entrance }) => {
+      const { hero, scene } = __doorTour;
+      const snapshot = PalaceInterior.r3Memory();
+      const stage = scene.getObjectByName('R3Stage');
+      const sectionIds = stage?.getObjectByName('R3_SealedZone')?.children.map(n => n.name.split('_')[0])
+        .filter(id => /^R3-\d+$/.test(id)).sort() || [];
+      const registered = (await SinAreas.list()).filter(a => a.stage === 'r3').map(a => a.id).sort();
+      const reloading = await PalaceInterior.loadPalaceAssets().then(() => false, () => true);
+      return { ...snapshot, arrival, actual: hero.position.toArray(), sectionIds, registered,
+        walkRetained: PalaceInterior.state() === 'R3' && Math.abs(hero.position.x - arrival[0]) < 0.25,
+        noReturn: reloading && PalaceInterior.blocks(entrance + 0.25, hero.position.z),
+        noOldScene: scene.children.length === 2 && scene.children.includes(hero) && scene.children.includes(stage) &&
+          !window.__r3DoorTest && !Object.keys(PalaceWings.state).length };
+    }, { arrival, entrance: report.walk.start });
+    report.retirement.heapMiB = [heapBefore, heapAfter].map(bytes => +(bytes / 1048576).toFixed(1));
+    const r3 = report.retirement;
+    report.checks.retainsPositionAndReleasesPalace = r3.walkRetained && r3.noReturn && r3.noOldScene &&
+      r3.released?.roots.length === 1 && r3.disposed?.geometries > 0 && r3.disposed?.textures > 0 &&
+      r3.released?.cpuMB < r3.before?.cpuMB && r3.released?.gpuMB < r3.before?.gpuMB;
+    report.checks.onlyRegisteredR3Sections = r3.sectionIds.length === 3 &&
+      JSON.stringify(r3.sectionIds) === JSON.stringify(r3.registered);
+    console.log('Point of no return', JSON.stringify({ checks: report.checks, memory: report.retirement }));
     assert.deepEqual(report.errors, []);
     assert.ok(Object.values(report.checks).every(Boolean), JSON.stringify(report.checks));
   } finally {

@@ -387,6 +387,7 @@
 
     return {
       open() { if (phase !== 'closed') return false; phase = 'opening'; return true; },
+      isOpen() { return phase === 'open'; },
       resetForTest(hero) {
         if (nearby(hero.x, hero.z, RADIUS)) return false;
         elapsed = 0;

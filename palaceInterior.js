@@ -104,7 +104,7 @@
   let state = 'IDLE';
   let r3Entry = null, r3Stage = null, r3Curtain = null, r3Fade = 0;
   const r3Memory = {};
-  let r3Door = null, r3Alcove = null, r3Preview = false;
+  let r3Door = null, r3Alcove = null, r3Entrance = null, r3Preview = false;
   const R3_CLEARANCE = 0.32;
   const inR3 = () => r3Entry !== null;
   const r3Locked = () => inR3() && state !== 'R3';
@@ -1760,7 +1760,7 @@
     palaceEnv = null;
     flameSprite.mat = null;
     group = null;
-    r3Door = r3Alcove = null;
+    r3Door = r3Alcove = r3Entrance = null;
     delete window.__r3DoorTest;
     colliders = [];
     lights = [];
@@ -2538,18 +2538,17 @@
           const courses = length => stone ? Math.ceil(length / 0.72) : 1;
           const surface = geometry => stone ? SinR3SealedDoor.stoneSurface(geometry) : geometry;
           const block = (x, y, z) => surface(new THREE.BoxGeometry(x, y, z, courses(x), courses(y), courses(z)));
-          const backGeo = surface(new THREE.PlaneGeometry(archW, archH, courses(archW), courses(archH)));
-          const back = new THREE.Mesh(backGeo, finish);
-          back.position.set(backX, archH * 0.5, zc);
-          back.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-          back.name = 'passage-back';
-          group.add(back);
+          if (!stone) {
+            const back = new THREE.Mesh(new THREE.PlaneGeometry(archW, archH), alcoveMat);
+            back.position.set(backX, archH * 0.5, zc);
+            back.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+            back.name = 'passage-back';
+            group.add(back);
+          }
           if (r3) {
-            // Existing alcove cap. Opening the test gate does not arm the
-            // transition or give access past the end of the palace passage.
             r3Alcove = { back: backX, front: inner, z: zc, half: archW * 0.41,
               ceiling: archH, floor: 0 };
-            extras.push({ min: new THREE.Vector3(backX, 0, zc - archW / 2),
+            if (!stone) extras.push({ min: new THREE.Vector3(backX, 0, zc - archW / 2),
               max: new THREE.Vector3(backX + R3_CLEARANCE, archH, zc + archW / 2), r3Alcove: true });
           }
           const sideGeo = block(depth, archH, 0.08 * H);
@@ -2607,7 +2606,17 @@
       if (query.get('r3DoorTest') === '1' && (query.get('dev') === '1' || query.has('startInHall'))) {
         window.__r3DoorTest = {
           state: () => r3Door?.state(),
-          open: () => state === 'DONE' && !r3Preview && !!r3Door?.open(),
+          open() {
+            if (state !== 'DONE' || r3Preview || !r3Door?.open()) return false;
+            if (!r3Entrance) {
+              const hall = { wallThickness: wallThick, alcoveDepth: 1.15 * H };
+              r3Entrance = SinR3SealedZone.mount(THREE, sealedPassage, hall, group.position, { entranceOnly: true });
+              group.add(r3Entrance.root);
+            }
+            r3Entrance.root.visible = true;
+            return true;
+          },
+          entranceReady: () => r3Entrance?.ready(),
           // Capture can step the exact game animation while the follow
           // camera is suspended. This entry exists only in test sessions.
           step: dt => { if (window.__holdSim && state === 'DONE') tickR3Door(dt, ctx.hero); },
@@ -4202,6 +4211,8 @@
     }
     const sill = r3Door?.support(x, z);
     if (sill != null) return sill;
+    const stairFloor = r3Entrance?.floorAt(lx, lz);
+    if (stairFloor) return floorY + stairFloor.y;
     if (inR3Alcove(lx, lz)) return floorY + r3Alcove.floor;
     if (wingRuntime && window.PalaceWings) {
       const wh = PalaceWings.floorAt(lx, lz, fromY == null ? 0 : fromY - floorY);
@@ -4583,16 +4594,19 @@
   }
 
   function beginR3(ctx) {
-    if (!r3Preview) return false;
+    if (!r3Preview && !r3Door?.isOpen()) return false;
     const hall = wingRuntime && window.PalaceWings?.state.hall;
     const passage = r3Passage(hall?.passages);
     if (!passage) return false;
     const p = ctx.hero.position;
     const [x, , z] = passage.position;
-    if (portalX + x - p.x < 0.12 || portalX + x - p.x > 1.4 ||
+    const crossed = r3Entrance?.crossed(p.x - portalX, p.z - portalFront);
+    if (!r3Preview && !crossed) return false;
+    if (r3Preview && (portalX + x - p.x < 0.12 || portalX + x - p.x > 1.4 ||
         Math.abs(p.z - portalFront - z) > passage.width / 2 - R3_CLEARANCE ||
-        Math.abs(p.y - floorY) > 0.6) return false;
+        Math.abs(p.y - floorY) > 0.6)) return false;
     r3Entry = { passage: { position: [...passage.position] }, hall: { wallThickness: hall.wallThickness, alcoveDepth: hall.alcoveDepth } };
+    if (crossed) r3Entry.arrival = [p.x - portalX, p.y - floorY, p.z - portalFront];
     state = 'R3_FADING_OUT';
     r3Fade = 0;
     r3Curtain = document.createElement('div');
@@ -4628,7 +4642,7 @@
     for (const node of previous) node.removeFromParent();
     const stoppingWings = window.PalaceWings?.retire();
     wingRuntime = null;
-    group = null; hallBuilt = false; r3Door = r3Alcove = null;
+    group = null; hallBuilt = false; r3Door = r3Alcove = r3Entrance = null;
     delete window.__r3DoorTest;
     assets = specs = loadPromise = loadOk = setupTask = saved = colliderBakePromise = null;
     palaceEnv = null;
@@ -4668,9 +4682,11 @@
     // R3-01 props and stone sets load while the curtain is still black.
     await stage.ready?.(ctx.renderer).catch(error => console.error('[R3-01] stair assets', error));
     r3Stage = stage;
-    ctx.hero.position.set(origin.x + stage.spawn[0], origin.y + stage.spawn[1], origin.z + stage.spawn[2]);
+    const arrival = r3Entry.arrival || stage.spawn;
+    if (r3Entry.arrival) arrival[1] = stage.nearFloor(arrival[0], arrival[2], arrival[1])?.y ?? arrival[1];
+    ctx.hero.position.set(origin.x + arrival[0], origin.y + arrival[1], origin.z + arrival[2]);
     ctx.setFacing(-Math.PI / 2);
-    stage.update(...stage.spawn);
+    stage.update(...arrival);
     followCamera(ctx.camera, ctx.hero, -Math.PI / 2, FOLLOW_PITCH, FOLLOW_DIST, 0.016, true, true);
     ctx.renderer.render(ctx.scene, ctx.camera);
     r3Memory.loaded = { ...r3Snapshot(ctx, 'R3-loaded'), budget: stage.budget, cost: stage.cost };
@@ -5162,7 +5178,7 @@
       const lz = ctx.hero.position.z - portalFront;
       const inHall = lz >= -0.08 && lz <= hallLen + 0.4 && Math.abs(lx) <= hallW / 2 + 0.2;
       const inWings = !!(wingRuntime && window.PalaceWings && PalaceWings.contains(lx, lz));
-      occupant = inHall || inWings || !!inR3Alcove(lx, lz);
+      occupant = inHall || inWings || !!inR3Alcove(lx, lz) || !!r3Entrance?.floorAt(lx, lz);
       // The hall shell (floor, ceiling, murals) must NEVER be hidden while
       // the player is in the palace. The previous `wingRuntime ? (inHall ||
       // palaceSeen) : occupant` set group.visible = false the moment the
@@ -5192,6 +5208,13 @@
     if (!active) return false;
     const hero = wingRuntime && window.PalaceWings && PalaceWings.state.ctx.hero;
     const fromY = hero ? hero.position.y : floorY;
+    if (r3Entrance && hero) {
+      const lx = x - portalX, lz = z - portalFront;
+      const hx = hero.position.x - portalX, hz = hero.position.z - portalFront;
+      if (r3Entrance.floorAt(lx, lz) || r3Entrance.floorAt(hx, hz)) {
+        return r3Entrance.blocks(lx, lz, hx, hz, R3_CLEARANCE);
+      }
+    }
     if (wingRuntime && window.PalaceWings && PalaceWings.capsuleBlocked(x - portalX, z - portalFront, 0.32, fromY - floorY)) return true;
     // Height-aware: boxes entirely above the hero's head (arch lintels over the open wing
     // passages) or below the feet must not act as full-height walls in this 2D check.
@@ -5255,6 +5278,8 @@
   // Ceiling height (world y) above a point, or +Infinity when unknown.
   function ceilingAt(x, z, feetY) {
     if (r3Stage) return floorY + (r3Stage.nearFloor(x - portalX, z - portalFront, feetY - floorY)?.ceiling ?? Infinity);
+    const stairFloor = r3Entrance?.floorAt(x - portalX, z - portalFront);
+    if (stairFloor) return floorY + stairFloor.ceiling;
     if (wingRuntime && window.PalaceWings && PalaceWings.state && PalaceWings.state.root) {
       const root = PalaceWings.state.root.position, lx = x - root.x, lz = z - root.z;
       if (PalaceWings.contains(lx, lz)) {
@@ -5309,7 +5334,8 @@
     const templeDoorCount=entranceCount+templeDoors.length,libraryDoorCount=templeDoorCount+libraryDoors.length;
     const studyCount=libraryDoorCount+studyBoxes.length;
     const kingCount = studyCount + kingBoxes.length;
-    const r3Boxes = r3Stage?.cameraBoxesAt(px - portalX, pz - portalFront, feetY - floorY) || noCameraColliders;
+    const stair = r3Stage || r3Entrance;
+    const r3Boxes = stair?.cameraBoxesAt(px - portalX, pz - portalFront, feetY - floorY) || noCameraColliders;
     for (let i = 0; i < kingCount + r3Boxes.length; i++) {
       const b = i < staticCount ? colliders[i] : i < libraryCount ? libraryBoxes[i - staticCount] :
         i < archiveCount ? archiveBoxes[i - libraryCount] : i < observatoryCount ? observatoryBoxes[i - archiveCount] :
@@ -5424,7 +5450,10 @@
       const t = Math.max(0.18, hit - 0.05);
       cam.position.set(ox + dx * t, oy + dy * t, oz + dz * t);
     }
-    if (inR3Alcove(cam.position.x - portalX, cam.position.z - portalFront)) {
+    const stairFloor = r3Entrance?.floorAt(cam.position.x - portalX, cam.position.z - portalFront);
+    if (stairFloor) {
+      cam.position.y = Math.max(floorY + stairFloor.y + 0.35, Math.min(floorY + stairFloor.ceiling - 0.25, cam.position.y));
+    } else if (inR3Alcove(cam.position.x - portalX, cam.position.z - portalFront)) {
       cam.position.y = Math.max(floorY + 0.35, Math.min(floorY + r3Alcove.ceiling - 0.25, cam.position.y));
     } else if (inWings) {
       // The main follow rig already applies the player's touch yaw/pitch.
@@ -5442,6 +5471,7 @@
 
   function clampFollowTarget(want) {
     if (!want || state !== 'DONE' || !occupant || inR3Alcove(want.x - portalX, want.z - portalFront)) return;
+    if (r3Entrance?.floorAt(want.x - portalX, want.z - portalFront)) return;
     if (wingRuntime && window.PalaceWings && PalaceWings.contains(want.x - portalX, want.z - portalFront)) {
       PalaceWings.clampFollowTarget(want); return;
     }
@@ -5462,7 +5492,10 @@
     locksControl: function () { return r3Locked() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
     ownsCamera: function () { return r3Locked() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
     inR3,
-    onR3Steps(p) { return !!r3Stage?.nearFloor(p.x - portalX, p.z - portalFront, p.y - floorY)?.steps; },
+    onR3Steps(p) {
+      const x = p.x - portalX, z = p.z - portalFront;
+      return !!(r3Stage?.nearFloor(x, z, p.y - floorY) || r3Entrance?.floorAt(x, z))?.steps;
+    },
     r3Memory: () => structuredClone(r3Memory),
     wantsWalk: function () { return state === 'ENTRANCE'; },
     clampFollowTarget: clampFollowTarget,

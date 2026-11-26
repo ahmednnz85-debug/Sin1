@@ -16,11 +16,11 @@ async function mount() {
   const window = { console, performance };
   const ctx = vm.createContext({ window, console, performance, Math, Set, Map, Promise, JSON, Object, Array, Float32Array, Uint8Array, Error });
   for (const f of ['r3-stair-dressing.js', 'r3-sealed-zone.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
-  const passage = { position: [-12.881019386649129, 0, 9.200728133320807] };
-  const hall = { wallThickness: 2.5643261702223548, alcoveDepth: 2.116167470663785 };
+  const hall = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/palace-colliders.json'), 'utf8')).hall;
+  const passage = hall.passages.find(p => p.id === window.SinR3SealedZone.passageId);
   const origin = new THREE.Vector3(1, 3.75, 183.66);
   const stage = window.SinR3SealedZone.mount(THREE, passage, hall, origin);
-  return { THREE, stage, window, passage };
+  return { THREE, stage, window, passage, hall, origin };
 }
 
 test('R3-01 dressing: plan, walkable path, collisions', { skip }, async () => {
@@ -85,4 +85,25 @@ test('R3-01 assets exist and are referenced by real paths', () => {
   assert.match(src, /اصول درج السنين\.glb/);
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.ok(html.indexOf('r3-stair-dressing.js') < html.indexOf('r3-sealed-zone.js?'), 'dressing loads before the zone');
+});
+
+test('the opened palace door joins the authored stair treads without a cap across the route', { skip }, async () => {
+  const { THREE, stage, window, passage, hall, origin } = await mount();
+  // Use the preview's real geometry with neutral materials in Node.
+  window.SinR3Stair = null;
+  const entrance = window.SinR3SealedZone.mount(THREE, passage, hall, origin, { entranceOnly: true });
+  const [x, , z] = passage.position;
+  assert.ok(entrance.root.getObjectByName('Treads'));
+  assert.ok(entrance.cost.geometryBytes < 0.2 * 1024 * 1024);
+  const samples = [];
+  for (let u = entrance.start - 0.6; u < entrance.handoff + 0.1; u += 0.05) {
+    assert.equal(entrance.blocks(x - u, z, x - u + 0.05, z, 0.32), false, `stair entrance blocked at ${u}`);
+    const floor = entrance.floorAt(x - u, z);
+    if (!floor) continue;
+    assert.equal(floor.y, stage.nearFloor(x - u, z, floor.y).y);
+    samples.push(floor.y);
+  }
+  assert.ok(Math.min(...samples) < -0.4);
+  assert.ok(entrance.crossed(x - entrance.handoff - 0.05, z));
+  assert.ok(entrance.blocks(x - entrance.start - 0.2, z + 3.6, x - entrance.start + 0.2, z, 0.32));
 });
