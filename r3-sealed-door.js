@@ -107,6 +107,63 @@
     return cut;
   }
 
+  function addLining(T, asset) {
+    const { scene, outline, size, edgeMaterial, archMaterial } = asset;
+    if (!edgeMaterial || scene.getObjectByName('R3DoorRebateLining')) return;
+    const root = new T.Group();
+    root.name = 'R3DoorRebateLining';
+    const segments = new Map([
+      [edgeMaterial, { positions: [], uvs: [] }],
+      [archMaterial, { positions: [], uvs: [] }]
+    ]);
+    const points = outline.map(([x, y]) => new T.Vector2(x, y));
+    const inward = points.map((point, i) => {
+      const next = points[(i + 1) % points.length];
+      return new T.Vector2(point.y - next.y, next.x - point.x).normalize();
+    });
+    const offset = points.map((p, i) => {
+      const edge = inward[i], adjacent = inward[(i + points.length - 1) % points.length];
+      const bisector = edge.clone().add(adjacent).normalize();
+      return bisector.multiplyScalar(1 / Math.max(0.5, edge.dot(bisector)));
+    });
+    const inner = points.map((point, i) => point.clone().addScaledVector(offset[i], 0.048));
+    const outer = points.map((point, i) => point.clone().addScaledVector(offset[i], -0.012));
+    const front = size.max.z - 0.012, rear = size.min.z - 0.020;
+    const quad = (batch, corners, u0, u1, height) => {
+      const uvs = [[u0, 0], [u1, 0], [u1, height], [u0, height]];
+      for (const i of [0, 1, 2, 0, 2, 3]) {
+        batch.positions.push(...corners[i]);
+        batch.uvs.push(...uvs[i]);
+      }
+    };
+    let u = 0;
+    for (let i = 0; i < points.length; i++) {
+      const j = (i + 1) % points.length;
+      const nextU = u + points[i].distanceTo(points[j]);
+      const batch = segments.get(Math.min(points[i].y, points[j].y) > 5.5 ? archMaterial : edgeMaterial);
+      const o0 = [...outer[i], front], o1 = [...outer[j], front];
+      const f0 = [...inner[i], front], f1 = [...inner[j], front];
+      // The front strip covers the joint; the return lines it through the
+      // depth of the recess so an oblique view cannot see behind the frame.
+      quad(batch, [o0, o1, f1, f0], u, nextU, 0.06);
+      quad(batch, [f0, f1, [...inner[j], rear], [...inner[i], rear]], u, nextU, front - rear);
+      u = nextU;
+    }
+    for (const [material, batch] of segments) {
+      if (!batch.positions.length) continue;
+      const geometry = new T.BufferGeometry();
+      geometry.setAttribute('position', new T.Float32BufferAttribute(batch.positions, 3));
+      geometry.setAttribute('uv', new T.Float32BufferAttribute(batch.uvs, 2));
+      geometry.computeVertexNormals();
+      geometry.userData.palaceShared = true;
+      const mesh = new T.Mesh(geometry, material);
+      mesh.name = 'R3DoorLining/' + material.name;
+      mesh.userData.r3DoorTrim = true;
+      root.add(mesh);
+    }
+    scene.add(root);
+  }
+
   async function prepare(T, buffer) {
     const { mergeGeometries } = await import('three/addons/utils/BufferGeometryUtils.js');
     const loader = new T.GLTFLoader();
@@ -172,7 +229,9 @@
       if (part !== frame) leafBoxes.push(bounds);
     }
     scene.name = 'R3SealedDoor';
-    return { scene, hinges, size, fixedBoxes, leafBoxes, outline: outlineOf(framePoints) };
+    const materials = new Map(frame.children.filter(node => node.isMesh).map(node => [node.material.name, node.material]));
+    return { scene, hinges, size, fixedBoxes, leafBoxes, outline: outlineOf(framePoints),
+      edgeMaterial: materials.get('SideStone'), archMaterial: materials.get('ArchSide') };
   }
 
   function mount(T, asset, parent, passage) {
@@ -198,6 +257,7 @@
     );
     scene.rotation.y = facing;
     scene.scale.set(horizontal, vertical, horizontal);
+    addLining(T, asset);
     parent.add(scene);
     scene.updateWorldMatrix(true, false);
     const origin = scene.getWorldPosition(new T.Vector3());

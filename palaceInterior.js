@@ -2533,7 +2533,8 @@
         const backX = outer + side * depth;
         const r3 = CONFIG.useWings && side < 0 && i === 0 && window.SinR3SealedZone;
         if (!wingArchOpen(side, i)) {
-          const back = new THREE.Mesh(new THREE.PlaneGeometry(archW, archH), alcoveMat);
+          const finish = (r3 && assets.r3Door?.edgeMaterial) || alcoveMat;
+          const back = new THREE.Mesh(new THREE.PlaneGeometry(archW, archH), finish);
           back.position.set(backX, archH * 0.5, zc);
           back.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
           back.name = 'passage-back';
@@ -2542,13 +2543,13 @@
             // Existing alcove cap. Opening the test gate does not arm the
             // transition or give access past the end of the palace passage.
             r3Alcove = { back: backX, front: inner, z: zc, half: archW * 0.41,
-              ceiling: archH, floor: 0.05 * H - 0.02 };
+              ceiling: archH, floor: 0 };
             extras.push({ min: new THREE.Vector3(backX, 0, zc - archW / 2),
               max: new THREE.Vector3(backX + R3_CLEARANCE, archH, zc + archW / 2), r3Alcove: true });
           }
           const sideGeo = new THREE.BoxGeometry(depth, archH, 0.08 * H);
           [-1, 1].forEach(function (k) {
-            const jamb = new THREE.Mesh(sideGeo, alcoveMat);
+            const jamb = new THREE.Mesh(sideGeo, finish);
             jamb.position.set((outer + backX) / 2, archH * 0.5, zc + k * (archW / 2));
             jamb.name = 'passage-jamb';
             group.add(jamb);
@@ -2562,12 +2563,13 @@
             }
           });
           const ceilGeo = new THREE.BoxGeometry(depth, 0.06 * H, archW);
-          const cl = new THREE.Mesh(ceilGeo, alcoveMat);
+          const cl = new THREE.Mesh(ceilGeo, finish);
           cl.position.set((outer + backX) / 2, archH, zc);
           cl.name = 'passage-slab';
-          const floorSpan = Math.abs(backX - inner) + 0.2 * H;
-          const fl = new THREE.Mesh(new THREE.BoxGeometry(floorSpan, 0.1 * H, archW + 0.2 * H), alcoveMat);
-          fl.position.set((inner + backX) / 2, -0.02, zc);
+          // End the passage floor at the wall, flush with the hall marble.
+          const floorSpan = Math.abs(backX - inner) + (r3 ? 0 : 0.2 * H);
+          const fl = new THREE.Mesh(new THREE.BoxGeometry(floorSpan, 0.1 * H, archW + 0.2 * H), finish);
+          fl.position.set((inner + backX) / 2, r3 ? -0.05 * H : -0.02, zc);
           fl.name = 'passage-slab';
           group.add(fl, cl);
           const span = 0.22 * H;

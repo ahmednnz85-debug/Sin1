@@ -13,7 +13,7 @@ url.searchParams.set('dev', '1');
 url.searchParams.set('level', 'HALL');
 url.searchParams.set('r3DoorTest', '1');
 const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
-const frequency = 15;
+const frequency = 12;
 
 async function main() {
   fs.mkdirSync(output, { recursive: true });
@@ -58,28 +58,32 @@ async function main() {
       const y = PalaceInterior.floorY();
       const passage = PalaceWings.state.hall.passages.find(p => p.id === SinR3SealedZone.passageId);
       const fixed = frame.children.filter(mesh => mesh.isMesh);
-      const baked = [];
+      const baked = [], edgeFinishes = [];
       const maps = new Set();
       gate.traverse(node => {
         if (node.isMesh) {
-          baked.push([node.name, node.geometry.index.count / 3]);
+          const count = (node.geometry.index?.count || node.geometry.attributes.position.count) / 3;
+          (node.userData.r3DoorTrim ? edgeFinishes : baked).push([node.material.name, count]);
           maps.add(node.material.map);
         }
       });
       document.documentElement.classList.add('sin-dev-clean');
       window.__doorTour = { game, hero, camera, scene, gate, fixed, x, y, z, passage,
-        render: window.__R.render.bind(window.__R) };
+        render: window.__R.render.bind(window.__R), size: window.__R.getSize(new THREE.Vector2()).toArray(),
+        far: camera.far };
       const closed = __r3DoorTest.state();
       gate.updateWorldMatrix(true, true);
       const face = new THREE.Box3().setFromObject(gate).max.x;
       const wallPlane = PalaceInterior.metrics().x + passage.position[0];
-      return { closed, passage, baked, face, wallPlane, hallFloor: y, recessedWall: !!scene.getObjectByName('R3-RecessedWall'), textures: [...maps].map(t => [
+      return { closed, passage, baked, edgeFinishes, face, wallPlane, hallFloor: y, recessedWall: !!scene.getObjectByName('R3-RecessedWall'), textures: [...maps].map(t => [
         t.image?.width || t.userData.sinGpuW, t.image?.height || t.userData.sinGpuH]) };
     });
     report.asset = info;
     report.checks.closedByDefault = info.closed.phase === 'closed' && info.closed.angles.every(a => a === 0);
     report.checks.flushMuralFace = info.recessedWall && Math.abs(info.face - info.wallPlane) < 0.005;
     report.checks.sharedFloorDatum = Math.abs(info.closed.columnBase - info.hallFloor) < 0.002;
+    report.checks.authoredEdgeFinishes = info.edgeFinishes.length === 2 &&
+      info.edgeFinishes.every(([name]) => ['SideStone', 'ArchSide'].includes(name));
     report.checks.sourceTriangles = info.baked.reduce((sum, [, count]) => sum + count, 0) === 86206;
     report.checks.sharedPng = info.textures.length === 4 &&
       info.textures.filter(([w, h]) => w === 1122 && h === 1402).length === 2;
@@ -118,8 +122,13 @@ async function main() {
       hero.position.set(x + 5.2, y, z + 2.4);
       game.setFacing(-Math.PI / 2);
     });
-    await raf(5);
-    await page.evaluate(() => { window.__holdSim = true; window.__R.render = () => {}; });
+    await raf(2);
+    await page.evaluate(() => {
+      window.__holdSim = true;
+      window.__R.render = () => {};
+      window.__R.setSize(720, 332, false);
+      __doorTour.camera.far = 34;
+    });
     await camera('front');
     await capture('front-closed.jpg', 0);
     await camera('oblique');
@@ -172,7 +181,8 @@ async function main() {
       if (side === 'back') await capture('back-closed.jpg', 0);
       await page.evaluate(() => __r3DoorTest.open());
       report.angles[side] = [];
-      for (let i = 0; i < 65; i++) {
+      const frames = Math.ceil(frequency * info.closed.duration) + 2;
+      for (let i = 0; i < frames; i++) {
         const pose = await capture(side + '/' + String(i).padStart(3, '0') + '.jpg', i ? 1 / frequency : 0);
         report.angles[side].push([pose.elapsed, ...pose.angles]);
       }
@@ -187,7 +197,10 @@ async function main() {
     }
 
     await page.evaluate(() => {
-      const { render, hero, x, y, z } = __doorTour;
+      const { render, hero, x, y, z, size, far, camera } = __doorTour;
+      window.__R.setSize(...size, false);
+      camera.far = far;
+      camera.updateProjectionMatrix();
       window.__R.render = render;
       hero.position.set(x - 0.93, y, z);
       window.__holdSim = false;
