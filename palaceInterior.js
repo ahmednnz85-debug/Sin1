@@ -2533,8 +2533,13 @@
         const backX = outer + side * depth;
         const r3 = CONFIG.useWings && side < 0 && i === 0 && window.SinR3SealedZone;
         if (!wingArchOpen(side, i)) {
-          const finish = (r3 && assets.r3Door?.edgeMaterial) || alcoveMat;
-          const back = new THREE.Mesh(new THREE.PlaneGeometry(archW, archH), finish);
+          const stone = r3 && assets.r3Door?.edgeMaterial;
+          const finish = stone || alcoveMat;
+          const courses = length => stone ? Math.ceil(length / 0.72) : 1;
+          const surface = geometry => stone ? SinR3SealedDoor.stoneSurface(geometry) : geometry;
+          const block = (x, y, z) => surface(new THREE.BoxGeometry(x, y, z, courses(x), courses(y), courses(z)));
+          const backGeo = surface(new THREE.PlaneGeometry(archW, archH, courses(archW), courses(archH)));
+          const back = new THREE.Mesh(backGeo, finish);
           back.position.set(backX, archH * 0.5, zc);
           back.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
           back.name = 'passage-back';
@@ -2547,7 +2552,7 @@
             extras.push({ min: new THREE.Vector3(backX, 0, zc - archW / 2),
               max: new THREE.Vector3(backX + R3_CLEARANCE, archH, zc + archW / 2), r3Alcove: true });
           }
-          const sideGeo = new THREE.BoxGeometry(depth, archH, 0.08 * H);
+          const sideGeo = block(depth, archH, 0.08 * H);
           [-1, 1].forEach(function (k) {
             const jamb = new THREE.Mesh(sideGeo, finish);
             jamb.position.set((outer + backX) / 2, archH * 0.5, zc + k * (archW / 2));
@@ -2562,13 +2567,13 @@
                 max: new THREE.Vector3(inner, archH, Math.max(innerEdge, outerEdge)), r3Alcove: true });
             }
           });
-          const ceilGeo = new THREE.BoxGeometry(depth, 0.06 * H, archW);
+          const ceilGeo = block(depth, 0.06 * H, archW);
           const cl = new THREE.Mesh(ceilGeo, finish);
           cl.position.set((outer + backX) / 2, archH, zc);
           cl.name = 'passage-slab';
           // End the passage floor at the wall, flush with the hall marble.
           const floorSpan = Math.abs(backX - inner) + (r3 ? 0 : 0.2 * H);
-          const fl = new THREE.Mesh(new THREE.BoxGeometry(floorSpan, 0.1 * H, archW + 0.2 * H), finish);
+          const fl = new THREE.Mesh(block(floorSpan, 0.1 * H, archW + 0.2 * H), finish);
           fl.position.set((inner + backX) / 2, r3 ? -0.05 * H : -0.02, zc);
           fl.name = 'passage-slab';
           group.add(fl, cl);

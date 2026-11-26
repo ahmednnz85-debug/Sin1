@@ -164,6 +164,26 @@
     scene.add(root);
   }
 
+  function stoneSurface(geometry) {
+    // The SideStone map is an atlas of reliefs and stone. Use the stone on
+    // either side of its cuneiform panel for the larger architectural faces.
+    const result = geometry.toNonIndexed();
+    const uv = result.attributes.uv;
+    const corners = [[0, 1], [0, 0], [1, 1], [0, 0], [1, 0], [1, 1]];
+    for (let i = 0; i < uv.count; i += 6) {
+      const tile = i / 6;
+      const left = (tile * 7 % 11) < 5;
+      const start = left ? 9 : 388;
+      const flip = Math.floor(tile * 11 / 7) % 2;
+      for (let j = 0; j < corners.length; j++) {
+        const [x, y] = corners[j];
+        uv.setXY(i + j, (start + (flip ? 1 - x : x) * 65) / 512, (119 + y * 113) / 1024);
+      }
+    }
+    geometry.dispose();
+    return result;
+  }
+
   async function prepare(T, buffer) {
     const { mergeGeometries } = await import('three/addons/utils/BufferGeometryUtils.js');
     const loader = new T.GLTFLoader();
@@ -387,5 +407,5 @@
     };
   }
 
-  window.SinR3SealedDoor = { FILE, prepare, mount };
+  window.SinR3SealedDoor = { FILE, prepare, mount, stoneSurface };
 })();

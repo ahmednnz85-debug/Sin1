@@ -13,7 +13,7 @@ url.searchParams.set('dev', '1');
 url.searchParams.set('level', 'HALL');
 url.searchParams.set('r3DoorTest', '1');
 const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
-const frequency = 12;
+const frequency = 10;
 
 async function main() {
   fs.mkdirSync(output, { recursive: true });
@@ -67,6 +67,8 @@ async function main() {
           maps.add(node.material.map);
         }
       });
+      const alcoveFaces = scene.getObjectsByProperty('material', gate.getObjectByName('world/SideStone').material)
+        .filter(node => /^passage-(back|jamb|slab)$/.test(node.name));
       document.documentElement.classList.add('sin-dev-clean');
       window.__doorTour = { game, hero, camera, scene, gate, fixed, x, y, z, passage,
         render: window.__R.render.bind(window.__R), size: window.__R.getSize(new THREE.Vector2()).toArray(),
@@ -75,7 +77,9 @@ async function main() {
       gate.updateWorldMatrix(true, true);
       const face = new THREE.Box3().setFromObject(gate).max.x;
       const wallPlane = PalaceInterior.metrics().x + passage.position[0];
-      return { closed, passage, baked, edgeFinishes, face, wallPlane, hallFloor: y, recessedWall: !!scene.getObjectByName('R3-RecessedWall'), textures: [...maps].map(t => [
+      return { closed, passage, baked, edgeFinishes, face, wallPlane, hallFloor: y,
+        stoneCourses: alcoveFaces.map(node => node.geometry.attributes.uv.count / 6),
+        recessedWall: !!scene.getObjectByName('R3-RecessedWall'), textures: [...maps].map(t => [
         t.image?.width || t.userData.sinGpuW, t.image?.height || t.userData.sinGpuH]) };
     });
     report.asset = info;
@@ -84,6 +88,7 @@ async function main() {
     report.checks.sharedFloorDatum = Math.abs(info.closed.columnBase - info.hallFloor) < 0.002;
     report.checks.authoredEdgeFinishes = info.edgeFinishes.length === 2 &&
       info.edgeFinishes.every(([name]) => ['SideStone', 'ArchSide'].includes(name));
+    report.checks.stoneCourses = info.stoneCourses.length === 5 && info.stoneCourses.every(courses => courses > 6);
     report.checks.sourceTriangles = info.baked.reduce((sum, [, count]) => sum + count, 0) === 86206;
     report.checks.sharedPng = info.textures.length === 4 &&
       info.textures.filter(([w, h]) => w === 1122 && h === 1402).length === 2;
@@ -127,7 +132,7 @@ async function main() {
       window.__holdSim = true;
       window.__R.render = () => {};
       window.__R.setSize(720, 332, false);
-      __doorTour.camera.far = 34;
+      __doorTour.camera.far = 18;
     });
     await camera('front');
     await capture('front-closed.jpg', 0);

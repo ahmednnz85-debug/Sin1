@@ -125,3 +125,26 @@ test('the recessed frame shares the mural and floor datums and removes only fron
   assert.deepEqual([...recessed.index.array], [3, 4, 5, 6, 7, 8]);
   assert.equal(recessed.attributes.uv.getX(7), 1);
 });
+
+test('alcove courses sample only the stone fields of the original side atlas', { skip }, () => {
+  const window = {};
+  vm.runInNewContext(script, { window });
+  const original = new T.BoxGeometry(2, 3, 1, 3, 4, 2);
+  const indices = [...original.index.array];
+  const surface = window.SinR3SealedDoor.stoneSurface(original);
+  const { uv, position } = surface.attributes;
+  assert.equal(uv.count, indices.length);
+  const regions = new Set();
+  for (let i = 0; i < uv.count; i += 6) {
+    const region = uv.getX(i) < 0.5;
+    regions.add(region);
+    for (let j = i; j < i + 6; j++) {
+      assert.equal(uv.getX(j) < 0.5, region, 'each course uses one stone field');
+      assert(uv.getY(j) >= 118 / 1024 && uv.getY(j) <= 233 / 1024);
+      assert.equal(position.getX(j), original.attributes.position.getX(indices[j]));
+      assert.equal(position.getY(j), original.attributes.position.getY(indices[j]));
+      assert.equal(position.getZ(j), original.attributes.position.getZ(indices[j]));
+    }
+  }
+  assert.equal(regions.size, 2);
+});
