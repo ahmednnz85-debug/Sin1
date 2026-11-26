@@ -102,10 +102,12 @@
     item('stair', 'Fractured_Inscribed_Slab_Large', L3.u0 + 2.4, L3.y, L3.v0 + 1.0, [0.3, 1], S(1.0), { tilt: 0.06 });
 
     // ---- overlook hall ----
+    P.wayItems = P.items.length;
     const { PU, PV } = A;
     P.platform = { u: PU, v: PV, y: ledge, yaw: yawZ(-1, 0), scale: rig.platformScale };
-    // Round platform: three boxes approximate the 5.8 m disc and its corner posts.
-    for (const [hu, hv] of [[5.9, 3.0], [3.0, 5.9], [4.45, 4.45]]) A.collision(PU - hu, PU + hu, ledge, ledge + 2.6, PV - hv, PV + hv, true);
+    // Round platform: five boxes follow the 5.8 m disc and its corner posts
+    // closely, so the 2 m passages between platform and arch piers stay open.
+    for (const [hu, hv] of [[5.9, 1.8], [5.4, 3.2], [4.5, 4.5], [3.2, 5.4], [1.8, 5.9]]) A.collision(PU - hu, PU + hu, ledge, ledge + 2.6, PV - hv, PV + hv, true);
     P.mechanism = { u: PU, v: PV, y: ledge + rig.mechTop, yaw: yawZ(-1, 0) + Math.PI / 6, scale: rig.mechScale };
     // Left side (screen left looking at the abyss is +v): blind arcade, lamassu
     // on its inscribed plinth beside the great arch, inscribed column in front.
@@ -131,7 +133,7 @@
     item('hall', 'rubble', bridge + 2.6, ledge - 0.05, VR - 4.6, [1, 0.3], S(0.6));
     item('stair', 'Collapsed_Masonry_Rubble_Cluster', bridge + 1.6, ledge, VR - 7.2, [1, 0], S(1.1));
     item('stair', 'Detached_Rough_Stone_Fragment', bridge + 3.9, ledge, VR - 6.4, [1, 0.4], S(1.1));
-    item('stair', 'Fractured_Inscribed_Slab_Large', A.A0 - 1.4, ledge, VL + 6.1, [-1, 0.5], S(1.0), { tilt: 0.1 });
+    item('stair', 'Fractured_Inscribed_Slab_Large', A.A0 - 2.2, ledge, VL + 2.2, [-1, 0.5], S(1.0), { tilt: 0.1 });
 
     // ---- the abyss beyond the great arch (no collision: out of reach) ----
     const g = (node, du, dy, dv, scale, face, extra = {}) =>
@@ -192,7 +194,10 @@
     const T = THREE, A = P.A;
     const owned = [];
     const dress = new T.Group(); dress.name = 'R3-03_Dressing'; dress.scale.x = -1; group.add(dress);
-    const far = new T.Group(); far.name = 'R3-03_Abyss'; dress.add(far);
+    // Corridor props and the overlook (hall, elevator, gorge) are shown by zone.
+    const wayDress = new T.Group(); wayDress.name = 'R3-03_Corridors'; dress.add(wayDress);
+    const hallDress = new T.Group(); hallDress.name = 'R3-03_Overlook'; dress.add(hallDress);
+    const far = new T.Group(); far.name = 'R3-03_Abyss'; hallDress.add(far);
     const fx = new T.Group(); fx.name = 'R3-03_Atmosphere'; group.add(fx);
     const lightRig = new T.Group(); lightRig.name = 'R3-03_Lights'; root.add(lightRig); lightRig.visible = false;
     const D = (u, y, v) => new T.Vector3(-u, y, v);
@@ -352,7 +357,7 @@
       g.position.copy(D(it.u, it.y, it.v));
       g.quaternion.setFromEuler(new T.Euler(it.tilt || 0, it.yaw, 0, 'YXZ'));
       g.scale.set(...it.scale);
-      dress.add(g);
+      (it.way ? wayDress : hallDress).add(g);
       return g;
     }
 
@@ -371,7 +376,7 @@
     function placeMaw(gltf) {
       const byName = n => gltf.scene.getObjectByName(n);
       const used = new Set();
-      const put = (node, it, parent = dress) => {
+      const put = (node, it, parent = hallDress) => {
         const src = byName(node); if (!src) { report.warnings.push('missing ' + node); return null; }
         used.add(node);
         const o = src.clone(true);
@@ -436,12 +441,12 @@
           anchor.rotation.set(0, theta0 + (rig.links - 1) * Math.PI / 2 + Math.PI / 2, 0);
           anchor.scale.setScalar(rig.anchorScale);
           anchor.name = 'Elevator_Anchor_Upper_' + o.name.split('_').pop();
-          dress.add(anchor);
+          hallDress.add(anchor);
           report.chains.push({ shackle: o.name, x: +bow.x.toFixed(2), z: +bow.z.toFixed(2), from: +(base + rig.firstLink).toFixed(2), to: +(base + rig.lastLink).toFixed(2), anchorTop: +(base + rig.anchorTop).toFixed(2) });
         }
         inst.instanceMatrix.needsUpdate = true;
         inst.computeBoundingSphere();
-        dress.add(inst);
+        hallDress.add(inst);
         used.add('Elevator_Chain'); used.add('Elevator_Anchor_Upper');
       }
       // Drop everything the scene does not use (textures shared with used meshes stay).
@@ -456,7 +461,8 @@
       stairLights = stair?.lights || null;
       const missing = [];
       const weathered = new Map(), dim = new T.Color(0.66, 0.63, 0.6);
-      for (const it of P.items) {
+      for (const [index, it] of P.items.entries()) {
+        it.way = index < P.wayItems;
         let src = it.src === 'stair' ? stair?.borrow?.(it.node) : hall?.borrow?.(it.node);
         if (!src) { missing.push(it.node); continue; }
         if (it.src === 'hall') {
@@ -488,7 +494,7 @@
       }
       let tris = 0;
       const byNode = {};
-      for (const top of [...dress.children, ...far.children]) {
+      for (const top of [...wayDress.children, ...hallDress.children, ...far.children]) {
         let n = 0;
         top.traverse(o => { if (o.isMesh && (!o.parent?.isLOD || o.parent.levels[0].object === o || o.parent.levels.length === 0)) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1); });
         if (top === far) continue;
@@ -518,8 +524,12 @@
       if (inside && blend < 0.02) blend = 0.02;
       const k = blend, on = k > 0.01 && installed;
       lightRig.visible = on;
-      fx.visible = on && visible;
-      far.visible = on && visible;
+      // The overlook is in sight from the last landing (down the mouth tunnel) onward.
+      const overlook = u > A.bridge - 12 && v < -12.5;
+      fx.visible = on && visible && overlook;
+      hallDress.visible = on && visible && overlook;
+      far.visible = true;
+      wayDress.visible = on && visible && u < A.bridge + 2;
       // Outside the overlook hall only the near end of the chasm can be seen.
       const view = Math.min(1, Math.max(0, (u - A.bridge + 6) / 8));
       // Corridors and the overlook hall never see each other's lights.
