@@ -1,0 +1,34 @@
+{
+  "url": "http://127.0.0.1:3104/index.html?startInHall=1&royalDoorTest=1&r3DoorTest=1",
+  "developerHub": "removed",
+  "checkpoint": "Playable R3, before the lift",
+  "royalPalace": {
+    "t": 396.365,
+    "state": "DONE",
+    "cityReleased": true,
+    "floorY": 3.7544692556158643,
+    "front": 183.65999999999997,
+    "x": 1
+  },
+  "sealedDoorOpened": true,
+  "passage": {
+    "t": 1296.857,
+    "inR3": true,
+    "state": "R3_FADING_OUT"
+  },
+  "r3": {
+    "t": 1759.55,
+    "state": "R3",
+    "roots": [
+      "SinHeroRoot",
+      "R3Stage"
+    ],
+    "palaceGone": true,
+    "backToPalaceBlocked": true,
+    "cityReleased": true,
+    "loaded": {
+      "cpuMB": 99.4,
+      "gpuMB": 130.6
+    }
+  }
+}

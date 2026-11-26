@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Run against the game's static server. NODE_PATH=… THREE_DIR=…
-   node tools/u1-harbor-check.cjs <output> <index URL> [--checks-only|--stills-only|--camera-only] [--harbor-only] */
+   node tools/u1-harbor-check.cjs <output> <index URL> [--checks-only|--stills-only|--camera-only] [--harbor-only|--lift-only] */
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -12,6 +12,7 @@ const base = process.argv[3] || 'http://127.0.0.1:8080/index.html';
 const checksOnly = process.argv.includes('--checks-only');
 const cameraOnly = process.argv.includes('--camera-only');
 const harborOnly = process.argv.includes('--harbor-only');
+const liftOnly = process.argv.includes('--lift-only');
 const stillsOnly = process.argv.includes('--stills-only');
 const report = { browser: '', viewport: '852×393, iPhone UA/touch, Chromium/SwiftShader', levels: {}, errors: [] };
 const write = (name, jpg) => fs.writeFileSync(path.join(out, name + '.jpg'), Buffer.from(jpg, 'base64'));
@@ -307,14 +308,21 @@ async function main() {
   };
   try {
     for (const level of Object.keys(views)) {
-      if (harborOnly && level !== 'U1-01') continue;
+      if (harborOnly && level !== 'U1-01' || liftOnly && level !== 'R3-03') continue;
       const { page, launched, url } = await open(browser, level);
       try {
         const result = report.levels[level] = { ...launched, url, frames: {} };
         result.audit = await audit(page, level);
         save();
         console.log(level, JSON.stringify(result.audit));
-        if (level === 'R3-03' && !cameraOnly) { result.ride = await ride(page); save(); }
+        if (level === 'R3-03' && !cameraOnly) {
+          result.ride = await ride(page);
+          result.arrivalAssets = await page.evaluate(() => {
+            const state = harborTest.stage.underworld.status;
+            return { phase: state.phase, landmarks: state.ruinLandmarks };
+          });
+          save();
+        }
         if (!checksOnly) for (const view of views[level]) {
           if (cameraOnly && view.camera) continue;
           if (view.name) await capture(page, level, view, null);
@@ -338,11 +346,15 @@ async function main() {
         assert.ok(d.poses.every(p => p.ticks > 0 && !p.blocked), JSON.stringify(d.poses));
       }
     }
-    if (report.levels['U1-01'].scenery) {
+    if (report.levels['U1-01']?.scenery) {
       assert.deepEqual(report.levels['U1-01'].scenery, { landmarks: 7, unreachable: true });
     }
-    if (!cameraOnly && !harborOnly) assert.deepEqual(report.levels['R3-03'].ride,
-      [{ offset: -420, veil: 1, veilGone: true, visible: 'U1' }, { offset: 420, veil: 1, veilGone: true, visible: 'R3' }]);
+    if (!cameraOnly && !harborOnly) {
+      const maw = report.levels['R3-03'];
+      assert.deepEqual(maw.ride,
+        [{ offset: -420, veil: 1, veilGone: true, visible: 'U1' }, { offset: 420, veil: 1, veilGone: true, visible: 'R3' }]);
+      assert.deepEqual(maw.arrivalAssets, { phase: 'ready', landmarks: 7 });
+    }
   } finally {
     save();
     await browser.close();
