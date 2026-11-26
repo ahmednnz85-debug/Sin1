@@ -20,7 +20,9 @@ test('the Maw GLBs carry the authored platform, only needed textures, and one li
   const names = chosen.doc.scenes[0].nodes.map(i => chosen.doc.nodes[i].name);
   assert.ok(names.includes('Elevator_Platform') && names.includes('Elevator_Mechanism'));
   assert.ok(names.includes('Elevator_Anchor_Upper') && names.includes('Elevator_Anchor_Lower'));
-  for (const node of ['Abyss_Mural_Fragment', 'Abyss_Overlook', 'Elevator_Chain']) assert.ok(!names.includes(node));
+  for (const node of ['Abyss_Mural_Fragment', 'Abyss_Overlook', 'Elevator_Chain', 'Abyss_Cliff_Ruins', 'Abyss_Rock_Formation']) {
+    assert.ok(!names.includes(node));
+  }
   const triangles = (asset, name) => {
     const node = asset.doc.nodes.find(n => n.name === name);
     return asset.doc.meshes[node.mesh].primitives.reduce((n, prim) => n + asset.doc.accessors[prim.indices].count / 3, 0);
@@ -35,7 +37,7 @@ test('the registered Maw spawn connects to the deck and the void blocks the caps
   const THREE = require(path.join(three, 'build/three.cjs'));
   const window = {};
   const ctx = vm.createContext({ window, globalThis: window, THREE, performance, console });
-  for (const file of ['sin-areas.js', 'r3-maw-dressing.js', 'r3-sealed-zone.js']) {
+  for (const file of ['sin-areas.js', 'r3-maw-geology.js', 'r3-maw-dressing.js', 'r3-sealed-zone.js']) {
     if (window.SinAreas) ctx.SinAreas = window.SinAreas;
     vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), ctx);
   }

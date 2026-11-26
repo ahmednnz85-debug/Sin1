@@ -16,9 +16,7 @@ MAW = {
     "Elevator_Anchor_Upper": None,
     "Elevator_Anchor_Lower": None,
     "Abyss_Bridge_Ruined": None,
-    "Abyss_Cliff_Ruins": None,
     "Abyss_Rock_Spire": None,
-    "Abyss_Rock_Formation": None,
 }
 GUARDIAN = {"Lamassu_Left_Facing_Guardian_On_Inscribed_Plinth": None}
 MAP_LIMITS = {

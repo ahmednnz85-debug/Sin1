@@ -15,7 +15,7 @@ const views = {
   left: [[4.20, 2.75, -1.6], [10.7, 2.37, 4.25], 57],
   approach: [[3.80, 1.84, 1.1], [13, 2.26, -0.6], 61],
   deck: [[8.5, 2.35, -0.75], [22.7, 3.1, -0.5], 65],
-  rim: [[15.3, 2.31, -0.20], [44, -9.72, -6.25], 63]
+  rim: [[17.08, 2.74, -0.55], [51, -10.4, -3.55], 62]
 };
 
 async function main() {
@@ -71,9 +71,12 @@ async function main() {
         if (o.name === 'Elevator_Chain_FourSuspensions') counts.chainLinks = o.count;
         if (/fire|torch|flame/i.test(o.name)) counts.fire++;
       });
+      const gorge = room.getObjectByName('Maw_Canyon_Geology');
+      const bounds = gorge && new THREE.Box3().setFromObject(gorge).getSize(new THREE.Vector3()).toArray();
       return { renderer: driver && gl.getParameter(driver.UNMASKED_RENDERER_WEBGL), area: __sinDev.area.id,
         status: room.userData.maw, spawnClear: !game.blocked(hero.position.x, hero.position.z),
-        position: local(), counts, roots: scene.children.map(o => o.name) };
+        position: local(), counts, gorge: { surfaces: gorge?.children.length, dimensions: bounds },
+        roots: scene.children.map(o => o.name) };
     });
     Object.assign(report, info, { bootSeconds: (Date.now() - start) / 1000 });
     assert.equal(info.status.phase, 'ready', info.status.error);
@@ -82,6 +85,7 @@ async function main() {
     report.checks.composition = info.counts.platform === 1 && info.counts.lamassu === 1 &&
       info.counts.supports === 4 && info.status.anchors.reduce((sum, a) => sum + a.links, 0) === info.counts.chainLinks &&
       info.counts.fire === 0;
+    report.checks.solidCanyon = info.gorge.surfaces === 10 && info.gorge.dimensions[1] > 195;
     console.log('Maw ready', JSON.stringify({ position: info.position, checks: report.checks, frame: report.bootSeconds }));
     save();
 

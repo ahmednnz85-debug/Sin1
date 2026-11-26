@@ -4,6 +4,7 @@
   const CENTER = [12.9, -1.40], DECK = 0.58, PLATFORM_SCALE = 1.38;
   const DECK_RADIUS = 4.86, ARCH = 8.18, SPRING = 5.9, RISE = 6.9, ARCH_Z = -1.3;
   const FAR_RIM = 20.4, HALF = 9.55, SHOULDER = 13.4;
+  const geology = root.SinR3MawGeology;
   const BUDGET = Object.freeze({ glbMiB: 22, drawCalls: 85, trianglesInView: 515000 });
   const tau = 2 * Math.PI;
   const anchors = [-1, 1].flatMap(x => [-1, 1].map(z => [
@@ -27,7 +28,6 @@
     const status = room.userData.maw = { phase: 'idle', selected: [], anchors: [], budget: BUDGET };
     let renderer, pending;
     const transform = { value: new T.Matrix4() }, clock = { value: 0 };
-    const farColor = new T.Color(0x183447);
 
     // Local world-space attenuation keeps the cliff mist and the entrance
     // contact shade independent of the fog/lights used in the neighbouring rooms.
@@ -35,7 +35,7 @@
       material.fog = false;
       material.customProgramCacheKey = () => 'r3-maw-stone-' + kind;
       material.onBeforeCompile = shader => {
-        Object.assign(shader.uniforms, { mawW2L: transform, mawAir: { value: farColor } });
+        Object.assign(shader.uniforms, { mawW2L: transform, mawTime: clock });
         shader.vertexShader = shader.vertexShader.replace('#include <common>',
           '#include <common>\nuniform mat4 mawW2L; varying vec3 vMaw;')
           .replace('#include <project_vertex>', `
@@ -46,13 +46,20 @@
             #endif
             vMaw = (mawW2L * modelMatrix * mawP).xyz;
           `);
-        shader.fragmentShader = shader.fragmentShader.replace('#include <common>',
-          '#include <common>\nuniform vec3 mawAir; varying vec3 vMaw;')
+        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `
+          #include <common>
+          uniform mat4 mawW2L;
+          varying vec3 vMaw;
+          float mawSquare(float n) { return n*n; }
+          ${kind === 2 ? geology.scattering : ''}
+        `)
           .replace('#include <color_fragment>', `
             #include <color_fragment>
             float mawWear = sin(vMaw.x * 2.62 + sin(vMaw.z * 1.37)) *
               cos(vMaw.z * 1.73 - vMaw.y * 0.31);
-            diffuseColor.rgb *= 0.94 + mawWear * 0.09;
+            float mawTone = dot(diffuseColor.rgb,vec3(0.263,0.655,0.082));
+            diffuseColor.rgb = mix(vec3(mawTone), diffuseColor.rgb, ${kind === 2 ? '0.52' : '0.72'}) *
+              (0.94 + mawWear * 0.09);
           `)
           .replace('#include <opaque_fragment>', `
             float mao = 1.0;
@@ -64,17 +71,22 @@
               mao -= 0.14 * exp(-abs(length(p-vec2(12.9,-1.4))-4.9)*7.0);
             ` : ''}
             float topLight = smoothstep(-1.6, 13.0, vMaw.x) *
-              (0.45 + 0.55 * exp(-pow((vMaw.z+1.1)*0.12,2.0)));
+              (0.45 + 0.55 * exp(-mawSquare((vMaw.z+1.1)*0.12)));
             ${kind === 2 ? `
-              float depth = smoothstep(18.0, 115.0, vMaw.x);
-              float wells = 1.0 - smoothstep(-35.0, 11.0, vMaw.y);
-              vec3 haze = mawAir * (0.62 + wells * 0.79);
-              float strata = 0.78 + 0.22 * sin(vMaw.z * 2.5 + sin(vMaw.x*0.23) + vMaw.y*0.13);
-              outgoingLight = mix(outgoingLight * vec3(0.073,0.116,0.162) * strata, haze,
-                clamp(0.07 + depth*0.66 + wells*0.25,0.0,0.90));
+              vec3 eye=(mawW2L * vec4(cameraPosition,1.0)).xyz;
+              float cracks=mNoise(vec3(vMaw.x*1.8,vMaw.y*0.22,vMaw.z*1.4));
+              float strata=0.49 + 0.50*smoothstep(0.12,0.72,cracks);
+              float depthShade=0.53+0.47*smoothstep(-54.0,7.0,vMaw.y);
+              vec3 bounce=diffuseColor.rgb*vec3(0.014,0.033,0.049);
+              vec3 charcoal=(outgoingLight*vec3(0.18,0.215,0.24)*strata+bounce)*depthShade;
+              outgoingLight=mawScatter(charcoal,eye,vMaw);
             ` : `
               outgoingLight *= mao * mix(vec3(0.58,0.59,0.61),vec3(0.86,0.94,1.02),topLight);
-              outgoingLight += diffuseColor.rgb * (vec3(0.035,0.047,0.064) * topLight +
+              float bounceKey=exp(-mawSquare((vMaw.x-12.75)*0.14)-mawSquare((vMaw.z+1.5)*0.15));
+              bounceKey*=1.0-0.58*smoothstep(4.8,10.0,vMaw.y);
+              float bounceLeft=exp(-mawSquare((vMaw.x-7.9)*0.30)-mawSquare((vMaw.z-5.1)*0.19));
+              outgoingLight += diffuseColor.rgb * mao * (vec3(0.032,0.046,0.066) * topLight +
+                vec3(0.16,0.20,0.24) * bounceKey + vec3(0.055,0.063,0.08)*bounceLeft +
                 vec3(0.072,0.081,0.10) * smoothstep(7.0,11.0,vMaw.y));
             `}
             #include <opaque_fragment>
@@ -137,6 +149,11 @@
         .translate(CENTER[0], height - 0.095, CENTER[1]);
       collect(bands, curb, 1.8);
     }
+    // Solid masonry below the movement joint keeps the blue gorge from
+    // showing through when the camera looks across the back of the platform.
+    const collar = new T.RingGeometry(3.82, 5.74, 80).rotateX(-Math.PI / 2)
+      .translate(CENTER[0], -0.09, CENTER[1]);
+    collect(bands, collar, 2.15);
 
     // Main opening. Individual voussoirs share one stone batch; the reveal
     // has real depth and sits behind the two close stone supports.
@@ -205,7 +222,7 @@
       room.add(mesh);
     }
 
-    const atmosphere = cavernAtmosphere(T, room, clock);
+    driftDust(T, room, clock);
     const approach = new Map();
     function material(slot) {
       const walk = slot === 'Landings' || slot === 'Treads';
@@ -264,7 +281,8 @@
               if (!farMats.has(mesh.material)) farMats.set(mesh.material, finish(mesh.material.clone(), 2));
               mesh.material = farMats.get(mesh.material);
             } else if (!built.has(mesh.material)) {
-              finish(mesh.material);
+              finish(mesh.material, mesh.material.name === 'M_Platform_Deck' ? 1 : 0);
+              if (mesh.material.name === 'M_Bronze_Hammered') mesh.material.color.multiplyScalar(0.71);
               built.add(mesh.material);
             }
           });
@@ -325,24 +343,22 @@
         lamassu.traverse(mesh => { if (mesh.isMesh) finish(mesh.material); });
         status.selected.push(lamassu.name);
 
-        // Only silhouettes visible through the arch are built. Asymmetric
-        // ledges and two broken arches leave an open blue channel down the middle.
-        place('Abyss_Cliff_Ruins', 44, -34.5, 21.2, [1.72, 2.25, 2.05], 1.42, true);
-        place('Abyss_Cliff_Ruins', 54, -31.5, -21.8, [2.12, 2.2, 2.35], -1.77, true);
-        place('Abyss_Rock_Formation', 65, -42, 37.0, [2.45, 4.2, 2.55], 1.11, true);
-        place('Abyss_Rock_Formation', 85, -48, -49, [3.3, 5.3, 3.8], -1.02, true);
-        place('Abyss_Rock_Formation', 110, -53, 26, [2.6, 4.0, 3.35], 0.24, true);
-        place('Abyss_Bridge_Ruined', 58, -3.8, -23.3, [1.53, 1.15, 1.1], -1.32, true);
-        place('Abyss_Bridge_Ruined', 85, 6.6, 4.1, [1.83, 1.18, 1.18], 1.69, true);
-        place('Abyss_Rock_Spire', 43, -30.7, -8.5, [1.5, 2.2, 1.45], 0.78, true);
-        place('Abyss_Rock_Spire', 86, -23.2, -10.5, [1.65, 2.15, 1.74], -0.37, true);
-        place('Abyss_Rock_Spire', 84, -24.5, 18.65, [1.51, 2.20, 1.86], 1.52, true);
+        // The canyon consists of bounded landforms with tops, depth and a
+        // vault. A single rock map set is shared by all of its surfaces.
+        const rock = kits.get('Abyss_Rock_Spire').getObjectByProperty('isMesh', true).material;
+        const basalt = finish(rock.clone(), 2);
+        basalt.side = T.DoubleSide;
+        basalt.vertexColors = true;
+        basalt.color.setHex(0x7b7871);
+        basalt.normalScale.setScalar(0.82);
+        room.add(geology.create(T, basalt));
+        place('Abyss_Bridge_Ruined', 61.5, 4.15, -21.8, [1.59, 1.2, 1.07], -1.12, true);
+        place('Abyss_Bridge_Ruined', 102.5, 4.37, 0.3, [1.92, 1.23, 1.13], 1.64, true);
         place('Abyss_Rock_Spire', 2.45, 0.18, 6.45, [0.47, 0.11, 0.37], 0.68);
         place('Abyss_Rock_Spire', 2.12, 0.05, 5.04, [0.22, 0.089, 0.23], -0.82);
         place('Abyss_Rock_Spire', 3.92, -0.07, 7.51, [0.37, 0.105, 0.23], -0.76);
         status.phase = 'ready';
         status.loadMs = Math.round(performance.now() - started);
-        atmosphere.visible = true;
       } finally {
         basis.dispose();
       }
@@ -367,97 +383,7 @@
     };
   }
 
-  function cavernAtmosphere(T, room, time) {
-    const effects = new T.Group();
-    effects.name = 'Maw_Cavern_Atmosphere';
-    room.add(effects);
-    const common = `
-      float hash21(vec2 p) {
-        p=fract(p*vec2(115.91,43.79)); p+=dot(p,p+34.23); return fract(p.x*p.y);
-      }
-      float noise21(vec2 p) {
-        vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
-        return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),
-          mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);
-      }
-      float vapor(vec2 p) { return noise21(p)*0.62 + noise21(p*2.43)*0.27 + noise21(p*5.11)*0.11; }
-    `;
-    const plane = (width, height, x, y, z, material) => {
-      const node = new T.Mesh(new T.PlaneGeometry(width, height), material);
-      node.rotation.y = -Math.PI / 2;
-      node.position.set(x, y, z);
-      effects.add(node);
-      return node;
-    };
-    const vert = 'varying vec2 vUV; void main(){vUV=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
-    const backdrop = new T.ShaderMaterial({
-      side: T.DoubleSide, vertexShader: vert, fragmentShader: `
-        varying vec2 vUV;
-        ${common}
-        void main() {
-          vec2 p=vUV-0.5;
-          float glow=exp(-p.x*p.x*15.0-pow(p.y+0.13,2.0)*15.0);
-          float strata=vapor(vec2(vUV.x*14.0,vUV.y*8.0));
-          vec3 color=mix(vec3(0.010,0.022,0.033),vec3(0.035,0.118,0.200),glow*(0.48+strata*0.70));
-          gl_FragColor=vec4(color,1.0);
-          #include <tonemapping_fragment>
-          #include <colorspace_fragment>
-        }
-      `
-    });
-    plane(314, 222, 124, -18, 0, backdrop);
-
-    for (const [x, y, z, width, height, intensity] of [
-      [29, -9.4, -1, 40, 15, 0.34], [44, -12, -3.5, 61, 23, 0.49],
-      [56, -8.0, 7.5, 76, 27, 0.37], [75, -13, 0, 92, 29, 0.45]
-    ]) {
-      const mist = new T.ShaderMaterial({
-        transparent: true, side: T.DoubleSide, depthWrite: false, vertexShader: vert,
-        uniforms: { elapsed: time, strength: { value: intensity }, offset: { value: x * 0.21 } },
-        fragmentShader: `
-          varying vec2 vUV; uniform float elapsed, strength, offset;
-          ${common}
-          void main() {
-            vec2 p=vUV-0.5;
-            float smoke=vapor(vec2(p.x*6.4+offset+elapsed*0.018,p.y*3.7-offset));
-            float warp=0.17*sin(p.x*12.0+offset)+0.21*(smoke-0.5);
-            float edge=smoothstep(0.0,0.16,vUV.x)*smoothstep(0.0,0.16,1.0-vUV.x);
-            float height=exp(-pow((p.y+warp)*4.15,2.0));
-            float alpha=edge*height*strength*smoothstep(0.20,0.82,smoke);
-            gl_FragColor=vec4(mix(vec3(0.045,0.124,0.213),vec3(0.11,0.31,0.47),smoke),alpha);
-            #include <colorspace_fragment>
-          }
-        `
-      });
-      plane(width, height, x, y, z, mist).renderOrder = 25;
-    }
-
-    const beam = new T.ShaderMaterial({
-      transparent: true, side: T.DoubleSide, depthWrite: false, blending: T.AdditiveBlending,
-      uniforms: { elapsed: time },
-      vertexShader: vert,
-      fragmentShader: `
-        varying vec2 vUV; uniform float elapsed;
-        ${common}
-        void main() {
-          float across=sin(vUV.x*3.14159265);
-          float lengthFade=smoothstep(0.0,0.23,vUV.y)*smoothstep(0.0,0.23,1.0-vUV.y);
-          float striations=0.74+0.26*vapor(vec2(vUV.x*15.0,vUV.y*2.6+elapsed*0.045));
-          float shaft=pow(across,2.35)*lengthFade*striations;
-          gl_FragColor=vec4(0.119,0.24,0.35, shaft*0.36);
-        }
-      `
-    });
-    for (const [x, y, z, width, height, angle] of [
-      [22, 5.8, 9.4, 2.6, 24, -0.36], [27, 5.6, 8.0, 1.3, 26, -0.32],
-      [33, 7.0, -12.0, 3.7, 29, -0.42], [39, 3.2, -16.6, 1.4, 34, -0.35],
-      [17.4, 6.0, -2.5, 1.45, 17, -0.10]
-    ]) {
-      const node = plane(width, height, x, y, z, beam);
-      node.rotateZ(angle);
-      node.renderOrder = 24;
-    }
-
+  function driftDust(T, room, time) {
     const motes = [];
     for (let i = 0; i < 76; i++) {
       const f = (seed, mul) => (Math.sin((i + 1) * seed) * mul % 1 + 1) % 1;
@@ -482,8 +408,8 @@
         void main() { float d=length(gl_PointCoord-0.5); gl_FragColor=vec4(0.53,0.68,0.78,vAlpha*max(0.0,1.0-d*2.0)); }`
     }));
     particles.renderOrder = 26;
-    effects.add(particles);
-    return effects;
+    particles.name = "Maw_Faint_Dust";
+    room.add(particles);
   }
 
   root.SinR3Maw = { create, floor, limits: { far: FAR_RIM, half: HALF }, budget: BUDGET };
