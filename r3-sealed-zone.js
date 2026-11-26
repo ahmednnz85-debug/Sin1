@@ -7,6 +7,7 @@
   const RADIUS = 20, GALLERY = -15, BASIN = GALLERY - 1.2;
   const SPRING = BASIN + 11.5, CROWN = BASIN + 20;
   const ABYSS_LANDING = -15.8; // floor of the landing that opens the Mouth of the Abyss
+  const MAW_ENTRY = HALL_U + 20, MAW_LANE = -17, MAW_LEVEL = -18.9;
   const HALF = 3, PORT = Math.asin(HALF / RADIUS);
   const CHORD = Math.sqrt(RADIUS ** 2 - HALF ** 2);
   const HALL_ENTRY = HALL_U - CHORD, SIDE_EXIT = HALL_V - CHORD;
@@ -48,8 +49,10 @@
     let part = parts[0];
     const Stair = window.SinR3Stair || null;
     const Hall = window.SinR3Hall || null;
+    const Maw = window.SinR3Maw || null;
     const hallDressed = () => !!Hall && part === parts[1];
     const dressed = () => !entranceOnly && !!Stair && part === parts[0];
+    const mawDressed = () => !!Maw && part === parts[2];
     const stairArches = [], stairTunnels = [];
     const uAt = x => passage.position[0] - x;
     const vAt = z => z - passage.position[2];
@@ -72,13 +75,13 @@
     function geometry(slot, geo, strength = 1) {
       const data = part.batches.get(slot) || { position: [], color: [], uv: [], normal: [] };
       part.batches.set(slot, data);
-      if (dressed() || hallDressed()) {
+      if (dressed() || hallDressed() || mawDressed()) {
         const hall = hallDressed();
         // Lit stone: real normals and metric UVs projected on the dominant
         // axis, so blocks keep their natural size on every surface.
         const pos = geo.attributes.position, normal = geo.attributes.normal;
         const count = geo.index ? geo.index.count : pos.count;
-        const scale = hall ? 0 : 1 / Stair.tileMetres(slot);
+        const scale = hall ? 0 : mawDressed() ? 1 / 2.65 : 1 / Stair.tileMetres(slot);
         for (let i = 0; i < count; i++) {
           const j = geo.index ? geo.index.getX(i) : i;
           const x = pos.getX(j), y = pos.getY(j), z = pos.getZ(j);
@@ -632,32 +635,35 @@
     drop.isTransverse = true;
     tunnel(drop, -14, -7, 2.32, -18, -16.7, 0, 8.4, [-1, 1]);
     landing(HALL_U + 8, HALL_U + 14, -20, -14, -18, 8.4, [true, false, true, false]);
-    const mouth = (d, y, t) => alongU(d, y, t - 17);
-    tunnel(mouth, HALL_U + 14, HALL_U + 20, 2.32, -18, -18.9, 0, 10, [-1, 1]);
-    const bridge = HALL_U + 20, rim = bridge + 8, ledge = -18.9;
-    arch(mouth, bridge - 0.05, bridge + 1.2, ledge, HALF, 9, 1.1);
-    box('Platform', bridge, rim, ledge - 1.45, ledge, -22, -12);
-    rectangle(bridge, rim, -22, -12, () => ledge, () => Infinity);
-    for (const z of [-21.8, -12.6]) {
-      solidBox('Guardstones', bridge + 0.4, rim, ledge, ledge + 1.04, z, z + 0.4);
-      solidBox('Buttresses', bridge, bridge + 1.5, ledge, ledge + 10.1, z - 0.25, z + 0.65);
-      solidBox('Plinths', bridge + 1.5, bridge + 3.3, ledge, ledge + 0.55, z - 0.1, z + 0.52);
-      socket(z < -17 ? 'OverlookStatue_A' : 'OverlookStatue_B', [bridge + 2.4, ledge + 0.55, z + 0.2]);
+    const mouth = (d, y, t) => alongU(d, y, t + MAW_LANE);
+    tunnel(mouth, HALL_U + 14, MAW_ENTRY, 2.32, -18, MAW_LEVEL, 0, 10, [-1, 1]);
+    const bridge = MAW_ENTRY, rim = bridge + (Maw?.limits.far ?? 8), ledge = MAW_LEVEL;
+    const mawLook = Maw?.create({ THREE, group: part.group, entry: bridge, lane: MAW_LANE, level: ledge, collision });
+    if (!mawLook) {
+      arch(mouth, bridge - 0.05, bridge + 1.2, ledge, HALF, 9, 1.1);
+      box('Platform', bridge, rim, ledge - 1.45, ledge, -22, -12);
+      rectangle(bridge, rim, -22, -12, () => ledge, () => Infinity);
+      for (const z of [-21.8, -12.6]) {
+        solidBox('Guardstones', bridge + 0.4, rim, ledge, ledge + 1.04, z, z + 0.4);
+        solidBox('Buttresses', bridge, bridge + 1.5, ledge, ledge + 10.1, z - 0.25, z + 0.65);
+        solidBox('Plinths', bridge + 1.5, bridge + 3.3, ledge, ledge + 0.55, z - 0.1, z + 0.52);
+        socket(z < -17 ? 'OverlookStatue_A' : 'OverlookStatue_B', [bridge + 2.4, ledge + 0.55, z + 0.2]);
+      }
+      // Open void below the overlook; just the shaft boundary belongs to R3.
+      solidBox('Guardstones', rim - 0.42, rim, ledge, ledge + 1.06, -22, -12);
+      box('Shaft', rim, rim + 0.5, -49, ledge - 1.45, -22, -12);
+      const far = rim + 23, bottom = -53, top = ledge + 11;
+      for (const [nearZ, farZ] of [[-22, -30], [-12, -4]]) {
+        const middleZ = (nearZ + farZ) / 2;
+        surface('Shaft', [[bridge, ledge - 8, nearZ], [rim + 8, bottom, middleZ],
+          [rim + 8, top, middleZ], [bridge, top, nearZ]], 0.75);
+        surface('Shaft', [[rim + 8, bottom, middleZ], [far, bottom, farZ],
+          [far, top, farZ], [rim + 8, top, middleZ]], 0.64);
+      }
+      box('Shaft', far, far + 1, bottom, top, -30, -4, 0.61);
+      box('Shaft', rim, far, bottom - 1, bottom, -30, -4, 0.48);
+      box('Shaft', bridge, far + 1, top, top + 0.5, -30, -4, 0.54);
     }
-    // Open void below the overlook; just the shaft boundary belongs to R3.
-    solidBox('Guardstones', rim - 0.42, rim, ledge, ledge + 1.06, -22, -12);
-    box('Shaft', rim, rim + 0.5, -49, ledge - 1.45, -22, -12);
-    const far = rim + 23, bottom = -53, top = ledge + 11;
-    for (const [nearZ, farZ] of [[-22, -30], [-12, -4]]) {
-      const middleZ = (nearZ + farZ) / 2;
-      surface('Shaft', [[bridge, ledge - 8, nearZ], [rim + 8, bottom, middleZ],
-        [rim + 8, top, middleZ], [bridge, top, nearZ]], 0.75);
-      surface('Shaft', [[rim + 8, bottom, middleZ], [far, bottom, farZ],
-        [far, top, farZ], [rim + 8, top, middleZ]], 0.64);
-    }
-    box('Shaft', far, far + 1, bottom, top, -30, -4, 0.61);
-    box('Shaft', rim, far, bottom - 1, bottom, -30, -4, 0.48);
-    box('Shaft', bridge, far + 1, top, top + 0.5, -30, -4, 0.54);
 
     function basicStone(slot) {
       return new THREE.MeshBasicMaterial({ color: slots[slot], vertexColors: true, fog: false, toneMapped: false, side: THREE.DoubleSide });
@@ -693,8 +699,12 @@
 
     let geometryBytes = 0, batchCount = 0;
     for (const section of parts) {
-      const baked = bake(section, (slot, lit) => lit
-        ? (section === parts[1] ? hallLook.stone(slot) : Stair.material(THREE, slot)) : basicStone(slot));
+      const baked = bake(section, (slot, lit) => {
+        if (!lit) return basicStone(slot);
+        if (section === parts[1]) return hallLook.stone(slot);
+        if (section === parts[2]) return mawLook.material(slot);
+        return Stair.material(THREE, slot);
+      });
       geometryBytes += baked.geometryBytes;
       batchCount += baked.batches;
     }
@@ -705,7 +715,12 @@
       throw new Error('R3 architecture exceeded its independent stage budget');
     }
     function sample(u, v) {
-      if (u < start || u > rim || v < -22 || v > HALL_V + RADIUS) return null;
+      const left = mawLook ? MAW_LANE - Maw.limits.half : -22;
+      if (u < start || u > rim || v < left || v > HALL_V + RADIUS) return null;
+      if (mawLook && u >= bridge - 0.04 && Math.abs(v - MAW_LANE) <= Maw.limits.half) {
+        const height = Maw.floor(u - bridge, v - MAW_LANE);
+        if (height != null) return { y: MAW_LEVEL + height, ceiling: Infinity, steps: true };
+      }
       const h = hallFloor(u, v);
       if (h !== null) {
         return { y: h, ceiling: domeY(Math.hypot(u - HALL_U, v - HALL_V)), steps: true };
@@ -741,6 +756,7 @@
       // hands the shared stage lights back on the way into the hall.
       stair?.update(u, y, v, parts[0].group.visible, inside && !inHall && u <= HALL_ENTRY);
       hallLook?.update(u, v, inHall, parts[1].group.visible);
+      mawLook?.update(u, v, inside);
     }
     const stair = stairPlan && Stair.create(THREE, root, parts[0].group, stairPlan);
 
@@ -763,6 +779,7 @@
       root, nearFloor, blocks, update, budget, cost: stageCost,
       // Prepare the independent stage while the transition curtain is black.
       async ready(renderer) {
+        mawLook?.configure(renderer);
         if (stair) stageCost.stair = await stair.load(renderer).catch(error => {
           console.error('[R3-01] stair assets', error);
           return { error: error.message };
@@ -770,7 +787,7 @@
         if (hallLook) stageCost.hall = await hallLook.load(renderer);
         return stageCost;
       },
-      stair,
+      stair, maw: mawLook,
       spawn: [passage.position[0] - start - 0.55, 0, passage.position[2]],
       cameraBoxesAt(x, z, y) {
         if (!nearFloor(x, z, y)) return null;
@@ -851,7 +868,9 @@
     SinAreas.group('r3', 'المنطقة المختومة R3', 'Sealed zone R3', 70);
     [['R3-01', 'درج السنين المدفونة', 'Buried Years Stair', { stageSpawn: true }],
       ['R3-02', 'قاعة الختم الأول', 'First Seal Hall', { u: HALL_ENTRY + 1.7, v: HALL_V, y: GALLERY, yaw: -Math.PI / 2 }],
-      ['R3-03', 'فم الهاوية', 'Mouth of the Abyss', { u: HALL_U, v: -4.2, y: ABYSS_LANDING, yaw: -Math.PI / 2 }]]
+      ['R3-03', 'فم الهاوية', 'Mouth of the Abyss', window.SinR3Maw
+        ? { u: MAW_ENTRY + 0.8, v: MAW_LANE + 0.6, y: MAW_LEVEL, yaw: -Math.PI / 2 }
+        : { u: HALL_U, v: -4.2, y: ABYSS_LANDING, yaw: -Math.PI / 2 }]]
       .forEach(([id, ar, en, spawn]) => SinAreas.register({ id, stage: 'r3', group: 'r3', ar, en, spawn }, 'r3-sealed-zone'));
   }
   window.SinR3SealedZone = { mount, resources, release, passageId: SEAL };

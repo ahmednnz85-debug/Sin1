@@ -1,0 +1,66 @@
+{
+  "assets/R3_MawOfTheAbyss_Assets.glb": {
+    "bytes": 25076612,
+    "sha256": "bff38559a51d6f1b328a7a05ee330d6b05ba0bd60669b39f97605a7fba1c0f6d",
+    "roots": [
+      "Elevator_Platform",
+      "Elevator_Mechanism",
+      "Elevator_Chain",
+      "Elevator_Anchor_Upper",
+      "Elevator_Anchor_Lower",
+      "Abyss_Overlook",
+      "Abyss_Bridge_Ruined",
+      "Abyss_Mural_Fragment",
+      "Abyss_Cliff_Ruins",
+      "Abyss_Rock_Spire",
+      "Abyss_Rock_Formation"
+    ],
+    "images": 18,
+    "triangles": 61486,
+    "errors": 0,
+    "warnings": 67,
+    "warningCodes": {
+      "VALUE_NOT_IN_LIST": 18,
+      "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE": 31,
+      "IMAGE_UNRECOGNIZED_FORMAT": 18
+    }
+  },
+  "assets/r3/maw/elevator-and-ruins.glb": {
+    "bytes": 13567384,
+    "sha256": "caf69ebbb846afceaa01a6dfc3774228558a94be896acbeb81bbf18fec1d6055",
+    "roots": [
+      "Elevator_Platform",
+      "Elevator_Mechanism",
+      "Elevator_Chain_Link_01",
+      "Elevator_Anchor_Upper",
+      "Elevator_Anchor_Lower",
+      "Abyss_Bridge_Ruined",
+      "Abyss_Cliff_Ruins",
+      "Abyss_Rock_Spire"
+    ],
+    "images": 15,
+    "triangles": 22876,
+    "errors": 0,
+    "warnings": 48,
+    "warningCodes": {
+      "VALUE_NOT_IN_LIST": 15,
+      "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE": 18,
+      "IMAGE_UNRECOGNIZED_FORMAT": 15
+    }
+  },
+  "assets/r3/maw/left-guardian.glb": {
+    "bytes": 6752600,
+    "sha256": "09303e3f8bb0b53414970aff97f09eab501b29b7aed2ee5d1be18a2943b21865",
+    "roots": [
+      "Lamassu_Left_Facing_Guardian_On_Inscribed_Plinth"
+    ],
+    "images": 9,
+    "triangles": 121594,
+    "errors": 0,
+    "warnings": 18,
+    "warningCodes": {
+      "VALUE_NOT_IN_LIST": 9,
+      "IMAGE_UNRECOGNIZED_FORMAT": 9
+    }
+  }
+}
