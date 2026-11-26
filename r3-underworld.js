@@ -543,11 +543,12 @@
 
       // The authored city is scenery only. Use the nearest terraced complex
       // on the left, taller ruins set back on the right, and arcades between.
+      // The outer terraces cover the oblique views through the side bays.
       const sites = {
         Cascade_Citadel: [[51, -12, 41, 135, -0.36], [81, -9, -40, 159, 1.25],
-          [125, 4, 9, 151, 2.44]],
+          [125, 4, 9, 151, 2.44], [52, -9.5, -76, 120, -1.78]],
         Upper_Precinct: [[66, -2, 5, 139, 0.52], [51, -8, -32, 113, -0.96],
-          [84, 1, 49, 137, 2.25]],
+          [84, 1, 49, 137, 2.25], [32, -4.5, 64, 141, 1.10]],
         Lower_Terrace: [[28, -25, 41, 132, -0.92], [60, -24, -42, 156, 0.94]],
         Watchtower: [[70, 4, 59, 121, 0.74], [113, 7, -47, 145, -0.28]],
         Temple_Stairs: [[40, -9, -48, 108, -0.78], [-8, -6, 35, 113, 0.21]],

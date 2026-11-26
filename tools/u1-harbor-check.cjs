@@ -85,7 +85,7 @@ async function open(browser, level) {
       }) };
     __R.render = () => {};
     const scenery = stage.underworld.status.ruinLandmarks;
-    const offstage = [[51, 41], [81, -40]].map(([x, z]) => at(x, 0, z, true));
+    const offstage = [[51, 41], [81, -40], [52, -76], [32, 64]].map(([x, z]) => at(x, 0, z, true));
     return { spawn: hero.position.toArray(), readyMs: __sinDev.ms, state: PalaceInterior.state(),
       scenery: scenery ? { landmarks: scenery, unreachable: offstage.every(p => game.blocked(p.x, p.z)) } : null,
       blocked: game.blocked(hero.position.x, hero.position.z),
@@ -291,11 +291,11 @@ async function main() {
         hero: [[-6.3, 0, -2.7], [-6.3, 0, -2.7]] },
       { name: 'harbor-cabin', frames: 1, camera: [[-4.6, 1.94, 0], [-4.6, 1.94, 0]], target: [[0, 2.12, 0], [0, 2.12, 0]],
         hero: [[-1.37, .58, 0], [-1.37, .58, 0]], fov: 48 },
-      { frames: 16, camera: [[-16.2, 1.77, 1.18], [-12.8, 2.10, 2.5]], target: [[0.2, 3.7, 4.2], [0.7, 3.5, 2.0]],
+      { frames: 12, camera: [[-16.2, 1.77, 1.18], [-12.8, 2.10, 2.5]], target: [[0.2, 3.7, 4.2], [0.7, 3.5, 2.0]],
         hero: [[-10.4, 0, 4.92], [-10.4, 0, 4.92]], fov: 69 },
-      { frames: 17, camera: [[-5.4, 2.27, 0], [-3.58, 2.14, .02]], target: [[0.5, 2.31, 0], [1, 2.14, 0]],
+      { frames: 16, camera: [[-5.4, 2.27, 0], [-3.58, 2.14, .02]], target: [[0.5, 2.31, 0], [1, 2.14, 0]],
         walk: [-3, .58, 0], fov: 49 },
-      { frames: 21, hero: [[.1, .58, .08], [.1, .58, .08]] }
+      { frames: 16, hero: [[.1, .58, .08], [.1, .58, .08]] }
     ],
     'R3-03': [
       { name: 'maw-lift', frames: 1, camera: [[-6.2, 2.6, 0.9], [-6.2, 2.6, 0.9]], target: [[0.7, 3.9, 0], [0.7, 3.9, 0]],
