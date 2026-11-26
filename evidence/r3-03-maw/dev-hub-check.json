@@ -1,0 +1,36 @@
+{
+ "base": "http://127.0.0.1:3103/index.html",
+ "results": {
+  "direct": {
+   "R3-03": {
+    "failed": "TimeoutError: page.screenshot: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - taking page screenshot\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n",
+    "snap": {
+     "level": "R3-03",
+     "ready": true,
+     "ms": 404266,
+     "error": null,
+     "phase": "R3",
+     "hero": [
+      -94.03,
+      -15.15,
+      176.46
+     ],
+     "blockedAtHero": false,
+     "geometries": 99,
+     "textures": 114,
+     "calls": 48,
+     "triangles": 422552,
+     "est": {
+      "cpuMB": 125.1,
+      "gpuMB": 144.6
+     },
+     "url": "?dev=1&level=R3-03"
+    },
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready R3-03 in 404266 ms"
+    ]
+   }
+  }
+ }
+}
