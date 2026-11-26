@@ -12,12 +12,21 @@
          "بدء اللعبة" → the original init() and story, unchanged.
          "وضع المطور" → the area menu, built from SinAreas.
      • ?dev=1&level=<id>: boots straight into that area, no menu, no story.
-         outdoor: original boot, story start skipped, Sîn placed at the spawn.
-         palace : the existing quick hall path (startInHall + royalDoorTest:
-                  minimal exterior, released at the door), then the game's own
-                  PalaceWings.teleport into the room.
-         r3     : as palace, then Sîn crosses passage-L0 through the real R3
-                  transition (palace retired), then is placed in the section.
+       Chapter-based direct loading: the area's stage is a chapter of the
+       story (SinAreas.chapter, separated by points of no return). Only that
+       chapter is loaded, through its own loader:
+         first chapter (outdoor): the original init(), Sîn placed at the spawn.
+         any later chapter: the game's bootChapter() loads Sîn alone and the
+                  chapter's owner starts play at its boundary (palace: its own
+                  load screen at the royal door; R3: the passage-L0 loader;
+                  U1: the R3 stage with only the lift and the underworld).
+                  Earlier chapters are never loaded, not even temporarily.
+       Then Sîn is placed by the spawn format (teleport into a palace room,
+       R3 stage coordinates, outdoor ground). A new chapter needs no change
+       here; a new spawn format needs a placement function.
+     • Inside one chapter the menu moves Sîn in place (palace streaming, R3
+       stage); another chapter reloads the page, which releases everything
+       of the current one before the new chapter boots.
      • Dev sessions keep their own storage (prefix "sin-dev:") so the
        player's real settings, discoveries and crash records are never read
        or written by a developer session.
@@ -55,6 +64,9 @@
     proto.__sinDevIsolated = true;
   }
   if (devSession && typeof Storage !== 'undefined') isolateStorage(Storage.prototype);
+  // A direct link may start past the exterior chapter: ask the game to hold
+  // its exterior network loads until the exterior's own start (init) runs.
+  if (devSession && qs.get('level')) root.__sinDeferExterior = true;
 
   // ---- links -------------------------------------------------------------
   function link(id, absolute) {
@@ -182,15 +194,24 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
   // palace, rooms switch in place through the game's own streaming.
   function go(id) {
     const a = byId.get(id); if (!a) return;
-    if (session && session.area && a.stage === 'palace' && session.area.stage === 'palace' && session.ready && palaceLive()) {
+    const here = session && session.area && session.ready && a.stage === session.area.stage;
+    if (here && a.spawn.teleport && palaceLive()) {
       session.area = a;
       root.history.replaceState(null, '', link(id));
       enterPalace(a).then(() => status('')).catch(fail);
       refreshTag();
       return;
     }
+    if (here && stageSpace(a) && root.PalaceInterior && PalaceInterior.state() === 'R3') {
+      session.area = a;
+      root.history.replaceState(null, '', link(id));
+      spawnR3(a);
+      refreshTag();
+      return;
+    }
     root.location.href = link(id);
   }
+  const stageSpace = a => a.spawn.stageSpawn || typeof a.spawn.u === 'number';
 
   // ---- boot hook (called by index.html) ---------------------------------------
   let session = null;
@@ -205,18 +226,14 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     let a = null;
     try { await catalog(); a = byId.get(id); } catch (e) { console.error('[dev-hub]', e); }
     if (!a) { showGate(start); showList(gateEl, null); status('معرّف غير معروف: ' + id); return; }
-    session = { area: a, ready: false, t0: performance.now(), log: [] };
+    const chapter = root.SinAreas.chapterOf(a.stage);
+    session = { area: a, ready: false, t0: performance.now(), log: [], chapter: a.stage, direct: !!(chapter && chapter.boot) };
     root.__sinDev = session;
-    // Palace / R3 areas reuse the game's quick hall path (minimal exterior).
-    if (a.stage !== 'outdoor') {
-      const p = new URLSearchParams(root.location.search);
-      p.set('startInHall', '1'); p.set('royalDoorTest', '1');
-      root.history.replaceState(null, '', '?' + p.toString());
-    }
     style();
     status('وضع المطور: تحميل ' + a.ar + ' (' + a.id + ')');
-    start();
-    enter(a).then(() => {
+    // The first chapter is the game's own start; any later one boots alone.
+    const begin = session.direct ? game.chapter(a.stage, a) : (start(), null);
+    Promise.resolve(begin).then(() => { session.bootMs = Math.round(performance.now() - session.t0); return enter(a); }).then(() => {
       session.ready = true; session.ms = Math.round(performance.now() - session.t0);
       root.history.replaceState(null, '', link(a.id));
       status(''); toolbar();
@@ -241,10 +258,11 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
   });
   const frames = n => new Promise(r => { let k = 0; (function f() { if (++k >= n) r(); else requestAnimationFrame(f); })(); });
   const face = yaw => game.setFacing(yaw);   // the game's own setFacing contract
+  // Placement by spawn format (the chapter is already booted).
   function enter(a) {
-    if (a.stage === 'outdoor') return enterOutdoor(a);
-    if (a.stage === 'palace') return enterPalace(a);
-    return enterR3(a);
+    if (a.spawn.teleport) return enterPalace(a);
+    if (stageSpace(a)) return enterR3(a);
+    return enterOutdoor(a);
   }
   async function enterOutdoor(a) {
     await waitFor(() => game && game.phase() === 'ready');
@@ -267,7 +285,7 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     cam.lookAt(x, y + 1.4, z);
   }
   async function hallReady() {
-    await waitFor(() => root.PalaceInterior && PalaceInterior.state && (PalaceInterior.state() === 'DONE' || PalaceInterior.state() === 'FAILED') && root.__holdSim === false);
+    await waitFor(() => root.PalaceInterior && PalaceInterior.state && (PalaceInterior.state() === 'DONE' || PalaceInterior.state() === 'FAILED') && !root.__holdSim);
     if (PalaceInterior.state() === 'FAILED') throw new Error('palace failed');
   }
   const palaceLive = () => root.PalaceInterior && PalaceInterior.state && PalaceInterior.state() === 'DONE' && !PalaceInterior.inR3() && root.PalaceWings && PalaceWings.state && PalaceWings.state.built;
@@ -309,37 +327,12 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     if (PalaceWings.resolveCamera) PalaceWings.resolveCamera(cam);
   }
   async function enterR3(a) {
-    await hallReady();
-    await waitFor(() => root.PalaceWings && PalaceWings.state && PalaceWings.state.hall);
-    const hall = PalaceWings.state.hall, p = hall.passages.find(d => d.id === root.SinR3SealedZone.passageId);
-    if (!p) throw new Error('passage-L0 not found');
-    const m = PalaceInterior.metrics(), floorY = PalaceInterior.floorY();
-    const frame = { portalX: m.x, front: m.front, floorY, px: p.position[0], pz: p.position[2] };
-    session.r3 = frame;
-    // Stand inside the authored threshold: the game's own beginR3() fires
-    // on the next tick (fade, palace retired, R3 stage mounted).
-    const hero = game.hero();
-    hero.position.set(m.x + p.position[0] - 0.6, floorY, m.front + p.position[2]);
-    face(-Math.PI / 2);
+    // The chapter boot mounted the stage and kept its curtain down until the
+    // area was dressed; Sîn already stands at the spawn.
     await waitFor(() => PalaceInterior.state() === 'R3' || PalaceInterior.state() === 'R3_FAILED');
     if (PalaceInterior.state() === 'R3_FAILED') throw new Error('R3 failed');
-    // Areas past R3-01 are dressed in the background after arrival. Keep the
-    // screen covered until that dressing is complete so the area never shows
-    // its untextured first pass (the game streams it long before a player
-    // walks there; only a direct jump can outrun it).
-    if (!a.spawn.stageSpawn && PalaceInterior.r3Settled) {
-      const cover = el('div', { id: 'sin-dev-cover' });
-      cover.style.cssText = 'position:fixed;inset:0;z-index:11999;background:#000;display:grid;place-items:center;color:#cbb994;font:15px system-ui';
-      cover.textContent = 'وضع المطور: تجهيز ' + a.ar;
-      doc.body.appendChild(cover);
-      try { await PalaceInterior.r3Settled(); }
-      finally {
-        spawnR3(a);
-        await frames(3);
-        cover.remove();
-      }
-      return;
-    }
+    session.r3 = PalaceInterior.r3Frame();
+    if (PalaceInterior.r3Settled) await PalaceInterior.r3Settled();
     await frames(3);
     spawnR3(a);
   }

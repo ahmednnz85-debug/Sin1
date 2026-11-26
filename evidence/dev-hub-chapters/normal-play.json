@@ -1,0 +1,83 @@
+{
+ "base": "http://127.0.0.1:8080/index.html",
+ "results": {
+  "gate": {
+   "phone": {
+    "glbRequestsBeforeChoice": 0,
+    "areas": 43,
+    "groups": 8,
+    "overflowX": false,
+    "registry": 43,
+    "searchR3": 3,
+    "errors": []
+   },
+   "desktop": {
+    "glbRequestsBeforeChoice": 0,
+    "areas": 43,
+    "groups": 8,
+    "overflowX": false,
+    "registry": 43,
+    "searchR3": 3,
+    "errors": []
+   }
+  },
+  "play": {
+   "gateShown": true,
+   "menuSeconds": 17.564,
+   "gate": false,
+   "tool": false,
+   "devSession": false,
+   "hub": true,
+   "enabled": true,
+   "storagePatched": false,
+   "afterStart": {
+    "ready": false,
+    "error": null,
+    "phase": "IDLE",
+    "hero": [
+     0,
+     0,
+     -30
+    ],
+    "blockedAtHero": false,
+    "geometries": 74,
+    "textures": 63,
+    "calls": 187,
+    "triangles": 1803278,
+    "est": {
+     "cpuMB": 58.2,
+     "gpuMB": 250.4
+    },
+    "url": "?sin=20261125-r3-stair-final"
+   },
+   "errors": []
+  },
+  "disabled": {
+   "gateShown": false,
+   "menuSeconds": 21.151,
+   "gate": false,
+   "tool": false,
+   "devSession": false,
+   "hub": true,
+   "enabled": false,
+   "storagePatched": false,
+   "afterStart": {
+    "ready": false,
+    "error": null,
+    "phase": "IDLE",
+    "hero": null,
+    "blockedAtHero": null,
+    "geometries": 74,
+    "textures": 63,
+    "calls": 187,
+    "triangles": 1803278,
+    "est": {
+     "cpuMB": 58.2,
+     "gpuMB": 250.4
+    },
+    "url": "?sin=20261125-r3-stair-final"
+   },
+   "errors": []
+  }
+ }
+}

@@ -433,7 +433,8 @@
       const mod = await import('three/addons/loaders/KTX2Loader.js');
       const basis = new mod.KTX2Loader().setTranscoderPath('vendor/basis/').setWorkerLimit(2).detectSupport(renderer);
       const loader = new T.GLTFLoader().setKTX2Loader(basis).setMeshoptDecoder(root.MeshoptDecoder);
-      const files = ['abyss-ruins.glb', 'left-guardian.glb', 'elevator.glb'];
+      const files = ['abyss-ruins.glb', 'left-guardian.glb'];
+      const liftDone = loadLift();
       try {
         const textureLoader = new T.TextureLoader();
         const assets = await Promise.all([
@@ -441,7 +442,7 @@
           ...['base', 'normal', 'rough'].map(channel => textureLoader.loadAsync('assets/r3/hall/paving-' + channel + '.webp')),
           ...['albedo', 'normal', 'orm'].map(channel => textureLoader.loadAsync('assets/r3/stair/ashlar_wall_' + channel + '.jpg'))
         ]);
-        const [maw, guardian, lift, color, normal, rough, wallColor, wallNormal, wallOrm] = assets;
+        const [maw, guardian, color, normal, rough, wallColor, wallNormal, wallOrm] = assets;
         color.colorSpace = wallColor.colorSpace = T.SRGBColorSpace;
         const pbr = { map: color, normalMap: normal, roughnessMap: rough };
         const stonePbr = { map: wallColor, normalMap: wallNormal, roughnessMap: wallOrm, aoMap: wallOrm };
@@ -474,22 +475,6 @@
         transferMaps(stone, stonePbr);
         transferMaps(bands, stonePbr);
         for (const [key, value] of approach) transferMaps(value, key === 'ground' ? pbr : stonePbr);
-
-        const kit = liftKit(T, lift);
-        const top = liftModel(T, kit, finish(kit.material), true);
-        top.name = 'Maw_Lift';
-        room.add(top);
-        status.selected.push('Maw_Lift_Cabin', 'Maw_Lift_Chains', 'Maw_Lift_Crown');
-        status.lift = { center: CENTER, deck: DECK, ceiling: +CEILING.toFixed(2), courses: LIFT.courses,
-          chain: +(LIFT.courses * LIFT_PERIOD).toFixed(2), drop: LIFT_DROP, triangles: kit.triangles };
-        if (deep) {
-          // Arrival at the Anchorage of Souls: the same cabin, lit there.
-          const shade = deep.userData.finish || (m => m);
-          const below = liftModel(T, kit, shade(kit.material.clone()), false, LIFT.arrivalCourses);
-          below.name = 'Maw_Lift_Arrival';
-          below.position.y += LIFT_DROP;
-          deep.add(below);
-        }
 
         const lamassu = guardian.scene.children[0];
         const stand = new T.Group();
@@ -526,6 +511,7 @@
         place('Abyss_Rock_Spire', 3.92, -0.07, 7.51, [0.37, 0.105, 0.23], -0.76);
         approachLook?.build();
         status.approach = approachLook?.status;
+        await liftDone;
         // Upload and link everything while the area is still hidden, so the
         // first visible frame is the finished one (no grey/untextured pass).
         await warm();
@@ -534,6 +520,56 @@
       } finally {
         basis.dispose();
       }
+    }
+
+    // The lift alone (cabin at the Maw dock, crown, chains, arrival cabin in
+    // the Anchorage): what the U1 chapter needs, and part of the full Maw.
+    let liftPending = null;
+    function loadLift() {
+      if (liftPending) return liftPending;
+      liftPending = (async () => {
+        // Normally the R3-01 loader has brought the decoder in already; a
+        // direct U1 start has not run it.
+        if (!root.MeshoptDecoder) await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'vendor/meshopt_decoder.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+        const loader = new T.GLTFLoader().setMeshoptDecoder(root.MeshoptDecoder);
+        const lift = await loader.loadAsync('assets/r3/maw/elevator.glb');
+        const kit = liftKit(T, lift);
+        const top = liftModel(T, kit, finish(kit.material), true);
+        top.name = 'Maw_Lift';
+        room.add(top);
+        status.selected.push('Maw_Lift_Cabin', 'Maw_Lift_Chains', 'Maw_Lift_Crown');
+        status.lift = { center: CENTER, deck: DECK, ceiling: +CEILING.toFixed(2), courses: LIFT.courses,
+          chain: +(LIFT.courses * LIFT_PERIOD).toFixed(2), drop: LIFT_DROP, triangles: kit.triangles };
+        if (deep) {
+          // Arrival at the Anchorage of Souls: the same cabin, lit there.
+          const shade = deep.userData.finish || (m => m);
+          const below = liftModel(T, kit, shade(kit.material.clone()), false, LIFT.arrivalCourses);
+          below.name = 'Maw_Lift_Arrival';
+          below.position.y += LIFT_DROP;
+          deep.add(below);
+        }
+        status.liftReady = true;
+      })();
+      return liftPending;
+    }
+    async function warmDeep() {
+      if (!deep || !renderer?.compileAsync) return;
+      let scene = deep;
+      while (scene.parent) scene = scene.parent;
+      const camera = new T.PerspectiveCamera(60, 1.6, 0.1, 400);
+      deep.updateWorldMatrix(true, true);
+      camera.position.setFromMatrixPosition(deep.matrixWorld);
+      camera.updateMatrixWorld();
+      const hidden = deep.visible;
+      deep.visible = true;
+      try { await renderer.compileAsync(deep, camera, scene); } catch (error) { console.warn('[U1] warm-up skipped', error); }
+      finally { deep.visible = hidden; }
     }
 
     async function warm() {
@@ -592,7 +628,17 @@
       configure(value) { renderer = value; },
       // Streams the Maw in the background (stage arrival, long before the
       // hero reaches it); resolves when the overlook is fully built.
-      prefetch: start,
+      // { liftOnly } prepares just the lift and its Anchorage dock (U1).
+      prefetch(options = {}) {
+        if (!options.liftOnly) return start();
+        if (!renderer) return Promise.resolve();
+        if (status.phase === 'idle') status.phase = 'lift';
+        return loadLift().then(warmDeep).catch(error => {
+          status.phase = 'failed';
+          status.error = String(error.message || error);
+          console.error('[U1] ' + status.error);
+        });
+      },
       update(u, v, inside) {
         const near = inside && u > entry - 9 && Math.abs(v - lane) < 11;
         const ready = status.phase === 'ready';

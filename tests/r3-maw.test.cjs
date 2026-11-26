@@ -123,6 +123,7 @@ test('the lift docks in the Maw and at the Anchorage; the U1 route walks to the 
   // The ride: wait in the cabin, the view closes, the hero is carried down.
   const at = [xAt(cabin[0]), top, zAt(cabin[1])];
   stage.maw.status.phase = 'ready';
+  stage.maw.status.liftReady = true;
   assert.equal(stage.lift(xAt(cabin[0] - 4), room.y, zAt(cabin[1]), 0.1).state, 'idle');
   let shift = null;
   for (let i = 0; i < 40 && !shift; i++) shift = stage.lift(...at, 0.1).shift;
