@@ -1,0 +1,359 @@
+{
+  "url": "http://127.0.0.1:3103/index.html?dev=1&level=R3-03",
+  "environment": "iPhone landscape viewport and UA, Chromium/SwiftShader on Linux",
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "checks": {
+    "directR3": true,
+    "freeSpawn": true,
+    "composition": true,
+    "solidCanyon": true,
+    "referenceLayout": true,
+    "controller": true,
+    "walksOntoDeck": true,
+    "edgeAndHardwareBlock": true,
+    "renderEnvelope": true
+  },
+  "views": {
+    "reference": {
+      "synchronizedFrameMs": 5251.43,
+      "worstMs": 5955.2,
+      "draws": 60,
+      "triangles": 434926,
+      "geometries": 106,
+      "textures": 114,
+      "resourceCpuMiB": 125.1,
+      "resourceGpuMiB": 144.6
+    },
+    "left": {
+      "synchronizedFrameMs": 3170.2,
+      "worstMs": 3398.5,
+      "draws": 43,
+      "triangles": 421630,
+      "geometries": 106,
+      "textures": 114,
+      "resourceCpuMiB": 125.1,
+      "resourceGpuMiB": 144.6
+    },
+    "approach": {
+      "synchronizedFrameMs": 3222.3,
+      "worstMs": 3794.6,
+      "draws": 55,
+      "triangles": 429774,
+      "geometries": 106,
+      "textures": 114,
+      "resourceCpuMiB": 125.1,
+      "resourceGpuMiB": 144.6
+    },
+    "deck": {
+      "synchronizedFrameMs": 2715.1,
+      "worstMs": 2850.9,
+      "draws": 41,
+      "triangles": 302288,
+      "geometries": 106,
+      "textures": 114,
+      "resourceCpuMiB": 125.1,
+      "resourceGpuMiB": 144.6
+    },
+    "rim": {
+      "synchronizedFrameMs": 1749.47,
+      "worstMs": 1807.3,
+      "draws": 26,
+      "triangles": 291552,
+      "geometries": 106,
+      "textures": 114,
+      "resourceCpuMiB": 125.1,
+      "resourceGpuMiB": 144.6
+    }
+  },
+  "errors": [],
+  "area": "R3-03",
+  "status": {
+    "phase": "ready",
+    "selected": [
+      "Elevator_Platform",
+      "Elevator_Mechanism",
+      "Elevator_Anchor_Lower",
+      "Elevator_Anchor_Upper",
+      "Elevator_Chain_Link_01",
+      "Lamassu_Left_Facing_Guardian_On_Inscribed_Plinth",
+      "Abyss_Cliff_Ruins",
+      "Abyss_Bridge_Ruined",
+      "Abyss_Rock_Spire"
+    ],
+    "anchors": [
+      {
+        "x": 9.6798357156,
+        "z": -4.6201642843999995,
+        "bottom": 2.16,
+        "top": 10,
+        "links": 20
+      },
+      {
+        "x": 9.6798357156,
+        "z": 1.8201642844,
+        "bottom": 2.16,
+        "top": 10,
+        "links": 20
+      },
+      {
+        "x": 16.1201642844,
+        "z": -4.6201642843999995,
+        "bottom": 2.16,
+        "top": 10,
+        "links": 20
+      },
+      {
+        "x": 16.1201642844,
+        "z": 1.8201642844,
+        "bottom": 2.16,
+        "top": 10,
+        "links": 20
+      }
+    ],
+    "budget": {
+      "glbMiB": 22,
+      "drawCalls": 85,
+      "trianglesInView": 515000
+    },
+    "ruins": [
+      {
+        "site": "Promontory",
+        "source": "Abyss_Cliff_Ruins",
+        "position": [
+          47.1,
+          8.05,
+          1.72
+        ]
+      },
+      {
+        "site": "RightLower",
+        "source": "Abyss_Bridge_Ruined",
+        "position": [
+          55.9,
+          11.45,
+          -30
+        ]
+      },
+      {
+        "site": "RightUpper",
+        "source": "Abyss_Bridge_Ruined",
+        "position": [
+          71.4,
+          22.35,
+          -43.1
+        ]
+      },
+      {
+        "site": "DistantSpan",
+        "source": "Abyss_Bridge_Ruined",
+        "position": [
+          90,
+          20,
+          -22.9
+        ]
+      }
+    ],
+    "guardian": {
+      "x": 8.86,
+      "z": 5.89,
+      "size": 5.18,
+      "yaw": -1.7307963267948965
+    },
+    "loadMs": 7171
+  },
+  "spawnClear": true,
+  "position": [
+    0.7999999999999972,
+    0,
+    0.5999999999999943
+  ],
+  "counts": {
+    "lamassu": 1,
+    "supports": 4,
+    "platform": 1,
+    "chainLinks": 80,
+    "fire": 0
+  },
+  "composition": {
+    "guardian": [
+      0.231,
+      0.551
+    ],
+    "Promontory": [
+      0.546,
+      0.425
+    ],
+    "RightLower": [
+      0.862,
+      0.362
+    ],
+    "RightUpper": [
+      0.894,
+      0.263
+    ],
+    "DistantSpan": [
+      0.695,
+      0.368
+    ]
+  },
+  "gorge": {
+    "surfaces": 12,
+    "dimensions": [
+      145.51608276367188,
+      233,
+      316
+    ]
+  },
+  "roots": [
+    "SinHeroRoot",
+    "R3Stage"
+  ],
+  "bootSeconds": 211.552,
+  "motion": [
+    2.0958862784594885,
+    0,
+    0.5999999999999943
+  ],
+  "path": {
+    "tested": [],
+    "heights": [
+      0,
+      0.19,
+      0.38,
+      0.58,
+      0.38,
+      0.19,
+      0
+    ],
+    "abyssBlocked": true,
+    "anchorBlocked": true
+  },
+  "heapMiB": 17.8,
+  "transition": {
+    "before": {
+      "geometries": 209,
+      "textures": 91,
+      "programs": 0,
+      "calls": 139,
+      "triangles": 1241615,
+      "cityReleased": true,
+      "cpuMB": 161.7,
+      "gpuMB": 182.5,
+      "heapMB": null,
+      "roots": [
+        "HemisphereLight",
+        "DirectionalLight",
+        "DirectionalLight",
+        "SinHeroRoot",
+        "PalaceInterior",
+        "SinLightRigPads",
+        "PalaceWings"
+      ]
+    },
+    "disposed": {
+      "geometries": 475,
+      "materials": 138,
+      "textures": 151
+    },
+    "released": {
+      "geometries": 4,
+      "textures": 13,
+      "programs": 0,
+      "calls": 2,
+      "triangles": 115174,
+      "cityReleased": true,
+      "cpuMB": 5.9,
+      "gpuMB": 16.2,
+      "heapMB": null,
+      "roots": [
+        "SinHeroRoot"
+      ]
+    },
+    "loaded": {
+      "geometries": 56,
+      "textures": 80,
+      "programs": 0,
+      "calls": 69,
+      "triangles": 508624,
+      "cityReleased": true,
+      "cpuMB": 96.4,
+      "gpuMB": 101.2,
+      "heapMB": null,
+      "roots": [
+        "SinHeroRoot",
+        "R3Stage"
+      ],
+      "budget": {
+        "geometryBytes": 3145728,
+        "textures": 0,
+        "batches": 52,
+        "hall": {
+          "textureMiB": 42,
+          "glbMiB": 18,
+          "drawCalls": 100,
+          "trianglesInView": 850000
+        },
+        "stair": {
+          "textureMiB": 48,
+          "glbMiB": 24,
+          "drawCalls": 110,
+          "trianglesInView": 900000
+        }
+      },
+      "cost": {
+        "geometryBytes": 1783008,
+        "batches": 35,
+        "textures": 0,
+        "stair": {
+          "textures": 31,
+          "textureMiB": 40.2,
+          "glbMiB": 22.1,
+          "triangles": 1864054,
+          "meshes": 221,
+          "ms": 4590
+        },
+        "hall": {
+          "glbBytes": 17628956,
+          "props": {
+            "platform": {
+              "instances": 1,
+              "triangles": 178774,
+              "lodTriangles": 178774
+            },
+            "guardian": {
+              "instances": 2,
+              "triangles": 121594,
+              "lodTriangles": 27963
+            },
+            "column": {
+              "instances": 9,
+              "triangles": 44888,
+              "lodTriangles": 8729
+            },
+            "stele": {
+              "instances": 4,
+              "triangles": 29824,
+              "lodTriangles": 9244
+            },
+            "rubble": {
+              "instances": 15,
+              "triangles": 29700,
+              "lodTriangles": 7280
+            }
+          },
+          "maps": 30,
+          "propTextures": 21,
+          "propTextureBytes": 16515856,
+          "loadMs": 971,
+          "mapBytesWithMipmaps": 20938752
+        }
+      }
+    }
+  },
+  "corridors": [
+    "corridor-01-from-hall.jpg",
+    "corridor-02-turn-and-ramp.jpg",
+    "corridor-03-abyss-reveal.jpg"
+  ],
+  "frames": 43
+}
