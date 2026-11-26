@@ -20,9 +20,13 @@ test('the Maw GLBs carry the authored platform, only needed textures, and one li
   const names = chosen.doc.scenes[0].nodes.map(i => chosen.doc.nodes[i].name);
   assert.ok(names.includes('Elevator_Platform') && names.includes('Elevator_Mechanism'));
   assert.ok(names.includes('Elevator_Anchor_Upper') && names.includes('Elevator_Anchor_Lower'));
-  for (const node of ['Abyss_Mural_Fragment', 'Abyss_Overlook', 'Elevator_Chain', 'Abyss_Cliff_Ruins', 'Abyss_Rock_Formation']) {
+  for (const node of ['Abyss_Mural_Fragment', 'Abyss_Overlook', 'Elevator_Chain', 'Abyss_Rock_Formation']) {
     assert.ok(!names.includes(node));
   }
+  const crown = chosen.doc.nodes.find(n => n.name === 'Abyss_Cliff_Ruins_Body_Geo');
+  const crownPieces = chosen.doc.meshes[crown.mesh].primitives;
+  assert.equal(crownPieces.length, 1);
+  assert.equal(chosen.doc.materials[crownPieces[0].material].name, 'M_Stone_Ashlar');
   const triangles = (asset, name) => {
     const node = asset.doc.nodes.find(n => n.name === name);
     return asset.doc.meshes[node.mesh].primitives.reduce((n, prim) => n + asset.doc.accessors[prim.indices].count / 3, 0);

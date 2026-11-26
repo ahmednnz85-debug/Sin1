@@ -60,8 +60,8 @@ async function main() {
     });
     await page.waitForFunction(() => ['ready', 'failed'].includes(__mawTour.room.userData.maw.phase), null,
       { timeout: 90000, polling: 250 });
-    const info = await page.evaluate(() => {
-      const { room, renderer, hero, game, local, scene } = __mawTour;
+    const info = await page.evaluate(reference => {
+      const { room, renderer, hero, game, local, scene, world } = __mawTour;
       const gl = renderer.getContext(), driver = gl.getExtension('WEBGL_debug_renderer_info');
       const counts = { lamassu: 0, supports: 0, platform: 0, chainLinks: 0, fire: 0 };
       room.traverse(o => {
@@ -73,11 +73,22 @@ async function main() {
       });
       const gorge = room.getObjectByName('Maw_Canyon_Geology');
       const bounds = gorge && new THREE.Box3().setFromObject(gorge).getSize(new THREE.Vector3()).toArray();
+      const comparison = new THREE.PerspectiveCamera(reference[2], 16 / 9, 0.25, 1200);
+      comparison.position.copy(world(...reference[0]));
+      comparison.lookAt(world(...reference[1]));
+      comparison.updateMatrixWorld();
+      const screen = name => {
+        const center = new THREE.Box3().setFromObject(room.getObjectByName(name)).getCenter(new THREE.Vector3());
+        center.project(comparison);
+        return [+(0.5 + center.x / 2).toFixed(3), +(0.5 - center.y / 2).toFixed(3)];
+      };
+      const composition = { guardian: screen('Maw_Left_Lamassu') };
+      for (const { site } of room.userData.maw.ruins) composition[site] = screen('Maw_Ruin_' + site);
       return { renderer: driver && gl.getParameter(driver.UNMASKED_RENDERER_WEBGL), area: __sinDev.area.id,
         status: room.userData.maw, spawnClear: !game.blocked(hero.position.x, hero.position.z),
-        position: local(), counts, gorge: { surfaces: gorge?.children.length, dimensions: bounds },
+        position: local(), counts, composition, gorge: { surfaces: gorge?.children.length, dimensions: bounds },
         roots: scene.children.map(o => o.name) };
-    });
+    }, views.reference);
     Object.assign(report, info, { bootSeconds: (Date.now() - start) / 1000 });
     assert.equal(info.status.phase, 'ready', info.status.error);
     report.checks.directR3 = info.area === 'R3-03' && info.roots.length === 2 && info.roots.includes('R3Stage');
@@ -85,7 +96,12 @@ async function main() {
     report.checks.composition = info.counts.platform === 1 && info.counts.lamassu === 1 &&
       info.counts.supports === 4 && info.status.anchors.reduce((sum, a) => sum + a.links, 0) === info.counts.chainLinks &&
       info.counts.fire === 0;
-    report.checks.solidCanyon = info.gorge.surfaces === 10 && info.gorge.dimensions[1] > 195;
+    report.checks.solidCanyon = info.gorge.surfaces === 12 && info.gorge.dimensions[1] > 195;
+    const landmarks = info.composition;
+    report.checks.referenceLayout = landmarks.guardian[0] < 0.34 &&
+      landmarks.Promontory[0] < landmarks.DistantSpan[0] &&
+      landmarks.DistantSpan[0] < landmarks.RightLower[0] &&
+      landmarks.RightLower[0] < landmarks.RightUpper[0] && landmarks.RightUpper[1] < landmarks.RightLower[1];
     console.log('Maw ready', JSON.stringify({ position: info.position, checks: report.checks, frame: report.bootSeconds }));
     save();
 
@@ -150,23 +166,46 @@ async function main() {
     report.heapMiB = +((await cdp.send('Runtime.getHeapUsage')).usedSize / 1048576).toFixed(1);
     for (const [name, view] of Object.entries(views)) {
       await setCamera(view);
-      await capture(name + '.jpg');
+      if (name === 'reference') {
+        const native = await page.evaluate(() => {
+          const { renderer, camera, hero, world } = __mawTour;
+          const saved = [renderer.getSize(new THREE.Vector2()).toArray(), renderer.getPixelRatio(),
+            camera.aspect, hero.position.toArray()];
+          renderer.setPixelRatio(1);
+          renderer.setSize(960, 540, false);
+          camera.aspect = 16 / 9;
+          camera.updateProjectionMatrix();
+          hero.position.copy(world(0.1, 0, 2.4));
+          return saved;
+        });
+        await capture('reference.jpg');
+        await page.evaluate(([size, ratio, aspect, heroPosition]) => {
+          const { renderer, camera, hero } = __mawTour;
+          renderer.setPixelRatio(ratio);
+          renderer.setSize(...size, false);
+          camera.aspect = aspect;
+          camera.updateProjectionMatrix();
+          hero.position.fromArray(heroPosition);
+        }, native);
+      } else await capture(name + '.jpg');
       report.views[name] = await page.evaluate(async () => {
         const { scene, camera, renderer, render } = __mawTour;
         const durations = [];
-        // Warm geometry/texture uploads before timing. A GPU fence keeps
-        // SwiftShader's queued rendering out of the next sample.
+        // Read one framebuffer pixel to include actual raster completion.
+        // This is a synchronized rendering benchmark, not gameplay FPS.
         const gl = renderer.getContext();
-        render(scene, camera); gl.finish();
-        for (let i = 0; i < 6; i++) {
+        const pixel = new Uint8Array(4), x = gl.drawingBufferWidth >> 1, y = gl.drawingBufferHeight >> 1;
+        render(scene, camera); gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        for (let i = 0; i < 3; i++) {
           const start = performance.now();
-          render(scene, camera); gl.finish();
+          render(scene, camera);
+          gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
           durations.push(performance.now() - start);
         }
         const estimate = SinProcessMemory.estimate({ scene, renderer, phase: 'maw-tour', room: 'R3-03' });
         const draw = renderer.info.render;
         const mean = durations.reduce((a, b) => a + b, 0) / durations.length;
-        return { softwareRenderMs: +mean.toFixed(2), softwareFpsEquivalent: +(1000 / mean).toFixed(2),
+        return { synchronizedFrameMs: +mean.toFixed(2),
           worstMs: +Math.max(...durations).toFixed(2), draws: draw.calls, triangles: draw.triangles,
           geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
           resourceCpuMiB: estimate.cpuMB, resourceGpuMiB: estimate.gpuMB };
@@ -180,13 +219,13 @@ async function main() {
     await page.evaluate(() => {
       const { renderer, camera, hero, world } = __mawTour;
       renderer.setPixelRatio(1);
-      renderer.setSize(800, 412, false);
-      camera.aspect = 800 / 412;
+      renderer.setSize(800, 450, false);
+      camera.aspect = 16 / 9;
       camera.updateProjectionMatrix();
       hero.position.copy(world(4.7, 0, 0.65));
     });
     let sequence = 0;
-    for (const [a, b, samples] of [['reference', 'approach', 17], ['approach', 'deck', 19], ['deck', 'rim', 18]]) {
+    for (const [a, b, samples] of [['reference', 'approach', 14], ['approach', 'deck', 15], ['deck', 'rim', 14]]) {
       const from = views[a], to = views[b];
       for (let i = 0; i < samples; i++) {
         const t = i / (samples - 1), smooth = t * t * (3 - 2 * t);

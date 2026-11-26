@@ -16,6 +16,7 @@ MAW = {
     "Elevator_Anchor_Upper": None,
     "Elevator_Anchor_Lower": None,
     "Abyss_Bridge_Ruined": None,
+    "Abyss_Cliff_Ruins": None,
     "Abyss_Rock_Spire": None,
 }
 GUARDIAN = {"Lamassu_Left_Facing_Guardian_On_Inscribed_Plinth": None}
@@ -70,6 +71,8 @@ def package(source, destination, selection, chain_indices=None):
     mapped, binary = {}, bytearray()
     chain_node = next((n for n in doc["nodes"] if n.get("name") == "Elevator_Chain_Link_01_Geo"), None)
     chain_mesh = chain_node["mesh"] if chain_node else None
+    crown_node = next((n for n in doc["nodes"] if n.get("name") == "Abyss_Cliff_Ruins_Body_Geo"), None)
+    crown_mesh = crown_node["mesh"] if crown_node else None
 
     def store(data):
         offset = len(binary)
@@ -116,6 +119,9 @@ def package(source, destination, selection, chain_indices=None):
                     if allowed is None or doc["nodes"][child].get("name") in allowed
                 ]
         elif table == "meshes":
+            if index == crown_mesh:
+                item["primitives"] = [p for p in item["primitives"]
+                                      if doc["materials"][p["material"]]["name"] == "M_Stone_Ashlar"]
             for primitive in item["primitives"]:
                 primitive["indices"] = (simplified_chain() if index == chain_mesh and chain_indices
                                         else select("accessors", primitive["indices"]))

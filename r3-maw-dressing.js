@@ -5,6 +5,13 @@
   const DECK_RADIUS = 4.86, ARCH = 8.18, SPRING = 5.9, RISE = 6.9, ARCH_Z = -1.3;
   const FAR_RIM = 20.4, HALF = 9.55, SHOULDER = 13.4;
   const geology = root.SinR3MawGeology;
+  const GUARDIAN = { x: 8.86, z: 5.89, size: 5.18, yaw: -Math.PI / 2 - 0.16 };
+  const RUINS = [
+    ['Promontory', 'Abyss_Cliff_Ruins', [47.1, 8.05, 1.72], [0.60, 0.42, 0.61], 0.69],
+    ['RightLower', 'Abyss_Bridge_Ruined', [55.9, 11.45, -30.0], [1.49, 0.98, 0.96], -1.36],
+    ['RightUpper', 'Abyss_Bridge_Ruined', [71.4, 22.35, -43.1], [1.10, 1.05, 1.03], -1.29],
+    ['DistantSpan', 'Abyss_Bridge_Ruined', [90, 20.0, -22.9], [1.91, 1.06, 1.1], 1.58]
+  ];
   const BUDGET = Object.freeze({ glbMiB: 22, drawCalls: 85, trianglesInView: 515000 });
   const tau = 2 * Math.PI;
   const anchors = [-1, 1].flatMap(x => [-1, 1].map(z => [
@@ -51,40 +58,42 @@
           uniform mat4 mawW2L;
           varying vec3 vMaw;
           float mawSquare(float n) { return n*n; }
-          ${kind === 2 ? geology.scattering : ''}
+          ${kind >= 2 ? geology.scattering : ''}
         `)
           .replace('#include <color_fragment>', `
             #include <color_fragment>
             float mawWear = sin(vMaw.x * 2.62 + sin(vMaw.z * 1.37)) *
               cos(vMaw.z * 1.73 - vMaw.y * 0.31);
             float mawTone = dot(diffuseColor.rgb,vec3(0.263,0.655,0.082));
-            diffuseColor.rgb = mix(vec3(mawTone), diffuseColor.rgb, ${kind === 2 ? '0.52' : '0.72'}) *
+            diffuseColor.rgb = mix(vec3(mawTone), diffuseColor.rgb, ${kind >= 2 ? '0.52' : '0.72'}) *
               (0.94 + mawWear * 0.09);
           `)
           .replace('#include <opaque_fragment>', `
             float mao = 1.0;
             ${kind === 1 ? `
               vec2 p = vMaw.xz;
-              mao -= 0.40 * exp(-dot((p-vec2(8.2,5.45))/vec2(2.0,1.15),
-                (p-vec2(8.2,5.45))/vec2(2.0,1.15)));
+              mao -= 0.40 * exp(-dot((p-vec2(${GUARDIAN.x},${GUARDIAN.z}))/vec2(2.0,1.15),
+                (p-vec2(${GUARDIAN.x},${GUARDIAN.z}))/vec2(2.0,1.15)));
               mao -= 0.18 * smoothstep(6.3, 9.6, abs(p.y));
               mao -= 0.14 * exp(-abs(length(p-vec2(12.9,-1.4))-4.9)*7.0);
             ` : ''}
             float topLight = smoothstep(-1.6, 13.0, vMaw.x) *
               (0.45 + 0.55 * exp(-mawSquare((vMaw.z+1.1)*0.12)));
-            ${kind === 2 ? `
+            ${kind >= 2 ? `
               vec3 eye=(mawW2L * vec4(cameraPosition,1.0)).xyz;
               float cracks=mNoise(vec3(vMaw.x*1.8,vMaw.y*0.22,vMaw.z*1.4));
-              float strata=0.49 + 0.50*smoothstep(0.12,0.72,cracks);
-              float depthShade=0.53+0.47*smoothstep(-54.0,7.0,vMaw.y);
-              vec3 bounce=diffuseColor.rgb*vec3(0.014,0.033,0.049);
-              vec3 charcoal=(outgoingLight*vec3(0.18,0.215,0.24)*strata+bounce)*depthShade;
+              float strata=0.58 + 0.41*smoothstep(0.12,0.72,cracks);
+              float crest=smoothstep(-17.0,24.0,vMaw.y);
+              float depthShade=0.56+0.44*smoothstep(-54.0,7.0,vMaw.y);
+              vec3 bounce=diffuseColor.rgb*vec3(0.023,0.052,0.073)*(0.71+crest*0.41);
+              vec3 charcoal=(outgoingLight*${kind === 3 ? 'vec3(0.31,0.34,0.38)' : 'vec3(0.24,0.28,0.31)'}*
+                strata+bounce)*depthShade;
               outgoingLight=mawScatter(charcoal,eye,vMaw);
             ` : `
               outgoingLight *= mao * mix(vec3(0.58,0.59,0.61),vec3(0.86,0.94,1.02),topLight);
               float bounceKey=exp(-mawSquare((vMaw.x-12.75)*0.14)-mawSquare((vMaw.z+1.5)*0.15));
               bounceKey*=1.0-0.58*smoothstep(4.8,10.0,vMaw.y);
-              float bounceLeft=exp(-mawSquare((vMaw.x-7.9)*0.30)-mawSquare((vMaw.z-5.1)*0.19));
+              float bounceLeft=exp(-mawSquare((vMaw.x-9.2)*0.29)-mawSquare((vMaw.z-6.0)*0.19));
               outgoingLight += diffuseColor.rgb * mao * (vec3(0.032,0.046,0.066) * topLight +
                 vec3(0.16,0.20,0.24) * bounceKey + vec3(0.055,0.063,0.08)*bounceLeft +
                 vec3(0.072,0.081,0.10) * smoothstep(7.0,11.0,vMaw.y));
@@ -171,9 +180,10 @@
       collect(i === 0 || i === 25 ? bands : stone, block, 2.65);
     }
     for (const side of [-1, 1]) {
+      const jamb = side > 0 ? 11.23 : 10.21;
       for (let i = 0; i < 7; i++) {
         const centerY = i * 0.81 + 0.41;
-        slab(10.21, centerY, ARCH_Z + side * 8.90, i === 0 ? 2.77 : 2.38, 0.82,
+        slab(jamb, centerY, ARCH_Z + side * 8.90, i === 0 ? 2.77 : 2.38, 0.82,
           i === 0 ? 1.9 : 1.65, i === 0 || i === 6 ? bands : stone);
       }
       for (let i = 0; i < 7; i++) {
@@ -182,12 +192,12 @@
             1.92, 1.21, 1.48, i === 3 ? bands : stone, side * 0.04);
         }
       }
-      hit(8.81, 11.59, 0, 6.2, ARCH_Z + side * 8.9 - 0.92, ARCH_Z + side * 8.9 + 0.92);
+      hit(jamb - 1.39, jamb + 1.39, 0, 6.2, ARCH_Z + side * 8.9 - 0.92, ARCH_Z + side * 8.9 + 0.92);
     }
     // The left guardian is seated against a solid return. Back the individual
     // courses so neither their joints nor the space behind the plinth leak blue.
     for (let i = 0; i < 9; i++) {
-      slab(9.35 + (i % 2) * 0.09, 0.66 + i * 1.36, 9.13,
+      slab(11.04 + (i % 2) * 0.09, 0.66 + i * 1.36, 9.13,
         1.73, 1.39, 3.26, i === 3 || i === 6 ? bands : stone);
     }
     // Lock the camera/character out of the narrow side footings and rear rail.
@@ -208,7 +218,7 @@
       }
     }
     for (const [x, z] of anchors) hit(x - 0.57, x + 0.57, DECK, DECK + 1.6, z - 0.55, z + 0.55);
-    hit(6.55, 9.77, 0, 5.75, 4.47, 6.43);
+    hit(GUARDIAN.x - 1.02, GUARDIAN.x + 1.02, 0, GUARDIAN.size, GUARDIAN.z - 1.97, GUARDIAN.z + 1.97);
 
     for (const [material, values] of pairs) {
       const geometry = new T.BufferGeometry();
@@ -268,7 +278,7 @@
         const kits = new Map(maw.scene.children.map(node => [node.name, node]));
         const built = new Set();
         const farMats = new Map();
-        function place(name, x, y, z, scale, yaw = 0, distance = false) {
+        function place(name, x, y, z, scale, yaw = 0, distantMasonry = false) {
           const template = kits.get(name);
           if (!template) throw new Error('Missing Maw node ' + name);
           const model = template.clone(true);
@@ -277,8 +287,8 @@
           model.rotation.y = yaw;
           model.traverse(mesh => {
             if (!mesh.isMesh) return;
-            if (distance) {
-              if (!farMats.has(mesh.material)) farMats.set(mesh.material, finish(mesh.material.clone(), 2));
+            if (distantMasonry) {
+              if (!farMats.has(mesh.material)) farMats.set(mesh.material, finish(mesh.material.clone(), 3));
               mesh.material = farMats.get(mesh.material);
             } else if (!built.has(mesh.material)) {
               finish(mesh.material, mesh.material.name === 'M_Platform_Deck' ? 1 : 0);
@@ -334,12 +344,12 @@
         stand.add(lamassu);
         // Preserve the quantization scale carried by the authored mesh root.
         lamassu.position.set(0, 0, 0);
-        lamassu.rotation.y = -Math.PI / 2;
+        lamassu.rotation.y = GUARDIAN.yaw;
         stand.updateWorldMatrix(true, true);
         const worldSize = new T.Box3().setFromObject(lamassu).getSize(new T.Vector3());
-        const scale = 5.5 / worldSize.y;
+        const scale = GUARDIAN.size / worldSize.y;
         stand.scale.setScalar(scale);
-        stand.position.set(8.2, 2.75, 5.47);
+        stand.position.set(GUARDIAN.x, GUARDIAN.size * 0.5, GUARDIAN.z);
         lamassu.traverse(mesh => { if (mesh.isMesh) finish(mesh.material); });
         status.selected.push(lamassu.name);
 
@@ -352,8 +362,11 @@
         basalt.color.setHex(0x7b7871);
         basalt.normalScale.setScalar(0.82);
         room.add(geology.create(T, basalt));
-        place('Abyss_Bridge_Ruined', 61.5, 4.15, -21.8, [1.59, 1.2, 1.07], -1.12, true);
-        place('Abyss_Bridge_Ruined', 102.5, 4.37, 0.3, [1.92, 1.23, 1.13], 1.64, true);
+        for (const [site, source, position, scale, yaw] of RUINS) {
+          place(source, ...position, scale, yaw, true).name = 'Maw_Ruin_' + site;
+        }
+        status.ruins = RUINS.map(([site, source, position]) => ({ site, source, position }));
+        status.guardian = { ...GUARDIAN };
         place('Abyss_Rock_Spire', 2.45, 0.18, 6.45, [0.47, 0.11, 0.37], 0.68);
         place('Abyss_Rock_Spire', 2.12, 0.05, 5.04, [0.22, 0.089, 0.23], -0.82);
         place('Abyss_Rock_Spire', 3.92, -0.07, 7.51, [0.37, 0.105, 0.23], -0.76);

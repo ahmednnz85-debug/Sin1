@@ -3,15 +3,17 @@
   'use strict';
   const DEPTH = -96;
   const LEFT = [
-    [18, 12.6, 0.0], [24, 10.8, -10.8], [29, 11.8, -5.6], [38, 18.5, -3.7],
-    [47, 12.6, 1.9], [54, 10.9, 2.7], [65, 16.4, -0.8], [75, 10.9, 2.8],
-    [87, 16.0, 2.1], [101, 10.7, 4.8], [115, 16.1, 8.1], [140, 12.4, 9.4]
+    [18, 12.6, 0.0], [24, 10.8, -6.8], [29, 11.8, 2.1], [36, 10.3, 6.0],
+    [45, 16.8, 4.8], [54, 12.9, 8.0], [65, 16.4, 5.8], [75, 12.9, 8.8],
+    [87, 16.0, 11.1], [101, 12.7, 13.8], [115, 16.1, 14.1], [140, 12.4, 16.4]
   ];
   const RIGHT = [
-    [18, 14.1, 1.3], [24, 12.7, -9.5], [31, 12.6, -7.2], [39, 17.4, -5.1],
-    [46, 15.9, -0.9], [57, 12.3, 2.7], [68, 16.1, 4.9], [78, 16.9, 1.7],
-    [86, 12.7, 4.1], [101, 12.1, 4.7], [117, 10.9, 5.8], [140, 13.6, 8.5]
+    [18, 14.1, 1.3], [24, 14.5, -7.5], [31, 17.1, -0.8], [40, 18.8, 2.5],
+    [47, 20.7, 6.0], [56, 19.9, 8.2], [64, 23.0, 11.4], [72, 25.3, 16.0],
+    [82, 24.6, 14.4], [88, 20.2, 17.7], [101, 23.5, 19.6], [117, 18.9, 19.8], [140, 15.6, 21.5]
   ];
+  const OUTCROPS = [[47, 1.73, 9.8, 6.9, 12.2, 2], [54.7, -22.6, 9.1, 7.5, 6.9, 9],
+    [91.3, -6.7, 7.1, 5.3, 18.8, 16]];
   const sin = Math.sin, cos = Math.cos, fract = n => n - Math.floor(n);
   const mix = (a, b, t) => a + (b - a) * t;
   const smooth = t => t * t * (3 - 2 * t);
@@ -91,8 +93,9 @@
       }));
     }
 
-    // Two outcrops break the long fault lines and sit at different depths.
-    for (const [cx, cz, rx, rz, crest, seed] of [[42, 7.3, 7.2, 4.4, -5.0, 2], [67, -7.65, 9.2, 4.5, -6.8, 9]]) {
+    // The nearest promontory carries the broken masonry. Farther out, two
+    // stepped buttresses separate the deep channel from the upper bridge.
+    for (const [cx, cz, rx, rz, crest, seed] of OUTCROPS) {
       const column = (a, t) => {
         const angle = Math.PI * 2 * a;
         const h = noise(cos(angle) * 3 + seed, sin(angle) * 3);
@@ -173,14 +176,14 @@
         float detail=mNoise(p*vec3(0.137,0.246,0.173)+vec3(drift*1.6,0.0,drift*0.18));
         float bed=-18.0+5.0*sin(p.x*0.094)+2.0*cos(p.z*0.25);
         float low=exp(-mSquare((p.y-bed+3.4*(billow-0.5))/10.9));
-        float channel=exp(-mSquare((p.z+2.7*sin(p.x*0.065))/20.0));
+        float channel=exp(-mSquare((p.z+8.1+2.7*sin(p.x*0.065))/19.0));
         float shelves=exp(-mSquare((p.y+5.8+4.2*sin(p.x*0.106)+3.6*(detail-0.5))/5.4));
         shelves*=smoothstep(22.0,41.0,p.x)*(1.0-smoothstep(117.0,147.0,p.x));
         float pockets=low*smoothstep(0.22,0.79,billow*0.86+detail*0.14);
         float lips=shelves*smoothstep(0.34,0.77,billow)*0.44;
         float density=0.0055+(0.025+channel*0.029)*(pockets+lips);
         float alpha=1.0-exp(-density*stride);
-        vec3 ambient=mix(vec3(0.032,0.061,0.082),vec3(0.074,0.179,0.235),min(1.0,(low+0.72*shelves)*channel));
+        vec3 ambient=mix(vec3(0.035,0.069,0.096),vec3(0.074,0.179,0.235),min(1.0,(low+0.72*shelves)*channel));
         light+=remaining*alpha*ambient;
         remaining*=1.0-alpha;
       }
