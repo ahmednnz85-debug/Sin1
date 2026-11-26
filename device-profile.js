@@ -80,7 +80,7 @@
   // Skips compressed textures, render targets, and images already small enough.
   // Safe to call more than once (userData.sinCapped).
   function capTexture(tex, maxSize) {
-    if (!tex || !maxSize || tex.isCompressedTexture || tex.isRenderTargetTexture) return false;
+    if (!tex || !maxSize || tex.isCompressedTexture || tex.isRenderTargetTexture || tex.userData?.r3DoorOriginal) return false;
     const img = tex.image || (tex.source && tex.source.data);
     if (!img) return false;
     const w = img.width || img.videoWidth || 0;

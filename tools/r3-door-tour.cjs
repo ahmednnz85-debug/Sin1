@@ -1,0 +1,232 @@
+#!/usr/bin/env node
+/* Capture and exercise the installed R3 door through the throne hall.
+   NODE_PATH=… THREE_DIR=… node tools/r3-door-tour.cjs [output] [index URL] */
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { chromium } = require('playwright');
+
+const output = process.argv[2] || 'r3-door-tour';
+const url = new URL(process.argv[3] || 'http://127.0.0.1:8080/index.html');
+url.searchParams.set('dev', '1');
+url.searchParams.set('level', 'HALL');
+url.searchParams.set('r3DoorTest', '1');
+const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
+const frequency = 15;
+
+async function main() {
+  fs.mkdirSync(output, { recursive: true });
+  const browser = await chromium.launch({ args: [
+    '--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'
+  ] });
+  const report = { url: url.href, browser: browser.version(), device: 'iPhone viewport/UA, Chromium SwiftShader',
+    fps: frequency, errors: [], checks: {}, angles: {}, views: {} };
+  const save = () => fs.writeFileSync(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+  try {
+    const page = await browser.newPage({
+      viewport: { width: 852, height: 393 }, isMobile: true, hasTouch: true,
+      deviceScaleFactor: 1, userAgent: ua
+    });
+    page.on('pageerror', error => report.errors.push(error.message));
+    page.on('console', msg => {
+      if (/WebGLProgram: Shader Error|Invalid sealed door|Incompatible sealed door/.test(msg.text())) report.errors.push(msg.text().slice(0, 700));
+      if (/\[palace load\] (الباب المختوم|gpu-pump-end|DONE)|\[dev-hub\] ready/.test(msg.text())) console.log(msg.text());
+    });
+    await page.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'iPhone', configurable: true });
+      Object.defineProperty(Performance.prototype, 'memory', { get: () => undefined, configurable: true });
+    });
+    if (process.env.THREE_DIR) await page.route(/cdn\.jsdelivr\.net\/npm\/three@0\.187\.0\//, route => {
+      const file = route.request().url().split('three@0.187.0/')[1].split('?')[0];
+      return route.fulfill({ path: path.join(process.env.THREE_DIR, file), contentType: 'text/javascript' });
+    });
+    const start = Date.now();
+    await page.goto(url.href);
+    await page.waitForFunction(() => window.__sinDev?.ready || window.__sinDev?.error, null, { timeout: 600000, polling: 500 });
+    report.bootSeconds = (Date.now() - start) / 1000;
+    const info = await page.evaluate(() => {
+      if (!__sinDev.ready) throw new Error(__sinDev.error);
+      if (!window.__r3DoorTest?.state()) throw new Error('Sealed door is missing');
+      const game = SinDevHub.game(), hero = game.hero(), camera = game.camera;
+      let scene = hero;
+      while (scene.parent) scene = scene.parent;
+      const gate = scene.getObjectByName('R3SealedDoor');
+      const frame = gate.getObjectByName('world');
+      const [x, , z] = gate.getWorldPosition(new THREE.Vector3()).toArray();
+      const y = PalaceInterior.floorY();
+      const passage = PalaceWings.state.hall.passages.find(p => p.id === SinR3SealedZone.passageId);
+      const fixed = frame.children.filter(mesh => mesh.isMesh);
+      const baked = [];
+      const maps = new Set();
+      gate.traverse(node => {
+        if (node.isMesh) {
+          baked.push([node.name, node.geometry.index.count / 3]);
+          maps.add(node.material.map);
+        }
+      });
+      document.documentElement.classList.add('sin-dev-clean');
+      window.__doorTour = { game, hero, camera, scene, gate, fixed, x, y, z, passage,
+        render: window.__R.render.bind(window.__R) };
+      const closed = __r3DoorTest.state();
+      gate.updateWorldMatrix(true, true);
+      const face = new THREE.Box3().setFromObject(gate).max.x;
+      const wallPlane = PalaceInterior.metrics().x + passage.position[0];
+      return { closed, passage, baked, face, wallPlane, hallFloor: y, recessedWall: !!scene.getObjectByName('R3-RecessedWall'), textures: [...maps].map(t => [
+        t.image?.width || t.userData.sinGpuW, t.image?.height || t.userData.sinGpuH]) };
+    });
+    report.asset = info;
+    report.checks.closedByDefault = info.closed.phase === 'closed' && info.closed.angles.every(a => a === 0);
+    report.checks.flushMuralFace = info.recessedWall && Math.abs(info.face - info.wallPlane) < 0.005;
+    report.checks.sharedFloorDatum = Math.abs(info.closed.columnBase - info.hallFloor) < 0.002;
+    report.checks.sourceTriangles = info.baked.reduce((sum, [, count]) => sum + count, 0) === 86206;
+    report.checks.sharedPng = info.textures.length === 4 &&
+      info.textures.filter(([w, h]) => w === 1122 && h === 1402).length === 2;
+    console.log('Hall ready with door', JSON.stringify(info.closed));
+    save();
+
+    const raf = count => page.evaluate(n => new Promise(resolve => {
+      function frame() { if (--n === 0) resolve(); else requestAnimationFrame(frame); }
+      requestAnimationFrame(frame);
+    }), count);
+    async function camera(side) {
+      await page.evaluate(side => {
+        const { camera, x, y, z } = __doorTour;
+        // Keep the camera inside the existing alcove for the reverse view.
+        const rear = side === 'back';
+        camera.position.set(x + (rear ? -3.95 : 8.1), y + (rear ? 3.8 : 3.6), z + (side === 'oblique' ? 4.4 : 0.25));
+        camera.fov = rear ? 96 : 61;
+        camera.lookAt(x, y + 3.95, z);
+        camera.updateProjectionMatrix();
+        camera.updateMatrixWorld();
+      }, side);
+    }
+    async function capture(file, dt) {
+      const frame = await page.evaluate(dt => {
+        const { scene, camera, render } = __doorTour;
+        if (dt) __r3DoorTest.step(dt);
+        render(scene, camera);
+        return { jpg: window.__R.domElement.toDataURL('image/jpeg', 0.91).split(',')[1], state: __r3DoorTest.state() };
+      }, dt);
+      fs.writeFileSync(path.join(output, file), Buffer.from(frame.jpg, 'base64'));
+      return frame.state;
+    }
+
+    await page.evaluate(() => {
+      const { hero, game, x, y, z } = __doorTour;
+      hero.position.set(x + 5.2, y, z + 2.4);
+      game.setFacing(-Math.PI / 2);
+    });
+    await raf(5);
+    await page.evaluate(() => { window.__holdSim = true; window.__R.render = () => {}; });
+    await camera('front');
+    await capture('front-closed.jpg', 0);
+    await camera('oblique');
+    await capture('mural-alignment.jpg', 0);
+    await page.evaluate(() => {
+      const { x, y, z, hero } = __doorTour;
+      hero.position.set(x + 0.8, y, z);
+    });
+    report.checks.closedCenterBlocks = await page.evaluate(() => {
+      const { game, x, z } = __doorTour;
+      return game.blocked(x, z);
+    });
+    report.checks.sillSupport = await page.evaluate(() => {
+      const { x, y, z } = __doorTour;
+      const rise = PalaceInterior.floorAt(x, z, y) - y;
+      return rise > 0 && rise < 0.25;
+    });
+    await page.evaluate(() => {
+      const { hero, x, y, z } = __doorTour;
+      hero.position.set(x - 1.02, y, z + 0.87);
+      __r3DoorTest.open();
+      for (let i = 0; i < 100; i++) __r3DoorTest.step(1 / 30);
+    });
+    report.checks.sweepPausesForHero = await page.evaluate(() => {
+      const { game, hero, x, y, z } = __doorTour;
+      const gate = __r3DoorTest.state();
+      if (gate.phase !== 'opening' || !(gate.elapsed > 0 && gate.elapsed < 3) || game.blocked(hero.position.x, hero.position.z)) return false;
+      hero.position.set(x + 5.2, y, z + 2.4);
+      for (let i = 0; i < 150; i++) __r3DoorTest.step(1 / 30);
+      return __r3DoorTest.state().phase === 'open' && __r3DoorTest.reset();
+    });
+    console.log('Closed and swept collision', JSON.stringify(report.checks));
+    save();
+
+    // Verify the production tick advances after the temporary trigger.
+    await page.evaluate(() => { window.__holdSim = false; __r3DoorTest.open(); });
+    await raf(12);
+    report.checks.gameTickAdvances = await page.evaluate(() => __r3DoorTest.state().elapsed > 0);
+    await page.evaluate(() => { window.__holdSim = true; __r3DoorTest.reset(); });
+
+    // Each frame is drawn by the live game's renderer. Automatic redraws
+    // stay suspended during export so software GL renders each pose once.
+    for (const side of ['front', 'back']) {
+      fs.mkdirSync(path.join(output, side), { recursive: true });
+      await camera(side);
+      const frameBefore = await page.evaluate(() => {
+        __doorTour.fixed.forEach(part => part.updateWorldMatrix(true, false));
+        return __doorTour.fixed.map(part => part.matrixWorld.toArray());
+      });
+      if (side === 'back') await capture('back-closed.jpg', 0);
+      await page.evaluate(() => __r3DoorTest.open());
+      report.angles[side] = [];
+      for (let i = 0; i < 65; i++) {
+        const pose = await capture(side + '/' + String(i).padStart(3, '0') + '.jpg', i ? 1 / frequency : 0);
+        report.angles[side].push([pose.elapsed, ...pose.angles]);
+      }
+      const after = await capture(side + '-open.jpg', 0);
+      report.checks[side + 'Angle'] = after.phase === 'open' &&
+        Math.abs(after.angles[0] * 180 / Math.PI - 88.5) < 0.01 && Math.abs(after.angles[0] + after.angles[1]) < 1e-8;
+      report.checks[side + 'FixedFrame'] = await page.evaluate(before =>
+        __doorTour.fixed.every((part, i) => part.matrixWorld.elements.every((n, j) => n === before[i][j])), frameBefore);
+      if (side === 'front') await page.evaluate(() => __r3DoorTest.reset());
+      console.log('Captured', side, after.angles);
+      save();
+    }
+
+    await page.evaluate(() => {
+      const { render, hero, x, y, z } = __doorTour;
+      window.__R.render = render;
+      hero.position.set(x - 0.93, y, z);
+      window.__holdSim = false;
+    });
+    await raf(12);
+    report.checks.centerClearAndNoTransition = await page.evaluate(() => {
+      const { game, hero, x, z, passage } = __doorTour;
+      const back = PalaceInterior.metrics().x + passage.position[0]
+        - PalaceWings.state.hall.wallThickness - PalaceWings.state.hall.alcoveDepth;
+      return !game.blocked(x, z) && !game.blocked(hero.position.x, hero.position.z) &&
+        game.blocked(back + 0.12, z) && PalaceInterior.state() === 'DONE' &&
+        PalaceInterior.ownsGround() && __doorTour.gate.parent.visible && !PalaceInterior.inR3();
+    });
+    await page.evaluate(() => { window.__holdSim = true; });
+    for (const side of ['front', 'back']) {
+      await camera(side);
+      report.views[side] = await page.evaluate(async () => {
+        const { scene } = __doorTour, r = window.__R;
+        const durations = [];
+        let calls = 0, triangles = 0, last = await new Promise(requestAnimationFrame);
+        for (let i = 0; i < 12; i++) {
+          const now = await new Promise(requestAnimationFrame);
+          durations.push(now - last);
+          calls = Math.max(calls, r.info.render.calls);
+          triangles = Math.max(triangles, r.info.render.triangles);
+          last = now;
+        }
+        const estimate = SinProcessMemory.estimate({ scene, renderer: r, phase: 'r3-door-test', room: 'HALL' });
+        return { meanFrameMs: durations.reduce((a, b) => a + b, 0) / durations.length,
+          p95Ms: durations.sort((a, b) => a - b).at(-1), calls, triangles,
+          cpuMB: estimate.cpuMB, gpuMB: estimate.gpuMB };
+      });
+    }
+    assert.deepEqual(report.errors, []);
+    assert.ok(Object.values(report.checks).every(Boolean), JSON.stringify(report.checks));
+  } finally {
+    save();
+    await browser.close();
+  }
+}
+
+main().catch(error => { console.error(error); process.exitCode = 1; });
