@@ -15,6 +15,21 @@ url.searchParams.set('r3DoorTest', '1');
 const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
 const frequency = 8;
 
+async function inspectSections() {
+  const { scene } = SinDevHub.game();
+  const zone = scene.getObjectByName('R3_SealedZone');
+  const materialSections = zone?.children.filter(n => n.children.some(part => part.userData.materialSlot)) || [];
+  return {
+    sceneChildren: zone?.children.map(n => n.name),
+    sectionIds: materialSections.map(n => n.name.split('_')[0]).sort(),
+    registered: (await SinAreas.list()).filter(a => a.stage === 'r3').map(a => a.id).sort()
+  };
+}
+
+function sectionsMatch({ sectionIds, registered }) {
+  return sectionIds.length === 3 && JSON.stringify(sectionIds) === JSON.stringify(registered);
+}
+
 async function main() {
   fs.mkdirSync(output, { recursive: true });
   const browser = await chromium.launch({ args: [
@@ -43,6 +58,19 @@ async function main() {
       const file = route.request().url().split('three@0.187.0/')[1].split('?')[0];
       return route.fulfill({ path: path.join(process.env.THREE_DIR, file), contentType: 'text/javascript' });
     });
+    if (process.argv.includes('--verify-sections')) {
+      url.searchParams.set('level', 'R3-01');
+      url.searchParams.delete('r3DoorTest');
+      report.url = url.href;
+      await page.goto(url.href);
+      await page.waitForFunction(() => window.__sinDev?.ready || window.__sinDev?.error, null, { timeout: 620000, polling: 500 });
+      assert.equal(await page.evaluate(() => (__sinDev.ready && PalaceInterior.state() === 'R3')), true);
+      report.sections = await page.evaluate(inspectSections);
+      report.checks.onlyRegisteredR3Sections = sectionsMatch(report.sections);
+      assert.deepEqual(report.errors, []);
+      assert.equal(report.checks.onlyRegisteredR3Sections, true);
+      return;
+    }
     const start = Date.now();
     await page.goto(url.href);
     await page.waitForFunction(() => window.__sinDev?.ready || window.__sinDev?.error, null, { timeout: 600000, polling: 500 });
@@ -282,26 +310,36 @@ async function main() {
       const { hero, scene } = __doorTour;
       const snapshot = PalaceInterior.r3Memory();
       const stage = scene.getObjectByName('R3Stage');
-      const sectionIds = stage?.getObjectByName('R3_SealedZone')?.children.map(n => n.name.split('_')[0])
-        .filter(id => /^R3-\d+$/.test(id)).sort() || [];
-      const registered = (await SinAreas.list()).filter(a => a.stage === 'r3').map(a => a.id).sort();
       const reloading = await PalaceInterior.loadPalaceAssets().then(() => false, () => true);
-      return { ...snapshot, arrival, actual: hero.position.toArray(), sectionIds, registered,
+      return { ...snapshot, arrival, actual: hero.position.toArray(),
         walkRetained: PalaceInterior.state() === 'R3' && Math.abs(hero.position.x - arrival[0]) < 0.25,
         noReturn: reloading && PalaceInterior.blocks(entrance + 0.25, hero.position.z),
         noOldScene: scene.children.length === 2 && scene.children.includes(hero) && scene.children.includes(stage) &&
           !window.__r3DoorTest && !Object.keys(PalaceWings.state).length };
     }, { arrival, entrance: report.walk.start });
+    Object.assign(report.retirement, await page.evaluate(inspectSections));
     report.retirement.heapMiB = [heapBefore, heapAfter].map(bytes => +(bytes / 1048576).toFixed(1));
     const r3 = report.retirement;
     report.checks.retainsPositionAndReleasesPalace = r3.walkRetained && r3.noReturn && r3.noOldScene &&
       r3.released?.roots.length === 1 && r3.disposed?.geometries > 0 && r3.disposed?.textures > 0 &&
       r3.released?.cpuMB < r3.before?.cpuMB && r3.released?.gpuMB < r3.before?.gpuMB;
-    report.checks.onlyRegisteredR3Sections = r3.sectionIds.length === 3 &&
-      JSON.stringify(r3.sectionIds) === JSON.stringify(r3.registered);
+    report.checks.onlyRegisteredR3Sections = sectionsMatch(r3);
     console.log('Point of no return', JSON.stringify({ checks: report.checks, memory: report.retirement }));
     assert.deepEqual(report.errors, []);
     assert.ok(Object.values(report.checks).every(Boolean), JSON.stringify(report.checks));
+    const stairJpeg = await page.evaluate(() => {
+      const { hero, scene } = __doorTour;
+      const camera = SinDevHub.game().camera;
+      window.__holdSim = true;
+      camera.position.copy(hero.position).add(new THREE.Vector3(1.45, 2.1, 0.3));
+      camera.fov = 66;
+      camera.lookAt(hero.position.x - 7, hero.position.y - 2.3, hero.position.z);
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld();
+      window.__R.render(scene, camera);
+      return window.__R.domElement.toDataURL('image/jpeg', 0.92).split(',')[1];
+    });
+    fs.writeFileSync(path.join(output, 'down-the-stair.jpg'), Buffer.from(stairJpeg, 'base64'));
   } finally {
     save();
     await browser.close();
