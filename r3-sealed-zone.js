@@ -804,7 +804,10 @@
       return 0;
     }
     function lift(x, y, z, dt) {
-      if (!under || !mawLook?.status.liftReady) return null;
+      // Normal play rides once the Maw is complete (as before); a U1 chapter
+      // start has only the lift ('lift' phase) and rides with that.
+      const maw = mawLook?.status;
+      if (!under || !(maw?.phase === 'ready' || maw?.phase === 'lift' && maw.liftReady)) return null;
       const cab = cabinAt(uAt(x), vAt(z), y);
       let shift = null;
       if (ride.state === 'idle') {

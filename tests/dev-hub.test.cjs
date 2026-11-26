@@ -163,3 +163,32 @@ test('direct entry boots only the chosen chapter: later chapters never run the o
     assert.equal(ctx.window.location.search, '?dev=1&level=' + id, 'no automation parameters added');
   }
 });
+
+test('chapter starts and the exterior hold are reachable only from the developer entry', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const game = fs.readdirSync(ROOT).filter(f => /\.js$/.test(f) && !/^dev-hub/.test(f))
+    .map(f => [f, fs.readFileSync(path.join(ROOT, f), 'utf8')]).concat([['index.html', html]]);
+  // Only the hub raises the exterior hold; the game only reads it.
+  for (const [f, src] of game) assert.ok(!/__sinDeferExterior\s*=[^=]/.test(src), f + ' never sets __sinDeferExterior');
+  assert.match(HUB, /root\.__sinDeferExterior = true/);
+  // bootChapter is defined once and handed only to the hub's bind.
+  assert.equal((html.match(/bootChapter\(/g) || []).length, 2);
+  assert.match(html, /SinDevHub\.bind\(\{[^\n]*chapter:\(stage,area\)=>bootChapter\(stage,area\)/);
+  // Chapter boots are called only by bootChapter; enterR3Direct only by a chapter boot.
+  for (const [f, src] of game) {
+    const calls = (src.match(/\.boot\(\{|chapter\.boot\(/g) || []).length;
+    assert.ok(f === 'index.html' ? calls === 1 : calls === 0, f + ' calls a chapter boot');
+  }
+  const direct = game.filter(([, src]) => /enterR3Direct\(/.test(src)).map(([f]) => f).sort();
+  assert.deepEqual(direct, ['palaceInterior.js', 'r3-sealed-zone.js']);
+});
+
+test('removing the hub: the boot hook falls back to the original start', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
+    .replace(/<!-- Temporary developer hub[^\n]*\n<script[^\n]*dev-hub\.js[^\n]*<\/script>\n/, '');
+  assert.ok(!/data-src="dev-hub\.js/.test(html), 'hub tag removable as documented');
+  const hook = html.split('\n').find(l => l.startsWith('if(window.SinDevHub&&SinDevHub.enabled)'));
+  let started = 0;
+  vm.runInNewContext(hook, { window: {}, SinDevHub: undefined, startGame: () => started++, bootChapter() {} });
+  assert.equal(started, 1);
+});

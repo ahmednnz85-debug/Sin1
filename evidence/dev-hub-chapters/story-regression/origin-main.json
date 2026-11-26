@@ -1,0 +1,153 @@
+{
+ "base": "http://127.0.0.1:8090/index.html",
+ "hub": "removed",
+ "results": {
+  "normal": {
+   "menuSeconds": 20.736,
+   "hub": false,
+   "deferExterior": "unset",
+   "exteriorStarted": false,
+   "palace": "IDLE",
+   "inR3": false,
+   "hero": [
+    0,
+    0,
+    -30
+   ],
+   "playing": true,
+   "chapters": null,
+   "preloads": [
+    "assets/lod/outdoor-lod.json?v=20261112r6",
+    "assets/lod/outdoor-hlod.json?v=20261112r1"
+   ],
+   "assetsAtMenu": [
+    "assets/Sin_hero_runtime.glb",
+    "assets/babylonian_wall.glb",
+    "assets/canal_color.jpg",
+    "assets/canal_normal.jpg",
+    "assets/canal_rough.jpg",
+    "assets/canal_water.jpg",
+    "assets/distant_city_ring.jpg",
+    "assets/grass_dark.jpg",
+    "assets/grass_lawn.jpg",
+    "assets/grass_moss.jpg",
+    "assets/grass_tuft_a.glb",
+    "assets/grass_tuft_b.glb",
+    "assets/ground_zones.png",
+    "assets/houses.glb",
+    "assets/kiosk.glb",
+    "assets/ktx2/manifest.json",
+    "assets/lod/outdoor-hlod.json",
+    "assets/lod/outdoor-lod.json",
+    "assets/marble.webp",
+    "assets/market_pot.glb",
+    "assets/market_pots.glb",
+    "assets/palace-glimpse.webp",
+    "assets/palace.glb",
+    "assets/palm.glb",
+    "assets/palm_new.glb",
+    "assets/plaza_mosaic.jpg",
+    "assets/plaza_paving.jpg",
+    "assets/plaza_stone.jpg",
+    "assets/sky_babylon_blood.jpeg",
+    "assets/stalls.glb",
+    "assets/مجسم الباب.glb"
+   ],
+   "assetCount": 31,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+   ]
+  },
+  "story": {
+   "steps": {
+    "palace": {
+     "t": 115.524,
+     "state": "DONE",
+     "cityReleased": true,
+     "floorY": 3.7544692556158643,
+     "front": 183.65999999999997,
+     "x": 1
+    },
+    "r3-door": {
+     "t": 123.171,
+     "opened": true,
+     "state": {
+      "phase": "open",
+      "elapsed": 4.2,
+      "duration": 4.2,
+      "angles": [
+       1.5446163880149817,
+       -1.5446163880149817
+      ],
+      "origin": [
+       -12.27455767789057,
+       3.5208099197215077,
+       192.86326740255302
+      ],
+      "floor": 3.9819796278009654,
+      "columnBase": 3.7544692556158643,
+      "scale": [
+       0.989268725420906,
+       1.1977602601470845
+      ],
+      "jambs": [
+       [
+        -1.8429946524064171,
+        0,
+        0
+       ],
+       [
+        1.8429946524064171,
+        0,
+        0
+       ]
+      ]
+     }
+    },
+    "passage-L0": {
+     "t": 424.606,
+     "inR3": true,
+     "state": "R3_FADING_OUT"
+    },
+    "r3": {
+     "t": 561.567,
+     "state": "R3",
+     "roots": [
+      "SinHeroRoot",
+      "R3Stage"
+     ],
+     "palaceGone": true,
+     "backToPalaceBlocked": true,
+     "cityReleased": true,
+     "loaded": {
+      "cpuMB": 118.6,
+      "gpuMB": 129.8
+     }
+    },
+    "lift": {
+     "t": 608.659,
+     "legs": [
+      {
+       "label": "down",
+       "moved": -420.01,
+       "underworld": true,
+       "maw": false,
+       "veilGone": true
+      },
+      {
+       "label": "up",
+       "moved": 419.99,
+       "underworld": false,
+       "maw": true,
+       "veilGone": true
+      }
+     ]
+    }
+   },
+   "assetsLoadedForR3": 71,
+   "errors": [
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+   ]
+  }
+ }
+}
