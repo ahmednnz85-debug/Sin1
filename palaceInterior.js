@@ -4680,10 +4680,13 @@
     envelope.add(key);
     ctx.scene.add(envelope);
     // R3-01 props and stone sets load while the curtain is still black.
-    await stage.ready?.(ctx.renderer).catch(error => console.error('[R3-01] stair assets', error));
+    await stage.ready?.(ctx.renderer, { chapter: r3Entry.chapter }).catch(error => console.error('[R3-01] stair assets', error));
     r3Stage = stage;
     const arrival = r3Entry.arrival || stage.spawn;
     if (r3Entry.arrival) arrival[1] = stage.nearFloor(arrival[0], arrival[2], arrival[1])?.y ?? arrival[1];
+    // A direct chapter start lands past the stage's own start: keep the
+    // curtain down until the deferred dressing there is complete.
+    if (r3Entry.chapter && r3Entry.arrival) await stage.settled?.();
     ctx.hero.position.set(origin.x + arrival[0], origin.y + arrival[1], origin.z + arrival[2]);
     ctx.setFacing(-Math.PI / 2);
     stage.update(...arrival);
@@ -5505,11 +5508,64 @@
     want.y = Math.max(floorY + 1.2, Math.min(floorY + Math.max(2.4, CONFIG.hallHeightH * H * 0.55), want.y));
   }
 
+  // Direct chapter starts (sin-areas.js chapters; used by the developer
+  // entry only, never by normal play). Each begins exactly where the story
+  // crosses into the chapter, through this module's own loaders.
+  //   palace: Sîn stands on the open royal threshold; the ordinary entry
+  //           (fade, palace load screen, hall build, reveal) takes over.
+  //   r3/u1:  the R3 stage is mounted by the same loader as the passage-L0
+  //           transition, from the canonical hall layout bake.
+  function waitState(done, ms = 1500000) {
+    return new Promise((resolve, reject) => {
+      const t0 = performance.now();
+      (function poll() {
+        if (done()) return resolve(state);
+        if (state === 'FAILED' || state === 'R3_FAILED') return reject(new Error('palace state ' + state));
+        if (performance.now() - t0 > ms) return reject(new Error('timeout in state ' + state));
+        setTimeout(poll, 100);
+      })();
+    });
+  }
+  function bootPalace(ctx) {
+    approachY = ctx.floorY; // the exterior ground at the door, as a walk-in would record it
+    ctx.place(ctx.portal.x, ctx.floorY, ctx.portal.frontZ + 0.1, 0);
+    return waitState(() => state === 'DONE');
+  }
+  async function enterR3Direct(ctx, { chapter = 'r3' } = {}, area = null) {
+    if (state !== 'IDLE') throw new Error('R3 direct start needs a fresh stage (state ' + state + ')');
+    const bake = await fetch('data/palace-colliders.json?v=20261117l1', { cache: 'no-cache' }).then(r => r.json());
+    const passage = r3Passage(bake.hall && bake.hall.passages);
+    if (!passage) throw new Error('passage-L0 missing from the hall bake');
+    portalX = ctx.portal.x; portalFront = ctx.portal.frontZ; floorY = ctx.floorY;
+    const box = new THREE.Box3().setFromObject(ctx.hero);
+    H = Math.max(1.2, box.getSize(new THREE.Vector3()).y);
+    r3Entry = { passage: { position: [...passage.position] },
+      hall: { wallThickness: bake.hall.wallThickness, alcoveDepth: bake.hall.alcoveDepth }, chapter };
+    // Arrive at the chosen area's own spawn (R3 stage space -> stage root).
+    const s = area && area.spawn;
+    if (s && !s.stageSpawn) r3Entry.arrival = [passage.position[0] - s.u, s.y, passage.position[2] + s.v];
+    r3Curtain = document.createElement('div');
+    r3Curtain.id = 'r3-transition';
+    Object.assign(r3Curtain.style, { position: 'fixed', inset: '0', zIndex: '12000', background: '#000', opacity: '1', pointerEvents: 'auto' });
+    document.body.appendChild(r3Curtain);
+    lastContext = ctx;
+    state = 'R3_BLACK';
+    r3Memory.before = r3Snapshot(ctx, 'R3-direct-' + chapter);
+    await loadR3(ctx).catch(error => { failR3(error); throw error; });
+    return waitState(() => state === 'R3');
+  }
+
   // Area registry (sin-areas.js): the throne hall is this module's stage.
+  if (window.SinAreas) SinAreas.chapter({ stage: 'palace', order: 20, ar: 'القصر الملكي', en: 'Royal palace',
+    boundary: 'royal door', boot: bootPalace }, 'palaceInterior');
   if (window.SinAreas) SinAreas.group('hall', 'قاعة العرش', 'Throne hall', 20)
     .register({ id: 'HALL', stage: 'palace', group: 'hall', ar: 'قاعة العرش', en: 'Throne hall', spawn: { teleport: 'Palace' } }, 'palaceInterior');
 
   window.PalaceInterior = {
+    enterR3Direct: enterR3Direct,
+    // Frame of the R3 stage in world space (portal, floor, passage-L0).
+    r3Frame: () => r3Entry && { portalX, front: portalFront, floorY,
+      px: r3Entry.passage.position[0], pz: r3Entry.passage.position[2] },
     CONFIG: CONFIG,
     BUILD: BUILD,
     tick: tick,

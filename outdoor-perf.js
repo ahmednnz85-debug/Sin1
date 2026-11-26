@@ -1275,6 +1275,15 @@
       const THREE = (typeof window !== 'undefined') && window.THREE;
       if (!THREE) return false;
       hookRenderer(THREE);
+      // The LOD packs belong to the exterior: on a direct start in a later
+      // chapter they wait for the exterior's own start (index.html init()).
+      if (window.__sinDeferExterior && !window.__sinExteriorStarted) {
+        if (!state._lodQueued) {
+          state._lodQueued = true;
+          window.addEventListener('sin:exterior-start', boot, { once: true });
+        }
+        return true;
+      }
       if (!state._lodStarted) {
         state._lodStarted = true;
         loadLod(THREE).catch(function () { state.ready = true; });

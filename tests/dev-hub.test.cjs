@@ -12,9 +12,13 @@ const HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const PALACE = fs.readFileSync(path.join(ROOT, 'palaceInterior.js'), 'utf8');
 const BAKE = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/palace-colliders.json'), 'utf8'));
 // The registrations exactly as the owning files write them.
-const outdoorBlock = HTML.slice(HTML.indexOf("if(window.SinAreas){SinAreas.group('outdoor'"), HTML.indexOf("'index.html'));}") + "'index.html'));}".length);
+const outdoorStart = HTML.indexOf("if(window.SinAreas){SinAreas.chapter({stage:'outdoor'");
+const outdoorBlock = HTML.slice(outdoorStart, HTML.indexOf("'index.html'));}", outdoorStart) + "'index.html'));}".length);
 const marketBlock = HTML.split('\n').find(l => l.startsWith("if(window.SinAreas)SinAreas.register({id:'OUT-MARKET'"));
-const hallBlock = PALACE.slice(PALACE.indexOf('  if (window.SinAreas) SinAreas.group(\'hall\''), PALACE.indexOf("'palaceInterior');") + "'palaceInterior');".length);
+const hallStart = PALACE.indexOf('  if (window.SinAreas) SinAreas.group(\'hall\'');
+const hallBlock = PALACE.slice(hallStart, PALACE.indexOf("'palaceInterior');", hallStart) + "'palaceInterior');".length);
+const chapterStart = PALACE.indexOf("  if (window.SinAreas) SinAreas.chapter({ stage: 'palace'");
+const palaceChapter = PALACE.slice(chapterStart, PALACE.indexOf("'palaceInterior');", chapterStart) + "'palaceInterior');".length);
 
 function load({ search = '', enabled = true } = {}) {
   const store = new Map();
@@ -40,6 +44,7 @@ function load({ search = '', enabled = true } = {}) {
   for (const f of ['wing-architecture.js', 'r3-maw-geology.js', 'r3-maw-approach.js', 'r3-maw-dressing.js', 'r3-underworld.js', 'r3-sealed-zone.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
   vm.runInContext('(function(){const CANAL_Z0=7,CANAL_Z1=76;' + marketBlock + '})()', ctx);
   vm.runInContext('(function(){const PL_Z0=76,PL_FRONT=160;' + outdoorBlock + '})()', ctx);
+  vm.runInContext('(function(){const bootPalace=()=>Promise.resolve();' + palaceChapter + '})()', ctx);
   vm.runInContext(hallBlock, ctx);
   return { hub: window.SinDevHub, store, Storage, ctx };
 }
@@ -128,5 +133,33 @@ test('index.html: one hook, original init() when the hub is absent', () => {
   assert.ok(html.indexOf('dev-hub.js') < html.indexOf('device-profile.js'), 'hub loads before any storage reader');
   for (const f of fs.readdirSync(ROOT).filter(f => /\.js$/.test(f) && !/^dev-hub/.test(f))) {
     assert.ok(!/SinDevHub/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), f + ' does not depend on the hub');
+  }
+});
+
+test('chapters: every stage is a registered chapter, ordered by its point of no return', async () => {
+  const { ctx } = load();
+  const A = ctx.window.SinAreas;
+  const chapters = A.chapters();
+  assert.deepEqual(JSON.parse(JSON.stringify(chapters.map(c => c.stage))), ['outdoor', 'palace', 'r3', 'u1']);
+  assert.equal(chapters[0].boot, undefined, 'the first chapter is the game\'s own full start');
+  for (const c of chapters.slice(1)) assert.equal(typeof c.boot, 'function', c.stage + ' boots directly');
+  for (const a of await A.list()) assert.ok(A.chapterOf(a.stage), a.id + ' belongs to a chapter');
+  // A new chapter adds its stage; its areas are then accepted with no hub change.
+  A.chapter({ stage: 'u2', order: 50, boot: () => Promise.resolve() }, 'test');
+  A.register({ id: 'U2-01', stage: 'u2', group: 'u1', ar: 'x', en: 'x', spawn: { u: 0, v: 0, y: 0, yaw: 0 } }, 'test');
+  assert.throws(() => A.chapter({ stage: 'u2', order: 51 }), /twice/);
+});
+
+test('direct entry boots only the chosen chapter: later chapters never run the original start', async () => {
+  for (const [id, direct] of [['OUT-GATE', false], ['K3', true], ['R3-02', true], ['U1-03', true]]) {
+    const { hub, ctx } = load({ search: '?dev=1&level=' + id });
+    const calls = [];
+    hub.bind({ chapter: (stage, area) => { calls.push(['chapter', stage, area.id]); return new Promise(() => {}); },
+      phase: () => 'ready', start() {}, hero: () => null });
+    hub.boot(() => calls.push(['init']));
+    await new Promise(r => setTimeout(r, 30));
+    const stage = (await ctx.window.SinAreas.get(id)).stage;
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), direct ? [['chapter', stage, id]] : [['init']], id);
+    assert.equal(ctx.window.location.search, '?dev=1&level=' + id, 'no automation parameters added');
   }
 });

@@ -14,19 +14,31 @@
    Area definition:
      { id, stage, group, ar, en, spawn, order? }
        id     stable, unique; used in links (?dev=1&level=<id>)
-       stage  'outdoor' | 'palace' | 'r3' — the game stage that must be booted
+       stage  a registered chapter: 'outdoor' | 'palace' | 'r3' | 'u1' | …
        group  menu section id (declared with SinAreas.group)
        ar/en  display names
        spawn  outdoor: { x, z, yaw }   palace: { teleport: '<region id>' }
-              r3: { u, v, y, yaw } in R3 stage space, or { stageSpawn: true }
+              r3, u1: { u, v, y, yaw } in R3 stage space, or { stageSpawn: true }
    Providers: SinAreas.provide(name, async () => [definitions]) for areas
    derived from data that is only known at runtime (e.g. the palace layout).
-   Providers run only when something calls SinAreas.list(). */
+   Providers run only when something calls SinAreas.list().
+
+   Chapters: the story is a chain of stages separated by points of no return
+   (the royal door, passage-L0, the Maw lift). Each stage's OWNER declares
+   its chapter, in order, with the boundary it starts from and how to start
+   play directly at that boundary:
+     SinAreas.chapter({ stage, order, ar, en, boundary, boot? }, from)
+       boot(ctx, area) → Promise   area: the target area (its spawn)
+                            ctx: { hero, scene, camera, renderer, setFacing,
+                             portal, floorY, place(x, y, z, yaw) }
+       The first chapter (no boot) is the game's own full start.
+   A direct start (developer entry) boots only the chosen chapter; nothing
+   of the chapters before it is loaded. Normal play never calls boot. */
 (function (root) {
   'use strict';
   if (root.SinAreas) return;
   const STAGES = ['outdoor', 'palace', 'r3'];
-  const statics = [], providers = new Map(), groups = new Map();
+  const statics = [], providers = new Map(), groups = new Map(), chapters = new Map();
   let resolved = null, seq = 0;
 
   function check(a, from) {
@@ -44,6 +56,17 @@
     register(a, from = 'static') { statics.push(check(a, from)); resolved = null; return api; },
     provide(name, fn) { providers.set(name, fn); resolved = null; return api; },
     groups: () => [...groups.values()].sort((a, b) => a.order - b.order),
+    // Story chapter of a stage (see header). Registering a chapter for a new
+    // stage adds that stage; areas may then use it.
+    chapter(c, from = 'static') {
+      if (!c || !c.stage || typeof c.order !== 'number') throw new Error('SinAreas: chapter needs stage and order (' + from + ')');
+      if (chapters.has(c.stage)) throw new Error('SinAreas: chapter ' + c.stage + ' registered twice');
+      if (!STAGES.includes(c.stage)) STAGES.push(c.stage);
+      chapters.set(c.stage, Object.assign({ ar: c.stage, en: c.stage }, c, { source: from }));
+      return api;
+    },
+    chapters: () => [...chapters.values()].sort((a, b) => a.order - b.order),
+    chapterOf: stage => chapters.get(stage) || null,
     // All areas: static registrations plus every provider, de-duplicated,
     // grouped and ordered. A failing provider is reported, not fatal.
     list() {

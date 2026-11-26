@@ -34,10 +34,14 @@ async function open(browser, { mobile = MOBILE, video = false, disable = false, 
     ? { viewport: { width: 852, height: 393 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, userAgent: UA, ...(video ? { recordVideo: { dir: path.join(OUT, 'video'), size: { width: 852, height: 393 } } } : {}) }
     : { viewport: { width: 1280, height: 720 }, ...(video ? { recordVideo: { dir: path.join(OUT, 'video'), size: { width: 1280, height: 720 } } } : {}) });
   const page = await ctx.newPage();
-  const log = { errors: [], requests: [], console: [] };
+  const log = { errors: [], requests: [], console: [], bytes: {} };
   page.on('pageerror', e => log.errors.push(String(e).slice(0, 300)));
   page.on('console', m => { const t = m.text(); if (/dev-hub|R3\]|error/i.test(t)) log.console.push(m.type() + ': ' + t.slice(0, 240)); });
   page.on('request', r => log.requests.push({ t: Date.now(), url: decodeURIComponent(r.url()).replace(/^https?:\/\/[^/]+\//, '') }));
+  page.on('response', r => {
+    const url = decodeURIComponent(r.url()).replace(/^https?:\/\/[^/]+\//, '').split('?')[0];
+    if (/^(assets|data)\//.test(url)) log.bytes[url] = +(r.headers()['content-length'] || 0);
+  });
   if (mobile) await page.addInitScript(() => { try { Object.defineProperty(Performance.prototype, 'memory', { get() { return undefined; }, configurable: true }); Object.defineProperty(Navigator.prototype, 'platform', { get() { return 'iPhone'; }, configurable: true }); } catch (e) {} });
   if (init) await page.addInitScript(init);
   if (THREE_DIR) await page.route(/cdn\.jsdelivr\.net\/npm\/three@0\.187\.0\/(.*)$/, r => r.fulfill({ path: path.join(THREE_DIR, r.request().url().replace(/^.*three@0\.187\.0\//, '').split('?')[0]), contentType: 'text/javascript' }));
@@ -48,6 +52,12 @@ async function open(browser, { mobile = MOBILE, video = false, disable = false, 
   return { ctx, page, log };
 }
 const glbs = log => log.requests.filter(r => /\.glb/.test(r.url)).length;
+// Every asset file the page fetched, and the bytes delivered (what a stage entry costs).
+const assetsOf = log => {
+  const files = [...new Set(log.requests.map(r => r.url.split('?')[0]).filter(u => /^(assets|data)\//.test(u)))].sort();
+  const bytes = Object.values(log.bytes).reduce((a, b) => a + b, 0);
+  return { count: files.length, MiB: +(bytes / 1048576).toFixed(1), files };
+};
 async function snapshot(page) {
   return page.evaluate(() => {
     const r = window.__R, i = r && r.info, s = window.__sinDev;
@@ -131,11 +141,12 @@ async function direct(browser, levels) {
       await page.keyboard.up('KeyW');
       await page.waitForTimeout(800);
       const b = await snapshot(page);
-      await page.screenshot({ path: path.join(OUT, `level-${id}.png`) });
+      // Software-GL frames can outlast Playwright's screenshot wait: keep the measurements.
+      const shot = await page.screenshot({ path: path.join(OUT, `level-${id}.png`), timeout: 90000 }).then(() => true, () => false);
       const moved = a.hero && b.hero ? +Math.hypot(b.hero[0] - a.hero[0], b.hero[2] - a.hero[2]).toFixed(2) : null;
-      out[id] = { wallSeconds: (Date.now() - t0) / 1000, ...a, movedAfterWalk: moved, heroAfterWalk: b.hero, blockedAfterWalk: b.blockedAtHero, glbRequests: glbs(log), errors: log.errors, console: log.console.slice(-4) };
+      out[id] = { wallSeconds: (Date.now() - t0) / 1000, ...a, movedAfterWalk: moved, heroAfterWalk: b.hero, blockedAfterWalk: b.blockedAtHero, glbRequests: glbs(log), assets: assetsOf(log), screenshot: shot, errors: log.errors, console: log.console.slice(-4) };
     } catch (e) {
-      out[id] = { failed: String(e).slice(0, 200), snap: await snapshot(page).catch(() => null), errors: log.errors, console: log.console.slice(-6) };
+      out[id] = { failed: String(e).slice(0, 200), snap: await snapshot(page).catch(() => null), assets: assetsOf(log), errors: log.errors, console: log.console.slice(-6) };
     }
     console.log(id, JSON.stringify(out[id]).slice(0, 400));
     report.results.direct = out; save();

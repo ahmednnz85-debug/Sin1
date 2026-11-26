@@ -804,7 +804,7 @@
       return 0;
     }
     function lift(x, y, z, dt) {
-      if (!under || mawLook?.status.phase !== 'ready') return null;
+      if (!under || !mawLook?.status.liftReady) return null;
       const cab = cabinAt(uAt(x), vAt(z), y);
       let shift = null;
       if (ride.state === 'idle') {
@@ -816,9 +816,13 @@
           shift = [0, ride.from > 0 ? Maw.lift.drop : -Maw.lift.drop, 0];
           ride.state = 'travel';
           ride.wait = 0;
+          // Riding up from a U1 chapter start: the veil holds until R3 is dressed.
+          ride.hold = ride.from < 0 ? loadUpper() : null;
+          ride.held = false;
+          ride.hold?.then(() => { ride.held = true; });
         }
       } else if (ride.state === 'travel') {
-        if ((ride.wait += dt) > 0.6) ride.state = 'opening';
+        if ((ride.wait += dt) > 0.6 && (!ride.hold || ride.held)) ride.state = 'opening';
       } else if ((ride.fade = Math.max(0, ride.fade - dt / 0.8)) === 0) {
         Object.assign(ride, { state: 'idle', armed: false, wait: 0 });
       }
@@ -840,12 +844,34 @@
     }
     cameraBoxes.length = 0;
     const stageCost = { geometryBytes, batches: batchCount, textures: 0 };
-    let mawPending = null;
+    let mawPending = null, stageRenderer = null, upper = undefined;
+    // Upper R3 dressing deferred by a U1 chapter start, loaded on demand.
+    function loadUpper() {
+      if (upper) return upper;
+      upper = (async () => {
+        if (stair) stageCost.stair = await stair.load(stageRenderer).catch(error => ({ error: error.message }));
+        if (hallLook) stageCost.hall = await hallLook.load(stageRenderer);
+        mawPending = mawLook?.prefetch();
+        await mawPending;
+      })();
+      return upper;
+    }
     return {
       root, nearFloor, blocks, update, lift, budget, cost: stageCost, underworld: under,
       // Prepare the independent stage while the transition curtain is black.
-      async ready(renderer) {
+      // options.chapter 'u1': a direct start in the underworld layer (developer
+      // chapter entry). Only the lift and U1 are prepared; R3-01..R3-03 load
+      // behind the lift veil the first time Sîn rides up.
+      async ready(renderer, options = {}) {
         mawLook?.configure(renderer);
+        stageRenderer = renderer;
+        if (options.chapter === 'u1' && under) {
+          upper = null;
+          mawPending = mawLook?.prefetch({ liftOnly: true });
+          stageCost.chapter = 'u1';
+          return stageCost;
+        }
+        upper = Promise.resolve();
         if (stair) stageCost.stair = await stair.load(renderer).catch(error => {
           console.error('[R3-01] stair assets', error);
           return { error: error.message };
@@ -936,6 +962,14 @@
   // Area registry (sin-areas.js): the three sections, spawned in stage space
   // (u out of passage-L0, v along the hall, y below the hall floor).
   if (window.SinAreas) {
+    // Chapters: R3 starts past passage-L0 (one-way), U1 at the bottom of the
+    // Maw lift. A direct start boots the R3 stage alone (the transition's own
+    // loader), and for U1 only the lift and the underworld layer.
+    const boot = chapter => (ctx, area) => window.PalaceInterior.enterR3Direct(ctx, { chapter }, area);
+    SinAreas.chapter({ stage: 'r3', order: 30, ar: 'المنطقة المختومة', en: 'Sealed zone',
+      boundary: 'passage-L0 (one-way)', boot: boot('r3') }, 'r3-sealed-zone');
+    SinAreas.chapter({ stage: 'u1', order: 40, ar: 'العالم السفلي', en: 'Underworld',
+      boundary: 'Maw lift (R3-03 → U1-01)', boot: boot('u1') }, 'r3-sealed-zone');
     SinAreas.group('r3', 'المنطقة المختومة R3', 'Sealed zone R3', 70);
     [['R3-01', 'درج السنين المدفونة', 'Buried Years Stair', { stageSpawn: true }],
       ['R3-02', 'قاعة الختم الأول', 'First Seal Hall', { u: HALL_ENTRY + 1.7, v: HALL_V, y: GALLERY, yaw: -Math.PI / 2 }],
@@ -950,7 +984,7 @@
       [['U1-01', 'مرسى الأرواح', 'Anchorage of Souls'], ['U1-02', 'طريق الموتى', 'Road of the Dead'],
         ['U1-03', 'بوابة إركالا', 'Gate of Irkalla']].forEach(([id, ar, en]) => {
         const [x, y, z] = plan.spawns[id];
-        SinAreas.register({ id, stage: 'r3', group: 'u1', ar, en, spawn: {
+        SinAreas.register({ id, stage: 'u1', group: 'u1', ar, en, spawn: {
           u: MAW_ENTRY + lift.center[0] + x, v: MAW_LANE + lift.center[1] + z,
           y: MAW_LEVEL + lift.drop + y, yaw: Math.PI / 2 } }, 'r3-sealed-zone');
       });

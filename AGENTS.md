@@ -48,7 +48,7 @@ THREE_DIR=…/node_modules/three node tools/list-areas.cjs --md
 ```js
 SinAreas.register({
   id: 'K6',                 // ثابت وفريد، ويُستخدم في الرابط ?dev=1&level=K6. لا يُغيَّر بعد نشره.
-  stage: 'palace',          // 'outdoor' | 'palace' | 'r3': المرحلة التي يجب تشغيلها
+  stage: 'palace',          // 'outdoor' | 'palace' | 'r3' | 'u1' | …: فصل مسجّل (SinAreas.chapter)
   group: 'Kings',           // قسم القائمة، يُعرَّف مرة واحدة بـ SinAreas.group(id, ar, en, order)
   ar: 'غرفة جديدة', en: 'New room',
   spawn: { teleport: 'K6' } // انظر صيغ نقطة الظهور أدناه
@@ -72,9 +72,10 @@ SinAreas.provide('name', async () => [ /* تعريفات */ ]);
 
 1. **غرفة أو ممر في القصر:** أضِفها إلى `solveLayout()` كالعادة، عبر `addRoom` أو `addCon` بمعرّف واسم واسم جناح. تظهر تلقائياً عبر المزوّد. أضِف اسمها العربي إلى `REGION_NAMES_AR`، وإن لم تفعل ظهرت باسمها الإنجليزي.
    - إن تغيّر شكل القاعة نفسها، أعِد توليد `data/palace-colliders.json` بالطريقة المعتادة، ثم راجع `node tools/list-areas.cjs`.
-2. **مرحلة أو منطقة خارج نظام القصر:** سجّلها من وحدتها المالكة بـ`SinAreas.register` أو `SinAreas.provide`. إن كانت مرحلة جديدة كلياً (`stage` جديد):
-   - أضِفها إلى `SinAreas.STAGES` في `sin-areas.js`.
-   - أضِف دالة دخول لها في `dev-hub.js` (`enter…`). هذه الحالة الوحيدة التي تتطلب لمس أداة المطور.
+2. **مرحلة أو منطقة خارج نظام القصر:** سجّلها من وحدتها المالكة بـ`SinAreas.register` أو `SinAreas.provide`. إن كانت مرحلة جديدة كلياً (`stage` جديد)، فهي فصل جديد من القصة، يبدأ بعد نقطة لاعودة:
+   - سجّلها من وحدتها المالكة بـ`SinAreas.chapter({ stage, order, ar, en, boundary, boot })`. يضيف ذلك الـ`stage` إلى السجل تلقائياً.
+   - `boot(ctx, area)` يبدأ اللعب مباشرة عند حدّ الفصل بمحمّله الخاص، ولا يحمّل أي فصل سابق. يستدعيه الدخول المباشر وحده، ولا يستدعيه اللعب العادي.
+   - لا يلزم تعديل `dev-hub.js`، إلا إن احتاجت المرحلة صيغة جديدة لنقطة الظهور.
 3. **التحقق:**
    - `node --test tests/dev-hub.test.cjs`: يفشل إن غابت منطقة من التخطيط الحقيقي، أو تكرر معرّف، أو أُضيفت قائمة خارج السجل.
    - `node tools/list-areas.cjs --md`: يجب أن تظهر المنطقة بلا أخطاء.
