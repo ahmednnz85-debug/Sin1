@@ -4731,8 +4731,32 @@
     }
     if (state === 'R3' || state === 'R3_FADING_IN') {
       const p = ctx.hero.position;
+      if (state === 'R3') tickR3Lift(dt, ctx);
       r3Stage.update(p.x - portalX, p.y - floorY, p.z - portalFront);
     }
+  }
+
+  // Maw lift (R3-03 <-> U1-01): the stage decides; here the view is veiled
+  // and the hero and camera are carried by the same vertical offset.
+  let r3LiftVeil = null;
+  function tickR3Lift(dt, ctx) {
+    const p = ctx.hero.position;
+    const ride = r3Stage.lift?.(p.x - portalX, p.y - floorY, p.z - portalFront, dt);
+    if (!ride) return;
+    if (ride.shift) {
+      p.y += ride.shift[1];
+      ctx.camera.position.y += ride.shift[1];
+      ctx.camera.updateMatrixWorld();
+    }
+    if (ride.fade > 0 && !r3LiftVeil) {
+      r3LiftVeil = document.createElement('div');
+      r3LiftVeil.id = 'r3-lift-veil';
+      Object.assign(r3LiftVeil.style, { position: 'fixed', inset: '0', zIndex: '11990', background: '#000',
+        opacity: '0', pointerEvents: 'none' });
+      document.body.appendChild(r3LiftVeil);
+    }
+    if (r3LiftVeil) r3LiftVeil.style.opacity = String(ride.fade);
+    if (ride.fade === 0 && r3LiftVeil) { r3LiftVeil.remove(); r3LiftVeil = null; }
   }
 
   function tickR3Door(dt, hero) {

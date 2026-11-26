@@ -1,0 +1,84 @@
+{
+  "url": "http://127.0.0.1:8080/index.html?dev=1&level=U1-01",
+  "environment": "Chromium/SwiftShader on Linux, 960x540",
+  "checks": {
+    "spawnInCabin": true,
+    "rideDown": true,
+    "rideUp": true
+  },
+  "views": {
+    "anchorage": {
+      "draws": 14,
+      "triangles": 278749,
+      "cpuMiB": 120.3,
+      "gpuMiB": 184.7
+    },
+    "arrival-cabin": {
+      "draws": 14,
+      "triangles": 278749,
+      "cpuMiB": 120.3,
+      "gpuMiB": 184.7
+    },
+    "road-of-the-dead": {
+      "draws": 12,
+      "triangles": 126968,
+      "cpuMiB": 120.3,
+      "gpuMiB": 184.7
+    },
+    "bridge": {
+      "draws": 12,
+      "triangles": 126968,
+      "cpuMiB": 120.3,
+      "gpuMiB": 184.7
+    },
+    "gate-of-irkalla": {
+      "draws": 12,
+      "triangles": 126968,
+      "cpuMiB": 120.3,
+      "gpuMiB": 184.7
+    },
+    "overview": {
+      "draws": 15,
+      "triangles": 278761,
+      "cpuMiB": 120.3,
+      "gpuMiB": 184.7
+    },
+    "maw-lift": {
+      "draws": 20,
+      "triangles": 454747,
+      "cpuMiB": 120.3,
+      "gpuMiB": 184.7
+    }
+  },
+  "errors": [],
+  "bootSeconds": 260.562,
+  "entry": {
+    "area": "U1-01",
+    "underworldVisible": true,
+    "mawVisible": false,
+    "arrivalCabin": true,
+    "heroFromCabin": 0,
+    "heroAboveDock": 0.58,
+    "blocked": false,
+    "greybox": 2,
+    "status": "hub-waited"
+  },
+  "ride": [
+    {
+      "moved": -420.01,
+      "veilPeak": 1,
+      "veilGone": true,
+      "underworldVisible": true,
+      "mawVisible": false,
+      "onFloor": true
+    },
+    {
+      "moved": 419.99,
+      "veilPeak": 1,
+      "veilGone": true,
+      "underworldVisible": false,
+      "mawVisible": true,
+      "onFloor": true
+    }
+  ]
+}
