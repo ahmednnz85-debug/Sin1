@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>R3 Maw of the Abyss — asset lab</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:100vw;height:100vh}#info{position:fixed;left:6px;bottom:4px;color:#ccc;font:11px monospace;white-space:pre}</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info"></div>
+<!-- Inspection lab for assets/R3_MawOfTheAbyss_Assets.glb (tools/r3-maw-assets.mjs).
+     Same loaders as the game (KTX2 via vendor/basis, meshopt via vendor).
+     ?asset=<root name>  frame one asset     ?yaw=deg&pitch=deg&dist=k   orbit
+     ?view=lit|normal|uv|wire                 drag to orbit, wheel to zoom
+     Automation: window.__maw.ready / .shoot(name, yaw, pitch, dist, view) / .report -->
+<script src="../vendor/meshopt_decoder.js"></script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+const qs = new URLSearchParams(location.search);
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setPixelRatio(1);
+renderer.setSize(innerWidth, innerHeight, false);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050403);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.35;
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.05, 600);
+scene.add(new THREE.HemisphereLight(0xfff0dc, 0x2a1e16, 0.55));
+const key = new THREE.DirectionalLight(0xffdcb0, 2.6);
+key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02;
+scene.add(key, key.target);
+const rim = new THREE.DirectionalLight(0x9fb4ff, 0.6); scene.add(rim, rim.target);
+
+const ktx = new KTX2Loader().setTranscoderPath('../vendor/basis/').detectSupport(renderer);
+const src = qs.get('src') || '../assets/R3_MawOfTheAbyss_Assets.glb';
+const report = { errors: [], textures: 0, gpuTextureBytes: 0, assets: [] };
+let gltf;
+try {
+  gltf = await new GLTFLoader().setKTX2Loader(ktx).setMeshoptDecoder(window.MeshoptDecoder).loadAsync(src);
+} catch (e) { report.errors.push(String(e)); window.__maw = { ready: true, report }; throw e; }
+const root = gltf.scene;
+scene.add(root);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x14100d, roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -0.002; ground.receiveShadow = true; scene.add(ground);
+
+const texSeen = new Set(), lit = new Map();
+root.traverse(o => {
+  if (!o.isMesh) return;
+  o.castShadow = o.receiveShadow = true;
+  lit.set(o, o.material);
+  for (const k of ['map', 'normalMap', 'roughnessMap', 'aoMap']) {
+    const t = o.material[k]; if (!t || texSeen.has(t)) continue; texSeen.add(t);
+    const img = t.image || t.mipmaps?.[0];
+    if (!img || !img.width) report.errors.push(`texture ${k} of ${o.material.name} not decoded`);
+    else { report.textures++; report.gpuTextureBytes += img.width * img.height * (t.isCompressedTexture ? 1 : 4) * 4 / 3; }
+  }
+  const p = o.geometry.attributes.position.array;
+  for (let i = 0; i < p.length; i++) if (!Number.isFinite(p[i])) { report.errors.push('NaN position in ' + o.name); break; }
+});
+for (const a of root.children) {
+  const box = new THREE.Box3().setFromObject(a), size = box.getSize(new THREE.Vector3());
+  let tris = 0, meshes = 0, parts = [];
+  a.traverse(o => { if (o.isMesh) { meshes++; tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; } });
+  for (const c of a.children) parts.push(c.name);
+  report.assets.push({ name: a.name, size: size.toArray().map(v => +v.toFixed(2)), min: box.min.toArray().map(v => +v.toFixed(2)), tris, drawCalls: meshes, parts });
+}
+const others = new Map();
+const normalMat = new THREE.MeshNormalMaterial();
+function setView(view) {
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const m = lit.get(o);
+    if (view === 'normal') o.material = normalMat;
+    else if (view === 'uv') { if (!others.has(m)) others.set(m, new THREE.MeshBasicMaterial({ map: m.map })); o.material = others.get(m); }
+    else if (view === 'wire') { if (!others.has('w' + m.uuid)) others.set('w' + m.uuid, Object.assign(m.clone(), { wireframe: true })); o.material = others.get('w' + m.uuid); }
+    else o.material = m;
+  });
+}
+function frame(name, yaw = 35, pitch = 18, dist = 1) {
+  let target = root;
+  for (const a of root.children) a.visible = !name || a.name === name;
+  if (name) target = root.getObjectByName(name);
+  const box = new THREE.Box3().setFromObject(target), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+  const r = size.length() * 0.5;
+  const d = r / Math.sin(camera.fov * Math.PI / 360) * 1.05 * dist;
+  const y = yaw * Math.PI / 180, p = pitch * Math.PI / 180;
+  camera.position.set(c.x + d * Math.cos(p) * Math.sin(y), c.y + d * Math.sin(p), c.z + d * Math.cos(p) * Math.cos(y));
+  camera.near = d / 100; camera.far = d * 10; camera.updateProjectionMatrix();
+  camera.lookAt(c);
+  const ky = y + 0.9;
+  key.position.set(c.x + r * 2 * Math.sin(ky), c.y + r * 2.2, c.z + r * 2 * Math.cos(ky)); key.target.position.copy(c);
+  const cam = key.shadow.camera; cam.left = cam.bottom = -r * 1.3; cam.right = cam.top = r * 1.3; cam.near = 0.1; cam.far = r * 6; cam.updateProjectionMatrix();
+  rim.position.set(c.x - r * 2 * Math.sin(y), c.y + r, c.z - r * 2 * Math.cos(y)); rim.target.position.copy(c);
+  state = { name, yaw, pitch, dist, c, d };
+}
+let state;
+window.__maw = {
+  ready: true, report, THREE, scene, renderer,
+  shoot(name, yaw, pitch, dist, view = 'lit') { setView(view); frame(name, yaw, pitch, dist); renderer.render(scene, camera); return true; },
+};
+frame(qs.get('asset'), +(qs.get('yaw') ?? 35), +(qs.get('pitch') ?? 18), +(qs.get('dist') ?? 1));
+setView(qs.get('view') || 'lit');
+let drag = null;
+canvas.addEventListener('pointerdown', e => drag = [e.clientX, e.clientY, state.yaw, state.pitch]);
+addEventListener('pointerup', () => drag = null);
+addEventListener('pointermove', e => { if (drag) frame(state.name, drag[2] - (e.clientX - drag[0]) * .3, Math.max(-80, Math.min(85, drag[3] + (e.clientY - drag[1]) * .3)), state.dist); });
+addEventListener('wheel', e => frame(state.name, state.yaw, state.pitch, state.dist * (e.deltaY > 0 ? 1.1 : 0.9)));
+document.getElementById('info').textContent = report.assets.map(a => `${a.name}  ${a.tris} tris  ${a.drawCalls} draws  ${a.size.join('×')} m`).join('\n')
+  + `\ntextures ${report.textures}  ~${(report.gpuTextureBytes / 1048576).toFixed(1)} MiB GPU` + (report.errors.length ? '\nERRORS ' + report.errors.join('; ') : '');
+(function loop() { requestAnimationFrame(loop); if (!window.__mawManual) renderer.render(scene, camera); })();
+</script>
+</body>
+</html>
