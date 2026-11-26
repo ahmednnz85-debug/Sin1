@@ -525,7 +525,7 @@
       const k = blend, on = k > 0.01 && installed;
       lightRig.visible = on;
       // The overlook is in sight from the last landing (down the mouth tunnel) onward.
-      const overlook = u > A.bridge - 12 && v < -12.5;
+      const overlook = u > A.bridge - 1 || (u > A.bridge - 12 && v < -12.5);
       fx.visible = on && visible && overlook;
       hallDress.visible = on && visible && overlook;
       far.visible = true;
