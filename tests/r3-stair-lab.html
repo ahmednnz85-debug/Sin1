@@ -25,6 +25,8 @@ const qs = new URLSearchParams(location.search);
 const load = src => new Promise((ok, err) => { const s = document.createElement('script'); s.src = src + '?lab=' + Date.now(); s.onload = ok; s.onerror = err; document.body.appendChild(s); });
 await load('../r3-stair-dressing.js');
 window.SinR3Stair.base = '../';
+await load('../r3-hall-dressing.js');
+await load('../r3-abyss-dressing.js');
 await load('../r3-sealed-zone.js');
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });

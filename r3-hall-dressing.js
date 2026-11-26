@@ -71,6 +71,7 @@
     const lods = [];
     const time = { value: 0 };
     let installed = false;
+    const borrowable = {};
     let shared;
     let lodX = Infinity, lodZ = Infinity;
     let wasInside = false;
@@ -468,9 +469,11 @@
           new T.Vector3(p.x, p.y, p.z), new T.Quaternion().setFromEuler(new T.Euler(p.tilt, p.yaw, 0, 'YXZ')),
           new T.Vector3(...p.scale)));
         count[type] = { instances: placements.length, triangles: 0, lodTriangles: 0 };
+        borrowable[type] = { size: bounds.getSize(new T.Vector3()), parts: [] };
         for (const part of parts) {
           const inner = shift.clone().multiply(part.matrixWorld);
           const material = part.material;
+          borrowable[type].parts.push({ geometry: part.geometry, material, matrix: inner });
           const geometry = part.geometry;
           const lowIndex = reduced.get(node.name + '/' + material.name);
           const triangleCount = (geometry.index?.count || geometry.attributes.position.count) / 3;
@@ -634,7 +637,9 @@
       wasInside = inside;
     }
 
-    return { stone, shell, stairs, plan, load, update, ready: () => installed };
+    // R3-03 reuses the loaded guardian / rubble (shared geometry and materials).
+    const borrow = type => borrowable[type] || null;
+    return { stone, shell, stairs, plan, load, update, borrow, ready: () => installed };
   }
 
   window.SinR3Hall = { create, platformFloor, uv };

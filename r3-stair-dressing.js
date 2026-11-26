@@ -69,7 +69,9 @@
           '#ifdef DOUBLE_SIDED',
           'r3up = gl_FrontFacing ? r3up : - r3up;',
           '#endif',
-          'vec4 r3s = texture2D( r3Map, ( vR3Pos.xz - r3Bounds.xy ) * r3Bounds.zw );',
+          'vec2 r3uv = ( vR3Pos.xz - r3Bounds.xy ) * r3Bounds.zw;',
+          // Outside the R3-01 stage map (R3-03 borrows these materials) no dust or corner shade.
+          'vec4 r3s = texture2D( r3Map, r3uv ) * step( 0.0, r3uv.x ) * step( r3uv.x, 1.0 ) * step( 0.0, r3uv.y ) * step( r3uv.y, 1.0 );',
           'float r3above = vR3Pos.y - ( r3s.g * 18.0 - 17.0 );',
           'float r3m = texture2D( r3Dust, vR3Pos.xz * 0.037 + vec2( vR3Pos.y * 0.029 ) ).r;',
           'float r3n = texture2D( r3Dust, vR3Pos.zx * 0.23 + vec2( vR3Pos.y * 0.17 ) ).g;',
@@ -580,6 +582,7 @@
 
     // ---- load: stone sets, reliefs, GLB ----------------------------------
     const cost = { textures: 0, textureMiB: 0, glbMiB: 0, triangles: 0, meshes: 0, ms: 0 };
+    let borrowed = {};
     const report = { cost, layout: P.layout, warnings: [] };
     async function load(renderer) {
       const t0 = performance.now();
@@ -749,7 +752,8 @@
       } finally { ktx.dispose(); }
       // Assets keep their quantized geometry untouched: an inner matrix
       // carries the authored node transform and puts the base centre at 0.
-      const used = new Set([...P.items.map(i => i.node), ...P.roots.map(r => r.node), 'Masonry_Archway_Large']);
+      // api.keep: nodes another R3 section borrows (R3-03); kept, never loaded twice.
+      const used = new Set([...P.items.map(i => i.node), ...P.roots.map(r => r.node), 'Masonry_Archway_Large', ...(api.keep || [])]);
       const prims = node => { const out = []; node.traverse(o => { if (o.isMesh) out.push(o); }); return out; };
       const src = {};
       gltf.scene.updateMatrixWorld(true);
@@ -769,6 +773,7 @@
         }
         src[node.name] = { size, levels: [list.map(o => ({ geometry: o.geometry, material: o.material, matrix: shift.clone().multiply(o.matrixWorld) }))] };
       }
+      borrowed = src;
       if (lod) {
         lod.scene.updateMatrixWorld(true);
         for (const node of lod.scene.children) {
@@ -903,6 +908,8 @@
 
     return {
       load, update, report: () => JSON.parse(JSON.stringify(report)),
+      // Authored level of a loaded prop: [{ geometry, material, matrix }], base centred at 0.
+      borrow: name => borrowed[name] ? { size: borrowed[name].size, parts: borrowed[name].levels[0], levels: borrowed[name].levels } : null,
       lights, dress, fx
     };
   }

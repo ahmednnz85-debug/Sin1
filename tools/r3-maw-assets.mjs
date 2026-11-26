@@ -478,9 +478,9 @@ const PITCH = 0.31;
     else { const q = Math.PI + (t - 3) * Math.PI; p = V(a * Math.cos(q), -s + a * Math.sin(q), 0); }
     pts.push(p);
   }
-  link.add('bronze', tube(pts, 0.045, 96, 14, true));
+  link.add('bronze', tube(pts, 0.045, 44, 10, true));   // repeated by the hundred in R3-03: kept light
   // forge weld band
-  link.add('bronze', xf(torus(0.049, 0.012, 8, 24), { p: [a, 0, 0], r: [Math.PI / 2, 0, 0] }));
+  link.add('bronze', xf(torus(0.049, 0.012, 6, 16), { p: [a, 0, 0], r: [Math.PI / 2, 0, 0] }));
   const kids = [];
   for (let i = 0; i < 6; i++) kids.push({ name: `Elevator_Chain_Link_${String(i + 1).padStart(2, '0')}`, part: link, t: { p: [0, -(s + a) - i * PITCH, 0], r: [0, i % 2 ? Math.PI / 2 : 0, 0] } });
   assets.push({ name: 'Elevator_Chain', pos: [16, 2.3, 0], children: kids,

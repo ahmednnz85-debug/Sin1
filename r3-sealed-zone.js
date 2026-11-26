@@ -49,6 +49,11 @@
     const Stair = window.SinR3Stair || null;
     const Hall = window.SinR3Hall || null;
     const hallDressed = () => !!Hall && part === parts[1];
+    // R3-03 (r3-abyss-dressing.js): lit stone sets of the stair on its own
+    // architecture, the vaulted overlook hall and the abyss assets.
+    const Abyss = window.SinR3Abyss || null;
+    const abyssLook = !entranceOnly && !!Abyss && !!Stair;
+    const abyssDressed = () => abyssLook && part === parts[2];
     const dressed = () => !entranceOnly && !!Stair && part === parts[0];
     const stairArches = [], stairTunnels = [];
     const uAt = x => passage.position[0] - x;
@@ -72,7 +77,7 @@
     function geometry(slot, geo, strength = 1) {
       const data = part.batches.get(slot) || { position: [], color: [], uv: [], normal: [] };
       part.batches.set(slot, data);
-      if (dressed() || hallDressed()) {
+      if (dressed() || hallDressed() || abyssDressed()) {
         const hall = hallDressed();
         // Lit stone: real normals and metric UVs projected on the dominant
         // axis, so blocks keep their natural size on every surface.
@@ -185,7 +190,7 @@
     }
 
     function arch(frame, a, b, base, half, top, thickness) {
-      const radius = half, spring = base + top - radius, n = 16;
+      const radius = half, spring = base + top - radius, n = Math.max(16, Math.round(radius * 3));
       if (dressed()) {
         // Masonry archway asset replaces rib, piers, capitals and plinths.
         // The pier and plinth collision volumes stay exactly as authored.
@@ -439,7 +444,8 @@
       surface, box, point, domeY, opening, inStair, apertures,
       propCollision: (...bounds) => collision(...bounds, true, () => hallLook.ready()),
       fallbackSlots: ['Columns', 'Dais', 'Plinths'],
-      url: path => window.__sinAsset?.(path) || path
+      // SinR3Stair.base is '' in the game ('../' in tests/r3-stair-lab.html).
+      url: path => { const p = (window.SinR3Stair?.base || '') + path; return window.__sinAsset?.(p) || p; }
     });
     const domeSteps = hallLook ? 24 : 8;
     const domeAngles = hallLook ? Array.from({ length: 169 }, (_, i) => i * TAU / 168) : angles;
@@ -634,30 +640,104 @@
     landing(HALL_U + 8, HALL_U + 14, -20, -14, -18, 8.4, [true, false, true, false]);
     const mouth = (d, y, t) => alongU(d, y, t - 17);
     tunnel(mouth, HALL_U + 14, HALL_U + 20, 2.32, -18, -18.9, 0, 10, [-1, 1]);
-    const bridge = HALL_U + 20, rim = bridge + 8, ledge = -18.9;
+    const bridge = HALL_U + 20, ledge = -18.9;
     arch(mouth, bridge - 0.05, bridge + 1.2, ledge, HALF, 9, 1.1);
-    box('Platform', bridge, rim, ledge - 1.45, ledge, -22, -12);
-    rectangle(bridge, rim, -22, -12, () => ledge, () => Infinity);
-    for (const z of [-21.8, -12.6]) {
-      solidBox('Guardstones', bridge + 0.4, rim, ledge, ledge + 1.04, z, z + 0.4);
-      solidBox('Buttresses', bridge, bridge + 1.5, ledge, ledge + 10.1, z - 0.25, z + 0.65);
-      solidBox('Plinths', bridge + 1.5, bridge + 3.3, ledge, ledge + 0.55, z - 0.1, z + 0.52);
-      socket(z < -17 ? 'OverlookStatue_A' : 'OverlookStatue_B', [bridge + 2.4, ledge + 0.55, z + 0.2]);
+    let rim, abyssPlan = null;
+    if (abyssLook) {
+      // Overlook hall after the reference: a 28 m hall ending in one great
+      // round-headed arch; the elevator platform stands in the arch, its
+      // mechanism hangs from the crown, and a semicircular terrace with a
+      // curved balustrade projects over the abyss.
+      const R = Abyss.rig, W = 0.6;
+      const VL = -31, VR = -3, PV = -17, PU = bridge + 18, CEIL = ledge + R.ceiling;
+      const HALF_SPAN = R.archHalf, RIB = R.archRib, DEPTH = R.archDepth;
+      const crown = ledge + R.mechTop, spring = crown - HALF_SPAN;
+      const terrace = R.terrace;
+      rim = PU + terrace;
+      const A0 = PU - DEPTH / 2, A1 = PU + DEPTH / 2;
+      box('Landings', bridge, PU, ledge - 1.45, ledge, VL, VR);
+      rectangle(bridge, PU, VL, VR, () => ledge, () => CEIL);
+      // Semicircular terrace (walkable inside the balustrade radius).
+      const reach = terrace - 0.75;
+      rectangle(PU, rim, PV - terrace, PV + terrace,
+        (u, v) => Math.hypot(u - PU, v - PV) <= reach ? ledge : ledge - 60, () => CEIL);
+      const arcPts = 48, arcAt = (k, r, y) => {
+        const t = -Math.PI / 2 + Math.PI * k / arcPts;
+        return [PU + r * Math.cos(t), y, PV + r * Math.sin(t)];
+      };
+      for (let k = 0; k < arcPts; k++) {
+        surface('Landings', [[PU, ledge, PV], arcAt(k + 1, terrace, ledge), arcAt(k, terrace, ledge)]);
+        surface('Landings', [[PU, ledge - 1.45, PV], arcAt(k, terrace, ledge - 1.45), arcAt(k + 1, terrace, ledge - 1.45)]);
+        surface('Walls', [arcAt(k, terrace, ledge - 1.45), arcAt(k + 1, terrace, ledge - 1.45),
+          arcAt(k + 1, terrace, ledge), arcAt(k, terrace, ledge)]);
+      }
+      // Low ring stone round the platform base (the reference's concentric ring).
+      cylinder('Plinths', PU, PV, ledge, 0.12, R.platformRing, R.platformRing, 72);
+      // Hall shell.
+      solidBox('Walls', bridge - W, A1, ledge - 0.4, CEIL, VL - W, VL);
+      solidBox('Walls', bridge - W, A1, ledge - 0.4, CEIL, VR, VR + W);
+      box('Vault', bridge - W, A1, CEIL, CEIL + W, VL - W, VR + W);
+      solidBox('Walls', bridge - W, bridge, ledge - 0.4, CEIL, VL, -20);
+      solidBox('Walls', bridge - W, bridge, ledge - 0.4, CEIL, -14, VR);
+      box('Walls', bridge - W, bridge, ledge + 9.9, CEIL, -20, -14);
+      // End wall: the great arch (round head, ribbed voussoirs, piers) and
+      // the masonry that fills the rest of the end wall up to the vault.
+      const archFrame = (d, y, t) => alongU(d, y, t + PV);
+      arch(archFrame, A0, A1, ledge, HALF_SPAN, R.mechTop, RIB);
+      const outer = HALF_SPAN + RIB;
+      solidBox('Walls', A0, A1, ledge - 0.4, CEIL, VL, PV - outer);
+      solidBox('Walls', A0, A1, ledge - 0.4, CEIL, PV + outer, VR);
+      const slices = 40;
+      for (let i = 0; i < slices; i++) {
+        const t0 = -outer + 2 * outer * i / slices, t1 = -outer + 2 * outer * (i + 1) / slices;
+        const ext = t => spring + Math.sqrt(Math.max(0, outer * outer - t * t));
+        for (const d of [A0, A1]) {
+          surface('Walls', [[d, ext(t0), PV + t0], [d, ext(t1), PV + t1], [d, CEIL, PV + t1], [d, CEIL, PV + t0]]);
+        }
+      }
+      try {
+        abyssPlan = Abyss.plan({
+          THREE, collision, ledge, bridge, rim, VL, VR, CEIL, PU, PV, crown, spring, A0, A1, HALL_U, ABYSS_LANDING,
+          corridors: {
+            cross: { u: HALL_U, v0: SIDE_EXIT, v1: -1, y0: GALLERY, y1: ABYSS_LANDING, half: 2.32, height: 8.4 },
+            jog: { v: -4, u0: HALL_U + 3, u1: HALL_U + 8, y0: ABYSS_LANDING, y1: -16.7, half: 2.32, height: 8.4 },
+            drop: { u: HALL_U + 11, v0: -7, v1: -14, y0: -16.7, y1: -18, half: 2.32, height: 8.4 },
+            mouth: { v: -17, u0: HALL_U + 14, u1: HALL_U + 20, y0: -18, y1: ledge, half: 2.32, height: 10 }
+          },
+          landings: [
+            { u0: HALL_U - 3, u1: HALL_U + 3, v0: -7, v1: -1, y: ABYSS_LANDING },
+            { u0: HALL_U + 8, u1: HALL_U + 14, v0: -7, v1: -1, y: -16.7 },
+            { u0: HALL_U + 8, u1: HALL_U + 14, v0: -20, v1: -14, y: -18 }
+          ]
+        });
+      } catch (error) {
+        console.error('[R3-03] abyss dressing plan failed', error);
+      }
+    } else {
+      rim = bridge + 8;
+      box('Platform', bridge, rim, ledge - 1.45, ledge, -22, -12);
+      rectangle(bridge, rim, -22, -12, () => ledge, () => Infinity);
+      for (const z of [-21.8, -12.6]) {
+        solidBox('Guardstones', bridge + 0.4, rim, ledge, ledge + 1.04, z, z + 0.4);
+        solidBox('Buttresses', bridge, bridge + 1.5, ledge, ledge + 10.1, z - 0.25, z + 0.65);
+        solidBox('Plinths', bridge + 1.5, bridge + 3.3, ledge, ledge + 0.55, z - 0.1, z + 0.52);
+        socket(z < -17 ? 'OverlookStatue_A' : 'OverlookStatue_B', [bridge + 2.4, ledge + 0.55, z + 0.2]);
+      }
+      // Open void below the overlook; just the shaft boundary belongs to R3.
+      solidBox('Guardstones', rim - 0.42, rim, ledge, ledge + 1.06, -22, -12);
+      box('Shaft', rim, rim + 0.5, -49, ledge - 1.45, -22, -12);
+      const far = rim + 23, bottom = -53, top = ledge + 11;
+      for (const [nearZ, farZ] of [[-22, -30], [-12, -4]]) {
+        const middleZ = (nearZ + farZ) / 2;
+        surface('Shaft', [[bridge, ledge - 8, nearZ], [rim + 8, bottom, middleZ],
+          [rim + 8, top, middleZ], [bridge, top, nearZ]], 0.75);
+        surface('Shaft', [[rim + 8, bottom, middleZ], [far, bottom, farZ],
+          [far, top, farZ], [rim + 8, top, middleZ]], 0.64);
+      }
+      box('Shaft', far, far + 1, bottom, top, -30, -4, 0.61);
+      box('Shaft', rim, far, bottom - 1, bottom, -30, -4, 0.48);
+      box('Shaft', bridge, far + 1, top, top + 0.5, -30, -4, 0.54);
     }
-    // Open void below the overlook; just the shaft boundary belongs to R3.
-    solidBox('Guardstones', rim - 0.42, rim, ledge, ledge + 1.06, -22, -12);
-    box('Shaft', rim, rim + 0.5, -49, ledge - 1.45, -22, -12);
-    const far = rim + 23, bottom = -53, top = ledge + 11;
-    for (const [nearZ, farZ] of [[-22, -30], [-12, -4]]) {
-      const middleZ = (nearZ + farZ) / 2;
-      surface('Shaft', [[bridge, ledge - 8, nearZ], [rim + 8, bottom, middleZ],
-        [rim + 8, top, middleZ], [bridge, top, nearZ]], 0.75);
-      surface('Shaft', [[rim + 8, bottom, middleZ], [far, bottom, farZ],
-        [far, top, farZ], [rim + 8, top, middleZ]], 0.64);
-    }
-    box('Shaft', far, far + 1, bottom, top, -30, -4, 0.61);
-    box('Shaft', rim, far, bottom - 1, bottom, -30, -4, 0.48);
-    box('Shaft', bridge, far + 1, top, top + 0.5, -30, -4, 0.54);
 
     function basicStone(slot) {
       return new THREE.MeshBasicMaterial({ color: slots[slot], vertexColors: true, fog: false, toneMapped: false, side: THREE.DoubleSide });
@@ -705,7 +785,7 @@
       throw new Error('R3 architecture exceeded its independent stage budget');
     }
     function sample(u, v) {
-      if (u < start || u > rim || v < -22 || v > HALL_V + RADIUS) return null;
+      if (u < start || u > rim || v < -36 || v > HALL_V + RADIUS) return null;
       const h = hallFloor(u, v);
       if (h !== null) {
         return { y: h, ceiling: domeY(Math.hypot(u - HALL_U, v - HALL_V)), steps: true };
@@ -741,8 +821,10 @@
       // hands the shared stage lights back on the way into the hall.
       stair?.update(u, y, v, parts[0].group.visible, inside && !inHall && u <= HALL_ENTRY);
       hallLook?.update(u, v, inHall, parts[1].group.visible);
+      abyss?.update(u, y, v, parts[2].group.visible, inside && !inHall && u > HALL_U - 4 && v < 1.5);
     }
     const stair = stairPlan && Stair.create(THREE, root, parts[0].group, stairPlan);
+    const abyss = stair && abyssPlan && Abyss.create(THREE, root, parts[2].group, abyssPlan);
 
     // Index the boxes by camera-pivot cell, with enough padding for the
     // game's longest follow-camera ray. Unrelated wings get no R3 boxes.
@@ -768,9 +850,13 @@
           return { error: error.message };
         });
         if (hallLook) stageCost.hall = await hallLook.load(renderer);
+        if (abyss) stageCost.abyss = await abyss.load(renderer, { stair, hall: hallLook }).catch(error => {
+          console.error('[R3-03] abyss assets', error);
+          return { error: error.message };
+        });
         return stageCost;
       },
-      stair,
+      stair, abyss,
       spawn: [passage.position[0] - start - 0.55, 0, passage.position[2]],
       cameraBoxesAt(x, z, y) {
         if (!nearFloor(x, z, y)) return null;
