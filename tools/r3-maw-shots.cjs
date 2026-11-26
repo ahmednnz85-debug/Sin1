@@ -42,7 +42,7 @@ const server = http.createServer((req, res) => {
   const src = GLB ? '&src=/__glb' : '';
   await page.goto(`http://127.0.0.1:${port}/tests/r3-maw-lab.html?x=1${src}`);
   await page.waitForFunction(() => window.__maw && window.__maw.ready, null, { timeout: 180000 });
-  const report = await page.evaluate(() => { window.__mawManual = true; return window.__maw.report; });
+  const report = await page.evaluate(() => { window.__mawManual = true; document.getElementById('info').style.display = 'none'; return window.__maw.report; });
   report.console = logs.filter(l => /error|warn/i.test(l)).slice(0, 40);
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 1));
   console.log(JSON.stringify({ errors: report.errors, textures: report.textures, gpuMiB: +(report.gpuTextureBytes / 1048576).toFixed(1) }));

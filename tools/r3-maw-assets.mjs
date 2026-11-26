@@ -37,6 +37,7 @@ const DEPS = path.resolve(opt('--deps') || path.join(ROOT, 'node_modules'));
 const TEX = path.resolve(opt('--tex') || '/tmp/maw-tex');
 const OUTFILE = path.resolve(opt('--out') || path.join(ROOT, 'assets', 'R3_MawOfTheAbyss_Assets.glb'));
 const KEEP_PNG = args.includes('--png');
+const FAST = args.includes('--fast');   // preview: keep PNG textures, skip KTX2 (not for shipping)
 const mod = p => import(pathToFileURL(path.join(DEPS, p)).href);
 
 const THREE = await mod('three/build/three.module.js');
@@ -386,11 +387,11 @@ const assets = [];   // { name, pos, extras, children: [{ name, part|ref, t:{p,r
   for (const [tag, deg] of corners) {
     const t = { p: [PIL_R * Math.sin(deg * D2R), 1.40, PIL_R * Math.cos(deg * D2R)], r: [0, deg * D2R + Math.PI / 2, 0] };
     kids.push({ name: `Elevator_Platform_Socket_${tag}`, part: socket, t });
-    kids.push({ name: `Elevator_Platform_Shackle_${tag}`, part: shackle, t, extras: { pivot: 'socket top centre; chain attaches at the top of the bow (y = 0.55)' } });
+    kids.push({ name: `Elevator_Platform_Shackle_${tag}`, part: shackle, t, extras: { origin: 'socket top centre; chain attaches at the top of the bow (y = 0.55)' } });
     kids.push({ name: `Elevator_Platform_Link_${tag}`, part: link, t });
   }
   assets.push({ name: 'Elevator_Platform', pos: [0, 0, 0], children: kids,
-    extras: { role: 'moving elevator platform', pivot: 'bottom centre', deckHeight: DECK_Y, radius: 3.6, chainAttachHeight: 1.95 } });
+    extras: { role: 'moving elevator platform', origin: 'bottom centre', deckHeight: DECK_Y, radius: 3.6, chainAttachHeight: 1.95 } });
 }
 
 // -------------------------------------------------- B. Upper mechanism ------
@@ -452,15 +453,15 @@ const assets = [];   // { name, pos, extras, children: [{ name, part|ref, t:{p,r
   const ring = new Part('Elevator_Mechanism_Ring');
   ring.add('bronze', xf(torus(0.2, 0.04), { p: [0, -0.125, 0], r: [0, Math.PI / 2, 0] }));
   const kids = [{ name: 'Elevator_Mechanism_Drum', part: drum },
-    { name: 'Elevator_Mechanism_Hub', part: hub, extras: { pivot: 'drum axis; rotate about Y to wind' } }];
+    { name: 'Elevator_Mechanism_Hub', part: hub, extras: { origin: 'drum axis; rotate about Y to wind' } }];
   for (let k = 0; k < 6; k++) {
     const ph = k * Math.PI / 3, R = 2.66;
     const id = String(k + 1).padStart(2, '0');
     kids.push({ name: `Elevator_Mechanism_Bracket_${id}`, part: bracket, t: { p: [R * Math.sin(ph), -1.42, R * Math.cos(ph)], r: [0, ph, 0] } });
-    kids.push({ name: `Elevator_Mechanism_Ring_${id}`, part: ring, t: { p: [R * Math.sin(ph), -1.72, R * Math.cos(ph)], r: [0, ph, 0] }, extras: { pivot: 'bracket pin; swings about local X' } });
+    kids.push({ name: `Elevator_Mechanism_Ring_${id}`, part: ring, t: { p: [R * Math.sin(ph), -1.72, R * Math.cos(ph)], r: [0, ph, 0] }, extras: { origin: 'bracket pin; swings about local X' } });
   }
   assets.push({ name: 'Elevator_Mechanism', pos: [10, 2.6, 0], children: kids,
-    extras: { role: 'upper elevator mechanism', pivot: 'top centre (ceiling side), geometry hangs below' } });
+    extras: { role: 'upper elevator mechanism', origin: 'top centre (ceiling side), geometry hangs below' } });
 }
 
 // -------------------------------------------------- C. Chain ----------------
@@ -483,7 +484,7 @@ const PITCH = 0.31;
   const kids = [];
   for (let i = 0; i < 6; i++) kids.push({ name: `Elevator_Chain_Link_${String(i + 1).padStart(2, '0')}`, part: link, t: { p: [0, -(s + a) - i * PITCH, 0], r: [0, i % 2 ? Math.PI / 2 : 0, 0] } });
   assets.push({ name: 'Elevator_Chain', pos: [16, 2.3, 0], children: kids,
-    extras: { role: 'elevator chain (6 links, shared mesh)', pivot: 'top of the first link', linkPitch: PITCH, linkOuterLength: 2 * (s + a + 0.045), linkWire: 0.045 } });
+    extras: { role: 'elevator chain (6 links, shared mesh)', origin: 'top of the first link', linkPitch: PITCH, linkOuterLength: 2 * (s + a + 0.045), linkWire: 0.045 } });
 }
 
 // -------------------------------------------------- D/E. Anchors ------------
@@ -502,8 +503,8 @@ const PITCH = 0.31;
   assets.push({ name: 'Elevator_Anchor_Upper', pos: [19.5, 1.9, 0], children: [
     { name: 'Elevator_Anchor_Upper_Plate', part: plate },
     { name: 'Elevator_Anchor_Upper_Clevis', part: clevis },
-    { name: 'Elevator_Anchor_Upper_Ring', part: uring, t: { p: [0, -0.70, 0] }, extras: { pivot: 'knuckle pin; swings about local Z' } }],
-    extras: { role: 'upper chain anchor (ceiling)', pivot: 'top centre of the plate' } });
+    { name: 'Elevator_Anchor_Upper_Ring', part: uring, t: { p: [0, -0.70, 0] }, extras: { origin: 'knuckle pin; swings about local Z' } }],
+    extras: { role: 'upper chain anchor (ceiling)', origin: 'top centre of the plate' } });
 
   const base = new Part('Elevator_Anchor_Lower_Base');
   base.ashlar(xf(bbox(1.36, 0.16, 1.12, .03), { p: [0, 0.08, 0] }));
@@ -525,8 +526,8 @@ const PITCH = 0.31;
   for (const sx of [-1, 1]) shk.bronzeBox(xf(bbox(0.2, 0.06, 0.24, .012), { p: [sx * 0.235, 0.03, 0] }));
   assets.push({ name: 'Elevator_Anchor_Lower', pos: [19.5, 0, 3.0], children: [
     { name: 'Elevator_Anchor_Lower_Base', part: base },
-    { name: 'Elevator_Anchor_Lower_Shackle', part: shk, t: { p: [0, 0.82, 0] }, extras: { pivot: 'shackle feet' } }],
-    extras: { role: 'lower chain anchor (floor)', pivot: 'bottom centre' } });
+    { name: 'Elevator_Anchor_Lower_Shackle', part: shk, t: { p: [0, 0.82, 0] }, extras: { origin: 'shackle feet' } }],
+    extras: { role: 'lower chain anchor (floor)', origin: 'bottom centre' } });
 }
 
 // -------------------------------------------------- F. Overlook -------------
@@ -542,11 +543,11 @@ const PITCH = 0.31;
   const slab = flat(new THREE.ExtrudeGeometry(shp, { depth: 0.45, bevelEnabled: false }));
   P.ashlar(xf(slab, { p: [0, TOP - 0.45, 0], r: [-Math.PI / 2, 0, 0] }));
   const inside = (x, z) => { let c = false; for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) { const [xi, zi] = outline[i], [xj, zj] = outline[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
-  for (let x = -3.4; x <= 3.4; x += 0.85) for (let z = -2.3; z <= 2.2; z += 0.85) {
-    const px = x + rng.r(-.25, .25), pz = z + rng.r(-.25, .25);
+  for (let x = -3.4; x <= 3.4; x += 0.7) for (let z = -2.3; z <= 2.2; z += 0.7) {
+    const px = x + rng.r(-.18, .18), pz = z + rng.r(-.18, .18);
     if (!inside(px, pz)) continue;
     const edge = Math.min(3.7 - Math.abs(px), 2.4 - Math.abs(pz));
-    P.rock(column(rng, { x: px, z: pz, y0: rng.r(0, .5) + Math.max(0, .5 - edge) * .4, y1: TOP - 0.42, r: rng.r(.48, .62), flare: .7, taper: 1.05, segs: 2, sides: 6 }));
+    P.rock(column(rng, { x: px, z: pz, y0: rng.r(0, .5) + Math.max(0, .5 - edge) * .4, y1: TOP - 0.42, r: rng.r(.62, .78), flare: .78, taper: 1.08, segs: 2, sides: 6 }));
   }
   // broken paving blocks along the jagged front / right edges
   for (let i = 2; i < outline.length - 1; i++) {
@@ -574,7 +575,7 @@ const PITCH = 0.31;
   // loose stones on the deck
   for (const [x, z] of [[-2.9, 1.6], [-2.95, -0.9], [-2.8, 0.3], [0.9, -2.1], [1.5, -2.0], [2.6, -1.8], [-1.2, 1.7], [2.9, 0.4]])
     P.ashlar(chunk(rng, x + rng.r(-.15, .15), TOP + 0.05, z, rng.r(.08, .16), rng.r(.05, .09), rng.r(.08, .15), 12));
-  assets.push({ name: 'Abyss_Overlook', pos: [0, 0, -14], part: P, extras: { role: 'stone overlook ledge', pivot: 'bottom centre', deckHeight: TOP } });
+  assets.push({ name: 'Abyss_Overlook', pos: [0, 0, -14], part: P, extras: { role: 'stone overlook ledge', origin: 'bottom centre', deckHeight: TOP } });
 }
 
 // -------------------------------------------------- G. Ruined bridge -------
@@ -612,7 +613,7 @@ const PITCH = 0.31;
     const [px] = sheet(sx, 0);
     for (let i = 0; i < 6; i++) P.ashlar(chunk(rng, px + rng.r(-.9, .9), rng.r(.05, .25), rng.r(-1.6, 1.6), rng.r(.2, .4), rng.r(.15, .3), rng.r(.2, .35)));
   }
-  assets.push({ name: 'Abyss_Bridge_Ruined', pos: [15, 0, -14], part: P, extras: { role: 'ruined arched bridge', pivot: 'bottom centre', length: W } });
+  assets.push({ name: 'Abyss_Bridge_Ruined', pos: [15, 0, -14], part: P, extras: { role: 'ruined arched bridge', origin: 'bottom centre', length: W } });
 }
 
 // -------------------------------------------------- H. Mural fragment ------
@@ -633,7 +634,7 @@ const PITCH = 0.31;
   P.add('mural', front);
   const [back, sides] = splitByNormal(rest, V(0, 0, -1), 0.99);
   P.ashlar(back); P.rock(sides);
-  assets.push({ name: 'Abyss_Mural_Fragment', pos: [28.5, 0, -14], part: P, extras: { role: 'carved procession mural fragment', pivot: 'bottom centre', width: W } });
+  assets.push({ name: 'Abyss_Mural_Fragment', pos: [28.5, 0, -14], part: P, extras: { role: 'carved procession mural fragment', origin: 'bottom centre', width: W } });
 }
 
 // -------------------------------------------------- I. Cliff ruins ---------
@@ -653,8 +654,8 @@ const PITCH = 0.31;
     P.rock(column(rng, { x: px, z: pz, y0: 0, y1, r: rng.r(.8, 1.0), sides: rng() < .5 ? 6 : 7, flare: isEdge ? 1.3 : 1.0, taper: .9, segs: isEdge ? 3 : 1, tilt: [rng.r(-.25, .25), rng.r(-.25, .25)] }));
   }
   // floors
-  P.ashlar(xf(bbox(9.0, 0.4, 12.0, .04), { p: [-4.3, LEFT - 0.2, -0.3] }));
-  P.ashlar(xf(bbox(4.8, 0.4, 11.6, .04), { p: [6.3, RIGHT - 0.2, -0.4] }));
+  P.ashlar(xf(bbox(8.4, 0.4, 10.6, .04), { p: [-4.0, LEFT - 0.2, -0.7] }));
+  P.ashlar(xf(bbox(4.3, 0.4, 10.4, .04), { p: [6.15, RIGHT - 0.2, -0.9] }));
   // stair: 22 steps up the channel, landing, 3 steps to the left terrace
   const N = 22, rise = RIGHT / N, run = 7.5 / N;
   for (let i = 0; i < N; i++) {
@@ -684,32 +685,36 @@ const PITCH = 0.31;
   for (let y = RIGHT + 1.0; y < RIGHT + 7.4; y += 1.3) P.ashlar(xf(bbox(3.75, 0.16, 4.15, .03), { p: [7.0, y, -4.2] }));
   P.ashlar(xf(bbox(4.6, 2.2, 3.6, .05), { p: [6.6, RIGHT + 1.1, -0.4] }));
   for (let i = 0; i < 8; i++) P.ashlar(chunk(rng, rng.r(4.6, 8.6), RIGHT + 2.25, rng.r(-2, 1.2), .3, .2, .3));
-  assets.push({ name: 'Abyss_Cliff_Ruins', pos: [0, 0, -38], part: P, extras: { role: 'rock cliff with ruined arcade, stair and tower', pivot: 'bottom centre', terraceHeights: [LEFT, RIGHT] } });
+  assets.push({ name: 'Abyss_Cliff_Ruins', pos: [0, 0, -38], part: P, extras: { role: 'rock cliff with ruined arcade, stair and tower', origin: 'bottom centre', terraceHeights: [LEFT, RIGHT] } });
 }
 
 // -------------------------------------------------- J. Rock spire ----------
 {
   const rng = rngOf(404);
   const P = new Part('Abyss_Rock_Spire');
-  P.rock(column(rng, { x: 0, z: 0, y0: 0, y1: 13.5, r: 1.25, sides: 7, flare: 1.35, taper: .45, segs: 5, tilt: [0.9, -0.5], cap: .6, wob: .08 }));
+  P.rock(column(rng, { x: 0, z: 0, y0: 0, y1: 13.5, r: 1.6, sides: 7, flare: 1.35, taper: .45, segs: 5, tilt: [0.9, -0.5], cap: .6, wob: .08 }));
   const ring = [[1.3, 0.2, 9.5, .9], [-1.1, 0.7, 8.2, .85], [0.4, -1.3, 10.5, .8], [-0.6, -1.0, 7.0, .75], [1.6, -0.9, 6.0, .8], [-1.7, -0.3, 5.0, .8], [0.9, 1.4, 5.5, .8], [-0.5, 1.6, 4.0, .75],
     [2.3, 0.9, 2.6, .7], [-2.4, 1.0, 2.0, .7], [2.2, -1.9, 2.4, .75], [-2.2, -1.8, 2.8, .7], [0.2, 2.4, 1.8, .7], [0.3, -2.5, 2.2, .7]];
-  for (const [x, z, h, r] of ring) P.rock(column(rng, { x, z, y0: 0, y1: h * rng.r(.92, 1.08), r, sides: 6, flare: 1.3, taper: .55, segs: Math.max(1, Math.round(h / 2.4)), tilt: [rng.r(-1, 1), rng.r(-1, 1)], cap: .5 }));
+  for (const [x, z, h, r] of ring) P.rock(column(rng, { x: x * .85, z: z * .85, y0: 0, y1: h * rng.r(.92, 1.08), r: r * 1.25, sides: 6, flare: 1.3, taper: .55, segs: Math.max(1, Math.round(h / 2.4)), tilt: [rng.r(-1, 1), rng.r(-1, 1)], cap: .5 }));
   for (let i = 0; i < 14; i++) { const a = rng() * 6.28, d = rng.r(2.4, 3.6); P.rock(chunk(rng, Math.cos(a) * d, .2, Math.sin(a) * d, rng.r(.25, .5), rng.r(.2, .35), rng.r(.25, .5))); }
-  assets.push({ name: 'Abyss_Rock_Spire', pos: [20, 0, -38], part: P, extras: { role: 'columnar rock spire', pivot: 'bottom centre' } });
+  assets.push({ name: 'Abyss_Rock_Spire', pos: [20, 0, -38], part: P, extras: { role: 'columnar rock spire', origin: 'bottom centre' } });
 }
 
 // -------------------------------------------------- K. Rock formation ------
 {
   const rng = rngOf(505);
   const P = new Part('Abyss_Rock_Formation');
+  // sheet: summit right of centre with a long ridge falling to the left, a sheer
+  // right face dropping onto a broad plateau, two lesser spires on the far left
   const H = (x, z) => {
-    const e = Math.max(0, 1 - Math.pow(x / 11.5, 2) - Math.pow(z / 7.5, 2));
-    const peak = 18.5 - 1.25 * Math.abs(x - 0.5) - 0.9 * Math.abs(z + 0.8) - (x < 0.5 ? 0.25 * (0.5 - x) * 1.3 : 0);
-    const plateau = x > 3 ? 11.5 - 0.4 * Math.abs(z) : 0;
-    const left1 = 9 - 3.2 * Math.hypot(x + 6.2, z + 0.5);
-    const left2 = 7 - 3.2 * Math.hypot(x + 8.8, z - 0.5);
-    return Math.max(peak, plateau, left1, left2, 1.5) * Math.min(1, Math.pow(e, .35) * 1.15);
+    const ell = Math.pow(x / 11.5, 2) + Math.pow(z / 7.5, 2);
+    if (ell > 1) return 0;
+    const edge = 0.4 + 0.6 * Math.min(1, (1 - ell) / 0.3) ** 0.6;
+    const peak = (x < 1.5 ? 19 - 1.05 * (1.5 - x) : 19 - 3.6 * (x - 1.5)) - 1.5 * Math.abs(z + 0.6);
+    const plateau = x > 1.5 && x < 10.5 ? 11.5 - 0.25 * Math.abs(z) - 0.25 * Math.max(0, x - 8) : 0;
+    const left1 = 9.5 - 2.6 * Math.hypot(x + 6.3, (z + 0.8) * 1.2);
+    const left2 = 7.0 - 2.6 * Math.hypot(x + 9.0, (z - 0.6) * 1.2);
+    return Math.max(peak, plateau, left1, left2, 1.6) * edge;
   };
   for (let x = -11; x <= 11; x += 1.35) for (let z = -7.2; z <= 7.2; z += 1.35) {
     const px = x + rng.r(-.3, .3), pz = z + rng.r(-.3, .3);
@@ -722,14 +727,14 @@ const PITCH = 0.31;
     const a = rng() * 6.28, d = rng.r(.92, 1.12);
     P.rock(chunk(rng, Math.cos(a) * 11.6 * d, .2, Math.sin(a) * 7.6 * d, rng.r(.25, .7), rng.r(.18, .45), rng.r(.25, .6)));
   }
-  assets.push({ name: 'Abyss_Rock_Formation', pos: [42, 0, -38], part: P, extras: { role: 'columnar abyss rock massif', pivot: 'bottom centre' } });
+  assets.push({ name: 'Abyss_Rock_Formation', pos: [42, 0, -38], part: P, extras: { role: 'columnar abyss rock massif', origin: 'bottom centre' } });
 }
 
 // ============================================================ glTF ==========
 const doc = new core.Document().setLogger(new core.Logger(core.Logger.Verbosity.ERROR));
 doc.createBuffer();
 const scene = doc.createScene('R3_MawOfTheAbyss_Assets');
-const basisu = doc.createExtension(ext.KHRTextureBasisu).setRequired(true);
+const basisu = FAST ? null : doc.createExtension(ext.KHRTextureBasisu).setRequired(true);
 const TEXSETS = {
   ashlar: { wrap: true }, rock: { wrap: true }, bronze: { wrap: true, metal: true }, top: { wrap: false },
   trim: { wrap: true, metal: true }, mural: { wrap: false },
@@ -743,7 +748,7 @@ for (const [k, o] of Object.entries(TEXSETS)) {
   };
   const m = doc.createMaterial(MATNAMES[k]).setBaseColorFactor([1, 1, 1, 1]).setMetallicFactor(o.metal ? 1 : 0).setRoughnessFactor(1);
   const orm = tex('orm');
-  m.setBaseColorTexture(tex('base')).setNormalTexture(tex('normal')).setNormalScale(1)
+  m.setBaseColorTexture(tex('base')).setNormalTexture(tex('normal')).setNormalScale(k === 'bronze' ? 0.55 : 1)
     .setOcclusionTexture(orm).setMetallicRoughnessTexture(orm).setOcclusionStrength(0.8);
   const wrap = o.wrap ? core.TextureInfo.WrapMode.REPEAT : core.TextureInfo.WrapMode.CLAMP_TO_EDGE;
   for (const info of [m.getBaseColorTextureInfo(), m.getNormalTextureInfo(), m.getOcclusionTextureInfo(), m.getMetallicRoughnessTextureInfo()])
@@ -801,11 +806,13 @@ const { createRequire } = await import('node:module');
 const sharp = createRequire(path.join(DEPS, 'x.cjs'))('sharp');
 const imageDecoder = async buf => { const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true }); return { data: new Uint8Array(data), width: info.width, height: info.height }; };
 let gpuBytes = 0;
-for (const { t, role } of texList) {
-  const png = t.getImage();
+for (const { t, role } of FAST ? [] : texList) {
+  let png = t.getImage();
+  const cap = { T_Maw_top_normal: 1024, T_Maw_top_orm: 1024, T_Maw_trim_orm: 1024 }[t.getName()];
+  if (cap) png = new Uint8Array(await sharp(png).resize(cap, cap, { kernel: 'lanczos3' }).png().toBuffer());
   const srgb = role === 'base';
   const out = await encodeToKTX2(png, {
-    isUASTC: true, needSupercompression: true, generateMipmap: true, uastcLDRQualityLevel: 3,
+    enableDebug: false, isUASTC: true, needSupercompression: true, generateMipmap: true, uastcLDRQualityLevel: 2,
     isPerceptual: srgb, isSetKTX2SRGBTransferFunc: srgb, isNormalMap: role === 'normal', imageDecoder,
     enableRDO: role !== 'normal', rdoQualityLevel: 0.6,
   });
