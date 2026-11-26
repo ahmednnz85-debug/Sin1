@@ -32,17 +32,15 @@
   // between the cabin roof and the crown, so the crown hangs from the ceiling
   // with the chains carried all the way down. Cuts fall on link joints.
   const LIFT = Object.freeze({
-    scale: 7, floor: -0.385, base: -0.5, roofCut: 0.137, crownCut: 0.1985, top: 0.5,
-    strand: [0.19, 0.31], courses: 16, arrivalCourses: 26, doorHalf: 0.36, wall: [1.55, 2.3]
+    scale: 7, floor: -0.38, roofCut: 0.137, crownCut: 0.1985, top: 0.5,
+    strand: [0.19, 0.31], courses: 16, arrivalCourses: 26, rise: 1.44
   });
   const LIFT_PERIOD = (LIFT.crownCut - LIFT.roofCut) * LIFT.scale;
-  // Cabin floor flush with the deck; the plinth sits in the dais well.
-  const LIFT_BASE = DECK + 0.01 - (LIFT.floor - LIFT.base) * LIFT.scale;
-  const liftAt = y => LIFT_BASE + (y - LIFT.base) * LIFT.scale;
-  const CROWN_DROP = liftAt(LIFT.roofCut) + LIFT.courses * LIFT_PERIOD - liftAt(LIFT.crownCut);
+  const liftAt = y => DECK + (y - LIFT.floor) * LIFT.scale;
+  const CABIN_HEAD = (-0.114 - LIFT.floor) * LIFT.scale * LIFT.rise;
+  const ROOF_RISE = (LIFT.roofCut - LIFT.floor) * (LIFT.rise - 1) * LIFT.scale;
+  const CROWN_DROP = (LIFT.courses - 1) * LIFT_PERIOD;
   const CEILING = liftAt(LIFT.top) + CROWN_DROP;
-  // Underworld arrival: the same cabin, docked LIFT_DROP metres below; its
-  // chains rise into the shaft of the Anchorage vault (ARRIVAL_VAULT).
   const LIFT_DROP = -420, ARRIVAL_VAULT = 14.6;
   const halfWidth = x => Math.min(HALF, 3 + Math.max(0, x) * 2.1);
 
@@ -53,15 +51,19 @@
     return radius <= DECK_RADIUS ? DECK : radius <= 5.12 ? 0.38 : radius <= 5.46 ? 0.19 : 0;
   }
 
-  // Cabin walls as capsule stops: a ring with the doorway toward the arch (-x).
+  // Inner wall follows the octagonal cabin. The two front jambs leave the
+  // measured 1.62 m opening clear all the way from the sill to the lintel.
   function liftWalls(hit, dy) {
+    const [cx, cz] = CENTER, y = DECK + dy, roof = y + CABIN_HEAD;
     for (let i = 0; i < 24; i++) {
-      const a = i * tau / 24;
-      if (Math.abs(Math.atan2(Math.sin(a - Math.PI), Math.cos(a - Math.PI))) < 0.35) continue;
-      const r = (LIFT.wall[0] + LIFT.wall[1]) / 2;
-      const x = CENTER[0] + Math.cos(a) * r, z = CENTER[1] + Math.sin(a) * r;
-      hit(x - 0.34, x + 0.34, DECK + dy, DECK + dy + 3.2, z - 0.34, z + 0.34);
+      const a = (i + 0.5) * tau / 24;
+      const x = Math.cos(a) * 1.59, z = Math.sin(a) * 1.76;
+      if (x < -1.05 && Math.abs(z) < 0.8) continue;
+      hit(cx + x - 0.26, cx + x + 0.26, y, roof, cz + z - 0.26, cz + z + 0.26);
     }
+    hit(cx - 1.80, cx - 0.95, y, roof, cz + 0.81, cz + 1.24);
+    hit(cx - 1.80, cx - 0.95, y, roof, cz - 1.24, cz - 0.81);
+    hit(cx - 1.76, cx + 1.66, roof, liftAt(LIFT.roofCut) + ROOF_RISE + dy, cz - 1.72, cz + 1.72, false);
   }
 
   // Split the single authored mesh into cabin / chain course / crown. All
@@ -85,42 +87,60 @@
         : y >= LIFT.roofCut && r >= LIFT.strand[0] && r <= LIFT.strand[1] ? parts.chain : parts.cabin;
       list.push(index[i], index[i + 1], index[i + 2]);
     }
-    const pick = list => {
+    const pick = (list, stretch = false) => {
       const geometry = new T.BufferGeometry();
       for (const [name, attribute] of Object.entries(g.attributes)) geometry.setAttribute(name, attribute);
+      if (stretch) {
+        const positions = new Float32Array(pos.count * 3);
+        const normal = g.attributes.normal;
+        const normals = new Float32Array(positions.length);
+        for (let i = 0; i < pos.count; i++) {
+          const y = pos.getY(i), sy = y > LIFT.floor ? LIFT.rise : 1;
+          a.set(pos.getX(i), LIFT.floor + (y - LIFT.floor) * sy, pos.getZ(i)).toArray(positions, i * 3);
+          a.set(normal.getX(i), normal.getY(i) / sy, normal.getZ(i)).normalize().toArray(normals, i * 3);
+        }
+        geometry.setAttribute('position', new T.BufferAttribute(positions, 3));
+        geometry.setAttribute('normal', new T.BufferAttribute(normals, 3));
+      }
       geometry.setIndex(list);
       geometry.computeBoundingSphere();
       return geometry;
     };
     return {
       node, material: mesh.material,
-      cabin: pick(parts.cabin), chain: pick(parts.chain), crown: pick(parts.crown),
+      cabin: pick(parts.cabin, true), chain: pick(parts.chain), crown: pick(parts.crown),
       triangles: { cabin: parts.cabin.length / 3, course: parts.chain.length / 3, crown: parts.crown.length / 3 }
     };
   }
 
-  // One lift: model space scaled into the Maw frame (un-mirrored, doorway
-  // toward the arch), base on LIFT_BASE, chains from the roof up to the crown.
-  function liftModel(T, kit, material, withCrown, courses = LIFT.courses) {
+  // Both docks share their cabin mesh and UVs. Shorten the chain run above
+  // the raised roof, retaining the existing crown and shaft fixing heights.
+  function liftModel(T, kit, material, withCrown) {
     const holder = new T.Group();
     holder.scale.set(-LIFT.scale, LIFT.scale, LIFT.scale);
-    holder.position.set(CENTER[0], LIFT_BASE - LIFT.base * LIFT.scale, CENTER[1]);
-    const shifted = dy => new T.Matrix4().makeTranslation(0, dy, 0).multiply(kit.node);
+    holder.position.set(CENTER[0], DECK - LIFT.floor * LIFT.scale, CENTER[1]);
     const cabin = new T.Mesh(kit.cabin, material);
     cabin.name = 'Maw_Lift_Cabin';
     cabin.matrixAutoUpdate = false;
     cabin.matrix.copy(kit.node);
-    const step = LIFT.crownCut - LIFT.roofCut;
+    const span = (withCrown ? LIFT.courses : LIFT.arrivalCourses) * LIFT_PERIOD - ROOF_RISE;
+    const courses = Math.round(span / LIFT_PERIOD);
+    const step = span / (courses * LIFT.scale);
+    const sy = step / (LIFT.crownCut - LIFT.roofCut);
+    const link = new T.Matrix4().makeScale(1, sy, 1).multiply(kit.node);
     const chains = new T.InstancedMesh(kit.chain, material, courses);
     chains.name = 'Maw_Lift_Chains';
-    for (let k = 0; k < courses; k++) chains.setMatrixAt(k, shifted(k * step));
+    for (let k = 0; k < courses; k++) {
+      const y = LIFT.roofCut * (1 - sy) + ROOF_RISE / LIFT.scale + k * step;
+      chains.setMatrixAt(k, new T.Matrix4().makeTranslation(0, y, 0).multiply(link));
+    }
     chains.computeBoundingSphere();
     holder.add(cabin, chains);
     if (withCrown) {
       const crown = new T.Mesh(kit.crown, material);
       crown.name = 'Maw_Lift_Crown';
       crown.matrixAutoUpdate = false;
-      crown.matrix.copy(shifted((LIFT.courses - 1) * step));
+      crown.matrix.makeTranslation(0, CROWN_DROP / LIFT.scale, 0).multiply(kit.node);
       holder.add(crown);
     }
     return holder;
@@ -349,8 +369,9 @@
         hit(u - 0.19, u + 0.19, 0, 0.98, v - 0.19, v + 0.19);
       }
     }
-    liftWalls(hit, 0);
-    if (deep) liftWalls(hit, LIFT_DROP);
+    const cabinHit = (x0, x1, y0, y1, z0, z1, solid = true) => collision(entry + x0, entry + x1, level + y0, level + y1, lane + z0, lane + z1, solid);
+    liftWalls(cabinHit, 0);
+    if (deep) liftWalls(cabinHit, LIFT_DROP);
     hit(GUARDIAN.x - 1.02, GUARDIAN.x + 1.02, 0, GUARDIAN.size, GUARDIAN.z - 1.97, GUARDIAN.z + 1.97);
 
     // Dais top around the docked cabin (the retired platform used to be
@@ -544,12 +565,12 @@
         top.name = 'Maw_Lift';
         room.add(top);
         status.selected.push('Maw_Lift_Cabin', 'Maw_Lift_Chains', 'Maw_Lift_Crown');
-        status.lift = { center: CENTER, deck: DECK, ceiling: +CEILING.toFixed(2), courses: LIFT.courses,
-          chain: +(LIFT.courses * LIFT_PERIOD).toFixed(2), drop: LIFT_DROP, triangles: kit.triangles };
+        status.lift = { center: CENTER, deck: DECK, ceiling: +CEILING.toFixed(2), courses: top.getObjectByName('Maw_Lift_Chains').count, clearance: CABIN_HEAD,
+          chain: +(LIFT.courses * LIFT_PERIOD - ROOF_RISE).toFixed(2), drop: LIFT_DROP, triangles: kit.triangles };
         if (deep) {
           // Arrival at the Anchorage of Souls: the same cabin, lit there.
           const shade = deep.userData.finish || (m => m);
-          const below = liftModel(T, kit, shade(kit.material.clone()), false, LIFT.arrivalCourses);
+          const below = liftModel(T, kit, shade(kit.material.clone()), false);
           below.name = 'Maw_Lift_Arrival';
           below.position.y += LIFT_DROP;
           deep.add(below);
@@ -688,7 +709,7 @@
     create, floor, limits: { far: FAR_RIM, half: HALF }, budget: BUDGET,
     // Lift frame shared with the stage (ride) and the underworld (arrival).
     lift: Object.freeze({ center: CENTER, deck: DECK, drop: LIFT_DROP, ceiling: CEILING,
-      chainTop: liftAt(LIFT.crownCut) + CROWN_DROP, cabinRadius: LIFT.wall[0] - 0.35,
+      chainTop: liftAt(LIFT.crownCut) + CROWN_DROP, cabinRadius: 1.20, cabinHead: CABIN_HEAD,
       arrivalVault: ARRIVAL_VAULT, arrivalChainTop: liftAt(LIFT.roofCut) + LIFT.arrivalCourses * LIFT_PERIOD })
   };
 })(window);

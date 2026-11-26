@@ -1,0 +1,358 @@
+{
+  "browser": "159.0.8154.6",
+  "viewport": "852×393, iPhone UA/touch, Chromium/SwiftShader",
+  "levels": {
+    "U1-01": {
+      "spawn": [
+        -103.77767328619957,
+        -434.56,
+        174.4583380615711
+      ],
+      "readyMs": 23923,
+      "state": "R3",
+      "scenery": {
+        "landmarks": 7,
+        "unreachable": true
+      },
+      "blocked": false,
+      "underworldAssets": "ready",
+      "url": "http://127.0.0.1:3104/index.html?dev=1&level=U1-01",
+      "frames": {
+        "harbor": {
+          "width": 852,
+          "height": 478,
+          "calls": 29,
+          "triangles": 503346,
+          "geometries": 29,
+          "textures": 27,
+          "cpuMB": 26.2,
+          "gpuMB": 94.1,
+          "readbackMs": 47702.3
+        },
+        "harbor-vista": {
+          "width": 852,
+          "height": 478,
+          "calls": 25,
+          "triangles": 499802,
+          "geometries": 29,
+          "textures": 27,
+          "cpuMB": 26.2,
+          "gpuMB": 94.1,
+          "readbackMs": 2916.7
+        },
+        "harbor-right": {
+          "width": 852,
+          "height": 478,
+          "calls": 26,
+          "triangles": 501594,
+          "geometries": 29,
+          "textures": 27,
+          "cpuMB": 26.2,
+          "gpuMB": 94.1,
+          "readbackMs": 3876.1
+        },
+        "dais-engravings": {
+          "width": 852,
+          "height": 478,
+          "calls": 24,
+          "triangles": 499292,
+          "geometries": 29,
+          "textures": 27,
+          "cpuMB": 26.2,
+          "gpuMB": 94.1,
+          "readbackMs": 3463.5
+        },
+        "harbor-cabin": {
+          "width": 852,
+          "height": 478,
+          "calls": 25,
+          "triangles": 499802,
+          "geometries": 29,
+          "textures": 27,
+          "cpuMB": 26.2,
+          "gpuMB": 94.1,
+          "readbackMs": 3897.4
+        }
+      },
+      "audit": {
+        "orbits": [
+          {
+            "name": "cabin center",
+            "samples": 361,
+            "wallClearance": 0.312,
+            "minHorizontal": 0.934,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 440,
+            "maxStep": 0.219,
+            "meanAuditMs": 0.198,
+            "maxSolverMs": 35.599999994039536
+          },
+          {
+            "name": "cabin wall",
+            "samples": 361,
+            "wallClearance": 0.312,
+            "minHorizontal": 1.279,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 108,
+            "maxStep": 0.198,
+            "meanAuditMs": 0.165,
+            "maxSolverMs": 4.600000001490116
+          },
+          {
+            "name": "sill",
+            "samples": 361,
+            "wallClearance": 0.382,
+            "minHorizontal": 0.91,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 123,
+            "maxStep": 0.214,
+            "meanAuditMs": 0.049,
+            "maxSolverMs": 4.899999998509884
+          },
+          {
+            "name": "column",
+            "samples": 361,
+            "wallClearance": 0.34,
+            "minHorizontal": 0.91,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 136,
+            "maxStep": 0.195,
+            "meanAuditMs": 0.041,
+            "maxSolverMs": 3.3000000044703484
+          },
+          {
+            "name": "parapet",
+            "samples": 361,
+            "wallClearance": 0.312,
+            "minHorizontal": 1.165,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 356,
+            "maxStep": 0.172,
+            "meanAuditMs": 0.038,
+            "maxSolverMs": 4.0999999940395355
+          }
+        ],
+        "doorway": {
+          "floorToSillM": 0.005,
+          "centreHeadroomM": 2.688,
+          "clearWidthSampleM": 1.55,
+          "sinRestHeightM": 2.228,
+          "poses": [
+            {
+              "key": "KeyW",
+              "ticks": 96,
+              "x": 0.37,
+              "y": 0,
+              "z": 0,
+              "blocked": false
+            },
+            {
+              "key": "KeyS",
+              "ticks": 90,
+              "x": 2.351,
+              "y": 0,
+              "z": 0.328,
+              "blocked": false
+            }
+          ]
+        }
+      }
+    },
+    "R3-03": {
+      "spawn": [
+        -91.67767328619956,
+        -15.149999999999999,
+        176.4583380615711
+      ],
+      "readyMs": 13207,
+      "state": "R3",
+      "scenery": null,
+      "blocked": false,
+      "underworldAssets": "idle",
+      "url": "http://127.0.0.1:3104/index.html?dev=1&level=R3-03",
+      "frames": {
+        "maw-lift": {
+          "width": 852,
+          "height": 478,
+          "calls": 30,
+          "triangles": 367961,
+          "geometries": 36,
+          "textures": 57,
+          "cpuMB": 175.9,
+          "gpuMB": 124.9,
+          "readbackMs": 33354.7
+        }
+      },
+      "audit": {
+        "orbits": [
+          {
+            "name": "cabin center",
+            "samples": 361,
+            "wallClearance": 0.312,
+            "minHorizontal": 0.934,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 440,
+            "maxStep": 0.219,
+            "meanAuditMs": 0.201,
+            "maxSolverMs": 1.6999999955296516
+          },
+          {
+            "name": "cabin wall",
+            "samples": 361,
+            "wallClearance": 0.312,
+            "minHorizontal": 1.279,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 108,
+            "maxStep": 0.198,
+            "meanAuditMs": 0.058,
+            "maxSolverMs": 4
+          },
+          {
+            "name": "sill",
+            "samples": 361,
+            "wallClearance": 0.382,
+            "minHorizontal": 0.91,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 123,
+            "maxStep": 0.214,
+            "meanAuditMs": 0.113,
+            "maxSolverMs": 28.100000001490116
+          },
+          {
+            "name": "arch pier",
+            "samples": 361,
+            "wallClearance": 0.312,
+            "minHorizontal": 1.74,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 358,
+            "maxStep": 0.148,
+            "meanAuditMs": 0.056,
+            "maxSolverMs": 0.5
+          }
+        ],
+        "doorway": {
+          "floorToSillM": 0.005,
+          "centreHeadroomM": 2.688,
+          "clearWidthSampleM": 1.55,
+          "sinRestHeightM": 1.776,
+          "poses": [
+            {
+              "key": "KeyW",
+              "ticks": 96,
+              "x": 0.388,
+              "y": 0,
+              "z": 0,
+              "blocked": false
+            },
+            {
+              "key": "KeyS",
+              "ticks": 85,
+              "x": 2.348,
+              "y": 0,
+              "z": 0.324,
+              "blocked": false
+            }
+          ]
+        }
+      },
+      "ride": [
+        {
+          "offset": -420,
+          "veil": 1,
+          "veilGone": true,
+          "visible": "U1"
+        },
+        {
+          "offset": 420,
+          "veil": 1,
+          "veilGone": true,
+          "visible": "R3"
+        }
+      ],
+      "arrivalAssets": {
+        "phase": "ready",
+        "landmarks": 7
+      }
+    },
+    "R3-01": {
+      "spawn": [
+        -17.10794500717247,
+        3.75,
+        192.85833806157112
+      ],
+      "readyMs": 86804,
+      "state": "R3",
+      "blocked": false,
+      "underworldAssets": "idle",
+      "url": "http://127.0.0.1:3104/index.html?dev=1&level=R3-01",
+      "frames": {},
+      "audit": {
+        "orbits": [
+          {
+            "name": "left corridor wall",
+            "samples": 361,
+            "wallClearance": 0.312,
+            "minHorizontal": 0.91,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 99,
+            "maxStep": 0.17,
+            "meanAuditMs": 0.045,
+            "maxSolverMs": 1.7000000029802322
+          },
+          {
+            "name": "right corridor wall",
+            "samples": 361,
+            "wallClearance": 0.312,
+            "minHorizontal": 0.768,
+            "bodyIntersections": 0,
+            "floorOrCeilingIntersections": 0,
+            "invalid": 0,
+            "sweptDegrees": 61,
+            "maxStep": 0.154,
+            "meanAuditMs": 0.181,
+            "maxSolverMs": 40.79999999701977
+          }
+        ]
+      }
+    }
+  },
+  "errors": [],
+  "sceneryPack": {
+    "sourceBytes": 9285224,
+    "runtimeBytes": 1224216,
+    "runtimeUniqueTriangles": 23593,
+    "sourceTriangles": 82401,
+    "sourceConnectedComponents": 17,
+    "selectedComponents": 7,
+    "instances": 18,
+    "atlasPixels": [
+      1024,
+      1024
+    ]
+  },
+  "sampling": {
+    "U1-01": "Updated authored skyline, final layout",
+    "R3-03": "Final fresh boot and round trip with all seven authored landmarks ready after descent; visual sample from the earlier full capture at the same Maw geometry.",
+    "R3-01": "Latest camera build; authored U1 skyline is independent of the R3 geometry"
+  }
+}
