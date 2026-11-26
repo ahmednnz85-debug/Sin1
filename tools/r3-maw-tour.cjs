@@ -17,6 +17,11 @@ const views = {
   deck: [[8.5, 2.35, -0.75], [22.7, 3.1, -0.5], 65],
   rim: [[17.08, 2.74, -0.55], [51, -10.4, -3.55], 62]
 };
+const corridors = [
+  ['corridor-01-from-hall.jpg', [-20.15, 4.93, 12.72], [-13.75, 4.60, 12.96], 59, [-18.25, 3.10, 12.85]],
+  ['corridor-02-turn-and-ramp.jpg', [-8.96, 4.00, 11.05], [-8.96, 2.80, 3.15], 62, [-9.00, 2.04, 8.93]],
+  ['corridor-03-abyss-reveal.jpg', [-4.75, 2.52, 0.0], [12.9, 3.38, -0.75], 58, [-2.20, 0.33, 0.37]]
+];
 
 async function main() {
   fs.mkdirSync(path.join(out, 'frames'), { recursive: true });
@@ -162,6 +167,18 @@ async function main() {
     }
     await page.evaluate(() => { __mawTour.renderer.render = () => {}; });
     await capture('sin-perspective.jpg');
+    const regionPose = await page.evaluate(() => __mawTour.hero.position.toArray());
+    for (const [name, position, target, fov, heroAt] of corridors) {
+      await page.evaluate(at => {
+        const { hero, world } = __mawTour;
+        hero.position.copy(world(...at));
+      }, heroAt);
+      await setCamera([position, target, fov]);
+      await capture(name);
+    }
+    await page.evaluate(saved => __mawTour.hero.position.fromArray(saved), regionPose);
+    report.corridors = corridors.map(([name]) => name);
+    save();
     await cdp.send('HeapProfiler.collectGarbage');
     report.heapMiB = +((await cdp.send('Runtime.getHeapUsage')).usedSize / 1048576).toFixed(1);
     for (const [name, view] of Object.entries(views)) {
