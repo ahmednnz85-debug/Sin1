@@ -37,7 +37,7 @@ function load({ search = '', enabled = true } = {}) {
   // Owners register in the browser as each script loads.
   window.fetch = fetch;
   window.ClipperLib = require(path.join(ROOT, 'vendor/clipper.js'));
-  for (const f of ['wing-architecture.js', 'r3-sealed-zone.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
+  for (const f of ['wing-architecture.js', 'r3-maw-geology.js', 'r3-maw-approach.js', 'r3-maw-dressing.js', 'r3-underworld.js', 'r3-sealed-zone.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
   vm.runInContext('(function(){const CANAL_Z0=7,CANAL_Z1=76;' + marketBlock + '})()', ctx);
   vm.runInContext('(function(){const PL_Z0=76,PL_FRONT=160;' + outdoorBlock + '})()', ctx);
   vm.runInContext(hallBlock, ctx);
@@ -53,14 +53,14 @@ test('menu = core registry: every palace region of the real layout, R3 and the e
   const graph = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/palace-graph.json'), 'utf8'));
   const regions = graph.planRegions.filter(r => r.kind === 'room' || r.kind === 'corridor' || r.kind === 'gallery').map(r => r.id);
   for (const id of regions) assert.ok(ids.includes(id), 'palace region ' + id + ' registered');
-  for (const id of ['HALL', 'R3-01', 'R3-02', 'R3-03', 'OUT-START', 'OUT-GATE', 'OUT-MARKET', 'OUT-PLAZA', 'OUT-PALACE']) assert.ok(ids.includes(id), id);
+  for (const id of ['HALL', 'R3-01', 'R3-02', 'R3-03', 'U1-01', 'U1-02', 'U1-03', 'OUT-START', 'OUT-GATE', 'OUT-MARKET', 'OUT-PLAZA', 'OUT-PALACE']) assert.ok(ids.includes(id), id);
   for (const a of list) {
     assert.ok(a.ar && a.en && a.group, a.id + ' labelled');
     if (a.stage === 'palace') assert.ok(a.spawn.teleport, a.id + ' teleport');
   }
   assert.equal(hub.area('R3-02').stage, 'r3');
-  assert.equal(list.length, 9 + regions.length, 'nothing else is listed');
-  assert.deepEqual(JSON.parse(JSON.stringify([...new Set(list.map(a => a.group))])), ['outdoor', 'hall', 'Kings', 'Library', 'Temple', 'corridors', 'r3']);
+  assert.equal(list.length, 12 + regions.length, 'nothing else is listed');
+  assert.deepEqual(JSON.parse(JSON.stringify([...new Set(list.map(a => a.group))])), ['outdoor', 'hall', 'Kings', 'Library', 'Temple', 'corridors', 'r3', 'u1']);
 });
 
 test('a room added to the layout appears in the menu with no hub change', async () => {

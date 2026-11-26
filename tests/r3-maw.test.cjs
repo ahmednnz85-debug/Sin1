@@ -13,35 +13,28 @@ function glb(relative) {
   return { size: file.length, doc: JSON.parse(file.subarray(20, 20 + file.readUInt32LE(12))) };
 }
 
-test('the Maw GLBs carry the authored platform, only needed textures, and one lighter link', () => {
-  const chosen = glb('assets/r3/maw/elevator-and-ruins.glb');
+test('the Maw packs carry the approved elevator, the ruins and no retired elevator parts', () => {
+  const lift = glb('assets/r3/maw/elevator.glb');
+  const source = glb('assets/مصعد فم الهاوية.glb');
+  const ruins = glb('assets/r3/maw/abyss-ruins.glb');
   const guardian = glb('assets/r3/maw/left-guardian.glb');
-  const source = glb('assets/R3_MawOfTheAbyss_Assets.glb');
-  const names = chosen.doc.scenes[0].nodes.map(i => chosen.doc.nodes[i].name);
-  assert.ok(names.includes('Elevator_Platform') && names.includes('Elevator_Mechanism'));
-  assert.ok(names.includes('Elevator_Anchor_Upper') && names.includes('Elevator_Anchor_Lower'));
-  for (const node of ['Abyss_Mural_Fragment', 'Abyss_Overlook', 'Elevator_Chain', 'Abyss_Rock_Formation']) {
-    assert.ok(!names.includes(node));
-  }
-  const crown = chosen.doc.nodes.find(n => n.name === 'Abyss_Cliff_Ruins_Body_Geo');
-  const crownPieces = chosen.doc.meshes[crown.mesh].primitives;
-  assert.equal(crownPieces.length, 1);
-  assert.equal(chosen.doc.materials[crownPieces[0].material].name, 'M_Stone_Ashlar');
-  const triangles = (asset, name) => {
-    const node = asset.doc.nodes.find(n => n.name === name);
-    return asset.doc.meshes[node.mesh].primitives.reduce((n, prim) => n + asset.doc.accessors[prim.indices].count / 3, 0);
-  };
-  assert.equal(triangles(chosen, 'Elevator_Platform_Body_Geo'), triangles(source, 'Elevator_Platform_Body_Geo'));
-  assert.equal(triangles(chosen, 'Elevator_Chain_Link_01_Geo'), 1140);
+  // Same authored mesh and accessors; only the maps are resized for phones.
+  assert.deepEqual(lift.doc.meshes, source.doc.meshes);
+  assert.deepEqual(lift.doc.accessors, source.doc.accessors);
+  assert.equal(lift.doc.images.length, 3);
+  const names = ruins.doc.scenes[0].nodes.map(i => ruins.doc.nodes[i].name);
+  assert.deepEqual(names.sort(), ['Abyss_Bridge_Ruined', 'Abyss_Cliff_Ruins', 'Abyss_Rock_Spire']);
+  assert.ok(!ruins.doc.nodes.some(n => /^Elevator_/.test(n.name || '')));
+  assert.ok(!fs.existsSync(path.join(root, 'assets/r3/maw/elevator-and-ruins.glb')));
   assert.equal(guardian.doc.scenes[0].nodes.length, 1);
-  assert.ok(chosen.size + guardian.size < 22 * 1024 * 1024);
+  assert.ok(lift.size + ruins.size + guardian.size < 16 * 1024 * 1024);
 });
 
 test('the registered Maw spawn connects to the deck and the void blocks the capsule', { skip: !three }, () => {
   const THREE = require(path.join(three, 'build/three.cjs'));
   const window = {};
   const ctx = vm.createContext({ window, globalThis: window, THREE, performance, console });
-  for (const file of ['sin-areas.js', 'r3-maw-geology.js', 'r3-maw-approach.js', 'r3-maw-dressing.js', 'r3-sealed-zone.js']) {
+  for (const file of ['sin-areas.js', 'r3-maw-geology.js', 'r3-maw-approach.js', 'r3-maw-dressing.js', 'r3-underworld.js', 'r3-sealed-zone.js']) {
     if (window.SinAreas) ctx.SinAreas = window.SinAreas;
     vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), ctx);
   }
@@ -57,7 +50,7 @@ test('the registered Maw spawn connects to the deck and the void blocks the caps
     let feet = room.y;
     const traversed = new Set();
     for (let x = room.x + 0.3; x < room.x + 18.1; x += 0.11) {
-      const z = zAt(room.z - 1.4);
+      const z = zAt(room.z + 1.9); // beside the docked cabin (its walls stop the capsule)
       assert.ok(!stage.blocks(xAt(x), z, feet, xAt(x - 0.11), z, 0.32), 'centerline blocked at ' + x);
       const f = stage.nearFloor(xAt(x), z, feet);
       feet = f.y;
@@ -93,5 +86,67 @@ test('the registered Maw spawn connects to the deck and the void blocks the caps
       const f = stage.nearFloor(at[0], at[1], walk + 2) || stage.nearFloor(at[0], at[1], walk);
       assert.ok(f, 'floor under arch at ' + x + ',' + z);
     }
+  });
+});
+
+test('the lift docks in the Maw and at the Anchorage; the U1 route walks to the closed gate', { skip: !three }, () => {
+  const THREE = require(path.join(three, 'build/three.cjs'));
+  const window = {};
+  const ctx = vm.createContext({ window, globalThis: window, THREE, performance, console });
+  for (const file of ['sin-areas.js', 'r3-maw-geology.js', 'r3-maw-approach.js', 'r3-maw-dressing.js', 'r3-underworld.js', 'r3-sealed-zone.js']) {
+    if (window.SinAreas) ctx.SinAreas = window.SinAreas;
+    vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), ctx);
+  }
+  const hall = JSON.parse(fs.readFileSync(path.join(root, 'data/palace-colliders.json'), 'utf8')).hall;
+  const p = hall.passages.find(x => x.id === window.SinR3SealedZone.passageId);
+  const stage = window.SinR3SealedZone.mount(THREE, p, hall, new THREE.Vector3());
+  const lift = window.SinR3Maw.lift;
+  // The crown hangs from a ceiling at the arch crown, well clear of the cabin
+  // roof on long chains; the arrival chains rise into the Anchorage vault.
+  assert.ok(lift.ceiling > 12.8 && lift.chainTop - (lift.deck + 3.6) > 6.5, JSON.stringify(lift));
+  assert.ok(lift.arrivalChainTop > lift.arrivalVault, 'arrival chains reach the vault');
+  const xAt = u => p.position[0] - u, zAt = v => p.position[2] + v;
+  const room = stage.maw.room.position;
+  const cabin = [room.x + lift.center[0], room.z + lift.center[1]];
+  const top = room.y + lift.deck, bottom = top + lift.drop;
+  // Both docks: floor inside the cabin, a wall beside it, the doorway open toward the arch (-u).
+  for (const y of [top, bottom]) {
+    assert.ok(stage.nearFloor(xAt(cabin[0]), zAt(cabin[1]), y), 'cabin floor at ' + y);
+    assert.ok(stage.blocks(xAt(cabin[0]), zAt(cabin[1] + 2.0), y, xAt(cabin[0]), zAt(cabin[1]), 0.32), 'cabin wall');
+    let feet = y;
+    for (let du = 0; du >= -3.2; du -= 0.1) {
+      const at = [xAt(cabin[0] + du), zAt(cabin[1])];
+      assert.ok(!stage.blocks(at[0], at[1], feet, xAt(cabin[0] + du + 0.1), zAt(cabin[1]), 0.32), 'doorway at ' + du);
+      feet = stage.nearFloor(at[0], at[1], feet).y;
+    }
+  }
+  // The ride: wait in the cabin, the view closes, the hero is carried down.
+  const at = [xAt(cabin[0]), top, zAt(cabin[1])];
+  stage.maw.status.phase = 'ready';
+  assert.equal(stage.lift(xAt(cabin[0] - 4), room.y, zAt(cabin[1]), 0.1).state, 'idle');
+  let shift = null;
+  for (let i = 0; i < 40 && !shift; i++) shift = stage.lift(...at, 0.1).shift;
+  assert.equal(JSON.stringify(shift), JSON.stringify([0, lift.drop, 0]));
+  // Registered U1 spawns stand on the underworld layer.
+  return Promise.all(['U1-01', 'U1-02', 'U1-03'].map(id => window.SinAreas.get(id))).then(areas => {
+    for (const a of areas) assert.ok(stage.nearFloor(xAt(a.spawn.u), zAt(a.spawn.v), a.spawn.y), a.id + ' spawn on floor');
+    // Anchorage -> causeway -> junction -> stair -> landing -> bridge -> midway -> descent -> plaza.
+    const rel = [[-3.5, 0], [-42, 0], [-42, -26], [-98, -26], [-139, -26], [-149, -26]];
+    let [px, pz] = [-3.5, 0], feet = bottom - 0.58;
+    const base = (x, z) => [xAt(cabin[0] + x), zAt(cabin[1] + z)];
+    feet = stage.nearFloor(...base(px, pz), bottom).y;
+    for (const [tx, tz] of rel.slice(1)) {
+      const steps = Math.ceil(Math.hypot(tx - px, tz - pz) / 0.1);
+      const [sx, sz] = [px, pz];
+      for (let i = 1; i <= steps; i++) {
+        const x = sx + (tx - sx) * i / steps, z = sz + (tz - sz) * i / steps;
+        assert.ok(!stage.blocks(...base(x, z), feet, ...base(px, pz), 0.32), 'U1 route blocked at ' + x.toFixed(1) + ',' + z.toFixed(1));
+        feet = stage.nearFloor(...base(x, z), feet).y;
+        px = x; pz = z;
+      }
+    }
+    // The gate is closed and the void is not walkable.
+    assert.ok(stage.blocks(...base(-154, -26), feet, ...base(-149, -26), 0.32), 'closed gate');
+    assert.ok(stage.blocks(...base(-70, -14), bottom - 6, ...base(-70, -26), 0.32), 'bridge edge');
   });
 });

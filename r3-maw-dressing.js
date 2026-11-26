@@ -1,7 +1,7 @@
 /* R3-03. Local x follows the final approach, z crosses it, and y starts at the landing. */
 (function (root) {
   'use strict';
-  const CENTER = [12.9, -1.40], DECK = 0.58, PLATFORM_SCALE = 1.38;
+  const CENTER = [12.9, -1.40], DECK = 0.58;
   const DECK_RADIUS = 4.86, ARCH = 8.18, SPRING = 5.9, RISE = 6.9, ARCH_Z = -1.3;
   const FAR_RIM = 20.4, HALF = 9.55, SHOULDER = 13.4;
   const geology = root.SinR3MawGeology;
@@ -26,9 +26,24 @@
   ];
   const BUDGET = Object.freeze({ glbMiB: 22, drawCalls: 85, trianglesInView: 515000 });
   const tau = 2 * Math.PI;
-  const anchors = [-1, 1].flatMap(x => [-1, 1].map(z => [
-    CENTER[0] + x * 2.33345238 * PLATFORM_SCALE, CENTER[1] + z * 2.33345238 * PLATFORM_SCALE
-  ]));
+  // The approved elevator (assets/r3/maw/elevator.glb, one authored mesh,
+  // model units: base y=-0.5, crown top y=+0.5). It is split by height into
+  // the cabin, one seamless chain course and the crown. The course repeats
+  // between the cabin roof and the crown, so the crown hangs from the ceiling
+  // with the chains carried all the way down. Cuts fall on link joints.
+  const LIFT = Object.freeze({
+    scale: 7, floor: -0.385, base: -0.5, roofCut: 0.137, crownCut: 0.1985, top: 0.5,
+    strand: [0.19, 0.31], courses: 16, arrivalCourses: 26, doorHalf: 0.36, wall: [1.55, 2.3]
+  });
+  const LIFT_PERIOD = (LIFT.crownCut - LIFT.roofCut) * LIFT.scale;
+  // Cabin floor flush with the deck; the plinth sits in the dais well.
+  const LIFT_BASE = DECK + 0.01 - (LIFT.floor - LIFT.base) * LIFT.scale;
+  const liftAt = y => LIFT_BASE + (y - LIFT.base) * LIFT.scale;
+  const CROWN_DROP = liftAt(LIFT.roofCut) + LIFT.courses * LIFT_PERIOD - liftAt(LIFT.crownCut);
+  const CEILING = liftAt(LIFT.top) + CROWN_DROP;
+  // Underworld arrival: the same cabin, docked LIFT_DROP metres below; its
+  // chains rise into the shaft of the Anchorage vault (ARRIVAL_VAULT).
+  const LIFT_DROP = -420, ARRIVAL_VAULT = 14.6;
   const halfWidth = x => Math.min(HALF, 3 + Math.max(0, x) * 2.1);
 
   function floor(x, z) {
@@ -38,13 +53,86 @@
     return radius <= DECK_RADIUS ? DECK : radius <= 5.12 ? 0.38 : radius <= 5.46 ? 0.19 : 0;
   }
 
-  function create({ THREE: T, group, entry, lane, level, collision, kit = () => null, floorAt = () => null }) {
+  // Cabin walls as capsule stops: a ring with the doorway toward the arch (-x).
+  function liftWalls(hit, dy) {
+    for (let i = 0; i < 24; i++) {
+      const a = i * tau / 24;
+      if (Math.abs(Math.atan2(Math.sin(a - Math.PI), Math.cos(a - Math.PI))) < 0.35) continue;
+      const r = (LIFT.wall[0] + LIFT.wall[1]) / 2;
+      const x = CENTER[0] + Math.cos(a) * r, z = CENTER[1] + Math.sin(a) * r;
+      hit(x - 0.34, x + 0.34, DECK + dy, DECK + dy + 3.2, z - 0.34, z + 0.34);
+    }
+  }
+
+  // Split the single authored mesh into cabin / chain course / crown. All
+  // three share the decoded vertex buffers; only the index lists differ.
+  function liftKit(T, gltf) {
+    let mesh = null;
+    gltf.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
+    if (!mesh) throw new Error('Maw lift mesh missing');
+    gltf.scene.updateMatrixWorld(true);
+    const node = mesh.matrixWorld.clone(), g = mesh.geometry;
+    const pos = g.attributes.position, index = g.index.array;
+    const parts = { cabin: [], chain: [], crown: [] };
+    const a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3();
+    for (let i = 0; i < index.length; i += 3) {
+      a.fromBufferAttribute(pos, index[i]).applyMatrix4(node);
+      b.fromBufferAttribute(pos, index[i + 1]).applyMatrix4(node);
+      c.fromBufferAttribute(pos, index[i + 2]).applyMatrix4(node);
+      const y = (a.y + b.y + c.y) / 3, x = (a.x + b.x + c.x) / 3, z = (a.z + b.z + c.z) / 3;
+      const r = Math.hypot(x, z);
+      const list = y >= LIFT.crownCut ? parts.crown
+        : y >= LIFT.roofCut && r >= LIFT.strand[0] && r <= LIFT.strand[1] ? parts.chain : parts.cabin;
+      list.push(index[i], index[i + 1], index[i + 2]);
+    }
+    const pick = list => {
+      const geometry = new T.BufferGeometry();
+      for (const [name, attribute] of Object.entries(g.attributes)) geometry.setAttribute(name, attribute);
+      geometry.setIndex(list);
+      geometry.computeBoundingSphere();
+      return geometry;
+    };
+    return {
+      node, material: mesh.material,
+      cabin: pick(parts.cabin), chain: pick(parts.chain), crown: pick(parts.crown),
+      triangles: { cabin: parts.cabin.length / 3, course: parts.chain.length / 3, crown: parts.crown.length / 3 }
+    };
+  }
+
+  // One lift: model space scaled into the Maw frame (un-mirrored, doorway
+  // toward the arch), base on LIFT_BASE, chains from the roof up to the crown.
+  function liftModel(T, kit, material, withCrown, courses = LIFT.courses) {
+    const holder = new T.Group();
+    holder.scale.set(-LIFT.scale, LIFT.scale, LIFT.scale);
+    holder.position.set(CENTER[0], LIFT_BASE - LIFT.base * LIFT.scale, CENTER[1]);
+    const shifted = dy => new T.Matrix4().makeTranslation(0, dy, 0).multiply(kit.node);
+    const cabin = new T.Mesh(kit.cabin, material);
+    cabin.name = 'Maw_Lift_Cabin';
+    cabin.matrixAutoUpdate = false;
+    cabin.matrix.copy(kit.node);
+    const step = LIFT.crownCut - LIFT.roofCut;
+    const chains = new T.InstancedMesh(kit.chain, material, courses);
+    chains.name = 'Maw_Lift_Chains';
+    for (let k = 0; k < courses; k++) chains.setMatrixAt(k, shifted(k * step));
+    chains.computeBoundingSphere();
+    holder.add(cabin, chains);
+    if (withCrown) {
+      const crown = new T.Mesh(kit.crown, material);
+      crown.name = 'Maw_Lift_Crown';
+      crown.matrixAutoUpdate = false;
+      crown.matrix.copy(shifted((LIFT.courses - 1) * step));
+      holder.add(crown);
+    }
+    return holder;
+  }
+
+  function create({ THREE: T, group, entry, lane, level, collision, kit = () => null, floorAt = () => null, deep = null }) {
     const room = new T.Group();
     room.name = 'MawOfTheAbyss_Dressing';
     room.position.set(entry, level, lane);
     group.add(room);
     room.visible = false;
-    const status = room.userData.maw = { phase: 'idle', selected: [], anchors: [], budget: BUDGET };
+    const status = room.userData.maw = { phase: 'idle', selected: [], budget: BUDGET };
     Object.defineProperty(room.userData, 'mawLinks', { value: { kit, floorAt }, enumerable: false });
     let renderer, pending;
     const transform = { value: new T.Matrix4() }, clock = { value: 0 };
@@ -261,8 +349,37 @@
         hit(u - 0.19, u + 0.19, 0, 0.98, v - 0.19, v + 0.19);
       }
     }
-    for (const [x, z] of anchors) hit(x - 0.57, x + 0.57, DECK, DECK + 1.6, z - 0.55, z + 0.55);
+    liftWalls(hit, 0);
+    if (deep) liftWalls(hit, LIFT_DROP);
     hit(GUARDIAN.x - 1.02, GUARDIAN.x + 1.02, 0, GUARDIAN.size, GUARDIAN.z - 1.97, GUARDIAN.z + 1.97);
+
+    // Dais top around the docked cabin (the retired platform used to be
+    // this surface) and the well rim the cabin plinth sits in.
+    const deckTop = new T.RingGeometry(2.42, 4.86, 72, 1).rotateX(-Math.PI / 2)
+      .translate(CENTER[0], DECK, CENTER[1]);
+    collect(paving, deckTop, 2.85);
+    collect(bands, new T.CylinderGeometry(2.42, 2.42, 0.9, 48, 1, true)
+      .translate(CENTER[0], DECK - 0.45, CENTER[1]), 1.6);
+    collect(bands, new T.CylinderGeometry(4.86, 4.86, 0.2, 72, 1, true)
+      .translate(CENTER[0], DECK - 0.1, CENTER[1]), 1.6);
+    // Ceiling the crown is fixed to: a coffered stone overhang corbelled out
+    // from the back of the arch, kept to the crown's footprint so the vista
+    // through the arch stays open. Its underside sits just under the arch
+    // crown, so the whole lift reads from the overlook.
+    {
+      const y = CEILING, cx = 13.55, cz = CENTER[1];
+      slab(cx, y + 1.0, cz, 6.7, 2.0, 8.4);
+      slab(cx - 0.2, y + 2.35, cz, 7.4, 0.7, 9.2, bands);
+      for (const side of [-1, 1]) slab(cx, y - 0.3, cz + side * 3.95, 6.7, 0.6, 0.5, bands);
+      slab(16.65, y - 0.3, cz, 0.5, 0.6, 8.4, bands);
+      for (const side of [-1, 1]) slab(11.9, y - 0.9, cz + side * 3.3, 1.3, 1.8, 1.1, bands);
+      const housing = new T.CylinderGeometry(3.25, 3.5, 0.8, 40, 1, true)
+        .translate(CENTER[0], y - 0.4, CENTER[1]);
+      collect(bands, housing, 1.7);
+      const lid = new T.RingGeometry(2.45, 3.5, 40, 1).rotateX(Math.PI / 2)
+        .translate(CENTER[0], y - 0.8, CENTER[1]);
+      collect(bands, lid, 1.7);
+    }
 
     for (const [material, values] of pairs) {
       const geometry = new T.BufferGeometry();
@@ -316,7 +433,7 @@
       const mod = await import('three/addons/loaders/KTX2Loader.js');
       const basis = new mod.KTX2Loader().setTranscoderPath('vendor/basis/').setWorkerLimit(2).detectSupport(renderer);
       const loader = new T.GLTFLoader().setKTX2Loader(basis).setMeshoptDecoder(root.MeshoptDecoder);
-      const files = ['elevator-and-ruins.glb', 'left-guardian.glb'];
+      const files = ['abyss-ruins.glb', 'left-guardian.glb', 'elevator.glb'];
       try {
         const textureLoader = new T.TextureLoader();
         const assets = await Promise.all([
@@ -324,7 +441,7 @@
           ...['base', 'normal', 'rough'].map(channel => textureLoader.loadAsync('assets/r3/hall/paving-' + channel + '.webp')),
           ...['albedo', 'normal', 'orm'].map(channel => textureLoader.loadAsync('assets/r3/stair/ashlar_wall_' + channel + '.jpg'))
         ]);
-        const [maw, guardian, color, normal, rough, wallColor, wallNormal, wallOrm] = assets;
+        const [maw, guardian, lift, color, normal, rough, wallColor, wallNormal, wallOrm] = assets;
         color.colorSpace = wallColor.colorSpace = T.SRGBColorSpace;
         const pbr = { map: color, normalMap: normal, roughnessMap: rough };
         const stonePbr = { map: wallColor, normalMap: wallNormal, roughnessMap: wallOrm, aoMap: wallOrm };
@@ -354,42 +471,25 @@
           if (!status.selected.includes(name)) status.selected.push(name);
           return model;
         }
-        place('Elevator_Platform', CENTER[0], DECK - 0.8 * 1.10004, CENTER[1],
-          [PLATFORM_SCALE, 0.8, PLATFORM_SCALE]);
         transferMaps(stone, stonePbr);
         transferMaps(bands, stonePbr);
         for (const [key, value] of approach) transferMaps(value, key === 'ground' ? pbr : stonePbr);
 
-        const upperY = 11.35, lowerY = 0.79;
-        place('Elevator_Mechanism', CENTER[0], upperY, CENTER[1], [1.58, 1.13, 1.58]);
-        for (const [x, z] of anchors) {
-          const yaw = Math.atan2(x - CENTER[0], z - CENTER[1]);
-          place('Elevator_Anchor_Lower', x, lowerY, z, [0.96, 1, 0.96], yaw);
-          place('Elevator_Anchor_Upper', x, upperY - 0.37, z, [1.29, 1.15, 1.29], yaw);
+        const kit = liftKit(T, lift);
+        const top = liftModel(T, kit, finish(kit.material), true);
+        top.name = 'Maw_Lift';
+        room.add(top);
+        status.selected.push('Maw_Lift_Cabin', 'Maw_Lift_Chains', 'Maw_Lift_Crown');
+        status.lift = { center: CENTER, deck: DECK, ceiling: +CEILING.toFixed(2), courses: LIFT.courses,
+          chain: +(LIFT.courses * LIFT_PERIOD).toFixed(2), drop: LIFT_DROP, triangles: kit.triangles };
+        if (deep) {
+          // Arrival at the Anchorage of Souls: the same cabin, lit there.
+          const shade = deep.userData.finish || (m => m);
+          const below = liftModel(T, kit, shade(kit.material.clone()), false, LIFT.arrivalCourses);
+          below.name = 'Maw_Lift_Arrival';
+          below.position.y += LIFT_DROP;
+          deep.add(below);
         }
-        const specimen = kits.get('Elevator_Chain_Link_01');
-        const link = specimen.getObjectByProperty('isMesh', true);
-        const startY = lowerY + 1.37, endY = upperY - 1.35;
-        const count = Math.round((endY - startY) / 0.41) + 1;
-        const stride = (endY - startY) / (count - 1);
-        const unit = stride / 0.31;
-        const chain = new T.InstancedMesh(link.geometry, finish(link.material), count * 4);
-        chain.name = 'Elevator_Chain_FourSuspensions';
-        const linkPose = new T.Object3D();
-        linkPose.scale.copy(link.scale).multiplyScalar(unit);
-        for (let j = 0; j < anchors.length; j++) {
-          const [x, z] = anchors[j];
-          for (let i = 0; i < count; i++) {
-            linkPose.position.set(x, startY + i * stride, z);
-            linkPose.rotation.y = Math.atan2(x - CENTER[0], z - CENTER[1]) + (i % 2) * Math.PI / 2;
-            linkPose.updateMatrix();
-            chain.setMatrixAt(j * count + i, linkPose.matrix);
-          }
-          status.anchors.push({ x, z, bottom: startY, top: endY, links: count });
-        }
-        chain.computeBoundingSphere();
-        room.add(chain);
-        status.selected.push('Elevator_Chain_Link_01');
 
         const lamassu = guardian.scene.children[0];
         const stand = new T.Group();
@@ -450,6 +550,11 @@
       try {
         await renderer.compileAsync(room, camera, scene);
         if (approachLook) await renderer.compileAsync(approachLook.group, camera, scene);
+        if (deep) {
+          const hidden = deep.visible;
+          deep.visible = true;
+          try { await renderer.compileAsync(deep, camera, scene); } finally { deep.visible = hidden; }
+        }
         // Push the textures to the GPU now rather than on the first frame.
         const textures = new Set();
         const visit = o => {
@@ -459,6 +564,7 @@
         };
         room.traverse(visit);
         approachLook?.group.traverse(visit);
+        deep?.traverse(visit);
         for (const t of approach.values()) visit({ material: t });
         textures.forEach(t => renderer.initTexture?.(t));
       } catch (error) {
@@ -532,5 +638,11 @@
     room.add(particles);
   }
 
-  root.SinR3Maw = { create, floor, limits: { far: FAR_RIM, half: HALF }, budget: BUDGET };
+  root.SinR3Maw = {
+    create, floor, limits: { far: FAR_RIM, half: HALF }, budget: BUDGET,
+    // Lift frame shared with the stage (ride) and the underworld (arrival).
+    lift: Object.freeze({ center: CENTER, deck: DECK, drop: LIFT_DROP, ceiling: CEILING,
+      chainTop: liftAt(LIFT.crownCut) + CROWN_DROP, cabinRadius: LIFT.wall[0] - 0.35,
+      arrivalVault: ARRIVAL_VAULT, arrivalChainTop: liftAt(LIFT.roofCut) + LIFT.arrivalCourses * LIFT_PERIOD })
+  };
 })(window);

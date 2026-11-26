@@ -83,12 +83,13 @@ async function main() {
     const info = await page.evaluate(reference => {
       const { room, renderer, hero, game, local, scene, world } = __mawTour;
       const gl = renderer.getContext(), driver = gl.getExtension('WEBGL_debug_renderer_info');
-      const counts = { lamassu: 0, supports: 0, platform: 0, chainLinks: 0, fire: 0 };
+      const counts = { lamassu: 0, lift: 0, crown: 0, chainCourses: 0, arrival: 0, fire: 0 };
+      scene.getObjectByName('Maw_Lift_Arrival') && counts.arrival++;
       room.traverse(o => {
         if (o.name === 'Maw_Left_Lamassu') counts.lamassu++;
-        if (o.name === 'Elevator_Anchor_Lower') counts.supports++;
-        if (o.name === 'Elevator_Platform') counts.platform++;
-        if (o.name === 'Elevator_Chain_FourSuspensions') counts.chainLinks = o.count;
+        if (o.name === 'Maw_Lift') counts.lift++;
+        if (o.name === 'Maw_Lift_Crown') counts.crown++;
+        if (o.name === 'Maw_Lift_Chains' && o.parent?.name === 'Maw_Lift') counts.chainCourses = o.count;
         if (/fire|torch|flame/i.test(o.name)) counts.fire++;
       });
       const gorge = room.getObjectByName('Maw_Canyon_Geology');
@@ -113,9 +114,8 @@ async function main() {
     assert.equal(info.status.phase, 'ready', info.status.error);
     report.checks.directR3 = info.area === 'R3-03' && info.roots.length === 2 && info.roots.includes('R3Stage');
     report.checks.freeSpawn = info.spawnClear;
-    report.checks.composition = info.counts.platform === 1 && info.counts.lamassu === 1 &&
-      info.counts.supports === 4 && info.status.anchors.reduce((sum, a) => sum + a.links, 0) === info.counts.chainLinks &&
-      info.counts.fire === 0;
+    report.checks.composition = info.counts.lift === 1 && info.counts.crown === 1 && info.counts.lamassu === 1 &&
+      info.counts.chainCourses === info.status.lift.courses && info.counts.arrival === 1 && info.counts.fire === 0;
     report.checks.solidCanyon = info.gorge.surfaces === 13 && info.gorge.dimensions[1] > 195;
     const landmarks = info.composition;
     report.checks.referenceLayout = landmarks.guardian[0] < 0.34 &&
@@ -140,9 +140,9 @@ async function main() {
       const previous = hero.position.clone();
       const tested = [], heights = [];
       try {
-        hero.position.copy(world(0.76, 0, -1.35));
+        hero.position.copy(world(0.76, 0, 1.9));
         for (let x = 0.85; x <= 18.5; x += 0.11) {
-          const at = world(x, 0, -1.35);
+          const at = world(x, 0, 1.9);
           if (game.blocked(at.x, at.z)) { tested.push({ blockedAt: x }); break; }
           at.y = PalaceInterior.floorAt(at.x, at.z, hero.position.y);
           hero.position.copy(at);
@@ -150,17 +150,19 @@ async function main() {
           if (y !== heights.at(-1)) heights.push(y);
         }
         const edge = world(21, 0, -1.35);
-        const anchor = room.userData.maw.anchors[0];
-        hero.position.copy(world(11.1, 0.58, -4.55));
-        const pin = world(anchor.x, 0.58, anchor.z);
+        // Cabin: its side wall stops the capsule, the doorway (toward the arch) does not.
+        hero.position.copy(world(12.9, 0.59, -1.4));
+        const pin = world(12.9, 0.59, -1.4 + 2.0);
+        const door = world(10.4, 0.59, -1.4);
+        const doorOpen = !game.blocked(door.x, door.z);
         return { tested, heights, abyssBlocked: game.blocked(edge.x, edge.z),
-          anchorBlocked: game.blocked(pin.x, pin.z) };
+          anchorBlocked: game.blocked(pin.x, pin.z), doorOpen };
       } finally {
         hero.position.copy(previous);
       }
     });
     report.checks.walksOntoDeck = report.path.tested.length === 0 && report.path.heights.includes(0.58);
-    report.checks.edgeAndHardwareBlock = report.path.abyssBlocked && report.path.anchorBlocked;
+    report.checks.edgeAndHardwareBlock = report.path.abyssBlocked && report.path.anchorBlocked && report.path.doorOpen;
     console.log('Maw collisions', JSON.stringify(report.path));
     save();
 

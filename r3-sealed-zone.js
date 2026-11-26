@@ -8,6 +8,7 @@
   const SPRING = BASIN + 11.5, CROWN = BASIN + 20;
   const ABYSS_LANDING = -15.8; // floor of the landing that opens the Mouth of the Abyss
   const MAW_ENTRY = HALL_U + 20, MAW_LANE = -17, MAW_LEVEL = -18.9;
+  const DEEP = MAW_LEVEL - 150; // below this height the stage samples the underworld layer
   const HALF = 3, PORT = Math.asin(HALF / RADIUS);
   const CHORD = Math.sqrt(RADIUS ** 2 - HALF ** 2);
   const HALL_ENTRY = HALL_U - CHORD, SIDE_EXIT = HALL_V - CHORD;
@@ -638,7 +639,20 @@
     const mouth = (d, y, t) => alongU(d, y, t + MAW_LANE);
     tunnel(mouth, HALL_U + 14, MAW_ENTRY, 2.32, -18, MAW_LEVEL, 0, 10, [-1, 1]);
     const bridge = MAW_ENTRY, rim = bridge + (Maw?.limits.far ?? 8), ledge = MAW_LEVEL;
+    // U1, the underworld below the abyss: its own layer of the stage, under
+    // the Maw frame and selected by height (the lift drops 420 m into it).
+    const Under = Maw?.lift && window.SinR3Underworld;
+    const deep = new THREE.Group();
+    deep.name = 'U1_Underworld';
+    deep.position.set(bridge, ledge, MAW_LANE);
+    deep.visible = false;
+    if (Under) root.add(deep);
+    const under = Under ? Under.create({ T: THREE, group: deep, lift: Maw.lift,
+      hit: (x0, x1, y0, y1, z0, z1) => collision(bridge + x0, bridge + x1, ledge + y0, ledge + y1,
+        MAW_LANE + z0, MAW_LANE + z1, true) }) : null;
+    if (under) deep.userData.finish = material => under.finish(material, 'lift');
     const mawLook = Maw?.create({ THREE, group: part.group, entry: bridge, lane: MAW_LANE, level: ledge, collision,
+      deep: under ? deep : null,
       // The approach reuses the resident R3-01 props (loaded first in ready()).
       kit: () => stair?.kit?.() || null, floorAt: (u, v) => sampleFloor(u, v)?.y ?? null });
     if (!mawLook) {
@@ -716,7 +730,11 @@
       release(live, resources([]));
       throw new Error('R3 architecture exceeded its independent stage budget');
     }
-    function sample(u, v) {
+    function sample(u, v, y = 0) {
+      if (under && y < DEEP) {
+        const h = under.floor(u - bridge, v - MAW_LANE);
+        return h == null ? null : { y: ledge + h, ceiling: Infinity, steps: true };
+      }
       const left = mawLook ? MAW_LANE - Maw.limits.half : -22;
       if (u < start || u > rim || v < left || v > HALL_V + RADIUS) return null;
       if (mawLook && u >= bridge - 0.04 && Math.abs(v - MAW_LANE) <= Maw.limits.half) {
@@ -731,15 +749,15 @@
     }
 
     function nearFloor(x, z, y) {
-      const hit = sample(uAt(x), vAt(z));
+      const hit = sample(uAt(x), vAt(z), y);
       return hit && Math.abs(hit.y - y) < 1.8 ? hit : null;
     }
 
     function blocks(x, z, y, px, pz, radius) {
       const u = uAt(x), v = vAt(z);
       const previous = nearFloor(px, pz, y);
-      const target = sample(u, v);
-      if (blocksPassage(u, v, previous, target, radius, sample)) return true;
+      const target = sample(u, v, y);
+      if (blocksPassage(u, v, previous, target, radius, (a, b) => sample(a, b, y))) return true;
       const r = Math.hypot(u - HALL_U, v - HALL_V);
       if (r > 15.8 - radius && r < 16.16 + radius && target.y > BASIN + 0.62 &&
           !inStair(Math.atan2(v - HALL_V, u - HALL_U))) return true;
@@ -750,6 +768,18 @@
       const u = uAt(x), v = vAt(z);
       const inside = !!nearFloor(x, z, y);
       root.visible = inside;
+      if (under) {
+        const below = inside && y < DEEP;
+        deep.visible = below;
+        under.update(below);
+        if (below) {
+          for (const section of parts) section.group.visible = false;
+          stair?.update(u, y, v, false, false);
+          hallLook?.update(u, v, false, false);
+          mawLook?.update(u, v, false);
+          return;
+        }
+      }
       const inHall = inside && hallFloor(u, v) !== null;
       parts[0].group.visible = inHall || inside && u <= HALL_ENTRY;
       parts[1].group.visible = inside && u > TURN - 4 && v > -5;
@@ -761,6 +791,39 @@
       mawLook?.update(u, v, inside);
     }
     const stair = stairPlan && Stair.create(THREE, root, parts[0].group, stairPlan);
+
+    // The lift ride: standing in the docked cabin (top or bottom) for a moment
+    // closes the view, carries the hero to the other dock and reopens it.
+    // The cabin is the same model at both ends, so Sîn arrives inside it.
+    const ride = { state: 'idle', armed: false, wait: 0, fade: 0, from: 0 };
+    function cabinAt(u, v, y) {
+      if (!under || Math.hypot(u - bridge - Maw.lift.center[0], v - MAW_LANE - Maw.lift.center[1]) > Maw.lift.cabinRadius) return 0;
+      const top = ledge + Maw.lift.deck;
+      if (Math.abs(y - top) < 0.9) return 1;
+      if (Math.abs(y - top - Maw.lift.drop) < 0.9) return -1;
+      return 0;
+    }
+    function lift(x, y, z, dt) {
+      if (!under || mawLook?.status.phase !== 'ready') return null;
+      const cab = cabinAt(uAt(x), vAt(z), y);
+      let shift = null;
+      if (ride.state === 'idle') {
+        if (!cab) { ride.armed = true; ride.wait = 0; }
+        else if (ride.armed && (ride.wait += dt) > 1.1) { ride.state = 'closing'; ride.from = cab; }
+      } else if (ride.state === 'closing') {
+        if (cab !== ride.from) ride.state = 'opening';
+        else if ((ride.fade = Math.min(1, ride.fade + dt / 0.7)) === 1) {
+          shift = [0, ride.from > 0 ? Maw.lift.drop : -Maw.lift.drop, 0];
+          ride.state = 'travel';
+          ride.wait = 0;
+        }
+      } else if (ride.state === 'travel') {
+        if ((ride.wait += dt) > 0.6) ride.state = 'opening';
+      } else if ((ride.fade = Math.max(0, ride.fade - dt / 0.8)) === 0) {
+        Object.assign(ride, { state: 'idle', armed: false, wait: 0 });
+      }
+      return { fade: ride.fade, shift, state: ride.state };
+    }
 
     // Index the boxes by camera-pivot cell, with enough padding for the
     // game's longest follow-camera ray. Unrelated wings get no R3 boxes.
@@ -779,7 +842,7 @@
     const stageCost = { geometryBytes, batches: batchCount, textures: 0 };
     let mawPending = null;
     return {
-      root, nearFloor, blocks, update, budget, cost: stageCost,
+      root, nearFloor, blocks, update, lift, budget, cost: stageCost, underworld: under,
       // Prepare the independent stage while the transition curtain is black.
       async ready(renderer) {
         mawLook?.configure(renderer);
@@ -880,6 +943,18 @@
         ? { u: MAW_ENTRY + 0.8, v: MAW_LANE + 0.6, y: MAW_LEVEL, yaw: -Math.PI / 2 }
         : { u: HALL_U, v: -4.2, y: ABYSS_LANDING, yaw: -Math.PI / 2 }]]
       .forEach(([id, ar, en, spawn]) => SinAreas.register({ id, stage: 'r3', group: 'r3', ar, en, spawn }, 'r3-sealed-zone'));
+    // U1: the underworld reached by the Maw lift, in the same stage space.
+    const lift = window.SinR3Maw?.lift, plan = window.SinR3Underworld?.plan;
+    if (lift && plan) {
+      SinAreas.group('u1', 'إركالا: العالم السفلي U1', 'Irkalla: underworld U1', 71);
+      [['U1-01', 'مرسى الأرواح', 'Anchorage of Souls'], ['U1-02', 'طريق الموتى', 'Road of the Dead'],
+        ['U1-03', 'بوابة إركالا', 'Gate of Irkalla']].forEach(([id, ar, en]) => {
+        const [x, y, z] = plan.spawns[id];
+        SinAreas.register({ id, stage: 'r3', group: 'u1', ar, en, spawn: {
+          u: MAW_ENTRY + lift.center[0] + x, v: MAW_LANE + lift.center[1] + z,
+          y: MAW_LEVEL + lift.drop + y, yaw: Math.PI / 2 } }, 'r3-sealed-zone');
+      });
+    }
   }
   window.SinR3SealedZone = { mount, resources, release, passageId: SEAL };
 })();

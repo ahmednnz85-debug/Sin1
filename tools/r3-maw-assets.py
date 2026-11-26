@@ -158,10 +158,7 @@ def package(source, destination, selection, chain_indices=None):
 
 
 if __name__ == "__main__":
+    # The authored elevator of R3_MawOfTheAbyss_Assets was retired: the
+    # approved lift and the ruins-only pack come from tools/r3-maw-elevator.py.
     OUT.mkdir(parents=True, exist_ok=True)
-    maw_source = ASSETS / "R3_MawOfTheAbyss_Assets.glb"
-    with TemporaryDirectory() as directory:
-        indices = Path(directory) / "chain.bin"
-        subprocess.run(["node", str(ROOT / "tools" / "r3-maw-chain-lod.mjs"), str(maw_source), str(indices)], check=True)
-        package(maw_source, OUT / "elevator-and-ruins.glb", MAW, indices.read_bytes())
     package(ASSETS / "اصول قاعة الختم.glb", OUT / "left-guardian.glb", GUARDIAN)
