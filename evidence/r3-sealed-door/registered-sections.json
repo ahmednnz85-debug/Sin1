@@ -1,0 +1,59 @@
+{
+  "source": "report.json",
+  "mode": "post-handoff scene observed during actual Developer Hub play-through",
+  "checks": {
+    "onlyRegisteredR3Sections": true
+  },
+  "sceneRoots": [
+    "SinHeroRoot",
+    "R3Stage"
+  ],
+  "observedGroupIds": [
+    "R3-01",
+    "R3-01",
+    "R3-02",
+    "R3-03"
+  ],
+  "uniquePlayableAreaIds": [
+    "R3-01",
+    "R3-02",
+    "R3-03"
+  ],
+  "registeredAreaIds": [
+    "R3-01",
+    "R3-02",
+    "R3-03"
+  ],
+  "note": "The first enumeration included the authored R3-01 lighting group. The corrected runner selects architecture groups with material slots.",
+  "directEntryVerification": {
+    "url": "http://127.0.0.1:3000/index.html?dev=1&level=R3-01",
+    "browser": "159.0.8154.6",
+    "device": "iPhone viewport/UA, Chromium SwiftShader",
+    "fps": 8,
+    "errors": [],
+    "checks": {
+      "onlyRegisteredR3Sections": true
+    },
+    "angles": {},
+    "views": {},
+    "sections": {
+      "sceneChildren": [
+        "R3-01_BuriedYearsStair",
+        "R3-02_FirstSealHall",
+        "R3-03_MouthOfTheAbyss",
+        "R3-01_Lights",
+        "FirstSeal_Lighting"
+      ],
+      "sectionIds": [
+        "R3-01",
+        "R3-02",
+        "R3-03"
+      ],
+      "registered": [
+        "R3-01",
+        "R3-02",
+        "R3-03"
+      ]
+    }
+  }
+}

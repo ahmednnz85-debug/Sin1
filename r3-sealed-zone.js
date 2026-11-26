@@ -22,9 +22,9 @@
     stair: Object.freeze({ textureMiB: 48, glbMiB: 24, drawCalls: 110, trianglesInView: 900000 })
   });
 
-  function mount(THREE, passage, hall, origin) {
+  function mount(THREE, passage, hall, origin, { entranceOnly = false } = {}) {
     const root = new THREE.Group();
-    root.name = 'R3_SealedZone';
+    root.name = entranceOnly ? 'R3DoorStairEntrance' : 'R3_SealedZone';
     root.position.set(passage.position[0], 0, passage.position[2]);
     root.scale.x = -1;
     root.visible = false;
@@ -49,8 +49,11 @@
     const Stair = window.SinR3Stair || null;
     const Hall = window.SinR3Hall || null;
     const hallDressed = () => !!Hall && part === parts[1];
-    const dressed = () => !!Stair && part === parts[0];
+    const dressed = () => !entranceOnly && !!Stair && part === parts[0];
     const stairArches = [], stairTunnels = [];
+    const uAt = x => passage.position[0] - x;
+    const vAt = z => z - passage.position[2];
+    const probes = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.707, 0.707], [0.707, -0.707], [-0.707, 0.707], [-0.707, -0.707]];
 
     function section(id, name) {
       const group = new THREE.Group();
@@ -115,9 +118,17 @@
         const falloff = slot === 'Shaft' ? Math.max(0.12, 1 + (y + 19) / 18) :
           part === parts[1] ? 0.88 + 0.11 * Math.exp(-Math.hypot(x - HALL_U, z - HALL_V) / 9) :
           0.83 + 0.16 * Math.cos((x + z) * 0.14) ** 2;
-        const light = Math.max(0.12, directional * strength * falloff);
+        const light = entranceOnly
+          ? (0.33 + 0.52 * Math.exp(-Math.max(0, x - start) / 8)) * strength
+          : Math.max(0.12, directional * strength * falloff);
         data.color.push(light, light, light);
-        data.uv.push(uv ? uv.getX(j) : (x + 0.3 * z) / 2, uv ? uv.getY(j) : (y + 0.3 * z) / 2);
+        if (entranceOnly) {
+          const scale = 1 / (Stair?.tileMetres(slot) || 2);
+          const nx = normal.getX(j), ny = normal.getY(j), nz = normal.getZ(j);
+          if (Math.abs(ny) > 0.6) data.uv.push(x * scale, z * scale);
+          else if (Math.abs(nx) > Math.abs(nz)) data.uv.push(z * scale, y * scale);
+          else data.uv.push(x * scale, y * scale);
+        } else data.uv.push(uv ? uv.getX(j) : (x + 0.3 * z) / 2, uv ? uv.getY(j) : (y + 0.3 * z) / 2);
       }
       geo.dispose();
     }
@@ -294,14 +305,62 @@
       if (south) solidBox('Walls', x0, x1, y - 0.4, y + height, z1, z1 + 0.5);
     }
 
-    // Keep the authored opening, floor and reveal. Widen only beyond the reveal.
-    // The independent stage starts beyond the old palace wall.
-    solidBox('Walls', start - 0.4, start, -0.45, 8.4, -3.68, 3.68);
+    function sampleFloor(u, v) {
+      for (const f of floors) {
+        if (u >= f.x0 && u <= f.x1 && v >= f.z0 && v <= f.z1) {
+          return { y: f.height(u, v), ceiling: f.ceiling(u, v), steps: f.steps };
+        }
+      }
+      return null;
+    }
+
+    function blocksPassage(u, v, previous, target, radius, sample) {
+      if (!previous || !target || Math.abs(target.y - previous.y) > 0.37) return true;
+      for (const [du, dv] of probes) {
+        const probe = sample(u + du * radius, v + dv * radius);
+        if (!probe || Math.abs(probe.y - target.y) > 0.47) return true;
+      }
+      for (const b of obstacles) {
+        if (b.enabled && !b.enabled()) continue;
+        if (b.y0 >= target.y + 1.9 || b.y1 <= target.y + 0.08) continue;
+        const dx = u - Math.max(b.x0, Math.min(u, b.x1));
+        const dz = v - Math.max(b.z0, Math.min(v, b.z1));
+        if (dx * dx + dz * dz < radius * radius) return true;
+      }
+      return false;
+    }
+
+    // Keep the one-way cap in the independent stage. At the open throne
+    // hall doorway, instead close only the junction outside the path.
+    if (entranceOnly) {
+      const jamb = passage.width * 0.5 - 0.06;
+      solidBox('Walls', start - 0.04, start, -0.45, 8.4, -3.68, -jamb);
+      solidBox('Walls', start - 0.04, start, -0.45, 8.4, jamb, 3.68);
+      solidBox('Vault', start - 0.04, start, passage.height, 8.4, -jamb, jamb);
+    } else solidBox('Walls', start - 0.4, start, -0.45, 8.4, -3.68, 3.68);
     const flightStart = start + 0.86, flightEnd = TURN - HALF - 0.68;
     const turnEnd = HALF + 0.68, lowerTurn = HALL_V - HALF - 0.68;
     landing(start, flightStart, -3.68, 3.68, 0, 8.4, [false, false, true, true]);
     tunnel(alongU, flightStart, flightEnd, HALF, 0, -9, 54, 8.4, [-1, 1], 5);
     landing(flightEnd, TURN + 3.68, -3.68, turnEnd, -9, 8.4, [false, true, true, false]);
+    if (entranceOnly) {
+      const maps = new Map();
+      const cost = bake(part, slot => Stair?.entranceMaterial(THREE, slot, maps) || basicStone(slot));
+      const limits = (u, v) => u < start
+        ? (u >= start - 2 && Math.abs(v) < passage.width * 0.41 ? { y: 0, ceiling: passage.height } : null)
+        : sampleFloor(u, v);
+      const handoff = flightStart + 1.45;
+      return {
+        root, cost, start, handoff, ready: () => Promise.all([...maps.values()].map(map => map.ready)),
+        floorAt(x, z) { return sampleFloor(uAt(x), vAt(z)); },
+        crossed(x, z) { return uAt(x) >= handoff && !!sampleFloor(uAt(x), vAt(z)); },
+        blocks(x, z, px, pz, radius) {
+          const u = uAt(x), v = vAt(z);
+          return blocksPassage(u, v, limits(uAt(px), vAt(pz)), limits(u, v), radius, limits);
+        },
+        cameraBoxesAt() { return cameraBoxes; }
+      };
+    }
     const cross = (d, y, t) => alongV(d, y, t + TURN);
     // An offset transverse tunnel shares the same orientation as alongV.
     cross.isTransverse = true;
@@ -600,8 +659,12 @@
     box('Shaft', rim, far, bottom - 1, bottom, -30, -4, 0.48);
     box('Shaft', bridge, far + 1, top, top + 0.5, -30, -4, 0.54);
 
-    let geometryBytes = 0, batchCount = 0;
-    for (const { group, batches } of parts) {
+    function basicStone(slot) {
+      return new THREE.MeshBasicMaterial({ color: slots[slot], vertexColors: true, fog: false, toneMapped: false, side: THREE.DoubleSide });
+    }
+
+    function bake({ group, batches }, materialForSlot) {
+      let geometryBytes = 0, batchCount = 0;
       for (const [slot, data] of batches) {
         const g = new THREE.BufferGeometry();
         const lit = data.normal.length > 0;
@@ -612,8 +675,7 @@
         g.computeBoundingSphere();
         geometryBytes += Object.values(g.attributes).reduce((total, attr) => total + attr.array.byteLength, 0);
         batchCount++;
-        const m = lit ? (group === parts[1].group ? hallLook.stone(slot) : Stair.material(THREE, slot)) :
-          new THREE.MeshBasicMaterial({ color: slots[slot], vertexColors: true, fog: false, toneMapped: false, side: THREE.DoubleSide });
+        const m = materialForSlot(slot, lit);
         m.name = group.name + '/' + slot;
         const mesh = new THREE.Mesh(g, m);
         mesh.name = slot;
@@ -626,6 +688,15 @@
         group.add(mesh);
       }
       batches.clear();
+      return { geometryBytes, batches: batchCount };
+    }
+
+    let geometryBytes = 0, batchCount = 0;
+    for (const section of parts) {
+      const baked = bake(section, (slot, lit) => lit
+        ? (section === parts[1] ? hallLook.stone(slot) : Stair.material(THREE, slot)) : basicStone(slot));
+      geometryBytes += baked.geometryBytes;
+      batchCount += baked.batches;
     }
 
     if (geometryBytes > budget.geometryBytes || batchCount > budget.batches) {
@@ -633,20 +704,13 @@
       release(live, resources([]));
       throw new Error('R3 architecture exceeded its independent stage budget');
     }
-    const uAt = x => passage.position[0] - x;
-    const vAt = z => z - passage.position[2];
     function sample(u, v) {
       if (u < start || u > rim || v < -22 || v > HALL_V + RADIUS) return null;
       const h = hallFloor(u, v);
       if (h !== null) {
         return { y: h, ceiling: domeY(Math.hypot(u - HALL_U, v - HALL_V)), steps: true };
       }
-      for (const f of floors) {
-        if (u >= f.x0 && u <= f.x1 && v >= f.z0 && v <= f.z1) {
-          return { y: f.height(u, v), ceiling: f.ceiling(u, v), steps: f.steps };
-        }
-      }
-      return null;
+      return sampleFloor(u, v);
     }
 
     function nearFloor(x, z, y) {
@@ -654,24 +718,11 @@
       return hit && Math.abs(hit.y - y) < 1.8 ? hit : null;
     }
 
-    const probes = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.707, 0.707], [0.707, -0.707], [-0.707, 0.707], [-0.707, -0.707]];
     function blocks(x, z, y, px, pz, radius) {
       const u = uAt(x), v = vAt(z);
       const previous = nearFloor(px, pz, y);
       const target = sample(u, v);
-      if (!previous || !target || Math.abs(target.y - previous.y) > 0.37) return true;
-      for (const [du, dv] of probes) {
-        const su = u + du * radius, sv = v + dv * radius;
-        const probe = sample(su, sv);
-        if (!probe || Math.abs(probe.y - target.y) > 0.47) return true;
-      }
-      for (const b of obstacles) {
-        if (b.enabled && !b.enabled()) continue;
-        if (b.y0 >= target.y + 1.9 || b.y1 <= target.y + 0.08) continue;
-        const dx = u - Math.max(b.x0, Math.min(u, b.x1));
-        const dz = v - Math.max(b.z0, Math.min(v, b.z1));
-        if (dx * dx + dz * dz < radius * radius) return true;
-      }
+      if (blocksPassage(u, v, previous, target, radius, sample)) return true;
       const r = Math.hypot(u - HALL_U, v - HALL_V);
       if (r > 15.8 - radius && r < 16.16 + radius && target.y > BASIN + 0.62 &&
           !inStair(Math.atan2(v - HALL_V, u - HALL_U))) return true;

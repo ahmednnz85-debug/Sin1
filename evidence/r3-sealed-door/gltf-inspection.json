@@ -1,0 +1,119 @@
+{
+  "file": "assets/الباب المختوم.glb",
+  "bytes": 9111320,
+  "sha256": "44c2e54be37c0b55caa132b65d648bb0359b516d5e316eba1247b00a17c887fe",
+  "errors": 0,
+  "warnings": 0,
+  "info": 3,
+  "hints": 155,
+  "meshes": 93,
+  "triangles": 86206,
+  "materials": [
+    "Front",
+    "Back",
+    "ArchSide",
+    "SideStone",
+    "GoldRings"
+  ],
+  "hinges": [
+    {
+      "name": "Door_Left_Hinge_Pivot",
+      "translation": [
+        -1.8429946524064171,
+        0,
+        0
+      ],
+      "children": [
+        "Door_Left_Box",
+        "Door_Left_Box_FrontSeal",
+        "Door_Left_Box_BackSeal",
+        "Door_Left_Front_Relief",
+        "Door_Left_Back_Relief",
+        "Door_Left_TopCap",
+        "Door_Left_TopCap_FrontSeal",
+        "Door_Left_TopCap_BackSeal",
+        "Door_Left_BottomCap",
+        "Door_Left_BottomCap_FrontSeal",
+        "Door_Left_BottomCap_BackSeal",
+        "Door_Left_OuterCap",
+        "Door_Left_OuterCap_FrontSeal",
+        "Door_Left_OuterCap_BackSeal",
+        "Door_Left_InnerCap",
+        "Door_Left_InnerCap_FrontSeal",
+        "Door_Left_InnerCap_BackSeal",
+        "Symbol_01_Dark_Moon",
+        "Symbol_03_First_Quarter",
+        "Symbol_05_Full_Moon",
+        "Symbol_07_Last_Quarter",
+        "Central_Left_Outer_Collar",
+        "Central_Left_Inner_Collar"
+      ]
+    },
+    {
+      "name": "Door_Right_Hinge_Pivot",
+      "translation": [
+        1.8429946524064171,
+        0,
+        0
+      ],
+      "children": [
+        "Door_Right_Box",
+        "Door_Right_Box_FrontSeal",
+        "Door_Right_Box_BackSeal",
+        "Door_Right_Front_Relief",
+        "Door_Right_Back_Relief",
+        "Door_Right_TopCap",
+        "Door_Right_TopCap_FrontSeal",
+        "Door_Right_TopCap_BackSeal",
+        "Door_Right_BottomCap",
+        "Door_Right_BottomCap_FrontSeal",
+        "Door_Right_BottomCap_BackSeal",
+        "Door_Right_OuterCap",
+        "Door_Right_OuterCap_FrontSeal",
+        "Door_Right_OuterCap_BackSeal",
+        "Door_Right_InnerCap",
+        "Door_Right_InnerCap_FrontSeal",
+        "Door_Right_InnerCap_BackSeal",
+        "Symbol_02_Waxing_Crescent",
+        "Symbol_04_Waxing_Gibbous",
+        "Symbol_06_Waning_Gibbous",
+        "Symbol_08_Waning_Crescent",
+        "Central_Right_Outer_Collar",
+        "Central_Right_Inner_Collar"
+      ]
+    }
+  ],
+  "seals": [
+    "Symbol_01_Dark_Moon",
+    "Symbol_02_Waxing_Crescent",
+    "Symbol_03_First_Quarter",
+    "Symbol_04_Waxing_Gibbous",
+    "Symbol_05_Full_Moon",
+    "Symbol_06_Waning_Gibbous",
+    "Symbol_07_Last_Quarter",
+    "Symbol_08_Waning_Crescent"
+  ],
+  "sharedImage": true,
+  "originalPngSizes": [
+    [
+      1122,
+      1402
+    ],
+    [
+      1122,
+      1402
+    ],
+    [
+      1024,
+      256
+    ],
+    [
+      512,
+      1024
+    ],
+    [
+      1122,
+      1402
+    ]
+  ]
+}
