@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Run against the game's static server. NODE_PATH=… THREE_DIR=…
-   node tools/u1-harbor-check.cjs <output> <index URL> [--checks-only|--stills-only|--camera-only] */
+   node tools/u1-harbor-check.cjs <output> <index URL> [--checks-only|--stills-only|--camera-only] [--harbor-only] */
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -11,6 +11,7 @@ const out = process.argv[2] || 'harbor-check';
 const base = process.argv[3] || 'http://127.0.0.1:8080/index.html';
 const checksOnly = process.argv.includes('--checks-only');
 const cameraOnly = process.argv.includes('--camera-only');
+const harborOnly = process.argv.includes('--harbor-only');
 const stillsOnly = process.argv.includes('--stills-only');
 const report = { browser: '', viewport: '852×393, iPhone UA/touch, Chromium/SwiftShader', levels: {}, errors: [] };
 const write = (name, jpg) => fs.writeFileSync(path.join(out, name + '.jpg'), Buffer.from(jpg, 'base64'));
@@ -83,7 +84,10 @@ async function open(browser, level) {
         requestAnimationFrame(frame);
       }) };
     __R.render = () => {};
+    const scenery = stage.underworld.status.ruinLandmarks;
+    const offstage = [[51, 41], [81, -40]].map(([x, z]) => at(x, 0, z, true));
     return { spawn: hero.position.toArray(), readyMs: __sinDev.ms, state: PalaceInterior.state(),
+      scenery: scenery ? { landmarks: scenery, unreachable: offstage.every(p => game.blocked(p.x, p.z)) } : null,
       blocked: game.blocked(hero.position.x, hero.position.z),
       underworldAssets: stage.underworld.status.phase };
   });
@@ -277,16 +281,18 @@ async function main() {
   const views = {
     'U1-01': [
       { name: 'harbor', frames: 1, camera: [[-16.2, 1.77, 1.18], [-16.2, 1.77, 1.18]], target: [[0.2, 3.7, 4.2], [0.2, 3.7, 4.2]],
-        hero: [[-10.4, 0, 5.82], [-10.4, 0, 5.82]], fov: 69 },
+        hero: [[-10.4, 0, 4.92], [-10.4, 0, 4.92]], fov: 69 },
       { name: 'harbor-vista', frames: 1, camera: [[-8.5, 2.45, 2.2], [-8.5, 2.45, 2.2]], target: [[8, 3.8, 10.7], [8, 3.8, 10.7]],
         hero: [[-5.6, 0, 3.9], [-5.6, 0, 3.9]], fov: 51 },
+      { name: 'harbor-right', frames: 1, camera: [[-9.5, 3.03, -4.10], [-9.5, 3.03, -4.10]],
+        target: [[12, 4.1, -12], [12, 4.1, -12]], fov: 54, hero: [[-5.6, 0, -4.8], [-5.6, 0, -4.8]] },
       { name: 'dais-engravings', frames: 1, camera: [[-7.7, 1.62, 1.82], [-7.7, 1.62, 1.82]],
         target: [[-3.1, .67, .47], [-3.1, .67, .47]], fov: 53,
         hero: [[-6.3, 0, -2.7], [-6.3, 0, -2.7]] },
       { name: 'harbor-cabin', frames: 1, camera: [[-4.6, 1.94, 0], [-4.6, 1.94, 0]], target: [[0, 2.12, 0], [0, 2.12, 0]],
         hero: [[-1.37, .58, 0], [-1.37, .58, 0]], fov: 48 },
       { frames: 16, camera: [[-16.2, 1.77, 1.18], [-12.8, 2.10, 2.5]], target: [[0.2, 3.7, 4.2], [0.7, 3.5, 2.0]],
-        hero: [[-10.4, 0, 5.82], [-10.4, 0, 5.82]], fov: 69 },
+        hero: [[-10.4, 0, 4.92], [-10.4, 0, 4.92]], fov: 69 },
       { frames: 17, camera: [[-5.4, 2.27, 0], [-3.58, 2.14, .02]], target: [[0.5, 2.31, 0], [1, 2.14, 0]],
         walk: [-3, .58, 0], fov: 49 },
       { frames: 21, hero: [[.1, .58, .08], [.1, .58, .08]] }
@@ -301,13 +307,14 @@ async function main() {
   };
   try {
     for (const level of Object.keys(views)) {
+      if (harborOnly && level !== 'U1-01') continue;
       const { page, launched, url } = await open(browser, level);
       try {
         const result = report.levels[level] = { ...launched, url, frames: {} };
         result.audit = await audit(page, level);
         save();
         console.log(level, JSON.stringify(result.audit));
-        if (level === 'R3-03') { result.ride = await ride(page); save(); }
+        if (level === 'R3-03' && !cameraOnly) { result.ride = await ride(page); save(); }
         if (!checksOnly) for (const view of views[level]) {
           if (cameraOnly && view.camera) continue;
           if (view.name) await capture(page, level, view, null);
@@ -331,7 +338,10 @@ async function main() {
         assert.ok(d.poses.every(p => p.ticks > 0 && !p.blocked), JSON.stringify(d.poses));
       }
     }
-    assert.deepEqual(report.levels['R3-03'].ride,
+    if (report.levels['U1-01'].scenery) {
+      assert.deepEqual(report.levels['U1-01'].scenery, { landmarks: 7, unreachable: true });
+    }
+    if (!cameraOnly && !harborOnly) assert.deepEqual(report.levels['R3-03'].ride,
       [{ offset: -420, veil: 1, veilGone: true, visible: 'U1' }, { offset: 420, veil: 1, veilGone: true, visible: 'R3' }]);
   } finally {
     save();

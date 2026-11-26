@@ -32,7 +32,7 @@
   // between the cabin roof and the crown, so the crown hangs from the ceiling
   // with the chains carried all the way down. Cuts fall on link joints.
   const LIFT = Object.freeze({
-    scale: 7, floor: -0.38, base: -0.5, roofCut: 0.137, crownCut: 0.1985, top: 0.5,
+    scale: 7, floor: -0.38, roofCut: 0.137, crownCut: 0.1985, top: 0.5,
     strand: [0.19, 0.31], courses: 16, arrivalCourses: 26, rise: 1.44
   });
   const LIFT_PERIOD = (LIFT.crownCut - LIFT.roofCut) * LIFT.scale;

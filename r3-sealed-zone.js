@@ -824,7 +824,7 @@
           shift = [0, ride.from > 0 ? Maw.lift.drop : -Maw.lift.drop, 0];
           ride.state = 'travel';
           ride.wait = 0;
-          // Riding up from a U1 chapter start: the veil holds until R3 is dressed.
+          // Keep the veil closed until the destination has its dressing.
           ride.hold = ride.from < 0 ? loadUpper() : stageRenderer && under.ready(stageRenderer);
           ride.held = false;
           ride.hold?.then(() => { ride.held = true; });

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Extract the U1-01 materials from the two authored reference sheets."""
 from pathlib import Path
-from tempfile import TemporaryDirectory
-import importlib.util
+from tempfile import gettempdir
+import io
 import json
 import math
 import struct
-import sys
 from random import Random
 
 import numpy as np
@@ -124,27 +123,16 @@ save('roof-rib', crop(ROOF, (126, 7, 143, 109), (64, 384)).transpose(Image.Trans
 save('roof-band', tile(crop(ROOF, (9, 118, 611, 169), (1024, 96))))
 save('roof-oculus', tile(crop(ROOF, (9, 216, 611, 252), (1024, 80))))
 
-# The forms read in silhouette at 50–130 m. Keep just small color mip chains
-# for the cliff, arcade and spire; the Harbor shader supplies the aerial light.
-sys.dont_write_bytecode = True
-spec = importlib.util.spec_from_file_location('maw_assets', Path(__file__).with_name('r3-maw-assets.py'))
-maw = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(maw)
-source = ASSETS / 'r3/maw/abyss-ruins.glb'
+# One shared atlas for the authored city. At scene distances the color atlas
+# carries the weathering and blue falls; the original three 2K maps stay in the source.
+source = ASSETS / 'البنايات البعيدة.glb'
 raw = source.read_bytes()
 json_size, = struct.unpack_from('<I', raw, 12)
 doc = json.loads(raw[20:20 + json_size])
-for material in doc['materials']:
-    material.pop('normalTexture', None)
-    material.pop('occlusionTexture', None)
-    material['pbrMetallicRoughness'].pop('metallicRoughnessTexture', None)
-    material['pbrMetallicRoughness'].update(metallicFactor=0, roughnessFactor=1)
-meta = json.dumps(doc, separators=(',', ':')).encode()
-meta += b' ' * (-len(meta) % 4)
-tail = raw[20 + json_size:]
-with TemporaryDirectory() as directory:
-    clean = Path(directory) / 'ruins.glb'
-    clean.write_bytes(struct.pack('<4sIII4s', b'glTF', 2, 20 + len(meta) + len(tail), len(meta), b'JSON') + meta + tail)
-    maw.MAP_LIMITS = {'T_Maw_ashlar_base': 256, 'T_Maw_rock_base': 256}
-    maw.package(clean, OUT / 'distant-ruins.glb', {
-        'Abyss_Cliff_Ruins': None, 'Abyss_Bridge_Ruined': None, 'Abyss_Rock_Spire': None})
+texture = doc['materials'][0]['pbrMetallicRoughness']['baseColorTexture']['index']
+image = doc['images'][doc['textures'][texture]['source']]
+view = doc['bufferViews'][image['bufferView']]
+start = 28 + json_size + view.get('byteOffset', 0)
+with Image.open(io.BytesIO(raw[start:start + view['byteLength']])) as color:
+    color.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+    color.convert('RGB').save(Path(gettempdir()) / 'sin1-harbor-skyline-atlas.webp', 'WEBP', quality=86, method=6)

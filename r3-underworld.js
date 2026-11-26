@@ -139,7 +139,9 @@
               float hollow = harborNoise(uLocal * vec3(0.11, 0.09, 0.10));
               float stratum = harborNoise(uLocal * vec3(0.44, 0.07, 0.39));
               float detail = (0.48 + 0.66 * stratum) * (0.61 + 0.55 * hollow);
-              outgoingLight = diffuseColor.rgb * vec3(0.18, 0.25, 0.29) * rim * detail;
+              float wetFall = smoothstep(0.025, 0.17, min(diffuseColor.g, diffuseColor.b) - diffuseColor.r * 1.09);
+              outgoingLight = diffuseColor.rgb * (vec3(0.26, 0.35, 0.42) * rim * detail
+                + vec3(0.07, 0.30, 0.36) * wetFall);
               float cloud = harborNoise(uLocal * vec3(0.048, 0.21, 0.048));
               float beneath = 1.0-smoothstep(-30.0,-6.0,uH);
               fade = clamp(fade*0.59+smoothstep(0.32,0.84,cloud)*beneath*0.42,0.0,0.96);
@@ -427,26 +429,6 @@
     for (const [x, y, z] of BRAZIERS) brazier(x, y, z);
 
     // ---- cavern and shared U1 materials -----------------------------------
-    // Three ruined precincts rise above their retaining cliffs.
-    for (const [x, z, y, width, height, a] of [
-      [19, 37.5, -4.4, 11.0, 18.6, -0.22], [49, 30, -5.3, 13.0, 14.4, -0.6],
-      [73, -29, -3.5, 12.5, 22.8, 0.28]
-    ]) {
-      box('citadel', x, y - 4.3, z, width * 1.26, 8.8, width * 1.48, a);
-      for (let k = 0; k < 6; k++) {
-        const w = width * (1 - k * 0.122), h = height / 6;
-        const dx = x + Math.cos(a) * k * 0.53, dz = z - Math.sin(a) * k * 0.49;
-        const level = y + h * k;
-        box('citadel', dx, level + h * 0.41, dz, w, h * 0.84, w * 1.22, a);
-        for (let p = -2; p <= 2; p++) {
-          if ((k + p * 2 + 6) % 5 === 0) continue;
-          const t = w * p * 0.20;
-          const px = dx - Math.cos(a) * w * 0.51 + Math.sin(a) * t;
-          const pz = dz + Math.sin(a) * w * 0.51 + Math.cos(a) * t;
-          box('citadel', px, level + h * 0.52, pz, 0.88, h * 1.04, w * 0.09, a);
-        }
-      }
-    }
     const shell = new T.SphereGeometry(330, 32, 16).scale(1, 0.55, 1);
     add('cavern', at(shell, -70, 20, -26));
     const materials = new Map();
@@ -456,7 +438,7 @@
       roofStone: [0xb8bec8, 0.88, 'roof-stone'], roofBand: [0xd5be9b, 0.82, 'roof-band'],
       roofRib: [0xe5c494, 0.76, 'roof-rib'], roofOculus: [0xd7c8b4, 0.78, 'roof-oculus']
     };
-    const colours = { ...PALETTE, flame: 0xffa24a, cavern: 0x2c323c, citadel: 0x818886, daisLip: 0x77624a };
+    const colours = { ...PALETTE, flame: 0xffa24a, cavern: 0x2c323c, daisLip: 0x77624a };
     for (const [kind, data] of batches) {
       const geometry = new T.BufferGeometry();
       const count = data.position.length / 3;
@@ -479,7 +461,7 @@
         ? new T.MeshBasicMaterial({ color, fog: false })
         : finish(new T.MeshStandardMaterial({ color, roughness, metalness: 0,
           side: kind === 'cavern' ? T.BackSide : kind.startsWith('roof') ? T.DoubleSide : T.FrontSide }),
-        kind === 'cavern' ? 'shell' : kind === 'paving' ? 'paving' : kind === 'citadel' ? 'distant' : 'stone');
+        kind === 'cavern' ? 'shell' : kind === 'paving' ? 'paving' : 'stone');
       const mesh = new T.Mesh(geometry, material);
       mesh.name = 'U1_' + kind;
       world.add(mesh);
@@ -510,17 +492,10 @@
         script.onerror = reject;
         document.head.appendChild(script);
       });
-      const { KTX2Loader } = await import('three/addons/loaders/KTX2Loader.js');
-      const basis = new KTX2Loader().setTranscoderPath('vendor/basis/').setWorkerLimit(1).detectSupport(renderer);
-      const loader = new T.GLTFLoader().setMeshoptDecoder(root.MeshoptDecoder).setKTX2Loader(basis);
+      const loader = new T.GLTFLoader().setMeshoptDecoder(root.MeshoptDecoder);
       const loadingMaps = Object.entries(surfaces).map(async ([key, [, , file]]) => {
         const material = materials.get(key);
         material.map = await loadMap(file, true);
-        if (key === 'paving') {
-          const retainingWalls = materials.get('citadel');
-          retainingWalls.map = material.map;
-          retainingWalls.needsUpdate = true;
-        }
         material.needsUpdate = true;
       });
       for (const [key, file] of [['daisGold', 'dais-gold'], ['daisBorder', 'dais-border']]) {
@@ -538,15 +513,10 @@
         paving.roughnessMap = rough;
         paving.needsUpdate = true;
       }));
-      let kit, ruins;
-      try {
-        [kit, ruins] = await Promise.all([loader.loadAsync(files + 'architecture.glb'), loader.loadAsync(files + 'distant-ruins.glb'),
-          ...loadingMaps]);
-      } finally {
-        basis.dispose();
-      }
+      const [kit, ruins] = await Promise.all([loader.loadAsync(files + 'architecture.glb'),
+        loader.loadAsync(files + 'distant-ruins.glb'), ...loadingMaps]);
       const stamp = new T.Object3D();
-      function instance(name, geometry, material, positions, sourceTransform = null) {
+      function instance(name, geometry, material, positions) {
         const mesh = new T.InstancedMesh(geometry, material, positions.length);
         mesh.name = name;
         positions.forEach(([position, scale, angle], i) => {
@@ -554,7 +524,6 @@
           stamp.scale.fromArray(scale);
           stamp.rotation.y = angle;
           stamp.updateMatrix();
-          if (sourceTransform) stamp.matrix.multiply(sourceTransform);
           mesh.setMatrixAt(i, stamp.matrix);
         });
         mesh.computeBoundingSphere();
@@ -572,70 +541,34 @@
       instance('U1_Carved_Columns', column.geometry, finish(column.material), plinths.map(([x, y, z, a]) => [L(x, y, z), [8.75, 12.62, 8.75], a]));
       instance('U1_Turquoise_Lamps', lamp.geometry, finish(lampMaterial, 'lamp'), LAMPS.map(([x, y, z, a]) => [L(x, y, z), [6.7, 6.7, 6.7], a]));
 
-      // Setbacks put terraces at different heights along the basin; open
-      // arcades break the skyline and span the gaps between rock promontories.
+      // The authored city is scenery only. Use the nearest terraced complex
+      // on the left, taller ruins set back on the right, and arcades between.
       const sites = {
-        Abyss_Cliff_Ruins: [
-          [19, -19, 36, 1.68, 1.83, 1.85, -0.52], [49, -22, 30, 1.52, 1.51, 1.56, -0.48],
-          [53, -25, 3, 1.4, 1.65, 1.5, -1.2], [42, -24, -41, 1.5, 1.8, 1.5, -1.4],
-          [73, -23, -29, 1.86, 2.0, 1.82, -1.8], [83, -17, 36, 1.48, 1.7, 1.60, -0.38],
-          [91, -26, 64, 1.75, 1.85, 1.65, -0.5], [-25, -25, 49, 1.65, 1.75, 1.70, 0.4],
-          [-8, -24, -46, 1.40, 1.62, 1.45, -0.35], [-49, -27, 53, 1.37, 1.70, 1.55, 0.95]
-        ],
-        Abyss_Bridge_Ruined: [
-          [34, -9, 40, 1.38, 1.55, 1.31, -0.12], [56, -11, 19, 1.46, 2.22, 1.24, -0.6],
-          [57, -7, -39, 1.45, 1.9, 1.22, -0.76], [81, -2, -17, 1.55, 1.68, 1.33, -1.22],
-          [87, 1, 53, 1.36, 1.95, 1.30, -1.82], [-19, -3, 53, 1.36, 1.74, 1.25, -0.24]
-        ],
-        Abyss_Rock_Spire: [
-          [22, -47, 26, 1.45, 3.1, 1.42, -0.40], [28, -60, 38, 2.4, 3.5, 2.1, 0.72],
-          [48, -52, 45, 2.36, 3.3, 2.25, 1.28], [53, -40, 11, 2.5, 3.8, 2.0, 0.56],
-          [59, -55, -39, 2.52, 3.5, 2.52, 1.37], [45, -48, -40, 1.8, 3.0, 1.65, 0.54],
-          [92, -34, -38, 4.0, 4.7, 3.4, 1.31], [108, -32, 25, 4.0, 4.8, 3.1, 0.25],
-          [85, -35, 62, 3.51, 4.9, 2.88, 0.65], [-6, -52, -48, 2.0, 3.5, 1.7, 0.52]
-        ]
+        Cascade_Citadel: [[51, -12, 41, 135, -0.36], [81, -9, -40, 159, 1.25],
+          [125, 4, 9, 151, 2.44]],
+        Upper_Precinct: [[66, -2, 5, 139, 0.52], [51, -8, -32, 113, -0.96],
+          [84, 1, 49, 137, 2.25]],
+        Lower_Terrace: [[28, -25, 41, 132, -0.92], [60, -24, -42, 156, 0.94]],
+        Watchtower: [[70, 4, 59, 121, 0.74], [113, 7, -47, 145, -0.28]],
+        Temple_Stairs: [[40, -9, -48, 108, -0.78], [-8, -6, 35, 113, 0.21]],
+        Round_Arcade: [[69, -6, -26, 119, -0.72]],
+        Bridge_Arcade: [[48, -12, 50, 130, -0.35], [59, -14, -33, 166, 0.32],
+          [103, -5, -54, 146, -1.21]]
       };
-      for (const [name, nodes] of Object.entries(sites)) {
-        const template = ruins.scene.getObjectByName(name);
-        template.position.set(0, 0, 0);
-        template.updateMatrixWorld(true);
-        const groups = [];
-        template.traverse(mesh => {
-          if (!mesh.isMesh) return;
-          groups.push([mesh.geometry, finish(mesh.material, 'distant'), mesh.matrixWorld]);
-        });
-        const positions = nodes.map(([x, y, z, sx, sy, sz, a]) => [L(x, y, z), [sx, sy, sz], a]);
-        for (const [geometry, material, matrix] of groups) instance('U1_' + name, geometry, material, positions, matrix);
+      const ruinMaterial = finish(ruins.scene.children[0].material, 'distant');
+      for (const [name, layout] of Object.entries(sites)) {
+        const source = ruins.scene.getObjectByName(name);
+        const positions = layout.map(([x, y, z, size, a]) => [L(x, y, z), [size, size, size], a]);
+        instance('U1_' + name, source.geometry, ruinMaterial, positions);
       }
       atmosphere();
       status.phase = 'ready';
       status.columns = plinths.length;
       status.lamps = LAMPS.length;
+      status.ruinLandmarks = Object.keys(sites).length;
     }
 
     function atmosphere() {
-      // Each fall has a narrow bright core and soft edges. It empties into
-      // the distance fog at the base instead of ending at a hard ground line.
-      const fall = new T.ShaderMaterial({
-        transparent: true, depthWrite: false, side: T.DoubleSide,
-        vertexShader: `varying vec2 vFall;
-          void main() { vFall=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-        fragmentShader: `varying vec2 vFall;
-          void main() {
-            float border = smoothstep(0.0,0.24,vFall.x) * (1.0-smoothstep(0.74,1.0,vFall.x));
-            float stream = 0.45 + 0.50*sin(vFall.x*28.0 + vFall.y*4.0)*sin(vFall.x*49.0 - vFall.y*12.0);
-            float alpha = border*stream*smoothstep(0.0,0.37,vFall.y)*(1.0-smoothstep(0.94,1.0,vFall.y));
-            gl_FragColor=vec4(0.13,0.57,0.60,alpha*0.78);
-          }`
-      });
-      for (const [x, top, z, w, h, turn] of [[15, 3.2, 28.6, 1.12, 32, 1.25], [45, 2, 18, 2.1, 41, 1.15],
-        [37, 3.5, -25.5, 1.7, 41, 0.93], [65, 10, -18, 1.3, 51, 1.1], [-14, 0, 38.2, 1.25, 29, 0.45]]) {
-        const veil = new T.Mesh(new T.PlaneGeometry(w, h), fall);
-        veil.name = 'U1_Cavern_Fall';
-        veil.rotation.y = turn;
-        veil.position.fromArray(L(x, top - h * 0.5, z));
-        world.add(veil);
-      }
       const beam = new T.ShaderMaterial({
         transparent: true, depthWrite: false, side: T.FrontSide, blending: T.AdditiveBlending,
         vertexShader: `varying vec2 beamUV; varying vec3 beamN; varying vec3 beamV;
