@@ -638,7 +638,9 @@
     const mouth = (d, y, t) => alongU(d, y, t + MAW_LANE);
     tunnel(mouth, HALL_U + 14, MAW_ENTRY, 2.32, -18, MAW_LEVEL, 0, 10, [-1, 1]);
     const bridge = MAW_ENTRY, rim = bridge + (Maw?.limits.far ?? 8), ledge = MAW_LEVEL;
-    const mawLook = Maw?.create({ THREE, group: part.group, entry: bridge, lane: MAW_LANE, level: ledge, collision });
+    const mawLook = Maw?.create({ THREE, group: part.group, entry: bridge, lane: MAW_LANE, level: ledge, collision,
+      // The approach reuses the resident R3-01 props (loaded first in ready()).
+      kit: () => stair?.kit?.() || null, floorAt: (u, v) => sampleFloor(u, v)?.y ?? null });
     if (!mawLook) {
       arch(mouth, bridge - 0.05, bridge + 1.2, ledge, HALF, 9, 1.1);
       box('Platform', bridge, rim, ledge - 1.45, ledge, -22, -12);
@@ -775,6 +777,7 @@
     }
     cameraBoxes.length = 0;
     const stageCost = { geometryBytes, batches: batchCount, textures: 0 };
+    let mawPending = null;
     return {
       root, nearFloor, blocks, update, budget, cost: stageCost,
       // Prepare the independent stage while the transition curtain is black.
@@ -785,8 +788,13 @@
           return { error: error.message };
         });
         if (hallLook) stageCost.hall = await hallLook.load(renderer);
+        // R3-03 streams in behind the hero from here on: by the time the
+        // approach is reached it is textured, compiled and complete.
+        mawPending = mawLook?.prefetch();
         return stageCost;
       },
+      // Resolves once the deferred R3-03 dressing is complete (or failed).
+      settled: () => Promise.resolve(mawPending).then(() => mawLook?.status.phase ?? 'none'),
       stair, maw: mawLook,
       spawn: [passage.position[0] - start - 0.55, 0, passage.position[2]],
       cameraBoxesAt(x, z, y) {

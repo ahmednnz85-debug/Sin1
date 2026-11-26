@@ -12,15 +12,19 @@ url.search = '?dev=1&level=R3-03';
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
 const views = {
   reference: [[0.65, 2.10, 0.1], [12, 3.38, 1.55], 58],
+  wide: [[1.5, 2.3, -1.0], [30, 0, -4], 70],
+  down: [[20.2, 3.4, -1.2], [48, -30, -7], 72],
   left: [[4.20, 2.75, -1.6], [10.7, 2.37, 4.25], 57],
   approach: [[3.80, 1.84, 1.1], [13, 2.26, -0.6], 61],
   deck: [[8.5, 2.35, -0.75], [22.7, 3.1, -0.5], 65],
   rim: [[17.08, 2.74, -0.55], [51, -10.4, -3.55], 62]
 };
 const corridors = [
-  ['corridor-01-from-hall.jpg', [-20.15, 4.93, 12.72], [-13.75, 4.60, 12.96], 59, [-18.25, 3.10, 12.85]],
-  ['corridor-02-turn-and-ramp.jpg', [-8.96, 4.00, 11.05], [-8.96, 2.80, 3.15], 62, [-9.00, 2.04, 8.93]],
-  ['corridor-03-abyss-reveal.jpg', [-4.75, 2.52, 0.0], [12.9, 3.38, -0.75], 58, [-2.20, 0.33, 0.37]]
+  ['corridor-01-from-hall.jpg', [-20.15, 5.2, 20.5], [-20, 4.2, 11], 64, [-20, 3.5, 18.5]],
+  ['corridor-02-first-landing.jpg', [-21.5, 4.6, 14.5], [-9, 3.6, 13], 64, [-20, 3.1, 13]],
+  ['corridor-03-second-landing.jpg', [-10.5, 4.0, 13.5], [-9, 2.6, 2], 66, [-9, 2.2, 12.5]],
+  ['corridor-04-drop.jpg', [-9.0, 3.6, 7.0], [-9, 2.0, -3], 64, [-9, 1.4, 5.5]],
+  ['corridor-05-abyss-reveal.jpg', [-10.5, 3.0, 1.0], [8, 2.5, -1], 62, [-8.5, 0.9, 0.5]]
 ];
 
 async function main() {
@@ -52,6 +56,17 @@ async function main() {
     await page.goto(url.href);
     await page.waitForFunction(() => window.__sinDev?.ready || window.__sinDev?.error, null,
       { timeout: 480000, polling: 500 });
+    // The hub uncovers the area only now: the Maw must already be complete.
+    const entry = await page.evaluate(() => {
+      const game = SinDevHub.game(), room = game.scene.getObjectByName('MawOfTheAbyss_Dressing');
+      __R.render(game.scene, game.camera);
+      return { phase: room?.userData.maw.phase, visible: room?.visible,
+        approach: room?.userData.maw.approach?.phase,
+        frame: __R.domElement.toDataURL('image/jpeg', 0.9).split(',')[1] };
+    });
+    fs.writeFileSync(path.join(out, 'first-frame.jpg'), Buffer.from(entry.frame, 'base64'));
+    report.firstFrame = { phase: entry.phase, roomVisible: entry.visible, approach: entry.approach };
+    report.checks.completeOnEntry = entry.phase === 'ready' && entry.visible === true && entry.approach === 'ready';
     await page.evaluate(() => {
       if (!__sinDev.ready) throw new Error(__sinDev.error);
       document.documentElement.classList.add('sin-dev-clean');
@@ -101,7 +116,7 @@ async function main() {
     report.checks.composition = info.counts.platform === 1 && info.counts.lamassu === 1 &&
       info.counts.supports === 4 && info.status.anchors.reduce((sum, a) => sum + a.links, 0) === info.counts.chainLinks &&
       info.counts.fire === 0;
-    report.checks.solidCanyon = info.gorge.surfaces === 12 && info.gorge.dimensions[1] > 195;
+    report.checks.solidCanyon = info.gorge.surfaces === 13 && info.gorge.dimensions[1] > 195;
     const landmarks = info.composition;
     report.checks.referenceLayout = landmarks.guardian[0] < 0.34 &&
       landmarks.Promontory[0] < landmarks.DistantSpan[0] &&

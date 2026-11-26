@@ -41,7 +41,7 @@ test('the registered Maw spawn connects to the deck and the void blocks the caps
   const THREE = require(path.join(three, 'build/three.cjs'));
   const window = {};
   const ctx = vm.createContext({ window, globalThis: window, THREE, performance, console });
-  for (const file of ['sin-areas.js', 'r3-maw-geology.js', 'r3-maw-dressing.js', 'r3-sealed-zone.js']) {
+  for (const file of ['sin-areas.js', 'r3-maw-geology.js', 'r3-maw-approach.js', 'r3-maw-dressing.js', 'r3-sealed-zone.js']) {
     if (window.SinAreas) ctx.SinAreas = window.SinAreas;
     vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), ctx);
   }
@@ -67,5 +67,31 @@ test('the registered Maw spawn connects to the deck and the void blocks the caps
     assert.ok(stage.blocks(xAt(room.x + 22), zAt(room.z), feet, xAt(room.x + 18.1), zAt(room.z), 0.32));
     assert.ok(!stage.nearFloor(xAt(room.x + 19), zAt(room.z - 9), feet));
     assert.equal(stage.maw.status.phase, 'idle');
+
+    // The dressed approach (arch piers, columns, fallen masonry) keeps the
+    // whole route from the First Seal hall exit to the overlook walkable.
+    const route = [[-20, 20.6], [-20, 13], [-9, 13], [-9, 0], [1.2, 0]];
+    let walk = stage.nearFloor(xAt(room.x - 20), zAt(room.z + 20.6), room.y + 4).y;
+    let [px, pz] = route[0];
+    for (let leg = 1; leg < route.length; leg++) {
+      const [tx, tz] = route[leg];
+      const steps = Math.ceil(Math.hypot(tx - px, tz - pz) / 0.1);
+      const [sx, sz] = [px, pz];
+      for (let i = 1; i <= steps; i++) {
+        const x = sx + (tx - sx) * i / steps, z = sz + (tz - sz) * i / steps;
+        const at = [xAt(room.x + x), zAt(room.z + z)];
+        assert.ok(!stage.blocks(at[0], at[1], walk, xAt(room.x + px), zAt(room.z + pz), 0.32),
+          'approach blocked at ' + x.toFixed(2) + ', ' + z.toFixed(2));
+        walk = stage.nearFloor(at[0], at[1], walk).y;
+        px = x; pz = z;
+      }
+    }
+    // Every dressed arch leaves the authored 2.32 m half-opening clear.
+    const piers = [[-17, 13 + 2.2], [-17, 13 - 2.2], [-9 + 2.2, 10], [-6, 2.2]];
+    for (const [x, z] of piers) {
+      const at = [xAt(room.x + x), zAt(room.z + z)];
+      const f = stage.nearFloor(at[0], at[1], walk + 2) || stage.nearFloor(at[0], at[1], walk);
+      assert.ok(f, 'floor under arch at ' + x + ',' + z);
+    }
   });
 });
