@@ -144,6 +144,22 @@ test('the lift docks in the Maw and at the Anchorage; the U1 route walks to the 
       [-98, -26], [-98, -38.5], [-98, -26], [-139, -26], [-149, -26]];
     let [px, pz] = [-3.5, 0], feet = bottom - 0.58;
     const base = (x, z) => [xAt(cabin[0] + x), zAt(cabin[1] + z)];
+    const surfaceNames = ['U1_roadFloor', 'U1_roadStars', 'U1_roadEdge', 'U1_roadMedallion', 'U1_paving'];
+    const surfaces = surfaceNames.map(name => underworld.root.getObjectByName(name)).filter(Boolean);
+    underworld.root.updateMatrixWorld(true);
+    const ray = new THREE.Raycaster();
+    for (const [first,last,z,level] of [[-40,-16.71,.417,0],[-99,-45.87,-26.431,-6],[-146.02,-125.7,-25.719,-9]]) {
+      for (let x=first;x<last;x+=.157) {
+        const [wx,wz]=base(x,z), y=bottom-lift.deck+level;
+        ray.set(new THREE.Vector3(wx,y+1,wz),new THREE.Vector3(0,-1,0));
+        const visible=ray.intersectObjects(surfaces,false).filter(hit=>Math.abs(hit.point.y-y)<.028);
+        assert.equal(visible.length,1,'one walk surface at '+x.toFixed(3)+','+z);
+        assert.ok(Math.abs(visible[0].point.y-y)<.001,'inlay flush with walk surface');
+      }
+    }
+    const [wx,wz]=base(-63.41,-26.51), y=bottom-lift.deck-6;
+    ray.set(new THREE.Vector3(wx,y-.05,wz),new THREE.Vector3(0,1,0));
+    assert.ok(ray.intersectObjects(surfaces,false).some(hit=>Math.abs(hit.point.y-y)<.001),'closed deck from below');
     feet = underworld.nearFloor(...base(px, pz), bottom).y;
     for (const [tx, tz] of rel.slice(1)) {
       const steps = Math.ceil(Math.hypot(tx - px, tz - pz) / 0.1);
