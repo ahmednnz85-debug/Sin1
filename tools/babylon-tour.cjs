@@ -107,7 +107,7 @@ async function direct(browser, url, tag) {
       ? [['start',[0,2.5,-36],[0,7.5,0]]]
       : [['start',[0,2.5,-36],[0,7.5,0]],['reference',[6.3,2.65,-40],[.2,8.4,3.5]],
         ['paving',[-3,3.1,-30],[.1,.15,-23]],['bazaar',[-6.1,2.4,-49],[-11.2,2.85,-35]],['gate-arch',[0,2.25,-9],[0,4.9,16]],
-        ['palace',[5,3.0,120],[1,8.4,179]],['city',[6,23,73],[-78,15,142]],
+        ['palace',[5,3.0,120],[1,8.4,179]],['palace-moon',[0,3.2,96],[5.6,32,186]],['city',[6,23,73],[-78,15,142]],
         ...(args.includes('--perimeter') ? [['wall-turn',[9,15,68],[20,2.5,72]],
           ['rear-wall',[35.4,8.0,208],[32.2,2.5,218]]] : [])];
     const shots = {};
@@ -242,7 +242,7 @@ async function story(browser) {
       exteriorGone:!__babylonProbe.scene.getObjectByName('BabylonExterior'), memory:PalaceInterior.status().postTeardown}));
     await page.waitForFunction(()=>__babylonProbe.frames.at(-1)?.phase==='DONE',null,{timeout:300000,polling:400}).catch(()=>{});
     assert.ok(palace.state==='DONE' && palace.exteriorGone);
-    assert.ok(market.blood>.95,'story changed to the authored blood sky');
+    assert.ok(market.blood>.95,'the post-gate sky grade reached full intensity');
     report.story={url,walked,crossed,market,palace,errors,requests:downloads.size};
   } finally {
     let frames=[];

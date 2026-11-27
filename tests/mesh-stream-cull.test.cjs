@@ -50,7 +50,7 @@ test('blood sky and skyline are disposed after outdoor teardown', () => {
   assert.match(index, /assets\/سماء سين\.JPG/);
   assert.match(index, /__sinSkyDisposed/);
   assert.match(index, /exterior\+sky disposed \(blood\+skyline\)/);
-  assert.match(index, /redSkyTex=null/);
+  assert.match(index, /disposeTex\(skyTex\);\s+skyTex=null/);
 });
 
 test('K1 preload is lod25 hall; الاستقبال.glb is not in assetList', () => {

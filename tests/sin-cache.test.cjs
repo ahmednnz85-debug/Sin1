@@ -51,10 +51,10 @@ describe('cache-proof boot is wired into the shipped files', () => {
     assert.doesNotMatch(t, /wrap\(ThreeModule\.ImageLoader/);
     assert.doesNotMatch(t, /script\.src = original\.dataset\.src/);
   });
-  it('index.html keeps a golden placeholder sky and pins skyline CPU', () => {
+  it('index.html keeps a dusk placeholder sky and pins skyline CPU', () => {
     const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
     assert.match(html, /function __sinPlaceholderSky/);
-    assert.match(html, /SKY_IMG failed to load/);
+    assert.match(html, /Babylon blood sky failed to load/);
     assert.match(html, /distant_city_ring\.jpg/);
     assert.match(html, /sinKeepCpu=true;t\.userData\.sinSky=true/);
   });
