@@ -146,7 +146,31 @@
     return holder;
   }
 
-  function create({ THREE: T, group, entry, lane, level, collision, kit = () => null, floorAt = () => null, deep = null }) {
+  let decoderReady;
+  function loadLiftKit(T) {
+    if (!root.MeshoptDecoder && !decoderReady) {
+      decoderReady = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'vendor/meshopt_decoder.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      }).catch(error => { decoderReady = null; throw error; });
+    }
+    return Promise.resolve(decoderReady).then(() => new T.GLTFLoader().setMeshoptDecoder(root.MeshoptDecoder)
+      .loadAsync('assets/r3/maw/elevator.glb')).then(gltf => liftKit(T, gltf));
+  }
+
+  async function loadArrival(T, deep, finish) {
+    const kit = await loadLiftKit(T);
+    // The bottom dock owns a cabin and chains. The top crown is never drawn here.
+    const below = liftModel(T, kit, finish(kit.material, 'lift'), false);
+    below.name = 'Maw_Lift_Arrival';
+    below.position.y += LIFT_DROP;
+    deep.add(below);
+  }
+
+  function create({ THREE: T, group, entry, lane, level, collision, kit = () => null, floorAt = () => null }) {
     const room = new T.Group();
     room.name = 'MawOfTheAbyss_Dressing';
     room.position.set(entry, level, lane);
@@ -371,7 +395,7 @@
     }
     const cabinHit = (x0, x1, y0, y1, z0, z1, solid = true) => collision(entry + x0, entry + x1, level + y0, level + y1, lane + z0, lane + z1, solid);
     liftWalls(cabinHit, 0);
-    if (deep) liftWalls(cabinHit, LIFT_DROP);
+
     hit(GUARDIAN.x - 1.02, GUARDIAN.x + 1.02, 0, GUARDIAN.size, GUARDIAN.z - 1.97, GUARDIAN.z + 1.97);
 
     // Dais top around the docked cabin (the retired platform used to be
@@ -543,54 +567,18 @@
       }
     }
 
-    // The lift alone (cabin at the Maw dock, crown, chains, arrival cabin in
-    // the Anchorage): what the U1 chapter needs, and part of the full Maw.
     let liftPending = null;
     function loadLift() {
-      if (liftPending) return liftPending;
-      liftPending = (async () => {
-        // Normally the R3-01 loader has brought the decoder in already; a
-        // direct U1 start has not run it.
-        if (!root.MeshoptDecoder) await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'vendor/meshopt_decoder.js';
-          script.onload = resolve;
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-        const loader = new T.GLTFLoader().setMeshoptDecoder(root.MeshoptDecoder);
-        const lift = await loader.loadAsync('assets/r3/maw/elevator.glb');
-        const kit = liftKit(T, lift);
+      if (!liftPending) liftPending = loadLiftKit(T).then(kit => {
         const top = liftModel(T, kit, finish(kit.material), true);
         top.name = 'Maw_Lift';
         room.add(top);
         status.selected.push('Maw_Lift_Cabin', 'Maw_Lift_Chains', 'Maw_Lift_Crown');
         status.lift = { center: CENTER, deck: DECK, ceiling: +CEILING.toFixed(2), courses: top.getObjectByName('Maw_Lift_Chains').count, clearance: CABIN_HEAD,
           chain: +(LIFT.courses * LIFT_PERIOD - ROOF_RISE).toFixed(2), drop: LIFT_DROP, triangles: kit.triangles };
-        if (deep) {
-          // Arrival at the Anchorage of Souls: the same cabin, lit there.
-          const shade = deep.userData.finish || (m => m);
-          const below = liftModel(T, kit, shade(kit.material.clone()), false);
-          below.name = 'Maw_Lift_Arrival';
-          below.position.y += LIFT_DROP;
-          deep.add(below);
-        }
         status.liftReady = true;
-      })();
+      });
       return liftPending;
-    }
-    async function warmDeep() {
-      if (!deep || !renderer?.compileAsync) return;
-      let scene = deep;
-      while (scene.parent) scene = scene.parent;
-      const camera = new T.PerspectiveCamera(60, 1.6, 0.1, 400);
-      deep.updateWorldMatrix(true, true);
-      camera.position.setFromMatrixPosition(deep.matrixWorld);
-      camera.updateMatrixWorld();
-      const hidden = deep.visible;
-      deep.visible = true;
-      try { await renderer.compileAsync(deep, camera, scene); } catch (error) { console.warn('[U1] warm-up skipped', error); }
-      finally { deep.visible = hidden; }
     }
 
     async function warm() {
@@ -607,11 +595,6 @@
       try {
         await renderer.compileAsync(room, camera, scene);
         if (approachLook) await renderer.compileAsync(approachLook.group, camera, scene);
-        if (deep) {
-          const hidden = deep.visible;
-          deep.visible = true;
-          try { await renderer.compileAsync(deep, camera, scene); } finally { deep.visible = hidden; }
-        }
         // Push the textures to the GPU now rather than on the first frame.
         const textures = new Set();
         const visit = o => {
@@ -621,7 +604,6 @@
         };
         room.traverse(visit);
         approachLook?.group.traverse(visit);
-        deep?.traverse(visit);
         for (const t of approach.values()) visit({ material: t });
         textures.forEach(t => renderer.initTexture?.(t));
       } catch (error) {
@@ -646,20 +628,15 @@
 
     return {
       room, material, status,
+      preview(show) {
+        if (status.phase !== 'ready') return;
+        show(room, true);
+        if (approachLook) show(approachLook.group, true);
+      },
       configure(value) { renderer = value; },
       // Streams the Maw in the background (stage arrival, long before the
       // hero reaches it); resolves when the overlook is fully built.
-      // { liftOnly } prepares just the lift and its Anchorage dock (U1).
-      prefetch(options = {}) {
-        if (!options.liftOnly) return start();
-        if (!renderer) return Promise.resolve();
-        if (status.phase === 'idle') status.phase = 'lift';
-        return loadLift().then(warmDeep).catch(error => {
-          status.phase = 'failed';
-          status.error = String(error.message || error);
-          console.error('[U1] ' + status.error);
-        });
-      },
+      prefetch: start,
       update(u, v, inside) {
         const near = inside && u > entry - 9 && Math.abs(v - lane) < 11;
         const ready = status.phase === 'ready';
@@ -708,6 +685,7 @@
   root.SinR3Maw = {
     create, floor, limits: { far: FAR_RIM, half: HALF }, budget: BUDGET,
     // Lift frame shared with the stage (ride) and the underworld (arrival).
+    loadArrival, liftWalls,
     lift: Object.freeze({ center: CENTER, deck: DECK, drop: LIFT_DROP, ceiling: CEILING,
       chainTop: liftAt(LIFT.crownCut) + CROWN_DROP, cabinRadius: 1.20, cabinHead: CABIN_HEAD,
       arrivalVault: ARRIVAL_VAULT, arrivalChainTop: liftAt(LIFT.roofCut) + LIFT.arrivalCourses * LIFT_PERIOD })

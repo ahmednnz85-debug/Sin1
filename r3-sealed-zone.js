@@ -8,7 +8,6 @@
   const SPRING = BASIN + 11.5, CROWN = BASIN + 20;
   const ABYSS_LANDING = -15.8; // floor of the landing that opens the Mouth of the Abyss
   const MAW_ENTRY = HALL_U + 20, MAW_LANE = -17, MAW_LEVEL = -18.9;
-  const DEEP = MAW_LEVEL - 150; // below this height the stage samples the underworld layer
   const HALF = 3, PORT = Math.asin(HALF / RADIUS);
   const CHORD = Math.sqrt(RADIUS ** 2 - HALF ** 2);
   const HALL_ENTRY = HALL_U - CHORD, SIDE_EXIT = HALL_V - CHORD;
@@ -24,7 +23,8 @@
     stair: Object.freeze({ textureMiB: 48, glbMiB: 24, drawCalls: 110, trianglesInView: 900000 })
   });
 
-  function mount(THREE, passage, hall, origin, { entranceOnly = false } = {}) {
+  function mount(THREE, passage, hall, origin, { entranceOnly = false, chapter } = {}) {
+    if (chapter === 'u1') return mountUnderworld(THREE, passage, origin);
     const root = new THREE.Group();
     root.name = entranceOnly ? 'R3DoorStairEntrance' : 'R3_SealedZone';
     root.position.set(passage.position[0], 0, passage.position[2]);
@@ -37,8 +37,7 @@
       section('R3-03', 'MouthOfTheAbyss')
     ];
     const floors = [];
-    const obstacles = [];
-    const cameraBoxes = [];
+    const { collision, blocksPassage, indexCamera, cameraBoxes } = collisionSpace(passage, origin);
     const slots = {
       Treads: 0x9b9b9b, Landings: 0x969696, Walls: 0x777777,
       Vault: 0x919191, ArchRibs: 0xa9a9a9, Buttresses: 0x909090,
@@ -159,16 +158,6 @@
       const g = new THREE.CylinderGeometry(top, bottom, height, sides);
       g.translate(x, y + height / 2, z);
       geometry(slot, g);
-    }
-
-    function collision(x0, x1, y0, y1, z0, z1, solid = false, enabled = null) {
-      cameraBoxes.push({
-        minx: origin.x + passage.position[0] - x1, maxx: origin.x + passage.position[0] - x0,
-        miny: origin.y + y0, maxy: origin.y + y1,
-        minz: origin.z + passage.position[2] + z0, maxz: origin.z + passage.position[2] + z1,
-        _wing: true, enabled
-      });
-      if (solid) obstacles.push({ x0, x1, y0, y1, z0, z1, enabled });
     }
 
     function solidBox(slot, x0, x1, y0, y1, z0, z1) {
@@ -316,22 +305,6 @@
         }
       }
       return null;
-    }
-
-    function blocksPassage(u, v, previous, target, radius, sample) {
-      if (!previous || !target || Math.abs(target.y - previous.y) > 0.37) return true;
-      for (const [du, dv] of probes) {
-        const probe = sample(u + du * radius, v + dv * radius);
-        if (!probe || Math.abs(probe.y - target.y) > 0.47) return true;
-      }
-      for (const b of obstacles) {
-        if (b.enabled && !b.enabled()) continue;
-        if (b.y0 >= target.y + 1.9 || b.y1 <= target.y + 0.08) continue;
-        const dx = u - Math.max(b.x0, Math.min(u, b.x1));
-        const dz = v - Math.max(b.z0, Math.min(v, b.z1));
-        if (dx * dx + dz * dz < radius * radius) return true;
-      }
-      return false;
     }
 
     // Keep the one-way cap in the independent stage. At the open throne
@@ -639,20 +612,7 @@
     const mouth = (d, y, t) => alongU(d, y, t + MAW_LANE);
     tunnel(mouth, HALL_U + 14, MAW_ENTRY, 2.32, -18, MAW_LEVEL, 0, 10, [-1, 1]);
     const bridge = MAW_ENTRY, rim = bridge + (Maw?.limits.far ?? 8), ledge = MAW_LEVEL;
-    // U1, the underworld below the abyss: its own layer of the stage, under
-    // the Maw frame and selected by height (the lift drops 420 m into it).
-    const Under = Maw?.lift && window.SinR3Underworld;
-    const deep = new THREE.Group();
-    deep.name = 'U1_Underworld';
-    deep.position.set(bridge, ledge, MAW_LANE);
-    deep.visible = false;
-    if (Under) root.add(deep);
-    const under = Under ? Under.create({ T: THREE, group: deep, lift: Maw.lift,
-      hit: (x0, x1, y0, y1, z0, z1, solid) => collision(bridge + x0, bridge + x1, ledge + y0, ledge + y1,
-        MAW_LANE + z0, MAW_LANE + z1, solid) }) : null;
-    if (under) deep.userData.finish = material => under.finish(material, 'lift');
     const mawLook = Maw?.create({ THREE, group: part.group, entry: bridge, lane: MAW_LANE, level: ledge, collision,
-      deep: under ? deep : null,
       // The approach reuses the resident R3-01 props (loaded first in ready()).
       kit: () => stair?.kit?.() || null, floorAt: (u, v) => sampleFloor(u, v)?.y ?? null });
     if (!mawLook) {
@@ -730,12 +690,7 @@
       release(live, resources([]));
       throw new Error('R3 architecture exceeded its independent stage budget');
     }
-    function sample(u, v, y = 0) {
-      if (under && y < DEEP) {
-        const x = u - bridge, z = v - MAW_LANE;
-        const h = under.floor(x, z);
-        return h == null ? null : { y: ledge + h, ceiling: ledge + under.ceiling(x, z), steps: true };
-      }
+    function sample(u, v) {
       const left = mawLook ? MAW_LANE - Maw.limits.half : -22;
       if (u < start || u > rim || v < left || v > HALL_V + RADIUS) return null;
       if (mawLook && u >= bridge - 0.04 && Math.abs(v - MAW_LANE) <= Maw.limits.half) {
@@ -769,18 +724,6 @@
       const u = uAt(x), v = vAt(z);
       const inside = !!nearFloor(x, z, y);
       root.visible = inside;
-      if (under) {
-        const below = inside && y < DEEP;
-        deep.visible = below;
-        under.update(below, u - bridge, v - MAW_LANE);
-        if (below) {
-          for (const section of parts) section.group.visible = false;
-          stair?.update(u, y, v, false, false);
-          hallLook?.update(u, v, false, false);
-          mawLook?.update(u, v, false);
-          return;
-        }
-      }
       const inHall = inside && hallFloor(u, v) !== null;
       parts[0].group.visible = inHall || inside && u <= HALL_ENTRY;
       parts[1].group.visible = inside && u > TURN - 4 && v > -5;
@@ -793,95 +736,46 @@
     }
     const stair = stairPlan && Stair.create(THREE, root, parts[0].group, stairPlan);
 
-    // The lift ride: standing in the docked cabin (top or bottom) for a moment
-    // closes the view, carries the hero to the other dock and reopens it.
-    // The cabin is the same model at both ends, so Sîn arrives inside it.
-    const ride = { state: 'idle', armed: false, wait: 0, fade: 0, from: 0 };
-    function cabinAt(u, v, y) {
-      if (!under || Math.hypot(u - bridge - Maw.lift.center[0], v - MAW_LANE - Maw.lift.center[1]) > Maw.lift.cabinRadius) return 0;
-      const top = ledge + Maw.lift.deck;
-      if (Math.abs(y - top) < 0.9) return 1;
-      if (Math.abs(y - top - Maw.lift.drop) < 0.9) return -1;
-      return 0;
-    }
+    // The dock arms after Sîn approaches it. Crossing commits only at
+    // full opacity, so stepping back out during the fade cancels the ride.
+    const ride = { state: 'idle', armed: false, wait: 0, fade: 0 };
     function lift(x, y, z, dt) {
-      // Normal play rides once the Maw is complete (as before); a U1 chapter
-      // start has only the lift ('lift' phase) and rides with that.
-      const maw = mawLook?.status;
-      if (!under || !(maw?.phase === 'ready' || maw?.phase === 'lift' && maw.liftReady)) return null;
-      const cab = cabinAt(uAt(x), vAt(z), y);
+      if (!window.SinR3Underworld || mawLook?.status.phase !== 'ready') return null;
+      const dock = Maw.lift;
+      const cab = Math.abs(y - ledge - dock.deck) < 0.9 &&
+        Math.hypot(uAt(x) - bridge - dock.center[0], vAt(z) - MAW_LANE - dock.center[1]) <= dock.cabinRadius;
       let shift = null;
       if (ride.state === 'idle') {
         if (!cab) { ride.armed = true; ride.wait = 0; }
-        else if (ride.armed && (ride.wait += dt) > 1.1) {
-          ride.state = 'closing';
-          ride.from = cab;
-          if (cab > 0 && stageRenderer) under.ready(stageRenderer);
-        }
+        else if (ride.armed && (ride.wait += dt) > 1.1) ride.state = 'closing';
       } else if (ride.state === 'closing') {
-        if (cab !== ride.from) ride.state = 'opening';
+        if (!cab) ride.state = 'opening';
         else if ((ride.fade = Math.min(1, ride.fade + dt / 0.7)) === 1) {
-          shift = [0, ride.from > 0 ? Maw.lift.drop : -Maw.lift.drop, 0];
-          ride.state = 'travel';
-          ride.wait = 0;
-          // Keep the veil closed until the destination has its dressing.
-          ride.hold = ride.from < 0 ? loadUpper() : stageRenderer && under.ready(stageRenderer);
-          ride.held = false;
-          ride.hold?.then(() => { ride.held = true; });
+          shift = [0, dock.drop, 0];
+          ride.state = 'committed';
         }
-      } else if (ride.state === 'travel') {
-        if ((ride.wait += dt) > 0.6 && (!ride.hold || ride.held)) ride.state = 'opening';
-      } else if ((ride.fade = Math.max(0, ride.fade - dt / 0.8)) === 0) {
+      } else if (ride.state === 'opening' && (ride.fade = Math.max(0, ride.fade - dt / 0.8)) === 0) {
         Object.assign(ride, { state: 'idle', armed: false, wait: 0 });
       }
       return { fade: ride.fade, shift, state: ride.state };
     }
 
-    // Index the boxes by camera-pivot cell, with enough padding for the
-    // game's longest follow-camera ray. Unrelated wings get no R3 boxes.
-    const cellSize = 6, rayReach = 6;
-    const cameraCells = new Map();
-    for (const box of cameraBoxes) {
-      for (let x = Math.floor((box.minx - rayReach) / cellSize); x <= Math.floor((box.maxx + rayReach) / cellSize); x++) {
-        for (let z = Math.floor((box.minz - rayReach) / cellSize); z <= Math.floor((box.maxz + rayReach) / cellSize); z++) {
-          const key = x + ',' + z;
-          if (!cameraCells.has(key)) cameraCells.set(key, []);
-          cameraCells.get(key).push(box);
-        }
-      }
-    }
-    cameraBoxes.length = 0;
     const stageCost = { geometryBytes, batches: batchCount, textures: 0 };
-    let mawPending = null, stageRenderer = null, upper = undefined;
-    // Upper R3 dressing deferred by a U1 chapter start, loaded on demand.
-    function loadUpper() {
-      if (upper) return upper;
-      upper = (async () => {
-        if (stair) stageCost.stair = await stair.load(stageRenderer).catch(error => ({ error: error.message }));
-        if (hallLook) stageCost.hall = await hallLook.load(stageRenderer);
-        mawPending = mawLook?.prefetch();
-        await mawPending;
-      })();
-      return upper;
-    }
+    let mawPending = null;
+    const cameraBoxesAt = indexCamera();
     return {
-      root, nearFloor, blocks, update, lift, budget, cost: stageCost, underworld: under,
+      root, nearFloor, blocks, update, lift, budget, cost: stageCost,
       cameraSurfaceAt: (x, z, feet) => sample(uAt(x), vAt(z), feet),
-      // Prepare the independent stage while the transition curtain is black.
-      // options.chapter 'u1': a direct start in the underworld layer (developer
-      // chapter entry). Only the lift and U1 are prepared; R3-01..R3-03 load
-      // behind the lift veil the first time Sîn rides up.
-      async ready(renderer, options = {}) {
+      preview({ show }) {
+        // All three sections belong to the resident sealed chapter.
+        show(root, true);
+        for (const { group } of parts) show(group, true);
+        stair?.preview(show);
+        mawLook?.preview(show);
+      },
+      // Prepare only the sealed chapter while the transition is black.
+      async ready(renderer) {
         mawLook?.configure(renderer);
-        stageRenderer = renderer;
-        if (options.chapter === 'u1' && under) {
-          upper = null;
-          await under.ready(renderer);
-          mawPending = mawLook?.prefetch({ liftOnly: true });
-          stageCost.chapter = 'u1';
-          return stageCost;
-        }
-        upper = Promise.resolve();
         if (stair) stageCost.stair = await stair.load(renderer).catch(error => {
           console.error('[R3-01] stair assets', error);
           return { error: error.message };
@@ -895,13 +789,107 @@
       // Resolves once the deferred R3-03 dressing is complete (or failed).
       settled: () => Promise.resolve(mawPending).then(() => mawLook?.status.phase ?? 'none'),
       stair, maw: mawLook,
+      detachedAssets: () => stair?.kit?.(),
       spawn: [passage.position[0] - start - 0.55, 0, passage.position[2]],
-      cameraBoxesAt(x, z, y) {
-        if (!nearFloor(x, z, y)) return null;
-        const boxes = cameraCells.get(Math.floor((x + origin.x) / cellSize) + ',' + Math.floor((z + origin.z) / cellSize));
-        return hallLook && boxes?.some(box => box.enabled)
-          ? boxes.filter(box => !box.enabled || box.enabled()) : boxes;
+      cameraBoxesAt: (x, z, y) => nearFloor(x, z, y) ? cameraBoxesAt(x, z) : null
+    };
+  }
+
+  function collisionSpace(passage, origin) {
+    const cameraBoxes = [], obstacles = [];
+    const probes = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.707, 0.707], [-0.707, 0.707], [0.707, -0.707], [-0.707, -0.707]];
+    function collision(x0, x1, y0, y1, z0, z1, solid = false, enabled = null) {
+      cameraBoxes.push({
+        minx: origin.x + passage.position[0] - x1, maxx: origin.x + passage.position[0] - x0,
+        miny: origin.y + y0, maxy: origin.y + y1,
+        minz: origin.z + passage.position[2] + z0, maxz: origin.z + passage.position[2] + z1,
+        _wing: true, enabled
+      });
+      if (solid) obstacles.push({ x0, x1, y0, y1, z0, z1, enabled });
+    }
+
+    function blocksPassage(u, v, previous, target, radius, sample) {
+      if (!previous || !target || Math.abs(target.y - previous.y) > 0.37) return true;
+      for (const [du, dv] of probes) {
+        const probe = sample(u + du * radius, v + dv * radius);
+        if (!probe || Math.abs(probe.y - target.y) > 0.47) return true;
       }
+      for (const b of obstacles) {
+        if (b.enabled && !b.enabled()) continue;
+        if (b.y0 >= target.y + 1.9 || b.y1 <= target.y + 0.08) continue;
+        const dx = u - Math.max(b.x0, Math.min(u, b.x1));
+        const dz = v - Math.max(b.z0, Math.min(v, b.z1));
+        if (dx * dx + dz * dz < radius * radius) return true;
+      }
+      return false;
+    }
+
+    // Index the boxes by camera-pivot cell, padded for the longest view.
+    function indexCamera() {
+      const size = 6, reach = 6;
+      const cells = new Map();
+      for (const box of cameraBoxes) {
+        for (let x = Math.floor((box.minx - reach) / size); x <= Math.floor((box.maxx + reach) / size); x++) {
+          for (let z = Math.floor((box.minz - reach) / size); z <= Math.floor((box.maxz + reach) / size); z++) {
+            const key = x + ',' + z;
+            if (!cells.has(key)) cells.set(key, []);
+            cells.get(key).push(box);
+          }
+        }
+      }
+      return (x, z) => {
+        const boxes = cells.get(Math.floor((x + origin.x) / size) + ',' + Math.floor((z + origin.z) / size));
+        return boxes?.some(box => box.enabled) ? boxes.filter(box => !box.enabled || box.enabled()) : boxes;
+      };
+    }
+    return { collision, blocksPassage, indexCamera, cameraBoxes };
+  }
+
+  function mountUnderworld(THREE, passage, origin) {
+    const Maw = window.SinR3Maw, Under = window.SinR3Underworld;
+    if (!Maw?.lift || !Under) throw new Error('Underworld assets are unavailable');
+    const { collision, blocksPassage, indexCamera } = collisionSpace(passage, origin);
+    const root = new THREE.Group();
+    root.name = 'U1_Chapter';
+    root.position.set(passage.position[0], 0, passage.position[2]);
+    root.scale.x = -1;
+    const deep = new THREE.Group();
+    deep.name = 'U1_Underworld';
+    deep.position.set(MAW_ENTRY, MAW_LEVEL, MAW_LANE);
+    root.add(deep);
+    const hit = (x0, x1, y0, y1, z0, z1, solid) => collision(MAW_ENTRY + x0, MAW_ENTRY + x1,
+      MAW_LEVEL + y0, MAW_LEVEL + y1, MAW_LANE + z0, MAW_LANE + z1, solid);
+    const dock = Maw.lift;
+    const under = Under.create({ T: THREE, group: deep, lift: dock, hit });
+    Maw.liftWalls((x0, x1, y0, y1, z0, z1, solid = true) => hit(x0, x1, y0, y1, z0, z1, solid), dock.drop);
+    const index = indexCamera();
+    const uAt = x => passage.position[0] - x;
+    const vAt = z => z - passage.position[2];
+    function sample(u, v) {
+      const x = u - MAW_ENTRY, z = v - MAW_LANE;
+      const y = under.floor(x, z);
+      return y == null ? null : { y: MAW_LEVEL + y, ceiling: MAW_LEVEL + under.ceiling(x, z), steps: true };
+    }
+    function nearFloor(x, z, y) {
+      const floor = sample(uAt(x), vAt(z));
+      return floor && Math.abs(floor.y - y) < 1.8 ? floor : null;
+    }
+    return {
+      root, nearFloor, underworld: under,
+      spawn: [passage.position[0] - MAW_ENTRY - dock.center[0], MAW_LEVEL + dock.deck + dock.drop, passage.position[2] + MAW_LANE + dock.center[1]],
+      async ready(renderer) {
+        await under.ready(renderer);
+        if (under.status.phase !== 'ready') throw new Error(under.status.error || 'Underworld load failed');
+        await Maw.loadArrival(THREE, deep, under.finish);
+      },
+      update(x, y, z) { under.update(!!nearFloor(x, z, y), uAt(x) - MAW_ENTRY, vAt(z) - MAW_LANE); },
+      preview({ show }) { show(under.group, true); },
+      blocks(x, z, y, px, pz, radius) {
+        const u = uAt(x), v = vAt(z);
+        return blocksPassage(u, v, nearFloor(px, pz, y), sample(u, v), radius, sample);
+      },
+      cameraSurfaceAt: (x, z) => sample(uAt(x), vAt(z)),
+      cameraBoxesAt: (x, z, y) => nearFloor(x, z, y) ? index(x, z) : null
     };
   }
 
@@ -976,10 +964,11 @@
     // Maw lift. A direct start boots the R3 stage alone (the transition's own
     // loader), and for U1 only the lift and the underworld layer.
     const boot = chapter => (ctx, area) => window.PalaceInterior.enterR3Direct(ctx, { chapter }, area);
+    const preview = view => window.PalaceInterior.previewR3(view);
     SinAreas.chapter({ stage: 'r3', order: 30, ar: 'المنطقة المختومة', en: 'Sealed zone',
-      boundary: 'passage-L0 (one-way)', boot: boot('r3') }, 'r3-sealed-zone');
+      boundary: 'passage-L0 (one-way)', boot: boot('r3'), preview }, 'r3-sealed-zone');
     SinAreas.chapter({ stage: 'u1', order: 40, ar: 'العالم السفلي', en: 'Underworld',
-      boundary: 'Maw lift (R3-03 → U1-01)', boot: boot('u1') }, 'r3-sealed-zone');
+      boundary: 'Maw lift (R3-03 → U1-01)', boot: boot('u1'), preview }, 'r3-sealed-zone');
     SinAreas.group('r3', 'المنطقة المختومة R3', 'Sealed zone R3', 70);
     [['R3-01', 'درج السنين المدفونة', 'Buried Years Stair', { stageSpawn: true }],
       ['R3-02', 'قاعة الختم الأول', 'First Seal Hall', { u: HALL_ENTRY + 1.7, v: HALL_V, y: GALLERY, yaw: -Math.PI / 2 }],

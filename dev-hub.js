@@ -127,9 +127,34 @@
 #sin-dev-panel .msg{font-size:12px;color:#b39a70;min-height:16px;margin-top:8px;direction:rtl}
 #sin-dev-fps{position:fixed;z-index:12400;right:calc(8px + env(safe-area-inset-right,0px));top:calc(48px + env(safe-area-inset-top,0px));font:12px ui-monospace,Menlo,monospace;color:#b8f5a0;background:rgba(0,0,0,.6);padding:5px 7px;border-radius:3px;pointer-events:none;white-space:pre;direction:ltr}
 #sin-dev-status{position:fixed;z-index:13100;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);font:13px Georgia,serif;color:#ead9b8;background:rgba(10,8,6,.86);border:1px solid rgba(225,183,111,.45);padding:9px 14px;border-radius:3px;direction:rtl;pointer-events:none}
-#sin-dev-fly{position:fixed;z-index:12450;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);font:11px ui-monospace,monospace;color:#efdfc0;background:rgba(0,0,0,.55);padding:5px 9px;border-radius:3px;pointer-events:none;direction:ltr}
+#sin-dev-fly{position:fixed;z-index:12700;inset:0;font:14px/1.3 system-ui,sans-serif;color:#f5ecd9;user-select:none;-webkit-user-select:none;pointer-events:none}
+#sin-dev-fly .fly-look{position:absolute;inset:0;pointer-events:auto;touch-action:none;cursor:grab}
+#sin-dev-fly .fly-look:active{cursor:grabbing}
+#sin-dev-fly .fly-bar,#sin-dev-fly .fly-controls{position:absolute;right:calc(14px + env(safe-area-inset-right,0px));display:flex;gap:8px;pointer-events:auto}
+#sin-dev-fly .fly-bar{top:calc(12px + env(safe-area-inset-top,0px))}
+#sin-dev-fly .fly-controls{bottom:calc(14px + env(safe-area-inset-bottom,0px));flex-direction:column;align-items:flex-end}
+#sin-dev-fly button,#sin-dev-fly label{padding:0 12px;min-height:44px;background:rgba(14,13,16,.87);border:1px solid rgba(224,183,112,.5);border-radius:8px;color:inherit;font:inherit;cursor:pointer}
+#sin-dev-fly button{touch-action:manipulation}
+#sin-dev-fly button:focus-visible,#sin-dev-fly input:focus-visible{outline:2px solid #f1c977;outline-offset:2px}
+#sin-dev-fly small{color:#bdab89;font:10px ui-monospace,monospace;margin-inline-start:4px}
+#sin-dev-fly .fly-vertical{display:flex;gap:6px;direction:ltr}
+#sin-dev-fly .fly-vertical button{min-width:54px;touch-action:none}
+#sin-dev-fly .fly-vertical button.held{background:#5f482e}
+#sin-dev-fly label{display:grid;align-items:center;grid-template-columns:1fr auto;gap:0 10px;padding:8px 10px;cursor:default}
+#sin-dev-fly input{grid-column:1/-1;width:clamp(112px,22vw,184px);height:28px;accent-color:#e1b76f}
+#sin-dev-fly output{font-variant-numeric:tabular-nums;color:#e8c792;justify-self:end}
+#sin-dev-fly .fly-stick{position:absolute;left:calc(18px + env(safe-area-inset-left,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));width:clamp(84px,20vmin,112px);aspect-ratio:1;display:grid;place-items:center;border:1px solid rgba(224,183,112,.65);border-radius:50%;background:rgba(14,13,16,.53);touch-action:none;pointer-events:auto}
+#sin-dev-fly .fly-stick>div{width:36%;aspect-ratio:1;border-radius:50%;border:1px solid #e1b76f;background:rgba(224,183,112,.38);pointer-events:none}
+#sin-dev-fly .fly-hint{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:calc(16px + env(safe-area-inset-left,0px));padding:7px 10px;margin:0;max-width:40%;border-radius:6px;background:rgba(14,13,16,.75);font-size:12px}
+#sin-dev-fly .fly-hint span{display:block;color:#dfc9a5;margin-top:3px}
+#sin-dev-fly .fly-reveal{display:none;position:absolute;top:env(safe-area-inset-top,0px);right:env(safe-area-inset-right,0px);min-width:48px;pointer-events:auto;opacity:0}
+#sin-dev-fly.fly-photo .fly-reveal{display:block}
+#sin-dev-fly.fly-photo :is(.fly-bar,.fly-controls,.fly-stick,.fly-hint){display:none}
+html.sin-dev-fly-active :is(#hud,#stick,#combat-pad,#hint,#wings-label,#sin-dev-tool,#sin-dev-panel,.sin-build-stamp){visibility:hidden!important;pointer-events:none}
+html.sin-dev-fly-active:has(#sin-dev-fly.fly-photo) :is(#sin-dev-fps,#sin-dev-status,#sin-mem-overlay,#sin-perf){visibility:hidden!important}
+@media(max-width:540px){#sin-dev-fly .fly-hint{top:calc(66px + env(safe-area-inset-top,0px))}}
 html.sin-dev-clean #hud,html.sin-dev-clean #stick,html.sin-dev-clean #combat-pad,html.sin-dev-clean #hint,html.sin-dev-clean #wings-label,
-html.sin-dev-clean #sin-dev-fps,html.sin-dev-clean #sin-dev-fly,html.sin-dev-clean .sin-build-stamp,html.sin-dev-clean #sin-dev-tool .tag{opacity:0!important;pointer-events:none}
+html.sin-dev-clean #sin-dev-fps,html.sin-dev-clean .sin-build-stamp,html.sin-dev-clean #sin-dev-tool .tag{opacity:0!important;pointer-events:none}
 html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
 @media (max-width:520px){#sin-dev-list .grid{grid-template-columns:1fr}#sin-dev-gate .choice{font-size:16px}}`;
     doc.head.appendChild(s);
@@ -194,7 +219,8 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
   // palace, rooms switch in place through the game's own streaming.
   function go(id) {
     const a = byId.get(id); if (!a) return;
-    const here = session && session.area && session.ready && a.stage === session.area.stage;
+    stopFly();
+    const here = session?.ready && a.stage === activeChapter();
     if (here && a.spawn.teleport && palaceLive()) {
       session.area = a;
       root.history.replaceState(null, '', link(id));
@@ -288,6 +314,7 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     await waitFor(() => root.PalaceInterior && PalaceInterior.state && (PalaceInterior.state() === 'DONE' || PalaceInterior.state() === 'FAILED') && !root.__holdSim);
     if (PalaceInterior.state() === 'FAILED') throw new Error('palace failed');
   }
+  const activeChapter = () => root.PalaceInterior?.activeSealedChapter?.() || (palaceLive() ? 'palace' : session.area.stage);
   const palaceLive = () => root.PalaceInterior && PalaceInterior.state && PalaceInterior.state() === 'DONE' && !PalaceInterior.inR3() && root.PalaceWings && PalaceWings.state && PalaceWings.state.built;
   async function enterPalace(a) {
     await hallReady();
@@ -352,7 +379,11 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
   }
   function respawn() {
     if (!session || !session.ready) return;
-    const a = session.area;
+    stopFly();
+    const stage = activeChapter();
+    const a = session.area.stage !== stage ? areas.find(area => area.stage === stage) : session.area;
+    if (!a) return;
+    if (a !== session.area) { session.area = a; root.history.replaceState(null, '', link(a.id)); refreshTag(); }
     if (a.stage === 'outdoor') spawnOutdoor(a);
     else if (a.stage === 'palace') enterPalace(a).catch(fail);
     else spawnR3(a);
@@ -441,58 +472,229 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     flags.mem = on;
     if (root.SinMemoryOverlay) SinMemoryOverlay.set(on); else msg('مراقب الذاكرة غير متاح');
   }
-  // Free camera: the simulation holds (window.__holdSim, as the game's own
-  // test hooks do) and only the camera moves; leaving restores everything.
+  // An independent lens presented by the game's existing paused frame.
+  // The normal camera, yaw, pitch and follow rig are never written here.
   let fly = null;
+  const flightKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+    'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight']);
+  const speedFor = value => 0.4 * 200 ** (Number(value) / 100);
+
   function setFly(on) {
-    const cam = game && game.camera; if (!cam) return;
-    if (on === flags.fly) return;
-    flags.fly = on;
-    if (on) {
-      fly = { pos: cam.position.clone(), quat: cam.quaternion.clone(), hold: root.__holdSim, yaws: game.yaws(), keys: new Set(), raf: 0, last: performance.now() };
-      const e = new (root.THREE.Euler)().setFromQuaternion(cam.quaternion, 'YXZ');
-      fly.yaw = e.y; fly.pitch = e.x; fly.touches = new Map();
-      root.__holdSim = true;
-      const kd = ev => { fly.keys.add(ev.code); if (/^(Key[WASDQE]|Shift|Arrow)/.test(ev.code)) { ev.stopPropagation(); ev.preventDefault(); } };
-      const ku = ev => { fly.keys.delete(ev.code); ev.stopPropagation(); };
-      let drag = null;
-      const pd = ev => { if (ev.target.closest && ev.target.closest('#sin-dev-tool,#sin-dev-panel')) return; drag = { x: ev.clientX, y: ev.clientY }; fly.touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); ev.stopPropagation(); };
-      const pm = ev => {
-        if (!fly.touches.has(ev.pointerId)) return;
-        const prev = fly.touches.get(ev.pointerId), dx = ev.clientX - prev.x, dy = ev.clientY - prev.y;
-        fly.touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-        if (fly.touches.size >= 2) { fly.move = { f: -dy * 0.03, s: dx * 0.03 }; }
-        else { fly.yaw -= dx * 0.004; fly.pitch = Math.max(-1.5, Math.min(1.5, fly.pitch - dy * 0.004)); }
-        ev.stopPropagation(); ev.preventDefault();
-      };
-      const pu = ev => { fly.touches.delete(ev.pointerId); drag = null; ev.stopPropagation(); };
-      fly.off = () => { root.removeEventListener('keydown', kd, true); root.removeEventListener('keyup', ku, true); root.removeEventListener('pointerdown', pd, true); root.removeEventListener('pointermove', pm, true); root.removeEventListener('pointerup', pu, true); root.removeEventListener('pointercancel', pu, true); };
-      root.addEventListener('keydown', kd, true); root.addEventListener('keyup', ku, true);
-      root.addEventListener('pointerdown', pd, true); root.addEventListener('pointermove', pm, { capture: true, passive: false });
-      root.addEventListener('pointerup', pu, true); root.addEventListener('pointercancel', pu, true);
-      const hint = el('div', { id: 'sin-dev-fly' }, 'FREE CAM · WASD move · Q/E down/up · Shift fast · drag look · two fingers move');
-      doc.body.appendChild(hint); fly.hint = hint;
-      const V = root.THREE.Vector3;
-      (function step(now) {
-        const dt = Math.min(0.05, (now - fly.last) / 1000); fly.last = now;
-        const k = fly.keys, speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? 14 : 4.5) * dt;
-        cam.quaternion.setFromEuler(new (root.THREE.Euler)(fly.pitch, fly.yaw, 0, 'YXZ'));
-        const fwd = new V(0, 0, -1).applyQuaternion(cam.quaternion), right = new V(1, 0, 0).applyQuaternion(cam.quaternion);
-        const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) + (fly.move ? fly.move.f : 0);
-        const s = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + (fly.move ? fly.move.s : 0);
-        const u = (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0);
-        fly.move = null;
-        cam.position.addScaledVector(fwd, f * speed).addScaledVector(right, s * speed);
-        cam.position.y += u * speed;
-        fly.raf = requestAnimationFrame(step);
-      })(performance.now());
-    } else if (fly) {
-      cancelAnimationFrame(fly.raf); fly.off(); fly.hint.remove();
-      cam.position.copy(fly.pos); cam.quaternion.copy(fly.quat);
-      game.setYaws(fly.yaws);
-      root.__holdSim = fly.hold === true ? true : false;
-      fly = null;
+    if (!on) { if (fly) stopFly(); return; }
+    if (fly || !session?.ready || !game?.camera || !game.holdPresentation) return;
+    if (root.__sinEntryBlackout || root.PalaceInterior?.ownsCamera?.() || doc.getElementById('r3-lift-veil')) return;
+    style();
+    panel?.classList.remove('open');
+    const camera = game.camera.clone(false);
+    camera.userData.independentView = true;
+    game.camera.getWorldPosition(camera.position);
+    game.camera.getWorldQuaternion(camera.quaternion);
+    const look = new root.THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+    const overlay = el('div', { id: 'sin-dev-fly', dir: 'rtl' });
+    overlay.innerHTML = `<div class="fly-look" aria-hidden="true"></div>
+      <div class="fly-bar">
+        <button type="button" data-fly="exit">العودة إلى سين <small>Esc</small></button>
+        <button type="button" data-fly="hide">إخفاء للتصوير <small>H</small></button>
+      </div>
+      <div class="fly-stick" role="img" aria-label="عصا تحريك الكاميرا"><div></div></div>
+      <div class="fly-controls">
+        <div class="fly-vertical">
+          <button type="button" data-fly="up" aria-label="صعود">↑ <small>E</small></button>
+          <button type="button" data-fly="down" aria-label="نزول">↓ <small>Q</small></button>
+        </div>
+        <label>السرعة <output dir="ltr"></output><input type="range" min="0" max="100" value="54" dir="ltr"></label>
+      </div>
+      <p class="fly-hint">طيران حر · NoClip <span>WASD للحركة · اسحب للنظر · Shift للتسريع</span></p>
+      <button type="button" class="fly-reveal" data-fly="reveal" aria-label="إظهار تحكم الكاميرا"></button>`;
+    const restore = new Map();
+    const preview = root.SinAreas.chapterOf(activeChapter())?.preview;
+    const velocity = new root.THREE.Vector3(), target = new root.THREE.Vector3();
+    const controller = new AbortController();
+    const state = {
+      camera, look, yaw: look.y, pitch: look.x, keys: new Set(), pointers: new Map(), overlay, controller,
+      hold: root.__holdSim, hadHold: Object.hasOwn(root, '__holdSim'), last: null, nextStream: 0,
+      strafe: 0, forward: 0, hidden: false
+    };
+    const { signal } = controller;
+    const find = selector => overlay.querySelector(selector);
+    const stick = find('.fly-stick'), knob = stick.firstElementChild, speed = find('input');
+    const saySpeed = () => { find('output').textContent = speedFor(speed.value).toFixed(1) + ' m/s'; };
+    saySpeed();
+    speed.addEventListener('input', saySpeed, { signal });
+
+    const clean = hidden => {
+      state.hidden = hidden;
+      overlay.classList.toggle('fly-photo', hidden);
+      if (!hidden) find('[data-fly="hide"]').focus({ preventScroll: true });
+    };
+    const actions = { exit: stopFly, hide: () => clean(true), reveal: () => clean(false) };
+    overlay.addEventListener('click', ev => {
+      const name = ev.target.closest('button')?.dataset.fly;
+      actions[name]?.();
+    }, { signal });
+    function resetStick() {
+      state.strafe = state.forward = 0;
+      knob.style.transform = '';
     }
+    function moveStick(ev, pointer) {
+      const dx = ev.clientX - pointer.x, dy = ev.clientY - pointer.y;
+      const len = Math.hypot(dx, dy);
+      const deflection = Math.max(0, (Math.min(1, len / pointer.radius) - 0.08) / 0.92);
+      state.strafe = len ? dx / len * deflection : 0;
+      state.forward = len ? -dy / len * deflection : 0;
+      knob.style.transform = 'translate(' + (state.strafe * pointer.radius) + 'px,' + (-state.forward * pointer.radius) + 'px)';
+    }
+    overlay.addEventListener('pointerdown', ev => {
+      const button = ev.target.closest('button');
+      const kind = button?.dataset.fly || (ev.target.closest('.fly-stick') ? 'stick' :
+        ev.target.closest('.fly-look') ? 'look' : null);
+      if (!['up', 'down', 'stick', 'look'].includes(kind) || ev.button !== 0) return;
+      if ([...state.pointers.values()].some(p => p.kind === kind)) return;
+      ev.preventDefault();
+      const r = kind === 'stick' ? stick.getBoundingClientRect() : null;
+      const p = { kind, x: r ? r.left + r.width / 2 : ev.clientX, y: r ? r.top + r.height / 2 : ev.clientY,
+        radius: r ? r.width * 0.35 : 0 };
+      state.pointers.set(ev.pointerId, p);
+      overlay.setPointerCapture(ev.pointerId);
+      if (kind === 'stick') moveStick(ev, p);
+      if (button) button.classList.add('held');
+    }, { signal });
+    overlay.addEventListener('pointermove', ev => {
+      const p = state.pointers.get(ev.pointerId);
+      if (!p) return;
+      if (p.kind === 'stick') moveStick(ev, p);
+      if (p.kind === 'look') {
+        state.yaw -= (ev.clientX - p.x) * 0.005;
+        state.pitch -= (ev.clientY - p.y) * 0.005;
+        p.x = ev.clientX;
+        p.y = ev.clientY;
+      }
+    }, { signal });
+    function releasePointer(id) {
+      const p = state.pointers.get(id);
+      if (!p) return;
+      state.pointers.delete(id);
+      if (p.kind === 'stick') resetStick();
+      if (p.kind === 'up' || p.kind === 'down') find('[data-fly="' + p.kind + '"]').classList.remove('held');
+      if (overlay.hasPointerCapture(id)) overlay.releasePointerCapture(id);
+    }
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+      overlay.addEventListener(type, ev => releasePointer(ev.pointerId), { signal });
+    }
+    overlay.addEventListener('contextmenu', ev => ev.preventDefault(), { signal });
+    function clearInput() {
+      state.keys.clear();
+      for (const id of state.pointers.keys()) releasePointer(id);
+      velocity.set(0, 0, 0);
+    }
+    root.addEventListener('blur', clearInput, { signal });
+    doc.addEventListener('visibilitychange', () => { if (doc.hidden) clearInput(); }, { signal });
+
+    root.addEventListener('keydown', ev => {
+      ev.stopImmediatePropagation();
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if (ev.code === 'Escape') { ev.preventDefault(); stopFly(); return; }
+      if (ev.code === 'KeyH') { ev.preventDefault(); if (!ev.repeat) clean(!state.hidden); return; }
+      if (!flightKeys.has(ev.code) || ev.target === speed && ev.code.startsWith('Arrow')) return;
+      ev.preventDefault();
+      state.keys.add(ev.code);
+    }, { capture: true, signal });
+    root.addEventListener('keyup', ev => {
+      state.keys.delete(ev.code);
+      ev.stopImmediatePropagation();
+    }, { capture: true, signal });
+
+    function show(node, visible) {
+      if (node.visible === visible) return;
+      if (!restore.has(node)) restore.set(node, node.visible);
+      node.visible = visible;
+    }
+    function draw(now) {
+      const dt = state.last === null ? 0 : Math.min(0.12, Math.max(0, (now - state.last) / 1000));
+      state.last = now;
+      const turn = -Math.expm1(-19 * dt);
+      look.y += (state.yaw - look.y) * turn;
+      look.x += (state.pitch - look.x) * turn;
+      camera.quaternion.setFromEuler(look);
+
+      const keys = state.keys, held = (a, b) => Number(keys.has(a) || keys.has(b));
+      const pressed = kind => [...state.pointers.values()].some(p => p.kind === kind);
+      const f = state.forward + held('KeyW', 'ArrowUp') - held('KeyS', 'ArrowDown');
+      const s = state.strafe + held('KeyD', 'ArrowRight') - held('KeyA', 'ArrowLeft');
+      const u = Number(keys.has('KeyE') || pressed('up')) - Number(keys.has('KeyQ') || pressed('down'));
+      const moveSpeed = speedFor(speed.value) * (held('ShiftLeft', 'ShiftRight') ? 2.5 : 1);
+      const sin = Math.sin(look.y), cos = Math.cos(look.y);
+      target.set(s * cos - f * sin, u, -s * sin - f * cos);
+      target.multiplyScalar(moveSpeed / Math.max(1, target.length()));
+      const ease = -Math.expm1(-12 * dt);
+      camera.position.addScaledVector(target, dt - ease / 12).addScaledVector(velocity, ease / 12);
+      velocity.lerp(target, ease);
+
+      camera.projectionMatrix.copy(game.camera.projectionMatrix);
+      camera.projectionMatrixInverse.copy(game.camera.projectionMatrixInverse);
+      camera.aspect = game.camera.aspect;
+      const stream = now >= state.nextStream;
+      if (stream) state.nextStream = now + 110;
+      const restorePositions = [];
+      const place = (node, at) => {
+        restorePositions.push([node, node.position.clone()]);
+        node.position.copy(at);
+      };
+      try {
+        preview?.({ camera, show, place, stream });
+        game.renderer.render(game.scene, camera);
+      } finally {
+        for (const [node, position] of restorePositions) node.position.copy(position);
+        for (const [node, visible] of restore) node.visible = visible;
+        restore.clear();
+      }
+    }
+
+    fly = state;
+    flags.fly = true;
+    game.releaseInput?.();
+    root.__holdSim = true;
+    doc.body.appendChild(overlay);
+    doc.documentElement.classList.add('sin-dev-fly-active');
+    game.holdPresentation(draw);
+    find('[data-fly="exit"]').focus({ preventScroll: true });
+    syncButtons();
+  }
+
+  function stopFly() {
+    if (!fly) return;
+    const state = fly;
+    fly = null;
+    flags.fly = false;
+    // Suppress OS repeats from flight keys still held during the handover.
+    const keys = state.keys;
+    if (keys.size) {
+      const pending = new AbortController();
+      const options = { capture: true, signal: pending.signal };
+      root.addEventListener('keydown', ev => {
+        if (keys.has(ev.code) && ev.repeat) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+        } else keys.delete(ev.code);
+        if (!keys.size) pending.abort();
+      }, options);
+      root.addEventListener('keyup', ev => {
+        keys.delete(ev.code);
+        if (!keys.size) pending.abort();
+      }, options);
+      root.addEventListener('blur', () => pending.abort(), options);
+    }
+    state.controller.abort();
+    state.overlay.remove();
+    doc.documentElement.classList.remove('sin-dev-fly-active');
+    game.releaseInput?.();
+    game.holdPresentation(null);
+    if (state.hadHold) root.__holdSim = state.hold;
+    else delete root.__holdSim;
+    syncButtons();
+    // Present the untouched gameplay lens immediately. The gameplay loop
+    // resumes from the same rig and input state on the next frame.
+    game.renderer.render(game.scene, game.camera);
   }
   // Collision view: cells around Sîn that the hero's own collision query
   // (index.html blocked(x, z): exterior, palace, wings and R3) refuses.

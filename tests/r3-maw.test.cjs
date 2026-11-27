@@ -100,6 +100,11 @@ test('the lift docks in the Maw and at the Anchorage; the U1 route walks to the 
   const hall = JSON.parse(fs.readFileSync(path.join(root, 'data/palace-colliders.json'), 'utf8')).hall;
   const p = hall.passages.find(x => x.id === window.SinR3SealedZone.passageId);
   const stage = window.SinR3SealedZone.mount(THREE, p, hall, new THREE.Vector3());
+  const underworld = window.SinR3SealedZone.mount(THREE, p, hall, new THREE.Vector3(), { chapter: 'u1' });
+  assert.equal(stage.root.getObjectByName('U1_Underworld'), undefined);
+  assert.ok(underworld.root.getObjectByName('U1_Underworld'));
+  assert.equal(underworld.root.getObjectByName('MawOfTheAbyss_Dressing'), undefined);
+  assert.equal(underworld.lift, undefined);
   const lift = window.SinR3Maw.lift;
   // The crown hangs from a ceiling at the arch crown, well clear of the cabin
   // roof on long chains; the arrival chains rise into the Anchorage vault.
@@ -110,14 +115,14 @@ test('the lift docks in the Maw and at the Anchorage; the U1 route walks to the 
   const cabin = [room.x + lift.center[0], room.z + lift.center[1]];
   const top = room.y + lift.deck, bottom = top + lift.drop;
   // Both docks: floor inside the cabin, a wall beside it, the doorway open toward the arch (-u).
-  for (const y of [top, bottom]) {
-    assert.ok(stage.nearFloor(xAt(cabin[0]), zAt(cabin[1]), y), 'cabin floor at ' + y);
-    assert.ok(stage.blocks(xAt(cabin[0]), zAt(cabin[1] + 2.0), y, xAt(cabin[0]), zAt(cabin[1]), 0.32), 'cabin wall');
+  for (const [dock, y] of [[stage, top], [underworld, bottom]]) {
+    assert.ok(dock.nearFloor(xAt(cabin[0]), zAt(cabin[1]), y), 'cabin floor at ' + y);
+    assert.ok(dock.blocks(xAt(cabin[0]), zAt(cabin[1] + 2.0), y, xAt(cabin[0]), zAt(cabin[1]), 0.32), 'cabin wall');
     let feet = y;
     for (let du = 0; du >= -3.2; du -= 0.1) {
       const at = [xAt(cabin[0] + du), zAt(cabin[1])];
-      assert.ok(!stage.blocks(at[0], at[1], feet, xAt(cabin[0] + du + 0.1), zAt(cabin[1]), 0.32), 'doorway at ' + du);
-      feet = stage.nearFloor(at[0], at[1], feet).y;
+      assert.ok(!dock.blocks(at[0], at[1], feet, xAt(cabin[0] + du + 0.1), zAt(cabin[1]), 0.32), 'doorway at ' + du);
+      feet = dock.nearFloor(at[0], at[1], feet).y;
     }
   }
   // The ride: wait in the cabin, the view closes, the hero is carried down.
@@ -128,26 +133,29 @@ test('the lift docks in the Maw and at the Anchorage; the U1 route walks to the 
   let shift = null;
   for (let i = 0; i < 40 && !shift; i++) shift = stage.lift(...at, 0.1).shift;
   assert.equal(JSON.stringify(shift), JSON.stringify([0, lift.drop, 0]));
+  assert.equal(stage.lift(...at, 0.1).shift, null);
+  assert.equal(stage.nearFloor(at[0], at[2], bottom), null);
+  assert.equal(underworld.nearFloor(at[0], at[2], top), null);
   // Registered U1 spawns stand on the underworld layer.
   return Promise.all(['U1-01', 'U1-02', 'U1-03'].map(id => window.SinAreas.get(id))).then(areas => {
-    for (const a of areas) assert.ok(stage.nearFloor(xAt(a.spawn.u), zAt(a.spawn.v), a.spawn.y), a.id + ' spawn on floor');
+    for (const a of areas) assert.ok(underworld.nearFloor(xAt(a.spawn.u), zAt(a.spawn.v), a.spawn.y), a.id + ' spawn on floor');
     // Anchorage -> causeway -> junction -> stair -> landing -> bridge -> midway -> descent -> plaza.
     const rel = [[-3.5, 0], [-42, 0], [-42, -26], [-98, -26], [-139, -26], [-149, -26]];
     let [px, pz] = [-3.5, 0], feet = bottom - 0.58;
     const base = (x, z) => [xAt(cabin[0] + x), zAt(cabin[1] + z)];
-    feet = stage.nearFloor(...base(px, pz), bottom).y;
+    feet = underworld.nearFloor(...base(px, pz), bottom).y;
     for (const [tx, tz] of rel.slice(1)) {
       const steps = Math.ceil(Math.hypot(tx - px, tz - pz) / 0.1);
       const [sx, sz] = [px, pz];
       for (let i = 1; i <= steps; i++) {
         const x = sx + (tx - sx) * i / steps, z = sz + (tz - sz) * i / steps;
-        assert.ok(!stage.blocks(...base(x, z), feet, ...base(px, pz), 0.32), 'U1 route blocked at ' + x.toFixed(1) + ',' + z.toFixed(1));
-        feet = stage.nearFloor(...base(x, z), feet).y;
+        assert.ok(!underworld.blocks(...base(x, z), feet, ...base(px, pz), 0.32), 'U1 route blocked at ' + x.toFixed(1) + ',' + z.toFixed(1));
+        feet = underworld.nearFloor(...base(x, z), feet).y;
         px = x; pz = z;
       }
     }
     // The gate is closed and the void is not walkable.
-    assert.ok(stage.blocks(...base(-154, -26), feet, ...base(-149, -26), 0.32), 'closed gate');
-    assert.ok(stage.blocks(...base(-70, -14), bottom - 6, ...base(-70, -26), 0.32), 'bridge edge');
+    assert.ok(underworld.blocks(...base(-154, -26), feet, ...base(-149, -26), 0.32), 'closed gate');
+    assert.ok(underworld.blocks(...base(-70, -14), bottom - 6, ...base(-70, -26), 0.32), 'bridge edge');
   });
 });

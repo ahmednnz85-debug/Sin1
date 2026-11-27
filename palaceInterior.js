@@ -103,7 +103,7 @@
   let entranceLeft = 0;
   let state = 'IDLE';
   let r3Entry = null, r3Stage = null, r3Curtain = null, r3Fade = 0;
-  const r3Memory = {};
+  const r3Memory = {}, underworldMemory = {};
   let r3Door = null, r3Alcove = null, r3Entrance = null, r3Preview = false;
   const R3_CLEARANCE = 0.32;
   const inR3 = () => r3Entry !== null;
@@ -168,7 +168,7 @@
   let ramp = null;
   let flames = [];
   let slotModes = [];
-  let palaceEnv = null;
+  let palaceEnv = null, palaceEnvTarget = null;
   let fireMats = [];
   let lodPacks = [];
   let instanceWallPacks = [];
@@ -1454,8 +1454,8 @@
     // pre-upgrade interior was lit by the three tagged outdoor lights
     // (hemi / sun / cold fill, userData.keepDuringPalace) and by the outdoor
     // sky PMREM as scene.environment. Dropping them (4de3f03) is what made
-    // the palace dark; they cost no geometry/texture memory (the sun's shadow
-    // map is still disposed in __releaseExteriorStage), so keep them again.
+    // the palace dark. Keep the lights themselves and retire the exterior
+    // PMREM and sun shadow resources in __releaseExteriorStage.
     hold(hero); hold(group);
     scene.traverse(function (o) {
       if (!o.userData || !o.userData.keepDuringPalace) return;
@@ -1486,7 +1486,10 @@
     materials.forEach(function (m) { if (!retainedResources.has(m) && !(m.userData && m.userData.palaceShared) && m.dispose) m.dispose(); });
     textures.forEach(function (t) { if (!retainedResources.has(t) && !(t.userData && t.userData.palaceShared) && t.dispose) t.dispose(); });
     scene.userData.cityReleased = true;
-    try { if (window.__releaseExteriorStage) window.__releaseExteriorStage(); } catch (e) { note('exterior refs ' + (e && e.message || e)); }
+    try {
+      window.__releaseExteriorStage?.();
+      window.__retireRoyalDoor?.();
+    } catch (e) { note('exterior refs ' + (e && e.message || e)); }
     note('city released ' + drop.length + ' roots, ' + geometries.size + ' geometries, ' + materials.size + ' materials, ' + textures.size + ' textures');
     try { if (window.SinMemoryOverlay) SinMemoryOverlay.note('teardown', 'city released g' + geometries.size + ' t' + textures.size); } catch (_) {}
     try {
@@ -1756,8 +1759,9 @@
     if (!group) return;
     scene.remove(group);
     disposeObject(group);
-    if (palaceEnv && palaceEnv.dispose && !palaceEnv.userData.keep) palaceEnv.dispose();
-    palaceEnv = null;
+    if (palaceEnvTarget) palaceEnvTarget.dispose();
+    else if (palaceEnv && palaceEnv.dispose && !palaceEnv.userData.keep) palaceEnv.dispose();
+    palaceEnv = palaceEnvTarget = null;
     flameSprite.mat = null;
     group = null;
     r3Door = r3Alcove = r3Entrance = null;
@@ -1982,10 +1986,10 @@
     tex.encoding = THREE.sRGBEncoding;
     const pmrem = new THREE.PMREMGenerator(renderer);
     pmrem.compileEquirectangularShader();
-    const env = pmrem.fromEquirectangular(tex).texture;
+    palaceEnvTarget = pmrem.fromEquirectangular(tex);
     pmrem.dispose();
     tex.dispose();
-    return env;
+    return palaceEnvTarget.texture;
   }
 
   function reportMeshMaterials(root, tag) {
@@ -4617,14 +4621,14 @@
     return true;
   }
 
-  async function retirePalaceForR3(ctx, R3) {
+  async function retireBeforeChapter(ctx, R3, memory, detachedAssets) {
     const {scene, hero, renderer} = ctx;
     const previous = scene.children.filter(node => node !== hero);
     const wingAssets = window.PalaceWings?.stageAssets() || [];
     const lookResources = window.SinGfx?.retireStageLook?.() || [];
-    const previousResources = R3.resources([...previous, scene.environment, scene.background, palaceEnv,
+    const previousResources = R3.resources([...previous, scene.environment, scene.background, palaceEnv, palaceEnvTarget,
       assets, specs?.map(spec => spec.result), wingAssets, gpuUploadQ, flameSprite.mat, lodPacks,
-      instanceWallPacks, lookResources, window.__r3LegacyResources?.(),
+      instanceWallPacks, lookResources, detachedAssets, window.__r3LegacyResources?.(),
       renderer.properties?._map && Array.from(renderer.properties._map.keys()).filter(item => item?.isTexture)]);
     const previousEnvironment = scene.environment;
     hero.traverse(node => {
@@ -4645,15 +4649,16 @@
     group = null; hallBuilt = false; r3Door = r3Alcove = r3Entrance = null;
     delete window.__r3DoorTest;
     assets = specs = loadPromise = loadOk = setupTask = saved = colliderBakePromise = null;
-    palaceEnv = null;
+    palaceEnv = palaceEnvTarget = null;
     colliders = []; lights = []; lightTargets = []; lightCandidates.length = 0;
     ramp = null; flames = []; fireMats = []; fireList = []; flameSprite.mat = null;
+    outsideLights.length = 0;
     lodPacks = []; instanceWallPacks = []; hallShellMeshes = []; hallDecorMeshes = []; propCullList = [];
     gpuUploadQ.length = 0;
     delete window.__palaceColliderBake;
     // These buffers belong to the old hall; keeping the renderer and hero
     // preserves the active WebGL context, current animation and equipment.
-    r3Memory.disposed = R3.release(previousResources, retained);
+    memory.disposed = R3.release(previousResources, retained);
     renderer.renderLists?.dispose();
     THREE.Cache.clear();
     await stoppingWings;
@@ -4663,24 +4668,27 @@
     window.MeshoptDecoder?.disposeWorkers?.();
     if (window.MeshoptDecoder) window.MeshoptDecoder.__sinWorkers = false;
     window.SinProcessMemory?.purgeOrphanTextures(renderer, scene);
-    r3Memory.released = { ...flushReleasedGPU(ctx), ...r3Snapshot(ctx, 'R3-released') };
+    memory.released = { ...flushReleasedGPU(ctx), ...r3Snapshot(ctx, 'chapter-released') };
   }
 
   async function loadR3(ctx) {
     const R3 = window.SinR3SealedZone;
-    await retirePalaceForR3(ctx, R3);
+    const chapter = r3Entry.chapter || 'r3';
+    const memory = chapter === 'u1' ? underworldMemory : r3Memory;
+    const releaseStage = retireBeforeChapter(ctx, R3, memory, r3Stage?.detachedAssets?.());
+    r3Stage = null;
+    await releaseStage;
     const origin = new THREE.Vector3(portalX, floorY, portalFront);
-    const stage = R3.mount(THREE, r3Entry.passage, r3Entry.hall, origin);
+    const stage = R3.mount(THREE, r3Entry.passage, r3Entry.hall, origin, { chapter });
     const envelope = new THREE.Group();
-    envelope.name = 'R3Stage';
+    envelope.name = chapter === 'u1' ? 'U1Stage' : 'R3Stage';
     envelope.position.copy(origin);
     envelope.add(stage.root, new THREE.HemisphereLight(0xe9e9e9, 0x525252, 1.2));
     const key = new THREE.DirectionalLight(0xffffff, 1.35);
     key.position.set(3, 9, -4);
     envelope.add(key);
     ctx.scene.add(envelope);
-    // R3-01 props and stone sets load while the curtain is still black.
-    await stage.ready?.(ctx.renderer, { chapter: r3Entry.chapter }).catch(error => console.error('[R3-01] stair assets', error));
+    await stage.ready(ctx.renderer);
     r3Stage = stage;
     const arrival = r3Entry.arrival || stage.spawn;
     if (r3Entry.arrival) arrival[1] = stage.nearFloor(arrival[0], arrival[2], arrival[1])?.y ?? arrival[1];
@@ -4688,11 +4696,12 @@
     // curtain down until the deferred dressing there is complete.
     if (r3Entry.chapter && r3Entry.arrival) await stage.settled?.();
     ctx.hero.position.set(origin.x + arrival[0], origin.y + arrival[1], origin.z + arrival[2]);
-    ctx.setFacing(-Math.PI / 2);
+    const facing = r3Entry.facing ?? -Math.PI / 2;
+    ctx.setFacing(facing);
     stage.update(...arrival);
-    followCamera(ctx.camera, ctx.hero, -Math.PI / 2, FOLLOW_PITCH, FOLLOW_DIST, 0.016, true, true);
+    followCamera(ctx.camera, ctx.hero, facing, FOLLOW_PITCH, FOLLOW_DIST, 0.016, true, true);
     ctx.renderer.render(ctx.scene, ctx.camera);
-    r3Memory.loaded = { ...r3Snapshot(ctx, 'R3-loaded'), budget: stage.budget, cost: stage.cost };
+    memory.loaded = { ...r3Snapshot(ctx, chapter + '-loaded'), budget: stage.budget, cost: stage.cost };
     r3Fade = 0;
     state = 'R3_FADING_IN';
   }
@@ -4704,7 +4713,7 @@
       r3Curtain.id = 'r3-transition';
       document.body.appendChild(r3Curtain);
     }
-    r3Curtain.textContent = 'تعذّر عرض مقام العهد المدفون';
+    r3Curtain.textContent = r3Entry?.chapter === 'u1' ? 'تعذّر تحميل العالم السفلي' : 'تعذّر عرض مقام العهد المدفون';
     Object.assign(r3Curtain.style, {position:'fixed', inset:'0', zIndex:'12000', background:'#000', opacity:'1',
       display:'grid', placeItems:'center', color:'#fff'});
     console.error('[R3] transition failed', error);
@@ -4724,7 +4733,7 @@
       return;
     }
     if (state === 'R3_FADING_IN') {
-      r3Fade = Math.min(1, r3Fade + dt / 0.55);
+      r3Fade = Math.min(1, r3Fade + dt / (r3Entry.chapter === 'u1' ? 0.8 : 0.55));
       r3Curtain.style.opacity = String(1 - r3Fade);
       if (r3Fade === 1) {
         r3Curtain.remove();
@@ -4734,23 +4743,18 @@
     }
     if (state === 'R3' || state === 'R3_FADING_IN') {
       const p = ctx.hero.position;
-      if (state === 'R3') tickR3Lift(dt, ctx);
+      if (state === 'R3' && tickR3Lift(dt, ctx)) return;
       r3Stage.update(p.x - portalX, p.y - floorY, p.z - portalFront);
     }
   }
 
-  // Maw lift (R3-03 <-> U1-01): the stage decides; here the view is veiled
-  // and the hero and camera are carried by the same vertical offset.
+  // The black frame is the lift's one-way chapter boundary. Keep the
+  // same position relative to the cabin and the same player instance.
   let r3LiftVeil = null;
   function tickR3Lift(dt, ctx) {
     const p = ctx.hero.position;
     const ride = r3Stage.lift?.(p.x - portalX, p.y - floorY, p.z - portalFront, dt);
-    if (!ride) return;
-    if (ride.shift) {
-      p.y += ride.shift[1];
-      ctx.camera.position.y += ride.shift[1];
-      ctx.camera.updateMatrixWorld();
-    }
+    if (!ride) return false;
     if (ride.fade > 0 && !r3LiftVeil) {
       r3LiftVeil = document.createElement('div');
       r3LiftVeil.id = 'r3-lift-veil';
@@ -4760,6 +4764,16 @@
     }
     if (r3LiftVeil) r3LiftVeil.style.opacity = String(ride.fade);
     if (ride.fade === 0 && r3LiftVeil) { r3LiftVeil.remove(); r3LiftVeil = null; }
+    if (!ride.shift) return false;
+    underworldMemory.before = r3Snapshot(ctx, 'u1-before');
+    Object.assign(r3Entry, { chapter: 'u1', arrival: [p.x - portalX, p.y - floorY + ride.shift[1], p.z - portalFront],
+      facing: ctx.hero.rotation.y });
+    r3Curtain = r3LiftVeil;
+    r3LiftVeil = null;
+    r3Curtain.style.pointerEvents = 'auto';
+    state = 'R3_BLACK';
+    requestAnimationFrame(() => loadR3(ctx).catch(failR3));
+    return true;
   }
 
   function tickR3Door(dt, hero) {
@@ -5713,14 +5727,15 @@
     document.body.appendChild(r3Curtain);
     lastContext = ctx;
     state = 'R3_BLACK';
-    r3Memory.before = r3Snapshot(ctx, 'R3-direct-' + chapter);
+    const memory = chapter === 'u1' ? underworldMemory : r3Memory;
+    memory.before = r3Snapshot(ctx, 'direct-' + chapter);
     await loadR3(ctx).catch(error => { failR3(error); throw error; });
     return waitState(() => state === 'R3');
   }
 
   // Area registry (sin-areas.js): the throne hall is this module's stage.
   if (window.SinAreas) SinAreas.chapter({ stage: 'palace', order: 20, ar: 'القصر الملكي', en: 'Royal palace',
-    boundary: 'royal door', boot: bootPalace }, 'palaceInterior');
+    boundary: 'royal door', boot: bootPalace, preview: view => window.PalaceWings?.preview(view) }, 'palaceInterior');
   if (window.SinAreas) SinAreas.group('hall', 'قاعة العرش', 'Throne hall', 20)
     .register({ id: 'HALL', stage: 'palace', group: 'hall', ar: 'قاعة العرش', en: 'Throne hall', spawn: { teleport: 'Palace' } }, 'palaceInterior');
 
@@ -5740,7 +5755,10 @@
       return !!(r3Stage?.nearFloor(x, z, p.y - floorY) || r3Entrance?.floorAt(x, z))?.steps;
     },
     r3Memory: () => structuredClone(r3Memory),
+    underworldMemory: () => structuredClone(underworldMemory),
+    activeSealedChapter: () => r3Stage ? r3Entry.chapter || 'r3' : null,
     // Deferred R3 dressing (R3-03 streams in after arrival): resolves when complete.
+    previewR3: view => r3Stage?.preview(view),
     r3Settled: () => (r3Stage?.settled ? r3Stage.settled() : Promise.resolve('none')),
     wantsWalk: function () { return state === 'ENTRANCE'; },
     clampFollowTarget: clampFollowTarget,
