@@ -640,8 +640,8 @@
     parapet(-139,gateFloor,gateZ,18.7,[[0,.18],[Math.PI,.62]]);
     // Seat the whole gate, including its return walls, on the existing court.
     // The matching stone plinth runs along both fortifications above the void.
-    slab(-162,gateFloor,gateZ,19.2,3,59);
-    queueTreads(-152.4,gateZ,-171.6,gateZ,gateFloor,59,[]);
+    slab(-163,gateFloor,gateZ,17.2,3,59);
+    queueTreads(-154.4,gateZ,-171.6,gateZ,gateFloor,59,[]);
     for (const side of [-1,1]) {
       const wingZ = gateZ + side*14.6;
       pier(-160,gateFloor-3,wingZ,8.6,8.2,32);
@@ -1342,7 +1342,7 @@
       group: world, status, floor, finish,
       gateBlocks: (x, z, radius) => gate
         ? gate.blocks(x - A.x, z - A.z, radius)
-        : Math.abs(z - A.z - gateZ) < gateHalfWidth && x - A.x < gateX + 1.3,
+        : Math.abs(z - A.z - gateZ) < gateHalfWidth && Math.abs(x - A.x - gateX) < 1.3,
       tickGate: (dt, ctx, towardGate) => gate?.update(dt, ctx, towardGate),
       gateCamera: (camera, safeFollow) => gate?.frameCamera(camera, safeFollow),
       gateCameraBoxes: (x, z) => gate?.cameraBoxesAt(x - A.x, z - A.z),
