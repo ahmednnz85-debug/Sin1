@@ -1,0 +1,65 @@
+{
+  "closedL": [
+    0,
+    0,
+    0,
+    1
+  ],
+  "closedR": [
+    0,
+    0,
+    0,
+    1
+  ],
+  "initial": [
+    -124,
+    -9,
+    -26.000000000000007
+  ],
+  "b": {
+    "centre": true,
+    "left": true,
+    "right": true,
+    "path": true
+  },
+  "hasGate": true,
+  "a": "U1-03",
+  "openTraverse": [
+    -160.73192534192108,
+    -9,
+    -26.000000000000007
+  ],
+  "leftBound": [
+    -153.19591022420946,
+    -9,
+    -20.000000000000007
+  ],
+  "rightBound": [
+    -153.1959102242096,
+    -9,
+    -32.00000000000001
+  ],
+  "endBound": [
+    -167.1573060046207,
+    -9,
+    -26.000000000000007
+  ],
+  "errors": [],
+  "contactWithinMetres": 0.0,
+  "authoredDuration": 5.199999809265137,
+  "endAngles": [
+    89.2,
+    -88.0
+  ],
+  "controlRestored": true,
+  "cameraRiseM": 4.13,
+  "cameraDollyM": 12.6,
+  "chapterChecks": {
+    "palaceIsolated": true,
+    "r3Isolated": true,
+    "u1Isolated": true,
+    "liftArrived": true
+  },
+  "render": "Chromium with SwiftShader on Linux. Sampling actual camera frames.",
+  "gateFetchedOnU1Entry": true
+}
