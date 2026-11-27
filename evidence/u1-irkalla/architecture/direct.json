@@ -2,10 +2,10 @@
   "results": {
     "direct": {
       "U1-01": {
-        "wallSeconds": 16.344,
+        "wallSeconds": 11.535,
         "level": "U1-01",
         "ready": true,
-        "ms": 5724,
+        "ms": 3173,
         "error": null,
         "phase": "R3",
         "hero": [
@@ -14,18 +14,18 @@
           174.46
         ],
         "blockedAtHero": false,
-        "geometries": 34,
-        "textures": 29,
+        "geometries": 33,
+        "textures": 30,
         "calls": 40,
-        "triangles": 567176,
+        "triangles": 571136,
         "est": {
-          "cpuMB": 41.5,
-          "gpuMB": 102.8
+          "cpuMB": 42.1,
+          "gpuMB": 103.4
         },
         "url": "?dev=1&level=U1-01",
-        "movedAfterWalk": 1.16,
+        "movedAfterWalk": 0.84,
         "heroAfterWalk": [
-          -102.62,
+          -102.94,
           -434.57,
           174.46
         ],
