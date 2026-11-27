@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } = require('meshoptimizer');
+const DracoDecoderModule = require('../vendor/draco/draco_wasm_wrapper.js');
 
 const assets = path.join(__dirname, '../assets');
 function readModel(name) {
@@ -50,7 +51,9 @@ function props() {
     return [image.mimeType, bin.subarray(offset, offset + view.byteLength)];
   });
   writePack('architecture.glb', points, attributes, [
-    ['Harbor_Column', column, 14300], ['Harbor_Turquoise_Lamp', lamp, 3600]
+    ['Harbor_Column', column, 14300], ['Harbor_Turquoise_Lamp', lamp, 3600],
+    ['Harbor_Column_Far', column, 3900, meshPivot(points,column), .041],
+    ['Harbor_Turquoise_Lamp_Far', lamp, 950, meshPivot(points,lamp), .045]
   ], { images, textures: original.textures, samplers: original.samplers, materials: original.materials });
 }
 
@@ -101,13 +104,66 @@ function skyline() {
   const landmarks = [
     ['Cascade_Citadel', 0, 11600], ['Upper_Precinct', 1, 4200], ['Lower_Terrace', 2, 1850],
     ['Watchtower', 3, 1890], ['Temple_Stairs', 4, 1560], ['Round_Arcade', 5, 1270],
-    ['Bridge_Arcade', 6, 1120]
+    ['Bridge_Arcade', 6, 1120], ['Cliff_Shelf', 7, 1000], ['Ruin_Arch', 8, 820],
+    ['Spirit_Fall', 15, 820], ['Rock_Buttress', 16, 640], ['Cascade_Citadel_Far', 0, 3800]
   ];
-  writePack('distant-ruins.glb', points, attributes, landmarks.map(([name, index, limit]) => [name, connected[index], limit]), {
+  const citadelPivot = meshPivot(points, connected[0]);
+  writePack('distant-ruins.glb', points, attributes, landmarks.map(([name, index, limit]) =>
+    [name, connected[index], limit, index === 0 ? citadelPivot : null, name.endsWith('_Far') ? .029 : .012]), {
     textures: [{}],
     materials: [{ doubleSided: true, pbrMetallicRoughness: { baseColorTexture: { index: 0 }, metallicFactor: 0, roughnessFactor: 1 } }],
     images: [['image/webp', fs.readFileSync(path.join(os.tmpdir(), 'sin1-harbor-skyline-atlas.webp'))]]
   });
+}
+
+function meshPivot(points, ids) {
+  const low = [Infinity, Infinity, Infinity], high = [-Infinity, -Infinity, -Infinity];
+  for (const id of ids) for (let axis = 0; axis < 3; axis++) {
+    const point = points[id * 3 + axis];
+    low[axis] = Math.min(low[axis], point);
+    high[axis] = Math.max(high[axis], point);
+  }
+  return [(low[0] + high[0]) / 2, low[1], (low[2] + high[2]) / 2];
+}
+
+async function guardians() {
+  const { original, bin } = readModel('اسد مجنح .glb');
+  const ext = original.meshes[0].primitives[0].extensions.KHR_draco_mesh_compression;
+  const view = original.bufferViews[ext.bufferView], offset = view.byteOffset || 0;
+  const { D } = await new Promise(resolve => {
+    const wasmBinary = fs.readFileSync(path.join(__dirname, '../vendor/draco/draco_decoder.wasm'));
+    DracoDecoderModule({ wasmBinary }).then(D => resolve({ D }));
+  });
+  const decoder = new D.Decoder(), buffer = new D.DecoderBuffer(), mesh = new D.Mesh();
+  const values = new D.DracoFloat32Array(), face = new D.DracoInt32Array();
+  try {
+    buffer.Init(new Int8Array(bin.subarray(offset, offset + view.byteLength)), view.byteLength);
+    const result = decoder.DecodeBufferToMesh(buffer, mesh);
+    if (!result.ok()) throw new Error(result.error_msg());
+    const extract = (name, size) => {
+      const attribute = decoder.GetAttributeByUniqueId(mesh, ext.attributes[name]);
+      decoder.GetAttributeFloatForAllPoints(mesh, attribute, values);
+      return Float32Array.from({length:mesh.num_points()*size}, (_, i) => values.GetValue(i));
+    };
+    const points = extract('POSITION', 3), normals = extract('NORMAL', 3), uv = extract('TEXCOORD_0', 2);
+    const attributes = new Float32Array(mesh.num_points() * 5), ids = new Uint32Array(mesh.num_faces() * 3);
+    for (let i = 0; i < mesh.num_points(); i++) {
+      const n = normals.subarray(i * 3, i * 3 + 3), length = Math.hypot(...n) || 1;
+      attributes.set([n[0]/length, n[1]/length, n[2]/length, uv[i*2], uv[i*2+1]], i*5);
+    }
+    for (let i = 0; i < mesh.num_faces(); i++) {
+      decoder.GetFaceFromMesh(mesh, i, face);
+      for (let k = 0; k < 3; k++) ids[i*3+k] = face.GetValue(k);
+    }
+    const pivot = meshPivot(points, ids);
+    const textures = original.textures.map(({ source, ...settings }) => ({ ...settings, extensions: { EXT_texture_webp: { source } } }));
+    const images = original.images.map((_, index) => ['image/webp', fs.readFileSync(path.join(os.tmpdir(), 'sin1-irkalla-guardian-' + index + '.webp'))]);
+    writePack('road-guardians.glb', points, attributes,
+      [['Winged_Lion', ids, 29500, pivot, .007], ['Winged_Lion_Far', ids, 8800, pivot, .02]],
+      { images, textures, samplers:original.samplers, materials:original.materials });
+  } finally {
+    for (const resource of [values, face, mesh, buffer, decoder]) D.destroy(resource);
+  }
 }
 
 function writePack(name, points, attributes, meshes, { images, textures, samplers, materials }) {
@@ -142,9 +198,9 @@ function writePack(name, points, attributes, meshes, { images, textures, sampler
     if (mode === 'ATTRIBUTES') view.byteStride = byteStride;
     return doc.bufferViews.push(view) - 1;
   }
-  function add(name, ids, triangles) {
+  function add(name, ids, triangles, fixedPivot, errorLimit = .012) {
     const [lod, error] = MeshoptSimplifier.simplifyWithAttributes(Uint32Array.from(ids), points, 3, attributes, 5,
-      [0.16, 0.16, 0.16, 0.85, 0.85], null, triangles * 3, 0.012, ['Regularize']);
+      [0.16, 0.16, 0.16, 0.85, 0.85], null, triangles * 3, errorLimit, ['Regularize']);
     const [remap, count] = MeshoptSimplifier.compactMesh(lod);
     const data = Buffer.alloc(count * 32);
     const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
@@ -155,7 +211,7 @@ function writePack(name, points, attributes, meshes, { images, textures, sampler
         max[k] = Math.max(max[k], points[i * 3 + k]);
       }
     }
-    const pivot = [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];
+    const pivot = fixedPivot || [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];
     for (let i = 0; i < remap.length; i++) {
       if (remap[i] === 0xffffffff) continue;
       const offset = 32 * remap[i];
@@ -163,7 +219,7 @@ function writePack(name, points, attributes, meshes, { images, textures, sampler
       for (let k = 0; k < 5; k++) data.writeFloatLE(attributes[i * 5 + k], offset + 12 + k * 4);
     }
     const view = compress(data, count, 32, 'ATTRIBUTES');
-    const faces = Uint16Array.from(lod);
+    const faces = count <= 65535 ? Uint16Array.from(lod) : Uint32Array.from(lod);
     const access = (bufferView, type, count, byteOffset, componentType) =>
       doc.accessors.push({ bufferView, type, count, byteOffset, componentType }) - 1;
     const p = access(view, 'VEC3', count, 0, 5126);
@@ -171,12 +227,13 @@ function writePack(name, points, attributes, meshes, { images, textures, sampler
     doc.accessors[p].max = max.map((v, i) => Math.fround(v - pivot[i]));
     const n = access(view, 'VEC3', count, 12, 5126);
     const uv = access(view, 'VEC2', count, 24, 5126);
-    const ix = access(compress(new Uint8Array(faces.buffer), faces.length, 2, 'TRIANGLES'), 'SCALAR', faces.length, 0, 5123);
+    const ix = access(compress(new Uint8Array(faces.buffer), faces.length, faces.BYTES_PER_ELEMENT, 'TRIANGLES'),
+      'SCALAR', faces.length, 0, faces.BYTES_PER_ELEMENT === 2 ? 5123 : 5125);
     const mesh = doc.meshes.push({ primitives: [{ attributes: { POSITION: p, NORMAL: n, TEXCOORD_0: uv }, indices: ix, material: 0 }] }) - 1;
     doc.nodes.push({ name, mesh });
     console.log(name, ids.length / 3, '→', lod.length / 3, 'triangles, error', error.toFixed(4));
   }
-  for (const [meshName, ids, limit] of meshes) add(meshName, ids, limit);
+  for (const mesh of meshes) add(...mesh);
   doc.buffers = [{ byteLength: bytes }, { byteLength: fallback, extensions: { EXT_meshopt_compression: { fallback: true } } }];
   let json = Buffer.from(JSON.stringify(doc), 'utf8');
   json = Buffer.concat([json, Buffer.alloc((4 - json.length % 4) % 4, 0x20)]);
@@ -187,5 +244,8 @@ function writePack(name, points, attributes, meshes, { images, textures, sampler
   fs.writeFileSync(path.join(assets, 'r3/harbor', name), Buffer.concat([header, json, binHeader, ...chunks]));
 }
 Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready, MeshoptSimplifier.ready])
-  .then(() => { props(); skyline(); })
+  .then(async () => {
+    if (process.argv.includes('--irkalla')) { props(); skyline(); await guardians(); }
+    else { props(); skyline(); }
+  })
   .catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,0 +1,49 @@
+{
+  "url": "http://127.0.0.1:3111/index.html?dev=1&level=U1-01",
+  "environment": "Chromium/SwiftShader on Linux, 960x540",
+  "checks": {
+    "spawnInCabin": true
+  },
+  "views": {
+    "anchorage": {
+      "frameMs": 2182.2,
+      "draws": 27,
+      "triangles": 500050,
+      "cpuMiB": 20.5,
+      "gpuMiB": 114
+    },
+    "road-of-the-dead": {
+      "frameMs": 462.7,
+      "draws": 15,
+      "triangles": 320642,
+      "cpuMiB": 20.5,
+      "gpuMiB": 114
+    },
+    "bridge": {
+      "frameMs": 343,
+      "draws": 11,
+      "triangles": 125042,
+      "cpuMiB": 20.5,
+      "gpuMiB": 114
+    },
+    "gate-of-irkalla": {
+      "frameMs": 441,
+      "draws": 10,
+      "triangles": 121922,
+      "cpuMiB": 20.5,
+      "gpuMiB": 114
+    }
+  },
+  "errors": [],
+  "bootSeconds": 6.914,
+  "entry": {
+    "area": "U1-01",
+    "underworldVisible": true,
+    "mawPresent": false,
+    "arrivalCabin": true,
+    "heroFromCabin": 0,
+    "heroAboveDock": 0.58,
+    "blocked": false,
+    "status": "hub-waited"
+  }
+}

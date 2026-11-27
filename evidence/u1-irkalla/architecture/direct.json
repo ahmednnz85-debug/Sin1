@@ -1,0 +1,117 @@
+{
+  "results": {
+    "direct": {
+      "U1-01": {
+        "wallSeconds": 16.344,
+        "level": "U1-01",
+        "ready": true,
+        "ms": 5724,
+        "error": null,
+        "phase": "R3",
+        "hero": [
+          -103.78,
+          -434.57,
+          174.46
+        ],
+        "blockedAtHero": false,
+        "geometries": 34,
+        "textures": 29,
+        "calls": 40,
+        "triangles": 567176,
+        "est": {
+          "cpuMB": 41.5,
+          "gpuMB": 102.8
+        },
+        "url": "?dev=1&level=U1-01",
+        "movedAfterWalk": 1.16,
+        "heroAfterWalk": [
+          -102.62,
+          -434.57,
+          174.46
+        ],
+        "blockedAfterWalk": false,
+        "glbRequests": 5,
+        "assets": {
+          "count": 38,
+          "MiB": 24.4
+        },
+        "screenshot": true,
+        "errors": []
+      },
+      "U1-02": {
+        "wallSeconds": 13.753,
+        "level": "U1-02",
+        "ready": true,
+        "ms": 3370,
+        "error": null,
+        "phase": "R3",
+        "hero": [
+          -54.78,
+          -441.15,
+          148.46
+        ],
+        "blockedAtHero": false,
+        "geometries": 35,
+        "textures": 28,
+        "calls": 42,
+        "triangles": 352953,
+        "est": {
+          "cpuMB": 60.1,
+          "gpuMB": 78
+        },
+        "url": "?dev=1&level=U1-02",
+        "movedAfterWalk": 1.16,
+        "heroAfterWalk": [
+          -53.62,
+          -441.15,
+          148.46
+        ],
+        "blockedAfterWalk": false,
+        "glbRequests": 5,
+        "assets": {
+          "count": 38,
+          "MiB": 24.4
+        },
+        "screenshot": true,
+        "errors": []
+      },
+      "U1-03": {
+        "wallSeconds": 13.818,
+        "level": "U1-03",
+        "ready": true,
+        "ms": 3702,
+        "error": null,
+        "phase": "R3",
+        "hero": [
+          20.22,
+          -444.15,
+          148.46
+        ],
+        "blockedAtHero": false,
+        "geometries": 34,
+        "textures": 28,
+        "calls": 36,
+        "triangles": 339691,
+        "est": {
+          "cpuMB": 60.1,
+          "gpuMB": 78
+        },
+        "url": "?dev=1&level=U1-03",
+        "movedAfterWalk": 1.16,
+        "heroAfterWalk": [
+          21.38,
+          -444.15,
+          148.46
+        ],
+        "blockedAfterWalk": false,
+        "glbRequests": 5,
+        "assets": {
+          "count": 38,
+          "MiB": 24.4
+        },
+        "screenshot": true,
+        "errors": []
+      }
+    }
+  }
+}
