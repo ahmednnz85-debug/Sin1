@@ -31,7 +31,7 @@ const save = () => fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringif
 async function open(browser) {
   const ctx = await browser.newContext({ viewport: { width: 852, height: 393 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, userAgent: UA });
   const page = await ctx.newPage();
-  const log = { errors: [], assets: [] };
+  const log = { errors: [], warnings: [], assets: [] };
   page.on('pageerror', e => log.errors.push(String(e).slice(0, 300)));
   page.on('console', m => {
     if (m.type() === 'error' && !m.text().startsWith('Failed to load resource:')) log.errors.push('console: ' + m.text().slice(0, 300));
@@ -39,7 +39,10 @@ async function open(browser) {
   page.on('response', response => {
     const file = new URL(response.url()).pathname;
     if (response.status() < 400 || /\/favicon\.ico$/.test(file) || (!KEEP_HUB && /\/dev-hub\.js$/.test(file))) return;
-    log.errors.push('HTTP ' + response.status() + ' ' + decodeURIComponent(file));
+    const message = 'HTTP ' + response.status() + ' ' + decodeURIComponent(file);
+    // The original exterior already uses its base sky when this optional map is absent.
+    if (response.status() === 404 && file === '/assets/sky_babylon_blood.jpeg') log.warnings.push(message);
+    else log.errors.push(message);
   });
   page.on('request', r => {
     const u = decodeURIComponent(r.url()).replace(/^https?:\/\/[^/]+\//, '').split('?')[0];
@@ -115,7 +118,7 @@ async function normal(browser) {
       preloads: [...document.querySelectorAll('link[rel=preload]')].map(l => l.getAttribute('href')) };
   });
   await ctx.close();
-  return { menuSeconds, ...state, assetsAtMenu: atMenu.sort(), assetCount: atMenu.length, errors: log.errors };
+  return { menuSeconds, ...state, assetsAtMenu: atMenu.sort(), assetCount: atMenu.length, errors: log.errors, warnings: log.warnings };
 }
 
 async function story(browser, palaceOnly = false) {
@@ -147,6 +150,7 @@ async function story(browser, palaceOnly = false) {
     out.checks = { palaceIsolated: palace.cityReleased && palace.memory.released?.cityReleased &&
       palace.isolated && palace.backToCityBlocked && palaceAssets.length === 0 && palace.memory.before.geometries > palace.memory.released.geometries };
     out.errors = log.errors;
+    out.warnings = log.warnings;
     await ctx.close();
     return out;
   }
@@ -220,6 +224,7 @@ async function story(browser, palaceOnly = false) {
     liftArrived: lift.sameHero && Math.abs(lift.moved + 420) < 0.1 && lift.arrivalCabin && lift.veilGone && lift.onFloor
   };
   out.errors = log.errors;
+  out.warnings = log.warnings;
   await ctx.close();
   return out;
 }
