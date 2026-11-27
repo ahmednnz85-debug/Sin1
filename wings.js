@@ -4369,13 +4369,20 @@
     const plannedRooms = plan ? new Set(plan.approach) : new Set(['L1']);
     zoneStreamer.update({ metric: true, loadingScreen: true, current: origin, approach: plannedRooms, keep: plan ? plan.keep : plannedRooms,
       rank: plan ? plan.rank : new Map([['L1', 0]]), visible: new Set(), retained: new Set(), allowBackgroundWarm: false });
-    // The blackout waits only for what the first frames can show: rooms seen
-    // from the spawn region. The rest of the plan keeps loading in play.
+    // Prepare rooms visible from spawn and the nearest additional room that
+    // the streamer has already admitted into memory. Getting that room ready
+    // here keeps a planned upload out of the first walk past the threshold.
     const seen = state.pvs && state.pvs.get(origin);
     const wanted = new Set([...plannedRooms].filter(id => !seen || seen.has(id)));
+    const r = zoneStreamer.report();
+    if (!entry.next && plan) {
+      entry.next = [...plannedRooms].filter(id => !wanted.has(id) &&
+        ['loading', 'uploading', 'compiling'].includes(r.zones[id]?.state))
+        .sort((a, b) => plan.rank.get(a) - plan.rank.get(b))[0];
+    }
+    if (entry.next && r.zones[entry.next]?.state !== 'cold') wanted.add(entry.next);
     const states = [...wanted].map(id => zoneStreamer.status(id));
     const busy = states.some(st => st === 'loading' || st === 'uploading' || st === 'compiling');
-    const r = zoneStreamer.report();
     const waitingMemory = [...wanted].filter(id => r.zones[id] && r.zones[id].state === 'cold' && r.zones[id].deferred);
     if (!busy && waitingMemory.length && !entry.reclaimed && reclaim) {
       entry.reclaimed = true;
