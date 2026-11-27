@@ -140,7 +140,8 @@ test('the lift docks in the Maw and at the Anchorage; the U1 route walks to the 
   return Promise.all(['U1-01', 'U1-02', 'U1-03'].map(id => window.SinAreas.get(id))).then(areas => {
     for (const a of areas) assert.ok(underworld.nearFloor(xAt(a.spawn.u), zAt(a.spawn.v), a.spawn.y), a.id + ' spawn on floor');
     // Anchorage -> causeway -> junction -> stair -> landing -> bridge -> midway -> descent -> plaza.
-    const rel = [[-3.5, 0], [-42, 0], [-42, -26], [-98, -26], [-139, -26], [-149, -26]];
+    const rel = [[-3.5, 0], [-42, 0], [-42, 13], [-42, 0], [-42, -26],
+      [-98, -26], [-98, -38.5], [-98, -26], [-139, -26], [-149, -26]];
     let [px, pz] = [-3.5, 0], feet = bottom - 0.58;
     const base = (x, z) => [xAt(cabin[0] + x), zAt(cabin[1] + z)];
     feet = underworld.nearFloor(...base(px, pz), bottom).y;

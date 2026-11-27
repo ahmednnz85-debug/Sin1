@@ -1,0 +1,292 @@
+{
+  "hub": "removed",
+  "results": {
+    "story": {
+      "url": "http://127.0.0.1:3111/index.html?startInHall=1&royalDoorTest=1&r3DoorTest=1",
+      "steps": {
+        "palace": {
+          "t": 86.656,
+          "state": "DONE",
+          "cityReleased": true,
+          "memory": {
+            "before": {
+              "geometries": 58,
+              "textures": 63,
+              "programs": 0,
+              "calls": 1,
+              "triangles": 12,
+              "cityReleased": false
+            },
+            "released": {
+              "geometries": 4,
+              "textures": 9,
+              "programs": 0,
+              "calls": 3,
+              "triangles": 115684,
+              "cityReleased": true
+            }
+          },
+          "roots": [
+            "HemisphereLight",
+            "DirectionalLight",
+            "DirectionalLight",
+            "SinHeroRoot",
+            "PalaceInterior",
+            "SinLightRigPads",
+            "PalaceWings"
+          ],
+          "isolated": true,
+          "backToCityBlocked": true,
+          "floorY": 3.7544692556158643,
+          "front": 183.65999999999997,
+          "x": 1
+        },
+        "r3-door": {
+          "t": 86.742,
+          "opened": true,
+          "state": {
+            "phase": "open",
+            "elapsed": 4.2,
+            "duration": 4.2,
+            "angles": [
+              1.5446163880149817,
+              -1.5446163880149817
+            ],
+            "origin": [
+              -12.27455767789057,
+              3.5208099197215077,
+              192.86326740255302
+            ],
+            "floor": 3.9819796278009654,
+            "columnBase": 3.7544692556158643,
+            "scale": [
+              0.989268725420906,
+              1.1977602601470845
+            ],
+            "jambs": [
+              [
+                -1.8429946524064171,
+                0,
+                0
+              ],
+              [
+                1.8429946524064171,
+                0,
+                0
+              ]
+            ]
+          }
+        },
+        "passage-L0": {
+          "t": 92.509,
+          "inR3": true,
+          "state": "R3_FADING_OUT"
+        },
+        "r3": {
+          "t": 121.222,
+          "state": "R3",
+          "roots": [
+            "SinHeroRoot",
+            "R3Stage"
+          ],
+          "stage": "r3",
+          "memory": {
+            "before": {
+              "geometries": 235,
+              "textures": 147,
+              "programs": 0,
+              "calls": 1,
+              "triangles": 15530,
+              "cityReleased": true,
+              "cpuMB": 100.7,
+              "gpuMB": 466.1,
+              "heapMB": null,
+              "roots": [
+                "HemisphereLight",
+                "DirectionalLight",
+                "DirectionalLight",
+                "SinHeroRoot",
+                "PalaceInterior",
+                "SinLightRigPads",
+                "PalaceWings"
+              ]
+            },
+            "disposed": {
+              "geometries": 482,
+              "materials": 145,
+              "textures": 156
+            },
+            "released": {
+              "geometries": 4,
+              "textures": 9,
+              "programs": 0,
+              "calls": 3,
+              "triangles": 115684,
+              "cityReleased": true,
+              "cpuMB": 5.9,
+              "gpuMB": 40.1,
+              "heapMB": null,
+              "roots": [
+                "SinHeroRoot"
+              ]
+            },
+            "loaded": {
+              "geometries": 4,
+              "textures": 9,
+              "programs": 0,
+              "calls": 3,
+              "triangles": 115684,
+              "cityReleased": true,
+              "cpuMB": 120.8,
+              "gpuMB": 78.5,
+              "heapMB": null,
+              "roots": [
+                "SinHeroRoot",
+                "R3Stage"
+              ],
+              "budget": {
+                "geometryBytes": 3145728,
+                "textures": 0,
+                "batches": 52,
+                "hall": {
+                  "textureMiB": 42,
+                  "glbMiB": 18,
+                  "drawCalls": 100,
+                  "trianglesInView": 850000
+                },
+                "stair": {
+                  "textureMiB": 48,
+                  "glbMiB": 24,
+                  "drawCalls": 110,
+                  "trianglesInView": 900000
+                }
+              },
+              "cost": {
+                "geometryBytes": 1783008,
+                "batches": 35,
+                "textures": 0,
+                "stair": {
+                  "textures": 31,
+                  "textureMiB": 40.2,
+                  "glbMiB": 22.1,
+                  "triangles": 1864054,
+                  "meshes": 221,
+                  "ms": 1873
+                },
+                "hall": {
+                  "glbBytes": 17628956,
+                  "props": {
+                    "platform": {
+                      "instances": 1,
+                      "triangles": 178774,
+                      "lodTriangles": 178774
+                    },
+                    "guardian": {
+                      "instances": 2,
+                      "triangles": 121594,
+                      "lodTriangles": 27963
+                    },
+                    "column": {
+                      "instances": 9,
+                      "triangles": 44888,
+                      "lodTriangles": 8729
+                    },
+                    "stele": {
+                      "instances": 4,
+                      "triangles": 29824,
+                      "lodTriangles": 9244
+                    },
+                    "rubble": {
+                      "instances": 15,
+                      "triangles": 29700,
+                      "lodTriangles": 7280
+                    }
+                  },
+                  "maps": 30,
+                  "propTextures": 21,
+                  "propTextureBytes": 16515856,
+                  "loadMs": 998,
+                  "mapBytesWithMipmaps": 20938752
+                }
+              }
+            }
+          },
+          "backToPalaceBlocked": true
+        },
+        "lift": {
+          "t": 133.95,
+          "state": "R3",
+          "stage": "u1",
+          "roots": [
+            "SinHeroRoot",
+            "U1Stage"
+          ],
+          "memory": {
+            "before": {
+              "geometries": 65,
+              "textures": 104,
+              "programs": 0,
+              "calls": 90,
+              "triangles": 721463,
+              "cityReleased": true,
+              "cpuMB": 120.1,
+              "gpuMB": 178.7,
+              "heapMB": null,
+              "roots": [
+                "SinHeroRoot",
+                "R3Stage"
+              ]
+            },
+            "disposed": {
+              "geometries": 179,
+              "materials": 93,
+              "textures": 144
+            },
+            "released": {
+              "geometries": 4,
+              "textures": 11,
+              "programs": 0,
+              "calls": 3,
+              "triangles": 115684,
+              "cityReleased": true,
+              "cpuMB": 5.9,
+              "gpuMB": 38.9,
+              "heapMB": null,
+              "roots": [
+                "SinHeroRoot"
+              ]
+            },
+            "loaded": {
+              "geometries": 33,
+              "textures": 32,
+              "programs": 0,
+              "calls": 34,
+              "triangles": 541146,
+              "cityReleased": true,
+              "cpuMB": 41.1,
+              "gpuMB": 125.4,
+              "heapMB": null,
+              "roots": [
+                "SinHeroRoot",
+                "U1Stage"
+              ]
+            }
+          },
+          "sameHero": true,
+          "moved": -420,
+          "arrivalCabin": true,
+          "veilGone": true,
+          "onFloor": true
+        }
+      },
+      "checks": {
+        "palaceIsolated": true,
+        "r3Isolated": true,
+        "u1Isolated": true,
+        "liftArrived": true
+      },
+      "errors": [],
+      "warnings": []
+    }
+  }
+}
