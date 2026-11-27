@@ -591,8 +591,8 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     doc.addEventListener('visibilitychange', () => { if (doc.hidden) clearInput(); }, { signal });
 
     root.addEventListener('keydown', ev => {
-      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       ev.stopImmediatePropagation();
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       if (ev.code === 'Escape') { ev.preventDefault(); stopFly(); return; }
       if (ev.code === 'KeyH') { ev.preventDefault(); if (!ev.repeat) clean(!state.hidden); return; }
       if (!flightKeys.has(ev.code) || ev.target === speed && ev.code.startsWith('Arrow')) return;
@@ -601,7 +601,6 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     }, { capture: true, signal });
     root.addEventListener('keyup', ev => {
       state.keys.delete(ev.code);
-      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       ev.stopImmediatePropagation();
     }, { capture: true, signal });
 

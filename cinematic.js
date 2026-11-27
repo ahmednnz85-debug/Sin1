@@ -396,16 +396,17 @@
     if (R.capabilities.isWebGL2) tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');
     R.render = function (s, c) {
       const isMain = !R.getRenderTarget() && c && c.isPerspectiveCamera;
+      const independent = isMain && c.userData.independentView;
       try {
         if (typeof window !== 'undefined') {
           window.__R = R;
           if (isMain) {
-            window.__C = c;
+            if (!independent) window.__C = c;
             if (s && s.isScene) window.__S = s;
           }
         }
       } catch (_) {}
-      if (isMain && !c.userData.independentView && ctx.interior() && window.PalaceWings && PalaceWings.beforePresent) {
+      if (isMain && !independent && ctx.interior() && window.PalaceWings && PalaceWings.beforePresent) {
         PalaceWings.beforePresent(s, c);
       }
       // Instance-level wrap shadows prototype hooks, so outdoor-perf must
