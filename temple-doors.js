@@ -457,5 +457,5 @@
     };
   }
 
-  window.SinTempleDoors={asset,libraryAsset,plan,mount,clipName};
+  window.SinTempleDoors={asset,libraryAsset,plan,mount,clipName,armRig};
 })();

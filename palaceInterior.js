@@ -4750,6 +4750,7 @@
     if (state === 'R3' || state === 'R3_FADING_IN') {
       const p = ctx.hero.position;
       if (state === 'R3' && tickR3Lift(dt, ctx)) return;
+      if (state === 'R3' && r3Stage.tickGate) r3Stage.tickGate(dt, ctx, ctx.gateMotion > .18);
       r3Stage.update(p.x - portalX, p.y - floorY, p.z - portalFront);
     }
   }
@@ -5753,7 +5754,7 @@
     CONFIG: CONFIG,
     BUILD: BUILD,
     tick: tick,
-    locksControl: function () { return r3Locked() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
+    locksControl: function () { return r3Locked() || r3Stage?.gateActive?.() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
     ownsCamera: function () { return r3Locked() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'ENTRANCE' || state === 'SETTLE' || state === 'FAILED'; },
     inR3,
     onR3Steps(p) {
@@ -5766,7 +5767,10 @@
     // Deferred R3 dressing (R3-03 streams in after arrival): resolves when complete.
     previewR3: view => r3Stage?.preview(view),
     r3Settled: () => (r3Stage?.settled ? r3Stage.settled() : Promise.resolve('none')),
-    wantsWalk: function () { return state === 'ENTRANCE'; },
+    wantsWalk: function () { return state === 'ENTRANCE' || !!r3Stage?.gateApproach?.(); },
+    restoreGatePose: () => r3Stage?.restoreGatePose?.(),
+    gateCamera: (cam, hero, yaw, pitch, dist, dt) =>
+      r3Stage?.gateCamera?.(cam, () => followCamera(cam, hero, yaw, pitch, dist, dt, false, false)),
     clampFollowTarget: clampFollowTarget,
     ownsGround: function () { return inR3() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'FAILED' || (state === 'DONE' && occupant); },
     blocks: blocks,

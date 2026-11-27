@@ -875,6 +875,11 @@
     }
     return {
       root, nearFloor, underworld: under,
+      tickGate: under.tickGate,
+      gateActive: under.gateActive,
+      gateApproach: under.gateApproach,
+      gateCamera: under.gateCamera,
+      restoreGatePose: under.restoreGatePose,
       spawn: [passage.position[0] - MAW_ENTRY - dock.center[0], MAW_LEVEL + dock.deck + dock.drop, passage.position[2] + MAW_LANE + dock.center[1]],
       async ready(renderer) {
         await under.ready(renderer);
@@ -885,10 +890,16 @@
       preview({ show }) { show(under.group, true); },
       blocks(x, z, y, px, pz, radius) {
         const u = uAt(x), v = vAt(z);
-        return blocksPassage(u, v, nearFloor(px, pz, y), sample(u, v), radius, sample);
+        return under.gateBlocks(u - MAW_ENTRY, v - MAW_LANE, radius) ||
+          blocksPassage(u, v, nearFloor(px, pz, y), sample(u, v), radius, sample);
       },
       cameraSurfaceAt: (x, z) => sample(uAt(x), vAt(z)),
-      cameraBoxesAt: (x, z, y) => nearFloor(x, z, y) ? index(x, z) : null
+      cameraBoxesAt(x, z, y) {
+        if (!nearFloor(x, z, y)) return null;
+        const fixed = index(x, z);
+        const gateBoxes = under.gateCameraBoxes(uAt(x) - MAW_ENTRY, vAt(z) - MAW_LANE);
+        return gateBoxes ? (fixed || []).concat(gateBoxes) : fixed;
+      }
     };
   }
 
