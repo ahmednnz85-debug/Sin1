@@ -21,15 +21,12 @@ K1_RoyalReceptionHall.glb,assets/K1_RoyalReceptionHall.glb,model,K1 reception ha
 babylonian_wall.glb,assets/babylonian_wall.glb,model,see notes,none — one continuous world,,7.04 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
 grass_tuft_a.glb,assets/grass_tuft_a.glb,model,see notes,none — one continuous world,,1.30 MB,,,,not-started,referenced in runtime
 grass_tuft_b.glb,assets/grass_tuft_b.glb,model,see notes,none — one continuous world,,2.45 MB,,,,not-started,referenced in runtime
-houses.glb,assets/houses.glb,model,see notes,none — one continuous world,,2.27 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
-kiosk.glb,assets/kiosk.glb,model,see notes,none — one continuous world,,4.27 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
 lion_winged.glb.glb,assets/lion_winged.glb.glb,model,see notes,none — one continuous world,,9.32 MB,,,,not-started,referenced in runtime
 market_pot.glb,assets/market_pot.glb,model,see notes,none — one continuous world,,3.14 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
 market_pots.glb,assets/market_pots.glb,model,see notes,none — one continuous world,,3.22 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
 palace.glb,assets/palace.glb,model,see notes,none — one continuous world,,5.82 MB,,,,not-started,referenced in runtime
 palm.glb,assets/palm.glb,model,see notes,none — one continuous world,,0.97 MB,,,,not-started,referenced in runtime
 palm_new.glb,assets/palm_new.glb,model,see notes,none — one continuous world,,2.98 MB,,,,not-started,referenced in runtime
-stalls.glb,assets/stalls.glb,model,see notes,none — one continuous world,,3.23 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
 اثاث_الخرائط.glb,assets/اثاث_الخرائط.glb,model,K3 map room,K3,,3.83 MB,,,,not-started,Referenced as K3_LAZY.furn via unicode escapes in wings.js. Split into pieces around the table. Loaded with Draco after the city is released.
 اجتماعات .glb,assets/اجتماعات .glb,model,see notes,none — one continuous world,,9.39 MB,,,,not-started,referenced in runtime
 اربع اعمده مختلفة.glb,assets/اربع اعمده مختلفة.glb,model,see notes,none — one continuous world,,22.76 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
@@ -75,19 +72,11 @@ props-set.glb,ارضيات وسقوف/optimized/props-set.glb,model,see notes,no
 performance-optimization.patch,performance-optimization.patch,patch,shared / tooling,none — one continuous world,,0.02 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
 royal-door.patch,royal-door.patch,patch,shared / tooling,none — one continuous world,,0.02 MB,,,,not-started,"in repo, not found as a string in index/palace/wings"
 IMG_2962.JPG,assets/IMG_2962.JPG,texture,see notes,none — one continuous world,,0.14 MB,,,,not-started,referenced in runtime
-canal_color.jpg,assets/canal_color.jpg,texture,see notes,none — one continuous world,,0.20 MB,,,,not-started,referenced in runtime
-canal_normal.jpg,assets/canal_normal.jpg,texture,see notes,none — one continuous world,,0.21 MB,,,,not-started,referenced in runtime
-canal_rough.jpg,assets/canal_rough.jpg,texture,see notes,none — one continuous world,,0.21 MB,,,,not-started,referenced in runtime
-canal_water.jpg,assets/canal_water.jpg,texture,see notes,none — one continuous world,,0.11 MB,,,,not-started,referenced in runtime
 grass_dark.jpg,assets/grass_dark.jpg,texture,see notes,none — one continuous world,,0.38 MB,,,,not-started,referenced in runtime
 grass_lawn.jpg,assets/grass_lawn.jpg,texture,see notes,none — one continuous world,,0.55 MB,,,,not-started,referenced in runtime
 grass_moss.jpg,assets/grass_moss.jpg,texture,see notes,none — one continuous world,,0.38 MB,,,,not-started,referenced in runtime
-ground_zones.png,assets/ground_zones.png,texture,see notes,none — one continuous world,,0.13 MB,,,,not-started,referenced in runtime
 marble.webp,assets/marble.webp,texture,see notes,none — one continuous world,,0.11 MB,,,,not-started,referenced in runtime
 palace-glimpse.webp,assets/palace-glimpse.webp,texture,see notes,none — one continuous world,,0.20 MB,,,,not-started,referenced in runtime
-plaza_mosaic.jpg,assets/plaza_mosaic.jpg,texture,see notes,none — one continuous world,,0.73 MB,,,,not-started,referenced in runtime
-plaza_paving.jpg,assets/plaza_paving.jpg,texture,see notes,none — one continuous world,,0.61 MB,,,,not-started,referenced in runtime
-plaza_stone.jpg,assets/plaza_stone.jpg,texture,see notes,none — one continuous world,,0.38 MB,,,,not-started,referenced in runtime
 sky_babylon_blood.jpeg,assets/sky_babylon_blood.jpeg,texture,see notes,none — one continuous world,,0.19 MB,,,,not-started,referenced in runtime
 skyline_ring_a.jpg,assets/skyline_ring_a.jpg,texture,see notes,none — one continuous world,,0.27 MB,,,,not-started,referenced in runtime
 skyline_ring_b.jpg,assets/skyline_ring_b.jpg,texture,see notes,none — one continuous world,,0.26 MB,,,,not-started,referenced in runtime

@@ -23,17 +23,14 @@ function load() {
   return ctx;
 }
 
-test('outdoor-perf is on the page and original outdoor GLBs are not replaced', () => {
-  // Token is bumped when outdoor-perf.js changes (r9 added releaseAfterCity).
-  assert.match(index, /data-src="outdoor-perf\.js\?v=[0-9]+r[0-9]+"/);
-  // Originals still referenced by the game (index loadX paths).
-  assert.match(index, /babylonian_wall/);
-  assert.match(index, /grass_tuft_a/);
-  assert.match(index, /palm_new/);
-  for (const f of ['assets/babylonian_wall.glb', 'assets/grass_tuft_a.glb', 'assets/grass_tuft_b.glb', 'assets/palm_new.glb']) {
-    const st = fs.statSync(path.join(root, f));
-    assert.ok(st.size > 10000, f + ' missing or empty');
-  }
+test('the authored city owns the active batches, with the reusable palm and its LODs', () => {
+  const city = fs.readFileSync(path.join(root, 'babylon-exterior.js'), 'utf8');
+  assert.match(index, /data-src="babylon-exterior\.js\?v=/);
+  assert.doesNotMatch(index, /data-src="outdoor-perf\.js/);
+  assert.match(city, /assets\/palm_new\.glb/);
+  assert.match(city, /palmLods/);
+  assert.match(city, /new T\.InstancedMesh/);
+  assert.ok(fs.statSync(path.join(root, 'assets/palm_new.glb')).size > 10000);
 });
 
 test('baked LOD pack exists, is smaller than the sources, and records tight errors', () => {
@@ -179,11 +176,11 @@ function fakeGeo(floats) {
   };
 }
 
-test('index.html teardown calls SinOutdoorPerf.releaseAfterCity', () => {
+test('index.html teardown releases the new exterior renderer batches', () => {
   const i = index.indexOf('window.__releaseExteriorStage=function(){');
   assert.ok(i >= 0);
   const block = index.slice(i, i + 2200);
-  assert.match(block, /SinOutdoorPerf\.releaseAfterCity/);
+  assert.match(block, /babylon\?\.release\(\)/);
 });
 
 test('releaseAfterCity disposes LOD/HLOD caches, drops mesh refs, and stops the poll', () => {

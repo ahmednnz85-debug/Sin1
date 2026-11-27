@@ -1,0 +1,117 @@
+{
+ "base": "http://127.0.0.1:3107/index.html",
+ "hub": "removed",
+ "results": {
+  "palace": {
+   "steps": {
+    "palace": {
+     "t": 148.81,
+     "state": "DONE",
+     "cityReleased": true,
+     "memory": {
+      "before": {
+       "geometries": 55,
+       "textures": 60,
+       "programs": 0,
+       "calls": 1,
+       "triangles": 12,
+       "cityReleased": false
+      },
+      "released": {
+       "geometries": 4,
+       "textures": 9,
+       "programs": 0,
+       "calls": 3,
+       "triangles": 115684,
+       "cityReleased": true
+      }
+     },
+     "roots": [
+      "HemisphereLight",
+      "DirectionalLight",
+      "DirectionalLight",
+      "SinHeroRoot",
+      "PalaceInterior",
+      "SinLightRigPads",
+      "PalaceWings"
+     ],
+     "isolated": true,
+     "backToCityBlocked": true,
+     "floorY": 3.7544692556158643,
+     "front": 183.65999999999997,
+     "x": 1
+    }
+   },
+   "url": "http://127.0.0.1:3107/index.html?startInHall=1",
+   "assets": {
+    "requested": [
+     "assets/Sin_hero_runtime.glb",
+     "assets/babylon/binding-normal.webp",
+     "assets/babylon/binding-rough.webp",
+     "assets/babylon/binding.webp",
+     "assets/babylon/brick-normal.webp",
+     "assets/babylon/brick-rough.webp",
+     "assets/babylon/brick.webp",
+     "assets/babylon/city.glb",
+     "assets/babylon/lion-normal.webp",
+     "assets/babylon/lion-rough.webp",
+     "assets/babylon/lion.webp",
+     "assets/babylon/lotus-normal.webp",
+     "assets/babylon/lotus-rough.webp",
+     "assets/babylon/lotus.webp",
+     "assets/babylon/market.glb",
+     "assets/babylon/medallion-normal.webp",
+     "assets/babylon/medallion-rough.webp",
+     "assets/babylon/medallion.webp",
+     "assets/babylon/paving-normal.webp",
+     "assets/babylon/paving-rough.webp",
+     "assets/babylon/paving.webp",
+     "assets/babylon/rosette-normal.webp",
+     "assets/babylon/rosette-rough.webp",
+     "assets/babylon/rosette.webp",
+     "assets/babylon/sandstone-normal.webp",
+     "assets/babylon/sandstone-rough.webp",
+     "assets/babylon/sandstone.webp",
+     "assets/distant_city_ring.jpg",
+     "assets/ktx2/manifest.json",
+     "assets/lod/outdoor-hlod.json",
+     "assets/lod/outdoor-lod.json",
+     "assets/marble.webp",
+     "assets/palace-glimpse.webp",
+     "assets/palace.glb",
+     "assets/palm_new.glb",
+     "assets/اثاث المدخل المقدس.glb",
+     "assets/ارضية الحرم المقدس.JPG",
+     "assets/ارضية المكتبة الكبرى.JPG",
+     "assets/ارضية الممرات.JPG",
+     "assets/الباب المختوم.glb",
+     "assets/المكتبة الكبرى l1 2.glb",
+     "assets/المكتبة الكبرى l1.glb",
+     "assets/باب الاجنحة.glb",
+     "assets/باب جناح المعبد.glb",
+     "assets/باب جناح المكتبة.glb",
+     "assets/بوابة عشتار.glb",
+     "assets/جدار الممرات.jpg",
+     "assets/حجر الارشيف.JPG",
+     "assets/حجر المكتبة الكبرى.JPG",
+     "assets/سجاد الارضية.jpg",
+     "assets/سجاد الممرات.JPG",
+     "assets/سجل القمر .glb",
+     "assets/سقف الارشيف.JPG",
+     "assets/سقف الحرم المقدم.JPG",
+     "assets/سماء سين.JPG",
+     "assets/مجسم الباب.glb",
+     "assets/نقوش صغيرة.PNG",
+     "assets/نقوش وحجر المدخل .JPG",
+     "data/palace-colliders.json"
+    ],
+    "palaceR3OrU1": []
+   },
+   "checks": {
+    "palaceIsolated": true
+   },
+   "errors": [],
+   "warnings": []
+  }
+ }
+}

@@ -14,7 +14,6 @@ const BAKE = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/palace-colliders.j
 // The registrations exactly as the owning files write them.
 const outdoorStart = HTML.indexOf("if(window.SinAreas){SinAreas.chapter({stage:'outdoor'");
 const outdoorBlock = HTML.slice(outdoorStart, HTML.indexOf("'index.html'));}", outdoorStart) + "'index.html'));}".length);
-const marketBlock = HTML.split('\n').find(l => l.startsWith("if(window.SinAreas)SinAreas.register({id:'OUT-MARKET'"));
 const hallStart = PALACE.indexOf('  if (window.SinAreas) SinAreas.group(\'hall\'');
 const hallBlock = PALACE.slice(hallStart, PALACE.indexOf("'palaceInterior');", hallStart) + "'palaceInterior');".length);
 const chapterStart = PALACE.indexOf("  if (window.SinAreas) SinAreas.chapter({ stage: 'palace'");
@@ -41,9 +40,8 @@ function load({ search = '', enabled = true } = {}) {
   // Owners register in the browser as each script loads.
   window.fetch = fetch;
   window.ClipperLib = require(path.join(ROOT, 'vendor/clipper.js'));
-  for (const f of ['wing-architecture.js', 'r3-maw-geology.js', 'r3-maw-approach.js', 'r3-maw-dressing.js', 'r3-underworld.js', 'r3-sealed-zone.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
-  vm.runInContext('(function(){const CANAL_Z0=7,CANAL_Z1=76;' + marketBlock + '})()', ctx);
-  vm.runInContext('(function(){const PL_Z0=76,PL_FRONT=160;' + outdoorBlock + '})()', ctx);
+  for (const f of ['wing-architecture.js', 'babylon-exterior.js', 'r3-maw-geology.js', 'r3-maw-approach.js', 'r3-maw-dressing.js', 'r3-underworld.js', 'r3-sealed-zone.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
+  vm.runInContext('(function(){const exterior=SinBabylonExterior;const {start:OUT_START,gateHalfDepth:GATE_HD,plaza:PL_Z0}=exterior.layout;const PL_FRONT=160;' + outdoorBlock + '})()', ctx);
   vm.runInContext('(function(){const bootPalace=()=>Promise.resolve();' + palaceChapter + '})()', ctx);
   vm.runInContext(hallBlock, ctx);
   return { hub: window.SinDevHub, store, Storage, ctx };

@@ -3,7 +3,7 @@
 
    node static-server.mjs &
    THREE_DIR=/path/to/node_modules/three node tools/dev-hub-check.cjs --out hub-check \
-     [--mode gate|play|disabled|direct|fly|cycle|storage|all] [--levels OUT-GATE,K3,R3-02] [--mobile 1] [--video 1]
+     [--mode gate|play|disabled|direct|fly|cycle|storage|all] [--levels OUT-GATE,K3,R3-02] [--mobile 1] [--video 1] [--sampled-render 1]
 
    gate     entry screen before any world asset; developer list; phone + desktop shots
    play     "بدء اللعبة" → original boot reaches the original main menu
@@ -127,14 +127,39 @@ async function play(browser, disable) {
 }
 async function direct(browser, levels) {
   const out = {};
+  const sampled = opt('sampled-render') === '1';
   for (const id of levels) {
-    const { ctx, page, log } = await open(browser);
+    const init = sampled ? () => {
+      let renderer;
+      Object.defineProperty(window, '__R', { configurable: true, get: () => renderer, set(value) {
+        if (renderer === value) return;
+        renderer = value;
+        queueMicrotask(() => {
+          const render = value.render.bind(value);
+          let drew = false;
+          value.render = (scene, camera) => {
+            if (!scene.isScene || !scene.getObjectByName('SinHeroRoot') || value.getRenderTarget()) return render(scene, camera);
+            if (window.__sinCaptureSample || !drew) {
+              drew = true;
+              window.__sinCaptureSample = false;
+              render(scene, camera);
+              if (window.__sinDev?.ready) window.__sinSample = value.domElement.toDataURL('image/jpeg', .9);
+            }
+          };
+        });
+      }});
+    } : undefined;
+    const { ctx, page, log } = await open(browser, { init });
     const t0 = Date.now();
     await page.goto(BASE + '?dev=1&level=' + encodeURIComponent(id));
     try {
       await page.waitForFunction("window.__sinDev && (window.__sinDev.ready || window.__sinDev.error)", null, { timeout: 1500000, polling: 1000 });
       await page.waitForTimeout(3000);
       // Walk a second forward with the controller: movement, camera, collisions.
+      if(sampled){
+        await page.evaluate(() => { window.__sinCaptureSample = true; });
+        await page.waitForFunction(() => window.__sinSample, null, { timeout: 120000, polling: 400 });
+      }
       const a = await snapshot(page);
       // Hold W for 40 rendered frames (game time is capped at 50 ms per frame,
       // so software rendering plays slower than real time).
@@ -144,7 +169,14 @@ async function direct(browser, levels) {
       await page.waitForTimeout(800);
       const b = await snapshot(page);
       // Software-GL frames can outlast Playwright's screenshot wait: keep the measurements.
-      const shot = await page.screenshot({ path: path.join(OUT, `level-${id}.png`), timeout: 90000 }).then(() => true, () => false);
+      let shot;
+      if (sampled) {
+        const jpg = await page.evaluate(() => window.__sinSample.split(',')[1]);
+        fs.writeFileSync(path.join(OUT, `level-${id}.jpg`), Buffer.from(jpg, 'base64'));
+        shot = true;
+      } else {
+        shot = await page.screenshot({ path: path.join(OUT, `level-${id}.png`), timeout: 90000 }).then(() => true, () => false);
+      }
       const moved = a.hero && b.hero ? +Math.hypot(b.hero[0] - a.hero[0], b.hero[2] - a.hero[2]).toFixed(2) : null;
       out[id] = { wallSeconds: (Date.now() - t0) / 1000, ...a, movedAfterWalk: moved, heroAfterWalk: b.hero, blockedAfterWalk: b.blockedAtHero, glbRequests: glbs(log), assets: assetsOf(log), screenshot: shot, errors: log.errors, console: log.console.slice(-4) };
     } catch (e) {

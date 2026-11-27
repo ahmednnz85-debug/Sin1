@@ -58,7 +58,7 @@ test('palace loading starts only after the fade, exterior disposal and reference
   assert.match(palace, /retainedResources\.has\(g\)/);
   assert.match(palace, /window\.__releaseExteriorStage/);
   assert.match(palace, /flushReleasedGPU/);
-  assert.match(index, /extras\.length=0;colliders\.length=0;marketOpenings\.length=0;vegChunks\.length=0;palMeshes\.length=0;palBVH=null/);
+  assert.match(index, /babylon\?\.release\(\);\s*babylon=null;\s*palMeshes\.length=0;\s*palBVH=null/);
   assert.match(index, /__sinCityReleased/);
   assert.match(index, /__sinEntryBlackout/);
 });
