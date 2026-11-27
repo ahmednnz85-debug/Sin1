@@ -30,6 +30,23 @@ test('the Maw packs carry the approved elevator, the ruins and no retired elevat
   assert.ok(lift.size + ruins.size + guardian.size < 16 * 1024 * 1024);
 });
 
+test('Irkalla uses its animated gate with independently keyed hinges and pull rings', () => {
+  const { doc, size } = glb('assets/بوابة اركالا.glb');
+  const clip = doc.animations.find(a => a.name === 'Arkila_Gate_Open');
+  assert.ok(clip);
+  assert.deepEqual(clip.channels.map(c => doc.nodes[c.target.node].name).sort(), [
+    'Left_Door_Vertical_Hinge', 'Left_Lion_Pull_Ring_Pivot',
+    'Right_Door_Vertical_Hinge', 'Right_Lion_Pull_Ring_Pivot'
+  ]);
+  for (const channel of clip.channels) {
+    assert.equal(channel.target.path, 'rotation');
+    const time = doc.accessors[clip.samplers[channel.sampler].input];
+    assert.ok(Math.abs(time.max[0] - 5.2) < 1e-5);
+  }
+  assert.ok(doc.extensionsUsed.includes('KHR_texture_basisu'));
+  assert.ok(size < 5 * 1024 * 1024);
+});
+
 test('the registered Maw spawn connects to the deck and the void blocks the capsule', { skip: !three }, () => {
   const THREE = require(path.join(three, 'build/three.cjs'));
   const window = {};

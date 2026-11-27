@@ -38,7 +38,9 @@
   const roadLampScale=4.6;
   const lampBase=(x,z)=>x>-36 || (x>-93&&x<-46&&z<-23) ? .92 : .42;
   const COLD = [[-70, 22, -26, 46, 0.07, 0.11, 0.17], [-139, 24, -26, 40, 0.10, 0.14, 0.21]];
-  const gateX = -155;
+  const gateX = -155, gateZ = -26, gateFloor = -9;
+  const gateScale = 2.85, gateBack = -167.6, gateHalfWidth = 3.55, hingeDepth = -1.345;
+  const gateAsset = 'assets/بوابة اركالا.glb';
   const GUARDIANS = [-1, 1].map(side => [gateX + 7.5, -9, -26 + side * 8.2, side < 0 ? 0 : Math.PI]);
 
   function create({ T, group, lift, hit }) {
@@ -48,6 +50,7 @@
     world.name = 'U1_Irkalla';
     group.add(world);
     const status = { phase: 'idle', lights: 0 };
+    let gate = null;
 
     // ---- shading: local braziers, cold cavern light, graded blue fog ------
     const transform = { value: new T.Matrix4() };
@@ -632,57 +635,25 @@
     pier(-117,-10.6,-26,2.5,5.8,31);
     vault(-112.5,-26,-10.68,9.1,10.3,5.35);
 
-    // ---- U1-03: the principal court and the original closed threshold -----
-    platform(-139,-9,-26,19,3,11.1,10);
-    parapet(-139,-9,-26,18.7,[[0,.18],[Math.PI,.62]]);
-    const gx=gateX;
+    // ---- U1-03: court, authored gate and its short landing ---------------
+    platform(-139,gateFloor,gateZ,19,3,11.1,10);
+    parapet(-139,gateFloor,gateZ,18.7,[[0,.18],[Math.PI,.62]]);
+    // Seat the whole gate, including its return walls, on the existing court.
+    // The matching stone plinth runs along both fortifications above the void.
+    slab(-162,gateFloor,gateZ,19.2,3,59);
+    queueTreads(-152.4,gateZ,-171.6,gateZ,gateFloor,59,[]);
     for (const side of [-1,1]) {
-      const z=-26+side*9.25, towerZ=-26+side*18.5;
-      box('roadStone',gx-3,2,z,6,22,9.5);
-      box('roadStone',gx-4.5,6,towerZ,11,30,9);
-      for (const y of [-8.2,3.15,12.48,19.9]) {
-        const tower=y>12.5;
-        box('roadTrim',gx-(tower?4.50:3),y,tower?towerZ:z,tower?11.48:6.48,.32,tower?9.5:9.87);
-      }
-      for (let k=-1; k<=1; k++) {
-        box('roadStone',gx-4.5+k*3.6,22.4,towerZ,1.6,2.8,9);
-        box('roadTrim',gx-4.5+k*3.6,23.66,towerZ,1.83,.27,9.26);
-      }
-      panel('roadPalms', [[gx+.016,-6.9,z+3],[gx+.016,-6.9,z-3],
-        [gx+.016,3.0,z-3],[gx+.016,3.0,z+3]]);
-      panel('roadScript', [[gx+.018,8.5,z+4.55],[gx+.018,8.5,z-4.55],
-        [gx+.018,9.45,z-4.55],[gx+.018,9.45,z+4.55]],2);
-      panel('roadRelief',[[gx+1.018,3.76,towerZ+4.05],[gx+1.018,3.76,towerZ-4.05],
-        [gx+1.018,6.05,towerZ-4.05],[gx+1.018,6.05,towerZ+4.05]]);
-      panel('roadScript',[[gx+1.018,14.4,towerZ+4.11],[gx+1.018,14.4,towerZ-4.11],
-        [gx+1.018,15.23,towerZ-4.11],[gx+1.018,15.23,towerZ+4.11]],2);
-      for (const edge of [-1,1]) {
-        box('roadTrim',gx+.93,6,towerZ+edge*4.18,.44,29.8,.54);
-        box('roadTrim',gx+.25,-2.14,-26+side*5.24+edge*.36,1.06,13.44,.19);
-      }
-      pier(gx-3,-8.9,towerZ,9.1,8.9,34);
+      const wingZ = gateZ + side*14.6;
+      pier(-160,gateFloor-3,wingZ,8.6,8.2,32);
+      pier(-166,gateFloor-3,gateZ+side*24,7,7,31);
+      const near = gateZ + side*3.82, far = gateZ + side*31;
+      solid(gateX-6.2,gateX+1.38,gateFloor,gateFloor+17,near,far);
+      // Low rails continue behind the jambs and tie into the court's rim.
+      railing(-154.25,gateZ+side*11.15,-167.5,gateZ+side*11.3,gateFloor,gateFloor,1.05);
+      solid(-167.5,-154.25,gateFloor,gateFloor+1.05,gateZ+side*11.05,gateZ+side*11.6,false);
     }
-    box('roadStone',gx-3,8.75,-26,6,8.5,9.0);
-    vault(gx+.48,-26,6.5,12.4,15.5,1.34,-Math.PI/2);
-    const archInner=12.4*.37, spring=5.8-archInner;
-    for(let block=0;block<18;block++) {
-      const a=block*Math.PI/18+.011, b=(block+1)*Math.PI/18-.011;
-      const point=(angle,r)=>[gx+1.162,spring+Math.sin(angle)*r,-26+Math.cos(angle)*r];
-      panel('roadEdge',[point(a,archInner+.16),point(b,archInner+.16),point(b,archInner+.65),point(a,archInner+.65)]);
-    }
-    box('roadDoor',gx-.9,-1.7,-26,.8,14.6,9.0);
-    for (const side of [-1,1]) {
-      const z=-26+2.24*side;
-      panel('roadRelief',[[gx-.484,-7.45,z+1.91],[gx-.484,-7.45,z-1.91],
-        [gx-.484,-2.1,z-1.91],[gx-.484,-2.1,z+1.91]]);
-      box('roadTrim',gx-.41,-.87,z,.12,13.8,.14);
-    }
-    for (const height of [-7.7,-2.03,3.84]) box('roadTrim',gx-.42,height,-26,.16,.18,8.86);
-    for (let k=-3; k<=3; k++) {
-      box('roadStone',gx-3,13.9,-26+k*2.7,6,1.8,1.5);
-      box('roadTrim',gx-3,14.72,-26+k*2.7,6.25,.18,1.69);
-    }
-    solid(gx-16,gx+1.3,-9,40,-50,-2);
+    railing(gateBack-.32,gateZ-11.3,gateBack-.32,gateZ+11.3,gateFloor,gateFloor,1.05);
+    solid(gateBack-.65,gateBack,gateFloor,gateFloor+2.6,gateZ-11.65,gateZ+11.65);
     for (const [x,y,z] of GUARDIANS) solid(x-2.8,x+2.8,y,y+6.65,z-2.8,z+2.8);
     for (const [x,y,z] of BRAZIERS) {
       const h=lampBase(x,z);
@@ -714,10 +685,10 @@
       roofStone: [0xb8bec8, 0.88, 'roof-stone'], roofBand: [0xd5be9b, 0.82, 'roof-band'],
       roofRib: [0xe5c494, 0.76, 'roof-rib'], roofOculus: [0xd7c8b4, 0.78, 'roof-oculus'],
       roadFloor: [0xd2d5dc,.78,'road-stone'], roadStone: [0xa8b2c1,.87,'road-stone'],
-      roadTrim: [0xcbbb9f,.81,'road-stone'], roadDoor: [0x9b8272,.87,'road-stone'],
+      roadTrim: [0xcbbb9f,.81,'road-stone'],
       roadStars: [0xffecca,.66,'road-stars'], roadEdge: [0xffedc4,.76,'road-edge'],
       roadMedallion: [0xfdf2df,.74,'road-medallion'], roadRail: [0xffecd1,.80,'road-rail'],
-      roadRelief: [0xfae9cd,.84,'road-relief'], roadScript: [0xf8e7c8,.79,'road-script'],
+      roadRelief: [0xfae9cd,.84,'road-relief'],
       roadPalms: [0xf8ebd5,.81,'road-palms']
     };
     const colours = { cavern: 0x2c323c, daisLip: 0x77624a };
@@ -756,6 +727,180 @@
 
     let pending;
     const bedHeight=(x,z)=>-120+7*Math.sin(x*.023+z*.032)+5*Math.cos(z*.043-x*.015);
+
+    async function loadGate(renderer, decoder) {
+      const { KTX2Loader } = await T.loadKTX2Loader();
+      const textures = new KTX2Loader().setTranscoderPath('vendor/basis/').setWorkerLimit(2).detectSupport(renderer);
+      try {
+        const loader = new T.GLTFLoader().setMeshoptDecoder(decoder).setKTX2Loader(textures);
+        const gltf = await loader.loadAsync(root.__sinAsset?.(gateAsset) || encodeURI(gateAsset));
+        gate = mountGate(gltf);
+        status.gate = gate.state;
+      } finally {
+        textures.dispose();
+      }
+    }
+
+    function mountGate({ scene: model, animations }) {
+      const clip = animations.find(clip => clip.name === 'Arkila_Gate_Open');
+      const sign = [-1, 1];
+      const hinges = ['Left', 'Right'].map(side => model.getObjectByName(side + '_Door_Vertical_Hinge'));
+      if (!clip?.duration || hinges.some(hinge => !hinge)) throw new Error('Missing Irkalla gate animation or hinges');
+      const closed = new T.Box3().setFromObject(hinges[0], true).union(new T.Box3().setFromObject(hinges[1], true));
+      model.name = 'U1_Authored_Gate';
+      model.scale.setScalar(gateScale);
+      model.rotation.y = Math.PI / 2;
+      model.position.fromArray(L(gateX - hingeDepth * gateScale, gateFloor - .045 * gateScale, gateZ));
+      const shared = new Set();
+      model.traverse(mesh => {
+        if (!mesh.isMesh) return;
+        if (!shared.has(mesh.material)) {
+          finish(mesh.material);
+          shared.add(mesh.material);
+        }
+      });
+      world.add(model);
+      const mixer = new T.AnimationMixer(model);
+      const action = mixer.clipAction(clip).setLoop(T.LoopOnce, 1);
+      action.clampWhenFinished = true;
+      action.play();
+      action.paused = true;
+      // Near the seam the bronze fills this depth through the hand-height band.
+      const faceX = gateX + (closed.max.z - hingeDepth) * gateScale;
+      const standX = faceX + .52, triggerX = standX + .85;
+      const state = { phase: 'closed', time: 0, duration: clip.duration, contactError: null, camera: 0 };
+      model.userData.gate = state;
+      const palms = sign.map(side => new T.Vector3(-side * 1.19, 1.145 / gateScale, .15));
+      const stance = new T.Vector3(), targetPosition = new T.Vector3(), cameraStart = new T.Vector3();
+      const heroLocal = new T.Vector3(), collisionPoint = new T.Vector3();
+      const cameraFrom = new T.Vector3(), cameraTo = new T.Vector3(), aimFrom = new T.Vector3(), aimTo = new T.Vector3();
+      const cameraDirection = new T.Vector3();
+      const slabs = sign.map(side => new T.Box3(
+        new T.Vector3(Math.min(0, -side * 1.306), 0, -.205),
+        new T.Vector3(Math.max(0, -side * 1.306), 3.86, .171)
+      ));
+      const cameraBounds = new T.Box3();
+      const cameraBoxes = hinges.map(() => ({ _wing: true }));
+      let needsCameraBoxes = true;
+      const facing = Math.PI / 2;
+      let hands, elapsed = 0;
+      const smooth = t => T.MathUtils.smoothstep(t, 0, 1);
+      function pose(time) {
+        state.time = Math.min(time, clip.duration);
+        action.time = state.time;
+        mixer.update(0);
+        model.updateWorldMatrix(true, true);
+        needsCameraBoxes = true;
+      }
+
+      function update(dt, { hero, combat, setFacing, camera }, towardGate) {
+        if (state.phase === 'open') return;
+        const p = world.worldToLocal(heroLocal.copy(hero.position));
+        const x = p.x - A.x, z = p.z - A.z;
+        if (state.phase === 'closed') {
+          if (!towardGate || x > triggerX || x < faceX || Math.abs(z - gateZ) > .87 ||
+              Math.abs(p.y - A.y - gateFloor) > .3 || combat.locked()) return;
+          hands = root.SinTempleDoors.armRig(hero);
+          state.phase = 'approach';
+        }
+        if (state.phase === 'approach') {
+          world.localToWorld(stance.fromArray(L(standX, gateFloor, gateZ)));
+          const distance = Math.hypot(stance.x - hero.position.x, stance.z - hero.position.z);
+          if (distance > .018) {
+            hero.position.lerp(stance, Math.min(1, 1.45 * dt / distance));
+            const turn = Math.atan2(Math.sin(facing - hero.rotation.y), Math.cos(facing - hero.rotation.y));
+            setFacing(hero.rotation.y + turn * (1 - Math.exp(-dt * 12)));
+            return;
+          }
+          hero.position.copy(stance);
+          setFacing(facing);
+          hero.rotation.y = facing;
+          if (combat.startPush({ timeScale: 1 })) state.phase = 'reach';
+          return;
+        }
+        const push = combat.pushState();
+        if (state.phase === 'reach') {
+          if (!push) { state.phase = 'closed'; return; }
+          const plant = push.mode === 'enter' ? smooth((push.time / push.duration - .58) / .37) : 1;
+          if (plant > 0) state.contactError = hands.plant(targets(), plant);
+          if (plant < 1) return;
+          state.phase = 'opening';
+          cameraStart.copy(camera.position);
+          camera.getWorldDirection(cameraDirection);
+          aimFrom.copy(camera.position).addScaledVector(cameraDirection, camera.position.distanceTo(hero.position));
+          elapsed = 0;
+          pose(0);
+          return;
+        }
+        if (state.phase === 'opening') {
+          elapsed += dt;
+          pose(elapsed);
+          state.camera = smooth(elapsed / 2.35);
+          if (elapsed <= 1.85) {
+            const target = targets();
+            // During the initial pressure the body follows the shallow part
+            // of the arc. The palms then release as the massive leaves swing.
+            const desired = (target[0].x + target[1].x) * .5;
+            world.localToWorld(stance.fromArray(L(faceX, gateFloor, gateZ)));
+            hero.position.x = stance.x - .52 + T.MathUtils.clamp(desired - stance.x, 0, .22);
+            state.contactError = hands.plant(target, 1 - smooth((elapsed - 1.20) / .65));
+          }
+          if (elapsed >= 1.85 && push && push.mode !== 'out') combat.releasePush();
+          if (state.time >= clip.duration) { state.phase = 'return'; elapsed = 0; }
+          return;
+        }
+        if (state.phase === 'return') {
+          elapsed += dt;
+          if (elapsed >= .85) { state.camera = 0; state.phase = 'open'; }
+        }
+      }
+
+      function targets() {
+        // The actor's left arm reaches across to the asset's right leaf.
+        return [1, 0].map(i => hinges[i].localToWorld(palms[i].clone()));
+      }
+      function frameCamera(camera, safeFollow) {
+        if (state.phase !== 'opening' && state.phase !== 'return') return false;
+        if (state.phase === 'return') {
+          safeFollow();
+          cameraFrom.copy(camera.position);
+          camera.getWorldDirection(cameraDirection);
+          const restore = smooth(elapsed / .85);
+          aimFrom.copy(cameraFrom).addScaledVector(cameraDirection, 4.5);
+          camera.position.lerpVectors(cameraTo, cameraFrom, restore);
+          camera.lookAt(targetPosition.lerpVectors(aimTo, aimFrom, restore));
+          return true;
+        }
+        // One move on contact, away from the hero and upward. The plaza's
+        // central axis is clear of the guardian plinths throughout the shot.
+        world.localToWorld(cameraTo.fromArray(L(faceX + 16.8, gateFloor + 6.2, gateZ + 3.1)));
+        world.localToWorld(aimTo.fromArray(L(gateX + .5, gateFloor + 4.45, gateZ)));
+        camera.position.lerpVectors(cameraStart, cameraTo, state.camera);
+        camera.lookAt(targetPosition.lerpVectors(aimFrom, aimTo, state.camera));
+        return true;
+      }
+      function blocks(x, z, radius) {
+        if (x > faceX + .7 || x < gateX - 4.9 || Math.abs(z - gateZ) > gateHalfWidth + radius) return false;
+        return hinges.some((hinge, i) => {
+          const point = hinge.worldToLocal(world.localToWorld(collisionPoint.fromArray(L(x, gateFloor + 1, z))));
+          return slabs[i].distanceToPoint(point) * gateScale < radius;
+        });
+      }
+      function cameraBoxesAt(x, z) {
+        if (Math.abs(x - gateX) > 13 || Math.abs(z - gateZ) > 11) return null;
+        if (needsCameraBoxes) {
+          model.updateWorldMatrix(true, true);
+          hinges.forEach((hinge, i) => {
+            const { min, max } = cameraBounds.copy(slabs[i]).applyMatrix4(hinge.matrixWorld);
+            Object.assign(cameraBoxes[i], { minx: min.x, miny: min.y, minz: min.z, maxx: max.x, maxy: max.y, maxz: max.z });
+          });
+          needsCameraBoxes = false;
+        }
+        return cameraBoxes;
+      }
+      pose(0);
+      return { state, update, frameCamera, blocks, cameraBoxesAt, restore: () => hands?.restore() };
+    }
 
     // A continuous ravine floor and terraced banks hold the authored ruins.
     // Build all the rock at once, with the same fog and no physics bodies.
@@ -883,13 +1028,13 @@
         paving.needsUpdate = true;
       }));
       loadingMaps.push(loadMap('road-stone-rough').then(rough => {
-        for (const key of ['roadFloor','roadStone','roadTrim','roadDoor']) {
+        for (const key of ['roadFloor','roadStone','roadTrim']) {
           materials.get(key).roughnessMap=rough;
           materials.get(key).needsUpdate=true;
         }
       }));
       const [kit, ruins, guardians] = await Promise.all([loader.loadAsync(files + 'architecture.glb'),
-        loader.loadAsync(files + 'distant-ruins.glb'),loader.loadAsync(files + 'road-guardians.glb'), ...loadingMaps]);
+        loader.loadAsync(files + 'distant-ruins.glb'),loader.loadAsync(files + 'road-guardians.glb'), loadGate(renderer, decoder), ...loadingMaps]);
       const stamp = new T.Object3D();
       function instance(name, geometry, material, positions, parent=world) {
         const mesh = new T.InstancedMesh(geometry, material, positions.length);
@@ -1179,6 +1324,7 @@
       const r = Math.hypot(rx, rz);
       for (const [radius, y] of DAIS) if (r <= radius) return A.y + y;
       for (const [, cx, cz, radius, y] of DISCS) if (Math.hypot(rx - cx, rz - cz) <= radius) return A.y + y;
+      if (rx >= gateBack - .8 && rx <= gateX + 2.5 && Math.abs(rz - gateZ) <= gateHalfWidth) return A.y + gateFloor;
       for (const [, ax, az, bx, bz, w, ya, yb] of PATHS) {
         const dx = bx - ax, dz = bz - az, len2 = dx * dx + dz * dz;
         const projected = ((rx - ax) * dx + (rz - az) * dz) / len2;
@@ -1194,6 +1340,15 @@
 
     return {
       group: world, status, floor, finish,
+      gateBlocks: (x, z, radius) => gate
+        ? gate.blocks(x - A.x, z - A.z, radius)
+        : Math.abs(z - A.z - gateZ) < gateHalfWidth && x - A.x < gateX + 1.3,
+      tickGate: (dt, ctx, towardGate) => gate?.update(dt, ctx, towardGate),
+      gateCamera: (camera, safeFollow) => gate?.frameCamera(camera, safeFollow),
+      gateCameraBoxes: (x, z) => gate?.cameraBoxesAt(x - A.x, z - A.z),
+      restoreGatePose: () => gate?.restore(),
+      gateActive: () => !!gate && gate.state.phase !== 'closed' && gate.state.phase !== 'open',
+      gateApproach: () => gate?.state.phase === 'approach',
       ready(renderer) {
         if (!pending) pending = loadHarbor(renderer).catch(error => {
           status.phase = 'failed';
