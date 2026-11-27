@@ -47,7 +47,7 @@ test('wing GLBs share a serial queue; K3 table then furniture', () => {
 });
 
 test('blood sky and skyline are disposed after outdoor teardown', () => {
-  assert.match(index, /sky_babylon_blood/);
+  assert.match(index, /assets\/سماء سين\.JPG/);
   assert.match(index, /__sinSkyDisposed/);
   assert.match(index, /exterior\+sky disposed \(blood\+skyline\)/);
   assert.match(index, /redSkyTex=null/);
