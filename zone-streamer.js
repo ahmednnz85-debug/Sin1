@@ -57,6 +57,7 @@
     'transmissionMap', 'thicknessMap', 'iridescenceMap', 'anisotropyMap'];
   const HIDE_FLAG = 'hideUntilDressReady';
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const drawable = object => (object.isMesh || object.isPoints || object.isLine || object.isSprite) && object.material;
 
   function materialsOf(o) { return o && o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; }
   function texturesOf(rootObj, out) {
@@ -75,6 +76,168 @@
       const p = renderer.properties.get(t);
       return !!(p && p.__webglTexture && p.__version === t.version);
     } catch (_) { return false; }
+  }
+
+  // A normal compile does not allocate vertex/index buffers. Draw small
+  // batches with the real material, light counts and framebuffer format
+  // before the first visible frame. Proxies borrow resources from the stage.
+  async function prepareRender(T, renderer, scene, camera, {
+    roots = [scene], budgetMs = 8, shouldContinue = () => true
+  } = {}) {
+    const report = { meshes: 0, textures: 0, slices: 0, maxSliceMs: 0 };
+    if (!renderer?.render || !renderer.getContext) return report;
+    const gl = renderer.getContext();
+    const nextFrame = () => new Promise(resolve => {
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(resolve);
+      else setTimeout(resolve, 0);
+    });
+    const check = () => shouldContinue() && !gl.isContextLost();
+    const lighting = new T.Scene();
+    lighting.name = 'Sin_PrepareRender';
+    lighting.fog = scene.fog;
+    lighting.environment = scene.environment;
+    lighting.environmentIntensity = scene.environmentIntensity;
+    lighting.environmentRotation.copy(scene.environmentRotation);
+    const shadowMap = renderer.shadowMap;
+    const objects = new Set(), textures = new Set(), lights = new Set();
+    const collectLight = node => { if (node.isLight && node.layers.test(camera.layers)) lights.add(node); };
+    scene.updateMatrixWorld(true);
+    camera.updateMatrixWorld();
+    // Leave spare memory for the driver on a tight device. Always prepare
+    // the opening view; only prepare off-camera stage assets with headroom.
+    const profile = globalThis.SinDevice?.detect();
+    const memory = profile?.constrained && globalThis.SinProcessMemory?.estimate({ scene, renderer, phase: 'stage-prewarm' });
+    const nearBudget = memory && (memory.processMB >= profile.processBudgetMB * .88 || memory.gpuMB >= profile.gpuBudgetMB * .88);
+    const frustum = nearBudget && new T.Frustum().setFromProjectionMatrix(
+      new T.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+    );
+    const wanted = object => !frustum || !object.frustumCulled || (object.isSprite ? frustum.intersectsSprite(object) : frustum.intersectsObject(object));
+    if (memory) report.processMBBefore = memory.processMB;
+    scene.traverseVisible(collectLight);
+    function collect(node) {
+      collectLight(node);
+      if (drawable(node) && node.layers.test(camera.layers) && wanted(node)) {
+        objects.add(node);
+        for (const material of materialsOf(node)) if (material) {
+          for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+          for (const uniform of Object.values(material.uniforms || {})) if (uniform.value?.isTexture) textures.add(uniform.value);
+        }
+      }
+      for (const child of node.children) if (child.visible) collect(child);
+    }
+    for (const root of roots) {
+      root.updateWorldMatrix(true, true);
+      collect(root);
+    }
+    const place = (copy, original) => {
+      original.updateWorldMatrix(true, false);
+      original.matrixWorld.decompose(copy.position, copy.quaternion, copy.scale);
+      copy.matrixAutoUpdate = true;
+      copy.visible = true;
+      lighting.add(copy);
+    };
+    for (const light of lights) {
+      const copy = light.clone(false);
+      place(copy, light);
+      if (light.target) place(copy.target, light.target);
+      if (light.shadow?.map && copy.shadow) copy.shadow.map = light.shadow.map;
+    }
+    const runBatch = (queue, action) => {
+      const start = now();
+      let count = 0;
+      while (queue.length && count < 4 && now() - start < budgetMs) {
+        action(queue.pop());
+        count++;
+      }
+      report.maxSliceMs = Math.max(report.maxSliceMs, now() - start);
+      report.slices++;
+    };
+    const textureQueue = Array.from(textures).reverse();
+    const objectQueue = Array.from(objects).reverse();
+    const scissor = new T.Vector4();
+    const batchLimit = budgetMs <= 2 ? 2 : 6;
+    let maxMeshes = Math.min(3, batchLimit);
+    while (check() && (textureQueue.length || objectQueue.length)) {
+      await nextFrame();
+      if (!check()) break;
+      if (textureQueue.length) {
+        runBatch(textureQueue, texture => {
+          if (!texture.isRenderTargetTexture && texture.source?.data && !uploaded(renderer, texture)) {
+            renderer.initTexture(texture);
+            report.textures++;
+          }
+        });
+      } else {
+        const batch = new T.Group();
+        lighting.add(batch);
+        for (let i = 0; i < maxMeshes && objectQueue.length; i++) {
+          const object = objectQueue.pop();
+          let proxy;
+          if (object.isInstancedMesh) {
+            proxy = new T.InstancedMesh(object.geometry, object.material, 0);
+            proxy.instanceMatrix = object.instanceMatrix;
+            proxy.instanceColor = object.instanceColor;
+            proxy.morphTexture = object.morphTexture;
+            proxy.count = object.count;
+          } else {
+            proxy = object.clone(false);
+          }
+          proxy.visible = true;
+          proxy.frustumCulled = false;
+          proxy.castShadow = false;
+          proxy.matrixAutoUpdate = false;
+          proxy.matrix.makeScale(0, 0, 0).setPosition(camera.position);
+          batch.add(proxy);
+        }
+        try {
+          if (renderer.compileAsync && renderer.extensions?.has('KHR_parallel_shader_compile')) {
+            const compileStart = now();
+            const pending = renderer.compileAsync(batch, camera, lighting);
+            report.maxSliceMs = Math.max(report.maxSliceMs, now() - compileStart);
+            await pending;
+            await nextFrame();
+          } else if (renderer.compile) {
+            const compileStart = now();
+            renderer.compile(batch, camera, lighting);
+            report.maxSliceMs = Math.max(report.maxSliceMs, now() - compileStart);
+            const fence = gl.fenceSync?.(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+            if (fence) {
+              try {
+                gl.flush();
+                while (check() && gl.clientWaitSync(fence, 0, 0) === gl.TIMEOUT_EXPIRED) await nextFrame();
+              } finally { gl.deleteSync(fence); }
+            }
+          }
+          if (!check()) break;
+          const drawStart = now();
+          const autoClear = renderer.autoClear, scissorTest = renderer.getScissorTest();
+          const shadowAuto = shadowMap.autoUpdate, shadowDirty = shadowMap.needsUpdate;
+          renderer.getScissor(scissor);
+          try {
+            renderer.autoClear = false;
+            shadowMap.autoUpdate = shadowMap.needsUpdate = false;
+            renderer.setScissor(0, 0, 1, 1);
+            renderer.setScissorTest(true);
+            renderer.render(lighting, camera);
+          } finally {
+            renderer.autoClear = autoClear;
+            shadowMap.autoUpdate = shadowAuto;
+            shadowMap.needsUpdate = shadowDirty;
+            renderer.setScissor(scissor);
+            renderer.setScissorTest(scissorTest);
+          }
+          report.meshes += batch.children.length;
+          report.slices++;
+          const drawMs = now() - drawStart;
+          report.maxSliceMs = Math.max(report.maxSliceMs, drawMs);
+          maxMeshes = drawMs > budgetMs ? Math.max(1, maxMeshes - 1) : Math.min(batchLimit, maxMeshes + 1);
+        } finally { batch.removeFromParent(); }
+      }
+    }
+    if (shouldContinue() && gl.isContextLost()) throw new Error('WebGL context lost during stage preparation');
+    if (memory) report.processMBAfter = globalThis.SinProcessMemory.estimate({ scene, renderer, phase: 'stage-prewarm-complete' })?.processMB;
+    report.maxSliceMs = Math.round(report.maxSliceMs * 10) / 10;
+    return report;
   }
   const DOOR_RE = /door|WingDoor|WingDoorPivot|BabylonianWingDoor/i;
   function isPersistentVisible(o) {
@@ -141,6 +304,7 @@
       // (fence) before the next one starts, so a reveal never links
       // programs and no frame links more than one.
       compileMsPerFrame: 4,
+      frameBudgetMs: 0,          // a shared upload / geometry / compile budget during play
       log: null                  // function(kind, msg) for the memory overlay
     }, options || {});
 
@@ -151,6 +315,19 @@
     let ctx = null;                        // { renderer, scene, camera, groupOf(id) }
     let uploadQueue = [];                  // { tex, zone, rank }
     const looseUploads = new Set();
+    let gpuBudget = 0, gpuStarted = false, gpuDeadline = 0;
+    function beginGpuSlice(loadingScreen) {
+      gpuBudget = loadingScreen ? 8 : o.frameBudgetMs;
+      gpuStarted = false;
+    }
+    function takeGpuSlice() {
+      if (!gpuBudget) return true;
+      if (gpuStarted) return false;
+      gpuStarted = true;
+      gpuDeadline = now() + gpuBudget;
+      return true;
+    }
+    const sliceLimit = configured => gpuBudget ? Math.max(0.25, Math.min(configured, gpuDeadline - now())) : configured;
 
     function note(kind, msg) { try { if (o.log) o.log(kind, msg); } catch (_) {} }
 
@@ -243,7 +420,6 @@
     function queueTextures(rec, obj, rank) {
       const renderer = ctx && ctx.renderer;
       texturesOf(obj).forEach(function (t) {
-        capOne(t);
         if (renderer && uploaded(renderer, t)) { tryReleaseCpu(t); return; }
         if (!t.image) {
           if (rec && rec.spec.requireComplete) rec.failed = new Error('Missing pixels for ' + (t.name || 'zone texture'));
@@ -265,11 +441,12 @@
         });
         return;
       }
-      if (!uploadQueue.length) return;
-      uploadQueue.sort((a, b) => a.rank - b.rank);
-      const t0 = now(); let n = 0;
+      if (!uploadQueue.length || !takeGpuSlice()) return;
+      const priority = job => job.zone?.isDemand || job.zone?.isCurrent ? -1 : (job.zone?.rank ?? job.rank);
+      uploadQueue.sort((a, b) => priority(a) - priority(b));
+      const t0 = now(), budget = sliceLimit(o.uploadMsPerFrame); let n = 0;
       while (uploadQueue.length && n < o.uploadsPerFrame) {
-        if (n > 0 && now() - t0 > o.uploadMsPerFrame) break;
+        if (now() - t0 > budget) break;
         const job = uploadQueue.shift();
         const t = job.tex;
         try { capOne(t); } catch (_) {}
@@ -809,13 +986,13 @@
           rec.state = 'uploading'; rec.timing.assetsMs=elapsed;
           // Program-affecting material tweaks run before upload/compile.
           try { if (rec.spec.prepare) rec.spec.prepare(apiFor(rec)); } catch (e) { console.warn('zone prepare', rec.id, e); }
-          const uploadRoot = rec.spec.keepShell ? dressOf(g) : g;
-          if (uploadRoot) queueTextures(rec, uploadRoot, rank);
+          if (g) queueTextures(rec, g, rank);
         }
       }
       if (rec.spec.requireComplete && rec.failed) { failStrict(rec, rec.failed); return; }
       if (rec.state === 'uploading' && rec.pending.size === 0) {
         if (rec.spec.prepareGeometry) {
+          if (!takeGpuSlice()) return;
           try {
             if (!rec.spec.prepareGeometry(apiFor(rec), ctx && ctx.renderer)) return;
           } catch (error) { failStrict(rec, error); return; }
@@ -827,10 +1004,13 @@
         if (g && r && ctx.camera && slicedCompileSupported(r)) {
           // Sliced, off-screen: one fresh program at a time, each finished on
           // the GPU before the next, uniforms fetched before the reveal.
-          const content = (rec.spec.keepShell && dressOf(g)) || g;
-          rec.compileJob = { list: drawables(content), i: 0, fence: null, waiting: [], uniforms: [], attempt: rec.startedAt };
+          rec.compileJob = compileJob(g);
           stats.compiles++;
         } else {
+          if (!rec.spec.prepareGeometry && !takeGpuSlice()) {
+            rec.state = 'uploading';
+            return;
+          }
           let p = null;
           if (g && r && ctx.camera) {
             const was = g.visible;
@@ -859,7 +1039,7 @@
         }
       }
       if (rec.state === 'compiling' && rec.compileJob && !rec.compileDone) {
-        try { if (pumpCompile(rec)) rec.compileDone = true; }
+        try { if (takeGpuSlice() && pumpCompile(rec.compileJob)) rec.compileDone = true; }
         catch (error) { if (rec.spec.requireComplete) { failStrict(rec, error); return; } rec.compileDone = true; }
       }
       if (rec.state === 'compiling' && rec.compileDone) reveal(rec);
@@ -889,16 +1069,25 @@
     }
     function drawables(root) {
       const list = [];
-      root.traverse(function (x) { if ((x.isMesh || x.isPoints || x.isLine || x.isSprite) && x.material) list.push(x); });
+      root.traverse(function (x) { if (drawable(x)) list.push(x); });
       return list;
+    }
+    function compileJob(root) {
+      return { list: drawables(root), i: 0, fence: null, waiting: [], uniforms: [] };
+    }
+    function cancelCompile(job) {
+      if (job?.fence && ctx?.renderer?.getContext) {
+        try { ctx.renderer.getContext().deleteSync(job.fence); } catch (_) {}
+      }
     }
     function parallelCompile(r) {
       try { return !!(r.extensions && r.extensions.has && r.extensions.has('KHR_parallel_shader_compile')); } catch (_) { return false; }
     }
+    const preparedPrograms = new WeakSet();
     // Returns true when every program of the room is linked and its uniform
     // locations are cached (so the reveal frame issues no blocking query).
-    function pumpCompile(rec) {
-      const job = rec.compileJob, r = ctx.renderer, gl = r.getContext();
+    function pumpCompile(job) {
+      const r = ctx.renderer, gl = r.getContext();
       if (job.fence) {
         const st = gl.clientWaitSync(job.fence, 0, 0);
         if (st === gl.TIMEOUT_EXPIRED) return false;
@@ -913,20 +1102,27 @@
       // per frame, instead of in the reveal frame.
       if (job.uniforms.length) {
         const p = job.uniforms.shift();
-        try { p.getUniforms(); p.getAttributes(); } catch (_) {}
-        if (job.uniforms.length) return false;
+        p.getUniforms();
+        p.getAttributes();
+        preparedPrograms.add(p);
+        return false;
       }
-      const t0 = now(), par = parallelCompile(r);
+      const t0 = now(), par = parallelCompile(r), budget = sliceLimit(o.compileMsPerFrame);
       if (job.i >= job.list.length && !job.fence && !job.waiting.length) return warmDraw(job);
-      while (job.i < job.list.length && now() - t0 < o.compileMsPerFrame) {
+      while (job.i < job.list.length && now() - t0 < budget) {
         const obj = job.list[job.i++];
         if (!obj.parent) continue;
         const before = r.info.programs.length;
         compileWith(r, obj, false);
         const fresh = r.info.programs.slice(before);
-        if (fresh.length) {
-          fresh.forEach(p => job.uniforms.push(p));
-          if (par) job.waiting.push.apply(job.waiting, fresh);
+        const programs = new Set(fresh);
+        for (const material of materialsOf(obj)) {
+          const active = r.properties?.get(material)?.currentProgram;
+          if (active) programs.add(active);
+        }
+        job.uniforms = [...programs].filter(program => !preparedPrograms.has(program));
+        if (job.uniforms.length) {
+          if (par) job.waiting = job.uniforms.slice();
           else { try { job.fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); } catch (_) { job.fence = null; } }
           stats.programsLinked = (stats.programsLinked || 0) + fresh.length;
           return false;
@@ -944,14 +1140,26 @@
       const T = (typeof window !== 'undefined' && window.THREE) || null;
       const rig = lightRig(), r = ctx.renderer;
       if (!T || !rig || !rig.compileScene || typeof r.render !== 'function') return true;
-      if (!job.warm) job.warm = job.list.filter(x => (x.isMesh && !x.isSkinnedMesh && !x.isBatchedMesh) && x.parent && x.geometry);
+      if (!job.warm) {
+        const seen = new Map();
+        job.warm = job.list.filter(x => {
+          if (!x.isMesh || x.isSkinnedMesh || x.isBatchedMesh || !x.parent || !x.geometry) return false;
+          if (x.isInstancedMesh) return true;
+          let materials = seen.get(x.geometry);
+          if (!materials) { materials = new Set(); seen.set(x.geometry, materials); }
+          if (materials.has(x.material)) return false;
+          materials.add(x.material);
+          return true;
+        }).reverse();
+      }
       if (!job.warm.length) return true;
       if (!warmCam) { warmCam = new T.OrthographicCamera(-1, 1, 1, -1, 0.1, 10); warmCam.position.set(0, -1e5, 0); warmCam.updateMatrixWorld(true); }
       const stage = rig.compileScene(ctx.scene);
       const proxies = [];
-      const t0 = now();
-      while (job.warm.length && proxies.length < 8 && now() - t0 < o.compileMsPerFrame) {
-        const src = job.warm.shift();
+      // Limit the draw itself, including the GL calls after proxy creation.
+      const maxBatch = job.warmBatch || (gpuBudget && gpuBudget <= 2 ? 2 : 6);
+      while (job.warm.length && proxies.length < maxBatch) {
+        const src = job.warm.pop();
         let p;
         if (src.isInstancedMesh) {
           p = new T.InstancedMesh(src.geometry, src.material, 0);
@@ -966,6 +1174,7 @@
         stage.add(p); proxies.push(p);
       }
       const clear = r.autoClear, target = r.getRenderTarget ? r.getRenderTarget() : null;
+      const started = now();
       try {
         r.autoClear = false;
         if (target && r.setRenderTarget) r.setRenderTarget(null);
@@ -976,11 +1185,13 @@
         if (target && r.setRenderTarget) r.setRenderTarget(target);
         proxies.forEach(p => { stage.remove(p); if (p.isInstancedMesh) { p.instanceMatrix = null; p.instanceColor = null; } });
       }
+      if (gpuBudget) job.warmBatch = now() - started > gpuBudget ? Math.max(1, maxBatch - 1) : Math.min(maxBatch + 1, gpuBudget <= 2 ? 3 : 8);
       return !job.warm.length;
     }
     function reveal(rec) {
       const g = group(rec);
       rec.state = 'ready';
+      rec.compileJob = null;
       const elapsed=now()-rec.startedAt;
       rec.timing.compileMs=Math.max(0,elapsed-rec.timing.assetsMs-rec.timing.uploadMs);
       rec.timing.totalMs=elapsed;
@@ -1079,9 +1290,7 @@
         // next load cannot show an incomplete room.
         hideZone(rec, g);
       }
-      if (rec.compileJob && rec.compileJob.fence && ctx && ctx.renderer && ctx.renderer.getContext) {
-        try { ctx.renderer.getContext().deleteSync(rec.compileJob.fence); } catch (_) {}
-      }
+      cancelCompile(rec.compileJob);
       rec.compileJob = null;
       rec.state = 'cold'; rec.leftAt = 0; rec.done = false; rec.failed = null;
       stats.evictions++;
@@ -1123,24 +1332,48 @@
     function memoryState() { return Object.assign({}, memLast); }
 
     // ---- shell warm (shader compile + budgeted upload of already-built
-    // architecture). Replaces wings.js warmNext / uploadQueue. One group per
-    // turn; the group is only made visible during the SYNCHRONOUS compile
-    // traversal so a hidden room is never drawn for a frame.
+    // architecture). Uses the same shader and buffer slices as dress jobs.
     const warmed = typeof WeakSet === 'function' ? new WeakSet() : { has() { return false; }, add() {}, delete() {} };
     const warmQ = [];
     let warmBusy = false;
+    let shell = null;
     function enqueueWarm(g) {
-      if (!g || (warmed.has && warmed.has(g)) || warmQ.indexOf(g) >= 0) return;
+      if (!g || warmed.has(g) || shell?.group === g || warmQ.includes(g)) return;
       warmQ.push(g);
     }
-    function forgetWarm(g) { if (g && warmed.delete) warmed.delete(g); }
+    function forgetWarm(g) {
+      if (g) warmed.delete(g);
+      if (shell?.group === g) {
+        cancelCompile(shell.job);
+        shell = null;
+      }
+    }
     function pumpWarm() {
       if (warmBusy || !ctx || !ctx.renderer || !ctx.camera) return;
-      if (!warmQ.length) return;
+      if (!(shell || warmQ.length) || !takeGpuSlice()) return;
+      const r = ctx.renderer;
+      if (slicedCompileSupported(r)) {
+        if (!shell) {
+          const g = warmQ.shift();
+          if (!g || warmed.has(g)) return;
+          shell = { group: g, job: compileJob(g) };
+          stats.compiles++;
+        }
+        try {
+          if (pumpCompile(shell.job)) {
+            warmed.add(shell.group);
+            shell = null;
+          }
+        } catch (_) {
+          cancelCompile(shell.job);
+          shell = null;
+        }
+        return;
+      }
       const g = warmQ.shift();
       if (!g || (warmed.has && warmed.has(g))) return;
       if (warmed.add) warmed.add(g);
-      const was = g.visible, r = ctx.renderer;
+      const was = g.visible;
       warmBusy = true;
       let pending = null;
       try {
@@ -1150,7 +1383,7 @@
           stats.compiles++;
         } finally { g.visible = was; }
       } catch (_) { g.visible = was; warmBusy = false; return; }
-      const fin = function () { warmBusy = false; pumpUploads(); };
+      const fin = function () { warmBusy = false; };
       if (pending && typeof pending.then === 'function') pending.then(fin, fin); else fin();
     }
 
@@ -1198,7 +1431,10 @@
           if (canStartMetric(rec)) { start(rec, t); loading++; }
           else if (!rec.firstWait) rec.firstWait = t;
         }
-        if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, t, i);
+        if (rec.state !== 'cold' && rec.state !== 'ready') {
+          if (rec.isCurrent) step(rec, t, 0);
+          else step(rec, t, i);
+        }
       });
       // Unload what is no longer within its release radius, after a short
       // linger (desktop keeps a small LRU of finished rooms while memory is
@@ -1232,6 +1468,7 @@
     let lastUpdateAt = 0;
     function update(view) {
       const t = now();
+      beginGpuSlice(view?.loadingScreen);
       lastUpdateAt = t;
       // Metric policy: a room the hero just left is still a few metres away,
       // so distance alone keeps it wanted — no "current" pinning needed.
@@ -1313,13 +1550,6 @@
       // Zones still preparing but no longer wanted keep preparing (cheap) so
       // a quick turn-back does not restart them.
       zones.forEach(function (rec) { if (!rec.lastWanted || rec.lastWanted === t) return; if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, t, 99); });
-      // Current room: if dress is complete, never sit in 'loading' — a 60 s
-      // door wait is a failure. Pump step every update so reveal is a few
-      // hundred ms after isComplete(), not an abandon timeout.
-      zones.forEach(function (rec) {
-        if (!rec.isCurrent) return;
-        if (rec.state !== 'cold' && rec.state !== 'ready') step(rec, t, 0);
-      });
       // Cold or deferred rooms can still have leftover visible shells
       // (evicted dress, resident architecture). Keep them hidden until
       // the next atomic reveal — visBefore must stay 0 regardless of budget.
@@ -1463,10 +1693,14 @@
     }
     function reset() {
       zones.forEach(r => {
+        cancelCompile(r.compileJob);
+        r.compileJob = null;
         r.state = 'cold'; r.pending.clear(); r.leftAt = 0; r.lastWanted = 0;
         r._currentUntil = 0; r.retained = r.protected = r.visible = r.isCurrent = false;
         r.deferred = false; r.deferredAt = 0; r.done = false; r.waiters.length = 0;
       });
+      cancelCompile(shell?.job);
+      shell = null;
       uploadQueue = []; looseUploads.clear(); releasable.clear(); warmQ.length = 0; warmBusy = false; memLevel = 'normal';
     }
     function report() {
@@ -1475,7 +1709,7 @@
         zones: {},
         uploadQueue: uploadQueue.length,
         releasable: releasable.size,
-        warmPending: warmQ.length,
+        warmPending: warmQ.length + Number(!!shell),
         memory: memoryState(),
         usage: u,
         budget: { processMB: o.processBudgetMB, gpuMB: o.gpuBudgetMB, cpuMB: o.cpuBudgetMB },
@@ -1489,5 +1723,5 @@
     const leadTime=id=>Math.max(3,Math.min(8,((zones.get(id)?.leadMs||5200)+650)/1000));
     return { register, unregister, attach, update, status, isReady, leadTime, whenReady, markReleasable, queueTextures: (obj) => queueTextures(null, obj, 50), pumpUploads, pumpWarm, enqueueWarm, forgetWarm, sample, memoryState, forceEvict, forceLoad, reset, report, hide: hideObject, reveal: revealObject, zones: () => Array.from(order) };
   }
-  return { create, HIDE_FLAG };
+  return { create, prepareRender, HIDE_FLAG };
 });

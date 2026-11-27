@@ -762,6 +762,7 @@
 
     const stageCost = { geometryBytes, batches: batchCount, textures: 0 };
     let mawPending = null;
+    const prefetch = () => mawPending ??= mawLook?.prefetch();
     const cameraBoxesAt = indexCamera();
     return {
       root, nearFloor, blocks, update, lift, budget, cost: stageCost,
@@ -781,13 +782,11 @@
           return { error: error.message };
         });
         if (hallLook) stageCost.hall = await hallLook.load(renderer);
-        // R3-03 streams in behind the hero from here on: by the time the
-        // approach is reached it is textured, compiled and complete.
-        mawPending = mawLook?.prefetch();
         return stageCost;
       },
+      prefetch,
       // Resolves once the deferred R3-03 dressing is complete (or failed).
-      settled: () => Promise.resolve(mawPending).then(() => mawLook?.status.phase ?? 'none'),
+      settled: () => Promise.resolve(prefetch()).then(() => mawLook?.status.phase ?? 'none'),
       stair, maw: mawLook,
       detachedAssets: () => stair?.kit?.(),
       spawn: [passage.position[0] - start - 0.55, 0, passage.position[2]],

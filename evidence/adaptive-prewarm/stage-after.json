@@ -1,0 +1,66 @@
+{
+  "environment": "Chromium / SwiftShader, simulated phone constraints, 568 x 320",
+  "readyMs": 25716,
+  "area": "U1-01",
+  "firstDraws": [
+    {
+      "firstCpuMs": 3.7,
+      "ready": false,
+      "buffers": 0,
+      "textures": 1,
+      "links": 0
+    },
+    {
+      "firstCpuMs": 1.1,
+      "ready": false,
+      "buffers": 0,
+      "textures": 1,
+      "links": 0
+    },
+    {
+      "firstCpuMs": 1.3,
+      "ready": false,
+      "buffers": 0,
+      "textures": 1,
+      "links": 0
+    },
+    {
+      "firstCpuMs": 1.9,
+      "ready": false,
+      "buffers": 0,
+      "textures": 1,
+      "links": 0
+    },
+    {
+      "firstCpuMs": 1.9,
+      "ready": false,
+      "buffers": 0,
+      "textures": 1,
+      "links": 0
+    },
+    {
+      "firstCpuMs": 1.4,
+      "ready": false,
+      "buffers": 0,
+      "textures": 1,
+      "links": 0
+    }
+  ],
+  "errors": [],
+  "estimate": {
+    "processMB": 232.6,
+    "cpuMB": 34.5,
+    "gpuMB": 113.2,
+    "geometries": 51,
+    "textures": 44,
+    "programs": 35
+  },
+  "prewarm": {
+    "meshes": 89,
+    "textures": 36,
+    "slices": 33,
+    "maxSliceMs": 93.2,
+    "processMBBefore": 200.1,
+    "processMBAfter": 233.1
+  }
+}

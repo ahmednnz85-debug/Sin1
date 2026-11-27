@@ -1,0 +1,768 @@
+{
+  "browser": "Chromium/SwiftShader",
+  "viewport": [
+    256,
+    144
+  ],
+  "direct": "HALL",
+  "sampleEvery": 12,
+  "before": {
+    "L1": {
+      "first": {
+        "approach": {
+          "state": "ready",
+          "frames": 25,
+          "p95": 650,
+          "p99": 5450,
+          "maxGap": 5450,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 285,
+          "maxLinksInFrame": 1,
+          "waitS": 0.1,
+          "motion": {
+            "metres": 0.58,
+            "frames": 20,
+            "maxGap": 5450,
+            "p50": 17,
+            "p95": 650,
+            "p99": 5450,
+            "over33": 6,
+            "over100": 3,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 1,
+            "maxLinksInFrame": 1,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 2017,
+            "maxQueryMsInFrame": 285,
+            "texUploads": 45,
+            "maxTexMsInFrame": 85,
+            "buffers": 330,
+            "worst": [
+              {
+                "gap": 5450,
+                "link": 0,
+                "q": 0,
+                "buf": 0,
+                "tex": 4,
+                "texMs": 0,
+                "busy": "L2:u"
+              },
+              {
+                "gap": 650,
+                "link": 0,
+                "q": 1727,
+                "buf": 145,
+                "tex": 32,
+                "texMs": 85,
+                "busy": "L2:u"
+              },
+              {
+                "gap": 117,
+                "link": 0,
+                "q": 284,
+                "buf": 68,
+                "tex": 2,
+                "texMs": 0,
+                "busy": "L2:u"
+              }
+            ]
+          }
+        },
+        "enter": {
+          "state": "ready",
+          "frames": 24,
+          "p95": 10433,
+          "p99": 14783,
+          "maxGap": 14783,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 14767,
+          "maxLinksInFrame": 1,
+          "waitS": 0.1,
+          "mem": {
+            "processMB": 430.3,
+            "gpuTexMB": 190.5,
+            "programs": 67,
+            "peakProcessMB": 433.5
+          },
+          "motion": {
+            "metres": 0.55,
+            "frames": 17,
+            "maxGap": 14783,
+            "p50": 33,
+            "p95": 14783,
+            "p99": 14783,
+            "over33": 8,
+            "over100": 3,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 0,
+            "maxLinksInFrame": 0,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 1144,
+            "maxQueryMsInFrame": 14767,
+            "texUploads": 18,
+            "maxTexMsInFrame": 8,
+            "buffers": 162,
+            "worst": [
+              {
+                "gap": 14783,
+                "link": 0,
+                "q": 564,
+                "buf": 39,
+                "tex": 10,
+                "texMs": 8,
+                "busy": "L3:l"
+              },
+              {
+                "gap": 317,
+                "link": 0,
+                "q": 0,
+                "buf": 0,
+                "tex": 4,
+                "texMs": 0,
+                "busy": "L3:u"
+              },
+              {
+                "gap": 167,
+                "link": 0,
+                "q": 284,
+                "buf": 66,
+                "tex": 1,
+                "texMs": 0,
+                "busy": "L3:l"
+              }
+            ]
+          }
+        }
+      },
+      "leave": {
+        "to": "K4",
+        "unloaded": false,
+        "mem": {
+          "processMB": 371.7,
+          "gpuTexMB": 171.6,
+          "programs": 49,
+          "peakProcessMB": 435.2
+        }
+      },
+      "return": {
+        "approach": {
+          "state": "ready",
+          "frames": 37,
+          "p95": 9633,
+          "p99": 32099,
+          "maxGap": 32099,
+          "holeFrames": 37,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 1,
+          "maxLinksInFrame": 1,
+          "waitS": 0,
+          "motion": {
+            "metres": 0,
+            "frames": 2,
+            "maxGap": 32099,
+            "p50": 9633,
+            "p95": 32099,
+            "p99": 32099,
+            "over33": 2,
+            "over100": 2,
+            "holeFrames": 2,
+            "holeIds": {
+              "T1": 2
+            },
+            "insideUnready": 0,
+            "links": 0,
+            "maxLinksInFrame": 0,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 0,
+            "maxQueryMsInFrame": 0,
+            "texUploads": 9,
+            "maxTexMsInFrame": 0,
+            "buffers": 8,
+            "worst": [
+              {
+                "gap": 32099,
+                "link": 0,
+                "q": 0,
+                "buf": 8,
+                "tex": 5,
+                "texMs": 0,
+                "busy": "T1:u"
+              },
+              {
+                "gap": 9633,
+                "link": 0,
+                "q": 0,
+                "buf": 0,
+                "tex": 4,
+                "texMs": 0,
+                "busy": "T1:l K4:u"
+              }
+            ]
+          }
+        },
+        "enter": {
+          "state": "ready",
+          "frames": 0,
+          "p95": 0,
+          "p99": 0,
+          "maxGap": 0,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 0,
+          "maxLinksInFrame": 0,
+          "waitS": 0,
+          "mem": {
+            "processMB": 379.5,
+            "gpuTexMB": 172.9,
+            "programs": 50,
+            "peakProcessMB": 435.2
+          },
+          "motion": {
+            "metres": 0,
+            "frames": 0,
+            "maxGap": 0,
+            "p50": 0,
+            "p95": 0,
+            "p99": 0,
+            "over33": 0,
+            "over100": 0,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 0,
+            "maxLinksInFrame": 0,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 0,
+            "maxQueryMsInFrame": 0,
+            "texUploads": 0,
+            "maxTexMsInFrame": 0,
+            "buffers": 0,
+            "worst": []
+          }
+        }
+      }
+    },
+    "L2": {
+      "first": {
+        "approach": {
+          "state": "uploading",
+          "frames": 42,
+          "p95": 9800,
+          "p99": 12316,
+          "maxGap": 12316,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 8,
+          "maxLinksInFrame": 1,
+          "waitS": 35.2,
+          "motion": {
+            "metres": 0,
+            "frames": 0,
+            "maxGap": 0,
+            "p50": 0,
+            "p95": 0,
+            "p99": 0,
+            "over33": 0,
+            "over100": 0,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 0,
+            "maxLinksInFrame": 0,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 0,
+            "maxQueryMsInFrame": 0,
+            "texUploads": 0,
+            "maxTexMsInFrame": 0,
+            "buffers": 0,
+            "worst": []
+          }
+        },
+        "enter": {
+          "state": "compiling",
+          "frames": 80,
+          "p95": 4833,
+          "p99": 6400,
+          "maxGap": 6400,
+          "holeFrames": 7,
+          "insideUnready": 80,
+          "maxQueryMsInFrame": 15,
+          "maxLinksInFrame": 1,
+          "waitS": 35.3,
+          "mem": {
+            "processMB": 382.8,
+            "gpuTexMB": 184.9,
+            "programs": 52,
+            "peakProcessMB": 435.2
+          },
+          "motion": null
+        }
+      },
+      "leave": {
+        "to": "K4",
+        "unloaded": false,
+        "mem": {
+          "processMB": 434.7,
+          "gpuTexMB": 197.2,
+          "programs": 53,
+          "peakProcessMB": 435.2
+        }
+      },
+      "return": {
+        "approach": {
+          "state": "compiling",
+          "frames": 48,
+          "p95": 4267,
+          "p99": 9133,
+          "maxGap": 9133,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 2503,
+          "maxLinksInFrame": 1,
+          "waitS": 35.1,
+          "motion": {
+            "metres": 0.44,
+            "frames": 17,
+            "maxGap": 1367,
+            "p50": 17,
+            "p95": 1367,
+            "p99": 1367,
+            "over33": 3,
+            "over100": 2,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 1,
+            "maxLinksInFrame": 1,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 14,
+            "maxQueryMsInFrame": 48,
+            "texUploads": 2,
+            "maxTexMsInFrame": 0,
+            "buffers": 0,
+            "worst": [
+              {
+                "gap": 1367,
+                "link": 0,
+                "q": 0,
+                "buf": 0,
+                "tex": 0,
+                "texMs": 0,
+                "busy": "K5:l"
+              },
+              {
+                "gap": 400,
+                "link": 0,
+                "q": 0,
+                "buf": 0,
+                "tex": 0,
+                "texMs": 0,
+                "busy": "K5:l"
+              },
+              {
+                "gap": 67,
+                "link": 1,
+                "q": 14,
+                "buf": 0,
+                "tex": 1,
+                "texMs": 0,
+                "busy": "K5:l"
+              }
+            ]
+          }
+        },
+        "enter": {
+          "state": "compiling",
+          "frames": 36,
+          "p95": 10783,
+          "p99": 13166,
+          "maxGap": 13166,
+          "holeFrames": 8,
+          "insideUnready": 36,
+          "maxQueryMsInFrame": 10765,
+          "maxLinksInFrame": 1,
+          "waitS": 35,
+          "mem": {
+            "processMB": 384.6,
+            "gpuTexMB": 184.9,
+            "programs": 55,
+            "peakProcessMB": 537.4
+          },
+          "motion": null
+        }
+      }
+    }
+  },
+  "prewarmingFirstPass": {
+    "L1": {
+      "first": {
+        "approach": {
+          "state": "ready",
+          "frames": 27,
+          "p95": 633,
+          "p99": 5483,
+          "maxGap": 5483,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 332,
+          "maxLinksInFrame": 1,
+          "waitS": 0.1,
+          "motion": {
+            "metres": 0.76,
+            "frames": 23,
+            "maxGap": 5483,
+            "p50": 17,
+            "p95": 633,
+            "p99": 5483,
+            "over33": 9,
+            "over100": 2,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 1,
+            "maxLinksInFrame": 1,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 2017,
+            "maxQueryMsInFrame": 332,
+            "texUploads": 47,
+            "maxTexMsInFrame": 140,
+            "buffers": 318,
+            "worst": [
+              {
+                "gap": 5483,
+                "link": 0,
+                "q": 0,
+                "buf": 0,
+                "tex": 4,
+                "texMs": 0,
+                "busy": "L2:u"
+              },
+              {
+                "gap": 633,
+                "link": 0,
+                "q": 2011,
+                "buf": 197,
+                "tex": 33,
+                "texMs": 140,
+                "busy": "L2:u"
+              },
+              {
+                "gap": 83,
+                "link": 0,
+                "q": 0,
+                "buf": 24,
+                "tex": 1,
+                "texMs": 0,
+                "busy": "L2:u"
+              }
+            ]
+          }
+        },
+        "enter": {
+          "state": "ready",
+          "frames": 17,
+          "p95": 2750,
+          "p99": 2750,
+          "maxGap": 2750,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 393,
+          "maxLinksInFrame": 0,
+          "waitS": 0,
+          "mem": {
+            "processMB": 389.6,
+            "gpuTexMB": 178.2,
+            "programs": 58,
+            "peakProcessMB": 433.5
+          },
+          "motion": {
+            "metres": 0,
+            "frames": 0,
+            "maxGap": 0,
+            "p50": 0,
+            "p95": 0,
+            "p99": 0,
+            "over33": 0,
+            "over100": 0,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 0,
+            "maxLinksInFrame": 0,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 0,
+            "maxQueryMsInFrame": 0,
+            "texUploads": 0,
+            "maxTexMsInFrame": 0,
+            "buffers": 0,
+            "worst": []
+          }
+        }
+      },
+      "leave": {
+        "to": "K4",
+        "unloaded": false,
+        "mem": {
+          "processMB": 378,
+          "gpuTexMB": 178.2,
+          "programs": 58,
+          "peakProcessMB": 433.5
+        }
+      },
+      "return": {
+        "approach": {
+          "state": "ready",
+          "frames": 0,
+          "p95": 0,
+          "p99": 0,
+          "maxGap": 0,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 0,
+          "maxLinksInFrame": 0,
+          "waitS": 0,
+          "motion": {
+            "metres": 0,
+            "frames": 0,
+            "maxGap": 0,
+            "p50": 0,
+            "p95": 0,
+            "p99": 0,
+            "over33": 0,
+            "over100": 0,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 0,
+            "maxLinksInFrame": 0,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 0,
+            "maxQueryMsInFrame": 0,
+            "texUploads": 0,
+            "maxTexMsInFrame": 0,
+            "buffers": 0,
+            "worst": []
+          }
+        },
+        "enter": {
+          "state": "ready",
+          "frames": 4,
+          "p95": 8433,
+          "p99": 8433,
+          "maxGap": 8433,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 0,
+          "maxLinksInFrame": 0,
+          "waitS": 0,
+          "mem": {
+            "processMB": 428.7,
+            "gpuTexMB": 190.6,
+            "programs": 58,
+            "peakProcessMB": 433.5
+          },
+          "motion": {
+            "metres": 0.05,
+            "frames": 2,
+            "maxGap": 8433,
+            "p50": 67,
+            "p95": 8433,
+            "p99": 8433,
+            "over33": 2,
+            "over100": 1,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 0,
+            "maxLinksInFrame": 0,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 0,
+            "maxQueryMsInFrame": 0,
+            "texUploads": 1,
+            "maxTexMsInFrame": 0,
+            "buffers": 0,
+            "worst": [
+              {
+                "gap": 8433,
+                "link": 0,
+                "q": 0,
+                "buf": 0,
+                "tex": 0,
+                "texMs": 0,
+                "busy": ""
+              },
+              {
+                "gap": 67,
+                "link": 0,
+                "q": 0,
+                "buf": 0,
+                "tex": 1,
+                "texMs": 0,
+                "busy": "L4:l"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "L2": {
+      "first": {
+        "approach": {
+          "state": "uploading",
+          "frames": 3,
+          "p95": 25266,
+          "p99": 25266,
+          "maxGap": 25266,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 0,
+          "maxLinksInFrame": 0,
+          "waitS": 35.3,
+          "motion": {
+            "metres": 0.03,
+            "frames": 2,
+            "maxGap": 2317,
+            "p50": 17,
+            "p95": 2317,
+            "p99": 2317,
+            "over33": 1,
+            "over100": 1,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 0,
+            "maxLinksInFrame": 0,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 0,
+            "maxQueryMsInFrame": 0,
+            "texUploads": 11,
+            "maxTexMsInFrame": 0,
+            "buffers": 0,
+            "worst": [
+              {
+                "gap": 2317,
+                "link": 0,
+                "q": 0,
+                "buf": 0,
+                "tex": 6,
+                "texMs": 0,
+                "busy": "L4:u L3:u"
+              },
+              {
+                "gap": 17,
+                "link": 0,
+                "q": 0,
+                "buf": 0,
+                "tex": 5,
+                "texMs": 0,
+                "busy": "L4:u L3:u L2:l"
+              }
+            ]
+          }
+        },
+        "enter": {
+          "state": "uploading",
+          "frames": 17,
+          "p95": 26816,
+          "p99": 26816,
+          "maxGap": 26816,
+          "holeFrames": 5,
+          "insideUnready": 17,
+          "maxQueryMsInFrame": 4186,
+          "maxLinksInFrame": 1,
+          "waitS": 35.1,
+          "mem": {
+            "processMB": 430.1,
+            "gpuTexMB": 201.9,
+            "programs": 59,
+            "peakProcessMB": 448.3
+          },
+          "motion": null
+        }
+      },
+      "leave": {
+        "to": "K4",
+        "unloaded": false,
+        "mem": {
+          "processMB": 430.1,
+          "gpuTexMB": 201.9,
+          "programs": 59,
+          "peakProcessMB": 448.3
+        }
+      },
+      "return": {
+        "approach": {
+          "state": "uploading",
+          "frames": 5,
+          "p95": 28066,
+          "p99": 28066,
+          "maxGap": 28066,
+          "holeFrames": 0,
+          "insideUnready": 0,
+          "maxQueryMsInFrame": 0,
+          "maxLinksInFrame": 0,
+          "waitS": 35.2,
+          "motion": {
+            "metres": 0,
+            "frames": 0,
+            "maxGap": 0,
+            "p50": 0,
+            "p95": 0,
+            "p99": 0,
+            "over33": 0,
+            "over100": 0,
+            "holeFrames": 0,
+            "holeIds": {},
+            "insideUnready": 0,
+            "links": 0,
+            "maxLinksInFrame": 0,
+            "revealLinks": 0,
+            "maxRevealGap": 0,
+            "queries": 0,
+            "maxQueryMsInFrame": 0,
+            "texUploads": 0,
+            "maxTexMsInFrame": 0,
+            "buffers": 0,
+            "worst": []
+          }
+        },
+        "enter": {
+          "state": "compiling",
+          "frames": 20,
+          "p95": 20299,
+          "p99": 25199,
+          "maxGap": 25199,
+          "holeFrames": 5,
+          "insideUnready": 20,
+          "maxQueryMsInFrame": 0,
+          "maxLinksInFrame": 1,
+          "waitS": 35.2,
+          "mem": {
+            "processMB": 430.5,
+            "gpuTexMB": 208.7,
+            "programs": 59,
+            "peakProcessMB": 460.2
+          },
+          "motion": null
+        }
+      }
+    }
+  }
+}

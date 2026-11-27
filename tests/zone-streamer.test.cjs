@@ -632,6 +632,30 @@ test('strict room waits for texture upload, geometry warmup and shader compilati
   assert.equal(group.children[0].visible, true);
 });
 
+test('playing-frame geometry work and background texture upload share one preparation slice', async () => {
+  const scene = obj('scene'), group = obj('near'); scene.add(group);
+  const r = renderer(), streamer = Z.create({ frameBudgetMs: 2 });
+  let geometrySteps = 0;
+  streamer.register({
+    id: 'near', requireComplete: true,
+    load(api) { api.add(mesh('near')); api.done(); },
+    prepareGeometry() { geometrySteps++; return geometrySteps === 2; }
+  });
+  streamer.attach({ renderer: r, scene, camera: {}, groupOf: () => group });
+  streamer.queueTextures(mesh('background', tex()));
+  const view = { metric: true, current: 'near', approach: new Set(['near']) };
+  streamer.update(view);
+  assert.equal(geometrySteps, 1);
+  assert.equal(r.uploads, 0);
+  streamer.update(view);
+  assert.equal(geometrySteps, 2);
+  assert.equal(r.uploads, 0);
+  await tick();
+  streamer.update(view);
+  assert.equal(streamer.status('near'), 'ready');
+  assert.equal(r.uploads, 1);
+});
+
 test('strict archive stays hidden on GPU error and can be retried', async () => {
   const scene = obj('scene'), group = obj('L2'); scene.add(group);
   const R = renderer(), s = Z.create();

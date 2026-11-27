@@ -1,0 +1,29 @@
+{
+  "during": {
+    "before": "ready",
+    "state": "ready",
+    "frames": 61,
+    "p95": 33.30000000000291,
+    "max": 2683.300000000003,
+    "walkedM": 1.352
+  },
+  "first": {
+    "ready": "ready",
+    "draw": {
+      "ms": 546.7,
+      "programs": 0,
+      "queries": 2028,
+      "buffers": 89
+    }
+  },
+  "returnVisit": {
+    "ready": "ready",
+    "draw": {
+      "ms": 39.6,
+      "programs": 0,
+      "queries": 0,
+      "buffers": 4
+    }
+  },
+  "errors": []
+}

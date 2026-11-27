@@ -859,7 +859,8 @@
         script.onerror = reject;
         document.head.appendChild(script);
       });
-      const loader = new T.GLTFLoader().setMeshoptDecoder(root.MeshoptDecoder);
+      const decoder = root.__sinMeshoptWorkers?.(root.MeshoptDecoder, true) || root.MeshoptDecoder;
+      const loader = new T.GLTFLoader().setMeshoptDecoder(decoder);
       const loadingMaps = Object.entries(surfaces).map(async ([key, [, , file]]) => {
         const material = materials.get(key);
         material.map = await loadMap(file, true);
