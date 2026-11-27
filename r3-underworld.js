@@ -161,8 +161,8 @@
               outgoingLight += wash * shaft * vec3(0.16, 0.14, 0.115)
                 + vec3(0.027, 0.20, 0.22) * facingLamp * lampGlow * lampGlow * (1.0 - roughnessFactor);
               ${kind === 'roadPaving' ? `
-                float glancing = pow(max(0.0,dot(reflectRay, normalize(vec3(0.59, 0.72, -0.36)))), 24.0);
-                outgoingLight += glancing * (1.0-roughnessFactor) * vec3(0.36,0.29,0.18);
+                float glancing = pow(max(0.0,dot(reflectRay, normalize(vec3(0.59, 0.72, -0.36)))), 13.0);
+                outgoingLight += glancing * (1.0-roughnessFactor) * vec3(0.24,0.20,0.14);
               ` : ''}
             ` : ''}
             ${kind === 'lamp' || kind === 'roadLamp' ? `
@@ -194,39 +194,52 @@
       return material;
     }
 
-    function scenicMaterial(map, waterfall = false) {
+    function scenicMaterial(map, waterfall = false, terrain = false) {
       return new T.ShaderMaterial({side:T.FrontSide,
         uniforms:{uW2L:transform,uFlowTime:flowTime,atlas:{value:map},isFall:{value:waterfall?1:0},
-          dock:{value:new T.Vector3(A.x,A.y,A.z)}},
+          rockNoise:{value:caveNoise},dock:{value:new T.Vector3(A.x,A.y,A.z)}},
         vertexShader:`uniform mat4 uW2L; uniform vec3 dock;
           varying vec2 vAtlas; varying vec3 vLocal; varying vec3 vCave;
           void main(){
             vAtlas=uv;
-            vec4 p=instanceMatrix*vec4(position,1.);
+            vec4 p=vec4(position,1.);
+            vec3 n=normal;
+            #ifdef USE_INSTANCING
+              p=instanceMatrix*p;
+              mat3 basis=mat3(instanceMatrix);
+              n=normalize(basis*(n/vec3(dot(basis[0],basis[0]),dot(basis[1],basis[1]),dot(basis[2],basis[2]))));
+            #endif
             vec4 local=uW2L*modelMatrix*p;
             vec3 eye=(uW2L*vec4(cameraPosition,1.)).xyz;
             vLocal=local.xyz-dock;
-            mat3 basis=mat3(instanceMatrix);
-            vec3 n=normal/vec3(dot(basis[0],basis[0]),dot(basis[1],basis[1]),dot(basis[2],basis[2]));
-            n=normalize(basis*n);
             vCave.x=.28+.49*max(0.,dot(n,normalize(vec3(-.46,.69,.45))))+.24*max(0.,n.y);
             vCave.y=length(eye-local.xyz);
             vCave.z=.5+.31*sin(vLocal.x*.09+vLocal.y*.18)*sin(vLocal.z*.12-vLocal.y*.087)
               +.19*sin(vLocal.z*.063+vLocal.x*.053);
             gl_Position=projectionMatrix*modelViewMatrix*p;
           }`,
-        fragmentShader:`uniform sampler2D atlas; uniform float uFlowTime,isFall;
+        fragmentShader:`uniform sampler2D atlas,rockNoise; uniform float uFlowTime,isFall;
           varying vec2 vAtlas; varying vec3 vLocal; varying vec3 vCave;
           void main(){
+            ${terrain ? `
+              vec2 seamUV=vec2(vLocal.x*.067+vLocal.z*.087,vLocal.y*.025+vLocal.z*.014);
+              float seam=texture2D(rockNoise,seamUV).r;
+              float layers=texture2D(rockNoise,vec2(vLocal.x*.033-vLocal.z*.021,vLocal.y*.073+seam*.18)).r;
+              vec3 grain=texture2D(atlas,vec2(vLocal.x+vLocal.z*.78,vLocal.y*.88-vLocal.z*.54)*.18).rgb;
+              float stone=smoothstep(.19,.81,seam*.47+layers*.53);
+              vec3 color=mix(vec3(.006,.013,.019),vec3(.038,.050,.055),stone);
+              color=(color+grain*vec3(.10,.17,.18))*(.29+.82*vCave.x);
+            ` : `
             vec3 color=texture2D(atlas,vAtlas).rgb;
             float wet=smoothstep(.024,.17,min(color.g,color.b)-color.r*1.1);
             float flow=.72+.16*sin(vLocal.y*.94+uFlowTime*4.4+vLocal.x*.37)
               +.12*sin(vLocal.y*2.10+uFlowTime*8.7+vLocal.z*1.8);
             color=color*(vCave.x*vec3(.48,.60,.69)+wet*flow*vec3(.07,.28,.34));
             color+=isFall*vec3(.013,.16,.21)*flow*(.2+.8*wet);
+            `}
             float depth=1.-smoothstep(-52.,-8.,vLocal.y);
-            float haze=clamp(1.-exp(-vCave.y*(.0032+.0037*depth))+.18*depth*vCave.z,0.,.94);
-            vec3 mist=mix(vec3(.010,.028,.045),vec3(.035,.125,.160),depth*(.44+.56*vCave.z));
+            float haze=clamp(1.-exp(-vCave.y*(.0030+.0030*depth))+.10*depth*vCave.z,0.,.90);
+            vec3 mist=mix(vec3(.010,.028,.045),vec3(.027,.088,.116),depth*(.44+.56*vCave.z));
             gl_FragColor=vec4(mix(color,mist,haze),1.);
             #include <tonemapping_fragment>
             #include <colorspace_fragment>
@@ -273,10 +286,10 @@
     function ringTop(kind, x, y, z, r0, r1, seg = 64) {
       add(kind, at(new T.RingGeometry(r0, r1, seg, 1), x, y, z, -Math.PI / 2));
     }
-    function inlay(kind, r0, r1, y, repeat = 1, x = 0, z = 0) {
+    function inlay(kind, r0, r1, y, repeat = 1, x = 0, z = 0, segments = 144) {
       const points = [], uv = [], index = [];
-      for (let i = 0; i <= 144; i++) {
-        const t = i / 144, a = t * tau;
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments, a = t * tau;
         for (const [r, v] of [[r0, 0], [r1, 1]]) {
           points.push(...L(x + Math.cos(a) * r, y, z + Math.sin(a) * r));
           uv.push(t * repeat, v);
@@ -293,41 +306,113 @@
       const [a, b, c] = L(x0, y0, z0), [d, e, f] = L(x1, y1, z1);
       hit(Math.min(a, d), Math.max(a, d), Math.min(b, e), Math.max(b, e), Math.min(c, f), Math.max(c, f), player);
     };
-    function panel(kind, points, u = 1) {
+    function face(kind, points, coords) {
       const geometry = new T.BufferGeometry();
       geometry.setAttribute('position', new T.Float32BufferAttribute(points.flatMap(point => L(...point)), 3));
-      geometry.setAttribute('uv', new T.Float32BufferAttribute([0, 0, u, 0, u, 1, 0, 1], 2));
-      geometry.setIndex([0, 1, 2, 0, 2, 3]);
-      add(kind, geometry, true);
+      if (coords) geometry.setAttribute('uv', new T.Float32BufferAttribute(coords, 2));
+      const index = [];
+      for (let i = 1; i < points.length - 1; i++) index.push(0, i, i + 1);
+      geometry.setIndex(index);
+      add(kind, geometry, Boolean(coords));
+    }
+    function panel(kind, points, u = 1) {
+      face(kind, points, [0, 0, u, 0, u, 1, 0, 1]);
     }
 
-    function ribbon(kind, x0, z0, x1, z1, y0, y1, width, span, offset = 0) {
-      const len = Math.hypot(x1 - x0, z1 - z0);
-      const nx = (z1 - z0) / len, nz = (x0 - x1) / len;
-      const side = (x, y, z, edge) => [x + nx * (offset + edge), y, z + nz * (offset + edge)];
-      panel(kind, [side(x0,y0,z0,-width/2), side(x1,y1,z1,-width/2),
-        side(x1,y1,z1,width/2), side(x0,y0,z0,width/2)], Math.max(1, Math.round(len / span)));
+    // The bridges enter the discs at the same elevation. Cut their top faces
+    // against the actual disc edges, and build each inlay into the floor plane.
+    const deckTops = [], platformEdges = [];
+    function excludeDisc(patch, disc) {
+      const pieces = [];
+      let inside = patch;
+      for (let i = 0; inside.length >= 3 && i < disc.length; i++) {
+        const [x, z] = disc[i], [nx, nz] = disc[(i + 1) % disc.length];
+        const signed = p => (nx - x) * (p[1] - z) - (nz - z) * (p[0] - x);
+        const outer = [], inner = [];
+        for (let j = 0; j < inside.length; j++) {
+          const p = inside[j], q = inside[(j + 1) % inside.length];
+          const a = signed(p), b = signed(q);
+          (a >= 0 ? inner : outer).push(p);
+          if ((a >= 0) !== (b >= 0)) {
+            const cross = [T.MathUtils.lerp(p[0],q[0],a/(a-b)), T.MathUtils.lerp(p[1],q[1],a/(a-b))];
+            inner.push(cross);
+            outer.push(cross);
+          }
+        }
+        if (outer.length >= 3) pieces.push(outer);
+        inside = inner;
+      }
+      return pieces;
+    }
+    function queueTreads(x0,z0,x1,z1,y,width,bands) {
+      const run = Math.hypot(x1-x0,z1-z0), dx=(x1-x0)/run, dz=(z1-z0)/run;
+      const point = (s,t) => [x0+s*dx+t*dz,z0+s*dz-t*dx];
+      let edge=-width/2;
+      for (const [lo,hi,kind,period] of [...bands,[width/2,width/2]]) {
+        if(lo>edge) deckTops.push({y,kind:'roadFloor',points:[point(0,edge),point(run,edge),point(run,lo),point(0,lo)]});
+        if(kind) {
+          const repeat=Math.max(1,Math.round(run/period));
+          const uv=([x,z])=>[
+            ((x-x0)*dx+(z-z0)*dz)*repeat/run,
+            ((x-x0)*dz-(z-z0)*dx-lo)/(hi-lo)
+          ];
+          deckTops.push({y,kind,uv,points:[point(0,lo),point(run,lo),point(run,hi),point(0,hi)]});
+        }
+        edge=hi;
+      }
+    }
+    function addPlatformEdge(x,y,z,radius,count) {
+      platformEdges.push({x,y,z,radius,disc:Array.from({length:count},(_,i)=>[
+        x+Math.cos(i*tau/count)*radius,z+Math.sin(i*tau/count)*radius
+      ])});
+    }
+    function finishDeckTops() {
+      for (const {y,kind,points,uv} of deckTops) {
+        let pieces=[points];
+        for (const {x,y:level,z,radius,disc} of platformEdges) {
+          if (y!==level || [0,1].some((axis)=>{
+            const center=axis===0?x:z;
+            return points.every(p=>p[axis]<center-radius) || points.every(p=>p[axis]>center+radius);
+          })) continue;
+          pieces=pieces.flatMap(piece=>excludeDisc(piece,disc));
+        }
+        for (const piece of pieces) face(kind,piece.map(([x,z])=>[x,y,z]),uv && piece.flatMap(uv));
+      }
     }
 
-    function railing(x0, z0, x1, z1, y0, y1, height) {
-      const run = Math.hypot(x1 - x0, z1 - z0), len = Math.hypot(run, y1 - y0);
-      const yaw = Math.atan2(z0 - z1, x1 - x0), slope = Math.atan2(y1 - y0, run);
-      const x = (x0 + x1) / 2, z = (z0 + z1) / 2, y = (y0 + y1) / 2;
-      box('roadStone', x, y + height / 2, z, len, height, 0.49, yaw, 0, slope);
-      box('roadTrim', x, y + height - 0.085, z, len + 0.016, 0.17, 0.61, yaw, 0, slope);
-      box('roadTrim', x, y + 0.075, z, len, 0.15, 0.60, yaw, 0, slope);
-      const nx = (z1 - z0) / run * 0.253, nz = (x0 - x1) / run * 0.253;
-      const repeat = Math.max(1, Math.round(run / 3.30));
-      panel('roadRail', [[x1+nx,y1+.15,z1+nz],[x0+nx,y0+.15,z0+nz],
-        [x0+nx,y0+height-.17,z0+nz],[x1+nx,y1+height-.17,z1+nz]], repeat);
-      panel('roadRail', [[x0-nx,y0+.15,z0-nz],[x1-nx,y1+.15,z1-nz],
-        [x1-nx,y1+height-.17,z1-nz],[x0-nx,y0+height-.17,z0-nz]], repeat);
-      const bays = Math.max(1, Math.round(run / 3.3));
-      for (let i = 0; i < bays; i++) {
-        const t = i / bays;
-        const px = T.MathUtils.lerp(x0,x1,t), py = T.MathUtils.lerp(y0,y1,t), pz = T.MathUtils.lerp(z0,z1,t);
-        box('roadStone', px, py + height * 0.52, pz, 0.47, height * 1.04, 0.65, yaw);
-        box('roadTrim', px, py + height + .09, pz, 0.57, 0.18, 0.74, yaw);
+    function slab(x,y,z,sx,thick,sz) {
+      const geometry=new T.BoxGeometry(sx,thick,sz);
+      const index=geometry.index.array;
+      // The top is emitted once by finishDeckTops, with no offset decals.
+      geometry.setIndex([...index.subarray(0,12),...index.subarray(18)]);
+      geometry.clearGroups();
+      add('roadStone',at(geometry,x,y-thick/2,z));
+    }
+
+    function railing(x0,z0,x1,z1,y0,y1,height,radial) {
+      const run=Math.hypot(x1-x0,z1-z0), yaw=Math.atan2(z0-z1,x1-x0);
+      const sides=radial || [[(z1-z0)/run,(x0-x1)/run],[(z1-z0)/run,(x0-x1)/run]];
+      const corner=(end,offset,elevation)=>end
+        ? [x1+sides[1][0]*offset,y1+elevation,z1+sides[1][1]*offset]
+        : [x0+sides[0][0]*offset,y0+elevation,z0+sides[0][1]*offset];
+      const repeat=Math.max(1,Math.round(run/3.30));
+      for (const [lo,hi,half,kind] of [[0,.15,.30,'roadTrim'],[.15,height-.17,.245,'roadRail'],[height-.17,height,.305,'roadTrim']]) {
+        const a=corner(0,half,lo), b=corner(1,half,lo), c=corner(1,half,hi), d=corner(0,half,hi);
+        const e=corner(0,-half,lo), f=corner(1,-half,lo), g=corner(1,-half,hi), h=corner(0,-half,hi);
+        if(kind==='roadRail') {
+          panel(kind,[b,a,d,c],repeat);
+          panel(kind,[e,f,g,h],repeat);
+        } else {
+          face(kind,[b,a,d,c]); face(kind,[e,f,g,h]);
+          face(kind,[h,g,c,d]); face(kind,[a,b,f,e]);
+        }
+        face('roadTrim',[a,e,h,d]); face('roadTrim',[f,b,c,g]);
+      }
+      const bays=Math.max(1,Math.round(run/3.3));
+      for(let i=0;i<bays;i++){
+        const t=i/bays, px=T.MathUtils.lerp(x0,x1,t), py=T.MathUtils.lerp(y0,y1,t), pz=T.MathUtils.lerp(z0,z1,t);
+        box('roadStone',px,py+height*.50,pz,.47,height,.65,yaw);
+        box('roadTrim',px,py+height+.09,pz,.57,.18,.74,yaw);
       }
     }
     // Low parapet, open at the road. The Anchorage retains its radius and
@@ -350,8 +435,9 @@
           const dz = 0.26 + Math.abs(Math.cos(a)) * len * 0.48;
           solid(px - dx, px + dx, y, y + height, pz - dz, pz + dz, false);
         } else {
-          const dx = -Math.sin(a) * len / 2, dz = Math.cos(a) * len / 2;
-          railing(px - dx, pz - dz, px + dx, pz + dz, y, y, height);
+          const a0=i*tau/segments, a1=(i+1)*tau/segments;
+          const n0=[Math.cos(a0),Math.sin(a0)], n1=[Math.cos(a1),Math.sin(a1)];
+          railing(x+n0[0]*r,z+n0[1]*r,x+n1[0]*r,z+n1[1]*r,y,y,height,[n0,n1]);
         }
         if (harbor && i % 2 === 0) box('paving', px, y + height + 0.12, pz, 0.75, 0.24, 0.75, -a);
       }
@@ -359,38 +445,46 @@
     // Straight deck with side parapets (x- or z-aligned).
     function deck(x0, z0, x1, z1, y0, y1, width, thick, rails = true) {
       const alongX = Math.abs(x1 - x0) > Math.abs(z1 - z0);
-      const len = Math.hypot(x1 - x0, z1 - z0), pitch = Math.atan2(y1 - y0, alongX ? x1 - x0 : z1 - z0);
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      const pitch = Math.atan2((y1-y0)*Math.sign(alongX ? x1-x0 : z1-z0),len);
       const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, cy = (y0 + y1) / 2;
       const tilt = alongX ? [0, 0, pitch] : [-pitch, 0, 0];
       const sx = alongX ? len / Math.cos(pitch) : width, sz = alongX ? width : len / Math.cos(pitch);
-      box('roadPaving', cx, cy - thick / 2, cz, sx, thick, sz, 0, tilt[0], tilt[2]);
-      if (!rails) return;
-      ribbon('roadStars', x0,z0,x1,z1,y0+.012,y1+.012,Math.min(width*.25,1.48),1.58);
-      for (const side of [-1, 1]) {
-        const ox = alongX ? 0 : side * (width / 2 - 0.27), oz = alongX ? side * (width / 2 - 0.27) : 0;
-        railing(x0+ox,z0+oz,x1+ox,z1+oz,y0,y1,1.0);
-        ribbon('roadEdge', x0,z0,x1,z1,y0+.013,y1+.013,.15,3.0,side*(width/2-.73));
+      if (!rails) {
+        const stringer=new T.BoxGeometry(sx,thick,sz).translate(0,-thick/2,0);
+        add('roadStone',at(stringer,cx,cy,cz,tilt[0],0,tilt[2]));
+        return;
+      }
+      slab(cx,y0,cz,sx,thick,sz);
+      const edge=width/2-.73, center=Math.min(width*.25,1.48)/2;
+      queueTreads(x0,z0,x1,z1,y0,width,[
+        [-edge-.075,-edge+.075,'roadEdge',3], [-center,center,'roadStars',1.58], [edge-.075,edge+.075,'roadEdge',3]
+      ]);
+      for (const side of [-1,1]) {
+        const ox=alongX?0:side*(width/2-.27), oz=alongX?side*(width/2-.27):0;
+        railing(x0+ox,z0+oz,x1+ox,z1+oz,y0,y1,1);
       }
     }
-    // Flight of steps over a straight ramp (visual treads; the walk is the ramp).
-    function steps(x0, z0, x1, z1, y0, y1, width, count) {
-      const alongX = Math.abs(x1 - x0) > Math.abs(z1 - z0);
-      const dx = x1 - x0, dz = z1 - z0, length = Math.hypot(dx, dz);
-      const run = length / count + 0.02;
-      deck(x0,z0,x1,z1,y0-.24,y1-.24,width,1.65,false);
-      for (let i = 0; i < count; i++) {
-        const t = (i + 0.5) / count, y = y0 + (y1 - y0) * t;
-        const x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
-        box('roadPaving', x, y - 0.55, z, alongX ? run : width - 1.0, 1.1, alongX ? width - 1.0 : run);
-        const noseX = x + dx / length * (run / 2 - .055), noseZ = z + dz / length * (run / 2 - .055);
-        const tx = -dz / length * (width / 2 - .48), tz = dx / length * (width / 2 - .48);
-        ribbon('roadEdge', noseX-tx,noseZ-tz,noseX+tx,noseZ+tz,y+.011,y+.011,.064,2.9);
+    // The staircase collision remains a ramp. The stone treads and noses are
+    // level, with the gold band in the same plane as each tread.
+    function steps(x0,z0,x1,z1,y0,y1,width,count) {
+      const dx=x1-x0, dz=z1-z0, length=Math.hypot(dx,dz);
+      const alongX=Math.abs(dx)>Math.abs(dz), run=length/count, treadWidth=width-1.0;
+      deck(x0,z0,x1,z1,y0-.32,y1-.32,width,1.65,false);
+      const rx=dx/length, rz=dz/length;
+      for (let i=0;i<count;i++){
+        const t=(i+.5)/count, y=T.MathUtils.lerp(y0,y1,t);
+        const x=x0+dx*t, z=z0+dz*t;
+        slab(x,y,z,alongX?run+.002:treadWidth,1.1,alongX?treadWidth:run+.002);
+        queueTreads(x-rz*treadWidth/2,z+rx*treadWidth/2,
+          x+rz*treadWidth/2,z-rx*treadWidth/2,y,run,[[-run/2+.014,-run/2+.078,'roadEdge',2.9]]);
       }
-      for (const side of [-1, 1]) {
-        const ox = alongX ? 0 : side * (width / 2 - 0.27), oz = alongX ? side * (width / 2 - 0.27) : 0;
+      for (const side of [-1,1]) {
+        const ox=alongX?0:side*(width/2-.27), oz=alongX?side*(width/2-.27):0;
         railing(x0+ox,z0+oz,x1+ox,z1+oz,y0-.36,y1-.36,1.36);
       }
     }
+
     // Closed spandrel geometry with an open arch at the bottom and a stone rim.
     function vault(x, z, top, w, height, depth, yaw = 0) {
       const r = Math.min(w * 0.37, height * 0.62), spring = height - r - 0.7;
@@ -408,20 +502,32 @@
       }
     }
 
+    const pierFootings=[];
     function pier(x, y, z, width, depth, height, yaw = 0) {
-      box('roadStone',x,y-height/2,z,width,height,depth,yaw);
+      box('roadStone',x,y-(height+.58)/2,z,width,height-.58,depth,yaw);
       box('roadTrim',x,y-.29,z,width+.30,.58,depth+.26,yaw);
       box('roadTrim',x,y-1.18,z,width+.15,.24,depth+.16,yaw);
+      pierFootings.push([x,y-height+.7,z,width*1.37,depth*1.33,yaw]);
     }
 
     function platform(x, y, z, radius, depth, medallion, piers = 0) {
       const count = radius > 10 ? 80 : 48;
-      cyl('roadPaving',x,y-depth/2,z,radius,radius,depth,count);
-      cyl('roadRelief',x,y-depth*.50,z,radius+.014,radius+.014,depth*.64,count,true,Math.round(tau*radius/(depth*2.0)));
-      cyl('roadTrim',x,y-.11,z,radius+.12,radius+.09,.22,count,true);
-      cyl('roadTrim',x,y-depth+.11,z,radius+.08,radius+.12,.24,count,true);
-      add('roadMedallion',at(new T.CircleGeometry(medallion,count),x,y+.012,z,-Math.PI/2),true);
-      inlay('roadEdge',radius-.62,radius-.47,y+.011,Math.round(tau*radius/2.9),x,z);
+      addPlatformEdge(x,y,z,radius,count);
+      const upper=.22, lower=.24, fascia=depth-upper-lower;
+      cyl('roadTrim',x,y-upper/2,z,radius,radius+.09,upper,count,true);
+      cyl('roadRelief',x,y-upper-fascia/2,z,radius+.09,radius+.09,fascia,count,true,Math.round(tau*radius/(depth*2)));
+      cyl('roadTrim',x,y-depth+lower/2,z,radius+.09,radius+.12,lower,count,true);
+      add('roadStone',at(new T.CircleGeometry(radius+.12,count),x,y-depth,z,Math.PI/2));
+      add('roadMedallion',at(new T.CircleGeometry(medallion,count),x,y,z,-Math.PI/2),true);
+      const rings=radius>10?[[12.82,13.55,'roadStars',28],[13.55,13.70,'roadEdge',28]]:[];
+      rings.push([radius-.62,radius-.47,'roadEdge',Math.round(tau*radius/2.9)]);
+      let rim=medallion;
+      for(const [inner,outer,kind,repeat] of rings){
+        if(inner>rim) ringTop('roadFloor',x,y,z,rim,inner,count);
+        inlay(kind,inner,outer,y,repeat,x,z,count);
+        rim=outer;
+      }
+      ringTop('roadFloor',x,y,z,rim,radius,count);
       if (!piers) {
         pier(x,y-depth,z,radius*.64,radius*.78,23);
         return;
@@ -441,6 +547,7 @@
 
     // ---- U1-01 Anchorage of Souls -----------------------------------------
     cyl('paving', 0, -1.5, 0, 17, 17, 3, 72);
+    addPlatformEdge(0,0,0,17,72);
     platformSupport(0,-3,0,17,8);
     const plinths = [];
     // Wrap the carved friezes around the *vertical* face of each step.
@@ -528,8 +635,6 @@
     // ---- U1-03: the principal court and the original closed threshold -----
     platform(-139,-9,-26,19,3,11.1,10);
     parapet(-139,-9,-26,18.7,[[0,.18],[Math.PI,.62]]);
-    inlay('roadStars',12.82,13.55,-8.987,28,-139,-26);
-    inlay('roadEdge',13.55,13.70,-8.985,28,-139,-26);
     const gx=gateX;
     for (const side of [-1,1]) {
       const z=-26+side*9.25, towerZ=-26+side*18.5;
@@ -597,6 +702,8 @@
       solid(-131.02,-129.18,-9,-1.3,-26+side*11.8-.93,-26+side*11.8+.93);
     }
 
+    finishDeckTops();
+
     // ---- cavern and shared U1 materials -----------------------------------
     const shell = new T.SphereGeometry(330, 32, 16).scale(1, 0.55, 1);
     add('cavern', at(shell, -70, 20, -26));
@@ -606,7 +713,7 @@
       daisBorder: [0xeccb9e, 0.66, 'dais-border'], floorInlay: [0xf3e2ca, 0.62, 'floor-inlay'],
       roofStone: [0xb8bec8, 0.88, 'roof-stone'], roofBand: [0xd5be9b, 0.82, 'roof-band'],
       roofRib: [0xe5c494, 0.76, 'roof-rib'], roofOculus: [0xd7c8b4, 0.78, 'roof-oculus'],
-      roadPaving: [0xd2d5dc,.78,'road-stone'], roadStone: [0xa8b2c1,.87,'road-stone'],
+      roadFloor: [0xd2d5dc,.78,'road-stone'], roadStone: [0xa8b2c1,.87,'road-stone'],
       roadTrim: [0xcbbb9f,.81,'road-stone'], roadDoor: [0x9b8272,.87,'road-stone'],
       roadStars: [0xffecca,.66,'road-stars'], roadEdge: [0xffedc4,.76,'road-edge'],
       roadMedallion: [0xfdf2df,.74,'road-medallion'], roadRail: [0xffecd1,.80,'road-rail'],
@@ -633,8 +740,8 @@
       geometry.computeBoundingSphere();
       const [color, roughness] = surfaces[kind] || [colours[kind], 0.94];
       const material = finish(new T.MeshStandardMaterial({ color, roughness, metalness: 0,
-          side: kind === 'cavern' ? T.BackSide : kind.startsWith('roof') ? T.DoubleSide : T.FrontSide }),
-        kind === 'cavern' ? 'shell' : ['paving','roadPaving','roadStars','roadMedallion'].includes(kind)
+          side: kind === 'cavern' ? T.BackSide : (kind.startsWith('roof') || ['roadFloor','roadMedallion','roadStars','roadEdge'].includes(kind)) ? T.DoubleSide : T.FrontSide }),
+        kind === 'cavern' ? 'shell' : ['paving','roadFloor','roadStars','roadMedallion'].includes(kind)
           ? (kind==='paving' ? 'paving' : 'roadPaving') : 'stone');
       const mesh = new T.Mesh(geometry, material);
       mesh.name = 'U1_' + kind;
@@ -648,6 +755,89 @@
     batches.clear();
 
     let pending;
+    const bedHeight=(x,z)=>-120+7*Math.sin(x*.023+z*.032)+5*Math.cos(z*.043-x*.015);
+
+    // A continuous ravine floor and terraced banks hold the authored ruins.
+    // Build all the rock at once, with the same fog and no physics bodies.
+    function addCanyon(terrain, landmarkFootings) {
+      const vertices=[], indices=[];
+      const vertex=(x,y,z)=>{vertices.push(...L(x,y,z)); return vertices.length/3-1;};
+      function patch(rows, reverse) {
+        for(let j=1;j<rows.length;j++) for(let i=1;i<rows[j].length;i++){
+          const a=rows[j-1][i-1], b=rows[j][i-1], c=rows[j][i], d=rows[j-1][i];
+          if(reverse) indices.push(a,d,b,b,d,c);
+          else indices.push(a,b,d,b,c,d);
+        }
+      }
+      const floorRows=Array.from({length:29},(_,i)=>Array.from({length:25},(_,j)=>{
+        const x=-284+i*18, z=-220+j*17;
+        return vertex(x,bedHeight(x,z),z);
+      }));
+      patch(floorRows,true);
+
+      function bank(anchors,axis,side) {
+        const rows=[];
+        const profile=[[0,null],[7,-93],[5,-68],[11,-46],[9,-19],[18,-7],[31,0],[53,-5],[75,3],[104,1],[139,17],[182,39]];
+        for(let i=1;i<anchors.length;i++) {
+          const [start]=anchors[i-1], [end]=anchors[i];
+          const divisions=Math.ceil((end-start)/7);
+          for(let k=i===1?0:1;k<=divisions;k++) {
+            const t=k/divisions;
+            const [along,edge,crest]=anchors[i-1].map((v,j)=>T.MathUtils.lerp(v,anchors[i][j],t));
+            const fissure=6.0*Math.sin(along*.071+side)+2.9*Math.sin(along*.23+axis);
+            rows.push(profile.map(([offset,level],tier)=>{
+              const across=edge+side*(offset+fissure+3.0*Math.sin(along*.15-tier*.89));
+              const x=axis===0?along:across, z=axis===0?across:along;
+              const height=tier===0?bedHeight(x,z)-3
+                :(tier<4?level:crest+level)+4.8*Math.sin(along*.068+tier*.62)+3.4*Math.cos(along*.20-tier*.69);
+              return vertex(x,height,z);
+            }));
+          }
+        }
+        patch(rows,axis===0?side>0:side<0);
+      }
+      bank([[-266,36,-4],[-224,25,-12],[-166,30,-12],[-116,27,-21],[-76,23,-19],
+        [-42,27,-20],[3,27,-15],[58,23,-12],[109,22,-13],[157,24,-8],[213,12,5]],0,1);
+      bank([[-270,-110,-3],[-215,-91,-14],[-163,-57,-17],[-115,-52,-23],[-72,-51,-22],
+        [-40,-44,-18],[0,-40,-15],[61,-36,-13],[120,-36,-11],[180,-31,-7],[217,-26,2]],0,-1);
+      bank([[-178,142,13],[-103,161,0],[-52,158,-14],[-11,154,-10],[38,146,-13],[97,156,0],[153,141,19]],1,1);
+      bank([[-179,-228,6],[-114,-247,0],[-53,-223,-15],[-11,-237,-12],[46,-232,-3],[111,-221,17],[166,-204,22]],1,-1);
+      const spine=[[-186,-27,-125,19],[-163,-27,-54,19],[-141,-27,-47,23],[-120,-26,-56,11],
+        [-100,-26,-58,14],[-80,-26,-60,12],[-61,-26,-55,13],[-43,-22,-49,14],
+        [-41,-4,-51,10],[-24,0,-62,13],[-12,0,-57,12],[12,0,-125,12]];
+      const spineRows=spine.map(([x,z,crest,width])=>[-2.7,-1.53,-.68,0,.62,1.65,2.7].map((offset,i)=>{
+        const edge=z+offset*width;
+        const y=Math.max(bedHeight(x,edge)-2,crest-Math.pow(Math.abs(offset),1.8)*16+Math.cos(x*.49+i)*3);
+        return vertex(x,y,edge);
+      }));
+      patch(spineRows,true);
+
+      function footing([x,top,z,width,depth,yaw]) {
+        const bottom=bedHeight(x,z)-8;
+        const count=14, angle=x*.108+z*.073, cos=Math.cos(yaw), sin=Math.sin(yaw);
+        const levels=[[0,1], [.049,1.07], [.14,.93], [.34,1.11], [.60,1.05], [.82,1.18], [1,1.22]];
+        const rows=levels.map(([t,scale],tier)=>Array.from({length:count+1},(_,i)=>{
+          const a=(i%count)*tau/count;
+          const rough=1+.14*Math.sin(a*3+angle)+.085*Math.cos(a*5-tier*.52+angle)+.06*Math.sin(a*7+tier*.81);
+          const u=Math.cos(a)*width*.5*scale*rough, v=Math.sin(a)*depth*.5*scale*rough;
+          const y=T.MathUtils.lerp(top,bottom,t)-(tier===0?.20:2.9)*Math.cos(a*3+angle+tier);
+          return vertex(x+u*cos+v*sin,y,z-u*sin+v*cos);
+        }));
+        patch(rows,true);
+        const crown=vertex(x,top-.16,z), ring=rows[0];
+        for(let i=0;i<count;i++) indices.push(crown,ring[i+1],ring[i]);
+      }
+      for(const support of [...pierFootings,...landmarkFootings]) footing(support);
+      const geometry=new T.BufferGeometry();
+      geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      geometry.computeBoundingSphere();
+      const canyon=new T.Mesh(geometry,terrain);
+      canyon.name='U1_Connected_Canyon';
+      world.add(canyon);
+    }
+
     async function loadHarbor(renderer) {
       const textureLoader = new T.TextureLoader();
       const files = 'assets/r3/harbor/';
@@ -656,7 +846,7 @@
         if (!maps.has(name)) maps.set(name,textureLoader.loadAsync(files + name + '.webp').then(map => {
           if (srgb) map.colorSpace = T.SRGBColorSpace;
           if (name!=='road-medallion') map.wrapS = map.wrapT = T.RepeatWrapping;
-          map.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+          map.anisotropy = Math.min(name.startsWith('road-') ? 8 : 4, renderer.capabilities.getMaxAnisotropy());
           return map;
         }));
         return maps.get(name);
@@ -675,12 +865,12 @@
         material.map = await loadMap(file, true);
         material.needsUpdate = true;
       });
-      for (const [key, file] of [['daisGold', 'dais-gold'], ['daisBorder', 'dais-border'], ['roadPaving','road-stone'],
+      for (const [key, file] of [['daisGold', 'dais-gold'], ['daisBorder', 'dais-border'], ['roadFloor','road-stone'],
         ['roadStone','road-stone'],['roadTrim','road-stone'],['roadStars','road-stars'],['roadRail','road-rail'],['roadRelief','road-relief']]) {
         loadingMaps.push(loadMap(file + '-normal').then(normal => {
           const frieze = materials.get(key);
           frieze.normalMap = normal;
-          frieze.normalScale.setScalar(0.82);
+          frieze.normalScale.setScalar(key.startsWith('road') ? .56 : .82);
           frieze.needsUpdate = true;
         }));
       }
@@ -692,7 +882,7 @@
         paving.needsUpdate = true;
       }));
       loadingMaps.push(loadMap('road-stone-rough').then(rough => {
-        for (const key of ['roadPaving','roadStone','roadTrim','roadDoor']) {
+        for (const key of ['roadFloor','roadStone','roadTrim','roadDoor']) {
           materials.get(key).roughnessMap=rough;
           materials.get(key).needsUpdate=true;
         }
@@ -768,12 +958,6 @@
       };
       const atlas=ruins.scene.children[0].material.map;
       const ruinMaterial = scenicMaterial(atlas);
-      for (const [name, layout] of Object.entries(sites)) {
-        const source = ruins.scene.getObjectByName(name);
-        const positions = layout.map(([x, y, z, size, a]) => [L(x, y, z), [size, size, size], a]);
-        if(name==='Cascade_Citadel') for(const entry of positions) instanceLOD('U1_'+name,source,ruins.scene.getObjectByName('Cascade_Citadel_Far'),ruinMaterial,[entry],125);
-        else instance('U1_' + name, source.geometry, ruinMaterial, positions);
-      }
       // Skyline tiers on both sides of the walk. The shelves carry the precincts,
       // support the ruined arcades and extend down into the same fog as the piers.
       const roadSites = {
@@ -794,35 +978,62 @@
         Spirit_Fall: [[-49,-61,-49,[98,580,82],1.57],[-80,-64,24,[99,657,85],.37],
           [-124,-69,-54,[112,657,86],2.8],[-155,-70,40,[93,718,96],.15]]
       };
+      // The extra ruins occupy the outer terraces behind the near districts.
+      // Stepped sanctuaries crown the shoulders, with bridges and smaller
+      // precincts between them so the silhouette stays readable in both directions.
+      const outerSites={
+        Cascade_Citadel: [[178,-2,-107,180,-.35],[-111,-6,122,154,2.16]],
+        Upper_Precinct: [[118,-5,106,148,.40],[-219,.8,73,144,-.57],[-92,-6,-122,131,2.13]],
+        Lower_Terrace: [[140,-13,-89,147,1.17],[-14,-14,-92,130,-.76],[-170,-13,110,179,.25]],
+        Temple_Stairs: [[190,-3,56,151,-1.27],[24,-10,113,121,.16],[-225,-7,-64,151,1.7]],
+        Watchtower: [[185,2,-46,147,.53],[-43,-1,111,139,1.79],[-156,-4,-122,131,-1.23]],
+        Bridge_Arcade: [[82,-5,101,153,1.17],[-53,-9,-120,146,-.35],[-195,-5,95,156,1.5]],
+        Round_Arcade: [[68,-3,-125,126,.56],[-230,0,22,139,.12]],
+        Ruin_Arch: [[164,-5,74,122,-1.05],[-137,-3,79,138,.67]]
+      };
       const waterMaterial=scenicMaterial(atlas,true);
       const shelf=ruins.scene.getObjectByName('Cliff_Shelf');
-      const shelfSize=shelf.geometry.boundingBox.getSize(new T.Vector3());
-      const footprint = new T.Vector3();
-      const footings=[];
-      for (const [name, placements] of Object.entries(roadSites)) {
-        const source=ruins.scene.getObjectByName(name);
-        const positions=placements.map(([x,y,z,s,a])=>[L(x,y,z),typeof s==='number'?[s,s,s]:s,a]);
-        if (!['Cliff_Shelf','Rock_Buttress','Spirit_Fall'].includes(name)) {
-          source.geometry.boundingBox.getSize(footprint);
-          for (const [x,y,z,s,a] of placements) {
-            const bottom=-66-8*Math.sin(x*.043+z*.073), crest=y+footprint.y*s*.23;
-            const width=footprint.x*s, depth=footprint.z*s;
-            if (name==='Bridge_Arcade') {
-              for (const edge of [-1,1]) {
-                footings.push([L(x+Math.cos(a)*width*.29*edge,bottom,z-Math.sin(a)*width*.29*edge),
-                  [width*.53/shelfSize.x,(crest-bottom)/shelfSize.y,depth*.62/shelfSize.z],a]);
-              }
-            } else footings.push([L(x,bottom,z),[width*.97/shelfSize.x,(crest-bottom)/shelfSize.y,depth*.97/shelfSize.z],a]);
-          }
-        }
-        if (name==='Cascade_Citadel') {
-          for(const entry of positions) instanceLOD('U1_Road_Citadel',source,ruins.scene.getObjectByName('Cascade_Citadel_Far'),ruinMaterial,[entry],108);
-        } else {
-          const mesh=instance('U1_Road_'+name,source.geometry,name==='Spirit_Fall'?waterMaterial:ruinMaterial,positions);
-          if (name==='Spirit_Fall') mesh.onBeforeRender=()=>{flowTime.value=performance.now()*.001;};
+      const footprint=new T.Vector3(), footings=[];
+      const outlyingCities=outerSites.Cascade_Citadel;
+      for (const [name,placements] of Object.entries(outerSites)) {
+        if (name==='Cascade_Citadel') continue;
+        for (const placement of placements) {
+          const district=placement[0]<0 ? roadSites : sites;
+          (district[name] ??= []).push(placement);
         }
       }
-      instance('U1_Rock_Foundations',shelf.geometry,ruinMaterial,footings);
+      const skylineGroups=[['U1_',sites],['U1_Road_',roadSites],['U1_Outer_',{Cascade_Citadel:outlyingCities}]];
+      for(const [prefix,district] of skylineGroups) {
+        for(const [name,placements] of Object.entries(district)) {
+          const source=ruins.scene.getObjectByName(name);
+          source.geometry.boundingBox.getSize(footprint);
+          const positions=placements.map(([x,y,z,size,a])=>{
+            const scale=typeof size==='number'?[size,size,size]:size;
+            const width=footprint.x*scale[0], height=footprint.y*scale[1], depth=footprint.z*scale[2];
+            // Rock overlaps the actual mesh base so no opening is visible
+            // beneath an island or between the feet of an arcade.
+            const water=name==='Spirit_Fall';
+            if(water) {
+              const crest=y+height;
+              const bed=Math.max(bedHeight(x,z)+4,-98);
+              footings.push([x,bed+.12,z,width*1.08,depth*1.08,a]);
+              return [L(x,bed,z),[scale[0],(crest-bed)/footprint.y,scale[2]],a];
+            }
+            footings.push([x,y+T.MathUtils.clamp(height*.11,.65,2.3),z,width*1.12,depth*1.12,a]);
+            return [L(x,y,z),scale,a];
+          });
+          if(name==='Cascade_Citadel') {
+            const far=ruins.scene.getObjectByName('Cascade_Citadel_Far');
+            if(prefix==='U1_Outer_') instance(prefix+name,far.geometry,ruinMaterial,positions);
+            else for(const entry of positions) instanceLOD(prefix+name,source,far,ruinMaterial,[entry],108);
+          } else {
+            const water=name==='Spirit_Fall';
+            const mesh=instance(prefix+name,source.geometry,water?waterMaterial:ruinMaterial,positions);
+            if(water) mesh.onBeforeRender=()=>{flowTime.value=performance.now()*.001;};
+          }
+        }
+      }
+      addCanyon(scenicMaterial(materials.get('roadStone').map,false,true),footings);
       const roofRock=ruins.scene.getObjectByName('Rock_Buttress');
       const cavernRoof=[[-34,85,-55,640,790,690,.37],[-74,84,36,770,850,680,-.42],
         [-120,93,-88,810,1005,890,1.66],[-174,90,53,804,890,820,1.03],[-211,105,-31,1010,1080,910,-.26]];
@@ -836,7 +1047,8 @@
       status.phase = 'ready';
       status.columns = plinths.length+roadColumns.length;
       status.lamps = LAMPS.length+BRAZIERS.length;
-      status.ruinLandmarks = new Set([...Object.keys(sites),...Object.keys(roadSites)]).size;
+      status.ruinLandmarks = new Set([...Object.keys(sites),...Object.keys(roadSites),...Object.keys(outerSites)]).size;
+      status.skylineAdditions = Object.values(outerSites).reduce((count,sites)=>count+sites.length,0);
     }
 
     function atmosphere() {
