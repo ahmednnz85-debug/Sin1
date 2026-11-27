@@ -203,9 +203,18 @@
       }
     }
     // Medallions fill openings in the stone courses at the same elevation.
-    for (const z of panels) strip(medallion,-panelHalfWidth,panelHalfWidth,-panelHalfWidth,panelHalfWidth,
-      z-panelHalfDepth,z+panelHalfDepth,.002,1,1);
+    for (const z of panels) {
+      const [x,z0,z1,y]=[panelHalfWidth,z-panelHalfDepth,z+panelHalfDepth,.002];
+      // From the south the motif reads upright, with the lion facing screen right.
+      quad(medallion,[[-x,y,z1],[x,y,z1],[x,y,z0],[-x,y,z0]],1,1,[1,1,0,1,0,0,1,0]);
+    }
     strip(stone,-35,35,-35,35,layout.south,219,-.025,22,99);
+    const outerStone=stone.clone();
+    outerStone.color.setHex(0x8b7867);
+    materials.outerStone=outerStone;
+    // Fabric outside the walls carries the distant structures up to the
+    // skyline. It is scenery and has no collision mesh.
+    strip(outerStone,-300,300,-340,340,-88,465,-2.015,94,76);
 
     function frieze(mat, alongX, cross, from, to, low, high) {
       const nudge = .016;
