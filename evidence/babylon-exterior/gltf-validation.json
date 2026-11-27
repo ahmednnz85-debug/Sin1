@@ -1,0 +1,45 @@
+{
+  "بوابة عشتار.glb": {
+    "errors": 0,
+    "warnings": 1,
+    "issues": {
+      "UNSUPPORTED_EXTENSION": 1,
+      "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE": 1
+    }
+  },
+  "مباني واكشاك.glb": {
+    "errors": 0,
+    "warnings": 1,
+    "issues": {
+      "BUFFER_VIEW_TARGET_MISSING": 4,
+      "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE": 1
+    }
+  },
+  "الزقورات والمدن البعيدة.glb": {
+    "errors": 0,
+    "warnings": 1,
+    "issues": {
+      "BUFFER_VIEW_TARGET_MISSING": 4,
+      "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE": 1
+    }
+  },
+  "babylon/market.glb": {
+    "errors": 0,
+    "warnings": 18,
+    "issues": {
+      "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE": 18
+    }
+  },
+  "babylon/city.glb": {
+    "errors": 0,
+    "warnings": 12,
+    "issues": {
+      "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE": 12
+    }
+  },
+  "palm_new.glb": {
+    "errors": 0,
+    "warnings": 0,
+    "issues": {}
+  }
+}

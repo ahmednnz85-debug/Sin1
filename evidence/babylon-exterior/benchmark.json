@@ -1,0 +1,64 @@
+{
+  "engine": "Chromium/SwiftShader",
+  "viewport": [
+    640,
+    360
+  ],
+  "direct": {
+    "after": {
+      "url": "http://127.0.0.1:3107/index.html?aa=0&dev=1&level=OUT-START",
+      "spawn": [
+        0,
+        0,
+        -30
+      ],
+      "bootMs": 7367,
+      "spawnClear": true,
+      "centerline": 0,
+      "gate": [
+        false,
+        true,
+        0,
+        0
+      ],
+      "bounds": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "shots": {
+        "start": {
+          "frameMs": 4525.9,
+          "drawCalls": 104,
+          "triangles": 2658865,
+          "cpuMiB": 87.7,
+          "gpuMiB": 268.1
+        }
+      },
+      "downloadMiB": 43.1,
+      "errors": []
+    },
+    "before": {
+      "url": "http://127.0.0.1:3106/index.html?aa=0&dev=1&level=OUT-START",
+      "spawn": [
+        0,
+        0,
+        -30
+      ],
+      "bootMs": 6148,
+      "spawnClear": true,
+      "shots": {
+        "start": {
+          "frameMs": 6649.1,
+          "drawCalls": 187,
+          "triangles": 2050605,
+          "cpuMiB": 59.5,
+          "gpuMiB": 447.8
+        }
+      },
+      "downloadMiB": 56.4,
+      "errors": []
+    }
+  }
+}

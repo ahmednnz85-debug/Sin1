@@ -61,7 +61,10 @@ async function open(browser, url) {
             // still run through the normal browser game loop between samples.
             const distance = probe.lastZ === undefined ? Infinity : z - probe.lastZ;
             const cinematic = document.body.classList.contains('hero-cinematic') || phase === 'DONE';
-            if (phase !== 'DONE' && !cinematic && distance < (z < 14 ? 2.8 : 5.5)) return;
+            if (phase !== 'DONE' && cinematic) {
+              probe.cinematicFrames = (probe.cinematicFrames || 0) + 1;
+              if (probe.cinematicFrames % 14 !== 1) return;
+            } else if (phase !== 'DONE' && distance < (z < 14 ? 3.5 : 6.5)) return;
             probe.next = t + (cinematic ? 550 : 100);
             probe.lastZ = z;
             render(scene, camera);
@@ -172,7 +175,8 @@ async function story(browser) {
     await page.waitForFunction(()=>__babylonProbe.frames.length>=1,null,{timeout:180000,polling:350});
     console.log('New Game footage captured');
     const at = () => page.evaluate(()=>__babylonProbe.hero?.position.toArray());
-    const waitZ = z=>page.waitForFunction(z=>__babylonProbe.hero?.position.z>=z,z,{timeout:600000,polling:350});
+    const waitZ = z=>page.waitForFunction(z=>__babylonProbe.hero?.position.z>=z ||
+      (z>170 && PalaceInterior.state()!=='IDLE'),z,{timeout:420000,polling:350});
     const pos0=await at(), then=Date.now();
     await page.keyboard.down('KeyW');
     await waitZ(-23);
@@ -190,17 +194,13 @@ async function story(browser) {
     await page.keyboard.up('ShiftLeft');
     await waitZ(178.8);
     await page.keyboard.up('KeyW');
-    let opened=false;
-    for(let i=0;i<25;i++){
-      await page.keyboard.press('KeyF');
-      if(await page.evaluate(()=>PalaceInterior.state()!=='IDLE')){opened=true;break;}
-      await page.waitForTimeout(400);
-    }
+    console.log('royal threshold reached',await at());
+    await page.keyboard.press('KeyF');
     await page.waitForFunction(()=>['DONE','FAILED'].includes(PalaceInterior.state()),null,{timeout:400000,polling:450});
     const palace=await page.evaluate(()=>({state:PalaceInterior.state(),eye:__babylonProbe.hero.position.toArray(),
       exteriorGone:!__babylonProbe.scene.getObjectByName('BabylonExterior'), memory:PalaceInterior.status().postTeardown}));
     await page.waitForFunction(()=>__babylonProbe.frames.at(-1)?.phase==='DONE',null,{timeout:300000,polling:400}).catch(()=>{});
-    assert.ok(opened && palace.state==='DONE' && palace.exteriorGone);
+    assert.ok(palace.state==='DONE' && palace.exteriorGone);
     assert.ok(market.blood>.95,'story changed to the authored blood sky');
     report.story={url,walked,crossed,market,palace,errors,requests:downloads.size};
   } finally {

@@ -1,0 +1,50 @@
+{
+  "engine": "Chromium/SwiftShader",
+  "viewport": [
+    640,
+    360
+  ],
+  "direct": {
+    "after": {
+      "url": "http://127.0.0.1:3107/index.html?aa=0&dev=1&level=OUT-START",
+      "spawn": [
+        0,
+        0,
+        -30
+      ],
+      "bootMs": 11283,
+      "spawnClear": true,
+      "centerline": 0,
+      "gate": [
+        false,
+        true,
+        0,
+        0
+      ],
+      "bounds": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "shots": {
+        "paving": {
+          "frameMs": null,
+          "drawCalls": 93,
+          "triangles": 2476884,
+          "cpuMiB": 87.7,
+          "gpuMiB": 268.1
+        },
+        "city": {
+          "frameMs": null,
+          "drawCalls": 48,
+          "triangles": 1409557,
+          "cpuMiB": 87.7,
+          "gpuMiB": 268.1
+        }
+      },
+      "downloadMiB": 43.1,
+      "errors": []
+    }
+  }
+}
