@@ -1,0 +1,100 @@
+{
+  "engine": "Chromium/SwiftShader",
+  "viewport": [
+    640,
+    360
+  ],
+  "direct": {
+    "after": {
+      "url": "http://127.0.0.1:3107/index.html?aa=0&dev=1&level=OUT-START",
+      "spawn": [
+        0,
+        0,
+        -30
+      ],
+      "bootMs": 6800,
+      "spawnClear": true,
+      "centerline": 0,
+      "gate": [
+        false,
+        true,
+        0,
+        0
+      ],
+      "bounds": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "enclosure": [
+        {
+          "name": "start-wall",
+          "start": [
+            0,
+            -75.2
+          ],
+          "end": [
+            2.0970373176877453e-15,
+            -76.95129637555982
+          ],
+          "stoppedAtWall": true
+        },
+        {
+          "name": "west-wall",
+          "start": [
+            -27.2,
+            89
+          ],
+          "end": [
+            -28.76998639261956,
+            89
+          ],
+          "stoppedAtWall": true
+        },
+        {
+          "name": "east-wall",
+          "start": [
+            34.7,
+            205
+          ],
+          "end": [
+            36.42623204080591,
+            205
+          ],
+          "stoppedAtWall": true
+        },
+        {
+          "name": "rear-corner",
+          "start": [
+            35.1,
+            215.5
+          ],
+          "end": [
+            36.43177829568847,
+            217.6078170227114
+          ],
+          "stoppedAtWall": true
+        }
+      ],
+      "shots": {
+        "wall-turn": {
+          "frameMs": null,
+          "drawCalls": 36,
+          "triangles": 1313446,
+          "cpuMiB": 129,
+          "gpuMiB": 213.7
+        },
+        "rear-wall": {
+          "frameMs": null,
+          "drawCalls": 23,
+          "triangles": 1070066,
+          "cpuMiB": 96,
+          "gpuMiB": 257.7
+        }
+      },
+      "downloadMiB": 43.1,
+      "errors": []
+    }
+  }
+}

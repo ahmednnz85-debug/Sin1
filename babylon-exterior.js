@@ -2,9 +2,16 @@
 (function (root) {
   'use strict';
   const layout = Object.freeze({
-    start: -30, south: -79, gate: 0, gateHalfDepth: 8.45, gateHeight: 22.5, pass: 3.65,
+    start: -30, south: -79, north: 218, gate: 0, gateHalfDepth: 8.45, gateHeight: 22.5, pass: 3.65,
     market: 34, road: 7.4, plaza: 76, palaceApproach: 160
   });
+  const wallWidth=1.6, capsuleRadius=.31;
+  // Distances from the center line to the inside face of both walls.
+  const perimeter=Object.freeze([
+    {end:70.2, west:16.1, east:16.1, height:5.6},
+    {end:149.5, west:29.2, east:29.2, height:5.1},
+    {end:layout.north, west:29.2, east:36.8, height:5.1}
+  ].map(Object.freeze));
   const PACK = 'assets/babylon/';
   const road=layout.road;
   const roads = [
@@ -56,10 +63,16 @@
       }
     }
     function blocked(x, z) {
-      const radius = .31;
-      if (z < layout.south + .5) return true;
-      if (Math.abs(z - layout.gate) < layout.gateHalfDepth + radius && Math.abs(x) > layout.pass) return true;
-      if (Math.abs(x) > (z < 71 ? 15.8 : z < 163 ? 28.9 : 33)) return true;
+      const r=capsuleRadius;
+      if(z-r<layout.south+wallWidth || z+r>layout.north)return true;
+      if(Math.abs(z-layout.gate)<layout.gateHalfDepth+r && Math.abs(x)>layout.pass)return true;
+      let start=layout.south;
+      for(const {end,west,east} of perimeter){
+        // Keep the narrower section solid through the depth of its return
+        // wall, including a capsule that overlaps the corner diagonally.
+        if(z+r>=start && z-r<=end+wallWidth && (x-r<-west || x+r>east))return true;
+        start=end;
+      }
       return (cells.get(Math.floor(x / size) + ',' + Math.floor(z / size)) || []).some(([x0, x1, z0, z1]) =>
         x > x0 && x < x1 && z > z0 && z < z1);
     }
@@ -208,7 +221,7 @@
       // From the south the motif reads upright, with the lion facing screen right.
       quad(medallion,[[-x,y,z1],[x,y,z1],[x,y,z0],[-x,y,z0]],1,1,[1,1,0,1,0,0,1,0]);
     }
-    strip(stone,-35,35,-35,35,layout.south,219,-.025,22,99);
+    strip(stone,-39,40,-39,40,layout.south,layout.north+2,-.025,23,99);
     const outerStone=stone.clone();
     outerStone.color.setHex(0x8b7867);
     materials.outerStone=outerStone;
@@ -244,13 +257,22 @@
     // foundations; its lowest course is level with the gate's plinth.
     transverse(-39,-16.6,-1.6,9.3);
     transverse(16.6,39,-1.6,9.3);
-    transverse(-20,20,layout.south,5.2,lotus);
+    const front=perimeter[0], back=perimeter.at(-1);
+    transverse(-front.west-wallWidth,front.east+wallWidth,layout.south,5.2,lotus);
+    transverse(-back.west-wallWidth,back.east+wallWidth,layout.north,4.9,lotus);
 
-    for (const s of [-1,1]) {
-      for (const [start,end,x,h] of [[-79,70,16.1,5.6],[71,163,29.2,5.1]]) {
+    for(const side of ['west','east']){
+      const s=side==='west'?-1:1;
+      let start=layout.south, prior=null;
+      for(const section of perimeter){
+        const {end,height:h}=section,x=section[side];
+        if(prior!==null && x!==prior){
+          const a=s*prior,b=s*x;
+          transverse(Math.min(a,b),Math.max(a,b),start,h,lotus);
+        }
         for (let z=start;z<end;z+=7.2) {
           const upper=Math.min(end,z+7.2);
-          const a=s*x, b=s*(x+1.55), x0=Math.min(a,b), x1=Math.max(a,b);
+          const a=s*x, b=s*(x+wallWidth), x0=Math.min(a,b), x1=Math.max(a,b);
           slab(stone,x0-.13,x1+.13,.02,.82,z,upper);
           slab(brick,x0,x1,.82,h,z,upper);
           slab(stone,x0-.13,x1+.13,h,h+.23,z,upper);
@@ -270,9 +292,9 @@
             slab(brick,tx0,tx1,h+1.26,h+1.85,z+1.39,z+1.85);
           }
         }
+        start=end;
+        prior=x;
       }
-      const a=s*16.1,b=s*29.2;
-      transverse(Math.min(a,b),Math.max(a,b),70.2,5.1,lotus);
     }
     for (const [mat, b] of batches) {
       const g = new T.BufferGeometry();
@@ -343,7 +365,11 @@
         }
       }
       for (const [i,z] of [81,99,119,137,152].entries()) {
-        put(houses[(i+side)%3],s*(25+(i%2)*2.8),.12,z,side*Math.PI-.22+i*.085,11+(i*2+side)%5);
+        const x=s*(25+(i%2)*2.8), yaw=side*Math.PI-.22+i*.085;
+        const [depth,frontage]=put(houses[(i+side)%3],x,.12,z,yaw,11+(i*2+side)%5);
+        const c=Math.abs(Math.cos(yaw)), sn=Math.abs(Math.sin(yaw));
+        const hx=(c*depth+sn*frontage)*.43, hz=(sn*depth+c*frontage)*.43;
+        collision.obstacle(x-hx,x+hx,z-hz,z+hz);
       }
     }
     const marketLods=[];
@@ -518,5 +544,5 @@
   }
 
   root.SinBabylonExterior = { layout, create };
-  if (typeof module !== 'undefined') module.exports = { layout, widthAt, createCollision };
+  if (typeof module !== 'undefined') module.exports = { layout, perimeter, widthAt, createCollision };
 })(typeof window !== 'undefined' ? window : globalThis);

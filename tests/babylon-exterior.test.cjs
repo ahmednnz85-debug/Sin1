@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { layout, widthAt, createCollision } = require('../babylon-exterior');
+const { layout, perimeter, widthAt, createCollision } = require('../babylon-exterior');
 
 function glb(name) {
   const b = fs.readFileSync(path.join(__dirname, '../assets', name));
@@ -49,4 +49,28 @@ test('the arch is flush through its full depth, and the walls close the market',
   assert.equal(space.blocked(7.6, 25), false);
   space.clear();
   assert.equal(space.blocked(10, 25), false);
+});
+
+
+test('the exterior perimeter is closed through the market, both turns and the palace rear', () => {
+  const { blocked } = createCollision();
+  let start = layout.south;
+  for (const { end, west, east } of perimeter) {
+    for (let z = start; z <= end; z += .07) {
+      assert.equal(blocked(-west, z), true, `west wall at ${z}`);
+      assert.equal(blocked(east, z), true, `east wall at ${z}`);
+    }
+    start = end;
+  }
+  for (let x = -37; x <= 37; x += .07) {
+    assert.equal(blocked(x, layout.south + 1.58), true);
+    assert.equal(blocked(x, layout.north - .17), true);
+    assert.equal(blocked(x, layout.north + 1), true);
+  }
+  assert.equal(blocked(19, perimeter[0].end + .03), true);
+  assert.equal(blocked(-19, perimeter[0].end + .03), true);
+  assert.equal(blocked(32, perimeter[1].end + .09), true);
+  assert.equal(blocked(32, perimeter[1].end + 2), false);
+  assert.equal(blocked(0, perimeter[0].end), false);
+  assert.equal(blocked(0, perimeter[1].end), false);
 });

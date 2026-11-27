@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Run with Playwright and the repository static server.
-   node tools/babylon-tour.cjs <out> <index URL> [--baseline <index URL>] [--no-story|--story-only] */
+   node tools/babylon-tour.cjs <out> <index URL> [--baseline <index URL>] [--no-story|--story-only] [--perimeter] */
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -107,7 +107,9 @@ async function direct(browser, url, tag) {
       ? [['start',[0,2.5,-36],[0,7.5,0]]]
       : [['start',[0,2.5,-36],[0,7.5,0]],['reference',[6.3,2.65,-40],[.2,8.4,3.5]],
         ['paving',[-3,3.1,-30],[.1,.15,-23]],['bazaar',[-6.1,2.4,-49],[-11.2,2.85,-35]],['gate-arch',[0,2.25,-9],[0,4.9,16]],
-        ['palace',[5,3.0,120],[1,8.4,179]],['city',[6,23,73],[-78,15,142]]];
+        ['palace',[5,3.0,120],[1,8.4,179]],['city',[6,23,73],[-78,15,142]],
+        ...(args.includes('--perimeter') ? [['wall-turn',[9,15,68],[20,2.5,72]],
+          ['rear-wall',[35.4,8.0,208],[32.2,2.5,218]]] : [])];
     const shots = {};
     for (const [name,position,target] of views) {
       if (focus && !focus.has(name)) continue;
@@ -160,8 +162,47 @@ async function direct(browser, url, tag) {
       });
       assert.ok(exact,'free fly restored the player and gameplay camera');
     }
+    if(tag==='after' && args.includes('--perimeter'))entry.enclosure=await checkPerimeter(page);
     return { url:launched, ...entry, shots, downloadMiB:+([...downloads.values()].reduce((a,b)=>a+b,0)/1048576).toFixed(1), errors };
   } finally { await page.close(); }
+}
+
+async function checkPerimeter(page) {
+  const tests = [
+    ['start-wall',[0,-75.2],Math.PI,([,z])=>z>=-77.10 && z<-76.8],
+    ['west-wall',[-27.2,89],-Math.PI/2,([x])=>x>=-28.90 && x<-28.5],
+    ['east-wall',[34.7,205],Math.PI/2,([x])=>x<=36.50 && x>36.15],
+    ['rear-corner',[35.1,215.5],Math.PI/4,([x,z])=>z<=217.70 && x<=36.50 && (z>217.3 || x>36.15)]
+  ];
+  const results=[];
+  for (const [name,start,yaw,inside] of tests) {
+    const clear=await page.evaluate(({start:[x,z],yaw})=>{
+      const game=SinDevHub.game(),hero=game.hero();
+      hero.position.set(x,game.ground(x,z,0),z);
+      game.setFacing(yaw);
+      return !game.blocked(x,z);
+    },{start,yaw});
+    assert.ok(clear,'can begin at '+name);
+    await page.keyboard.down('ShiftLeft');
+    await page.keyboard.down('KeyW');
+    const end=await page.evaluate(yaw=>new Promise(resolve=>{
+      let remaining=115;
+      const game=SinDevHub.game();
+      const tick=()=>{
+        // Keep the approach axis facing the wall even if collision response
+        // turns Sîn alongside it on an attempted diagonal step.
+        game.setFacing(yaw);
+        if(--remaining>0)requestAnimationFrame(tick);
+        else {const {x,z}=game.hero().position;resolve([x,z]);}
+      };
+      requestAnimationFrame(tick);
+    }),yaw);
+    await page.keyboard.up('KeyW');
+    await page.keyboard.up('ShiftLeft');
+    assert.ok(inside(end), JSON.stringify({name,start,end}));
+    results.push({name,start,end,stoppedAtWall:true});
+  }
+  return results;
 }
 
 async function story(browser) {
