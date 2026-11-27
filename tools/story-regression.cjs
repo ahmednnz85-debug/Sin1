@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /* Original-play regression, with the Developer Hub REMOVED from the page.
    node static-server.mjs &
-   NODE_PATH=… THREE_DIR=… node tools/story-regression.cjs --out dir [--url index] [--scenario normal,story] [--hub keep]
+   NODE_PATH=… THREE_DIR=… node tools/story-regression.cjs --out dir [--url index] [--scenario normal,palace,story] [--hub keep]
 
    The page is served without the dev-hub.js <script> tag and dev-hub.js
    answers 404, exactly as after the hub's removal (DEVELOPER_GUIDE.md).
    normal  plain link: loading screen -> main menu -> NEW GAME (story start).
            Records every asset fetched, the boot flags, hero and stage state.
+   palace  the royal boundary with all exterior assets loaded.
    story   the repository's story test path (startInHall + royalDoorTest +
            r3DoorTest, AGENTS.md rule 3): the real royal door transition into
            the palace (point of no return), the sealed R3 door, the one-way
@@ -32,7 +33,14 @@ async function open(browser) {
   const page = await ctx.newPage();
   const log = { errors: [], assets: [] };
   page.on('pageerror', e => log.errors.push(String(e).slice(0, 300)));
-  page.on('console', m => { if (m.type() === 'error') log.errors.push('console: ' + m.text().slice(0, 300)); });
+  page.on('console', m => {
+    if (m.type() === 'error' && !m.text().startsWith('Failed to load resource:')) log.errors.push('console: ' + m.text().slice(0, 300));
+  });
+  page.on('response', response => {
+    const file = new URL(response.url()).pathname;
+    if (response.status() < 400 || /\/favicon\.ico$/.test(file) || (!KEEP_HUB && /\/dev-hub\.js$/.test(file))) return;
+    log.errors.push('HTTP ' + response.status() + ' ' + decodeURIComponent(file));
+  });
   page.on('request', r => {
     const u = decodeURIComponent(r.url()).replace(/^https?:\/\/[^/]+\//, '').split('?')[0];
     if (/^(assets|data)\//.test(u)) log.assets.push(u);
@@ -110,24 +118,38 @@ async function normal(browser) {
   return { menuSeconds, ...state, assetsAtMenu: atMenu.sort(), assetCount: atMenu.length, errors: log.errors };
 }
 
-async function story(browser) {
+async function story(browser, palaceOnly = false) {
   const { ctx, page, log } = await open(browser);
   const out = { steps: {} };
-  report.results.story = out;
+  report.results[palaceOnly ? 'palace' : 'story'] = out;
   const t0 = Date.now();
   const mark = (k, v) => { out.steps[k] = { t: (Date.now() - t0) / 1000, ...v }; save(); console.log('story', k, JSON.stringify(out.steps[k]).slice(0, 300)); };
-  await page.goto(BASE + '?startInHall=1&royalDoorTest=1&r3DoorTest=1');
+  const query = palaceOnly ? '?startInHall=1' : '?startInHall=1&royalDoorTest=1&r3DoorTest=1';
+  out.url = BASE + query;
+  await page.goto(out.url);
   // 1. Royal door -> palace (the game's own door test path and palace loader).
-  await page.waitForFunction(() => window.PalaceInterior && ['DONE', 'FAILED'].includes(PalaceInterior.state()) && window.__holdSim === false, null, { timeout: 1500000, polling: 1000 });
+  await page.waitForFunction(() => window.PalaceInterior && (PalaceInterior.state() === 'FAILED' ||
+    (PalaceInterior.state() === 'DONE' && window.__holdSim === false)), null, { timeout: 1500000, polling: 1000 });
   await grab(page); await frames(page, 3);
   mark('palace', await page.evaluate(() => ({
     state: PalaceInterior.state(), cityReleased: !!window.__sinCityReleased,
     memory: { before: PalaceInterior.status().preTeardown, released: PalaceInterior.status().postTeardown },
     roots: __S.children.map(o => o.name || o.type),
     isolated: !!__S.getObjectByName('PalaceInterior') && !__S.getObjectByName('R3Stage') && !__S.getObjectByName('U1Stage'),
+    backToCityBlocked: PalaceInterior.blocks(PalaceInterior.metrics().x, PalaceInterior.metrics().front + 0.05),
     floorY: PalaceInterior.floorY(), front: PalaceInterior.metrics().front, x: PalaceInterior.metrics().x
   })));
   const assetsBeforeR3 = new Set(log.assets);
+  const palaceAssets = [...assetsBeforeR3].filter(file => /^assets\/r3\//.test(file));
+  if (palaceOnly) {
+    out.assets = { requested: [...assetsBeforeR3].sort(), palaceR3OrU1: palaceAssets };
+    const palace = out.steps.palace;
+    out.checks = { palaceIsolated: palace.cityReleased && palace.memory.released?.cityReleased &&
+      palace.isolated && palace.backToCityBlocked && palaceAssets.length === 0 && palace.memory.before.geometries > palace.memory.released.geometries };
+    out.errors = log.errors;
+    await ctx.close();
+    return out;
+  }
   // 2. The sealed R3 door opens; Sîn walks through passage-L0 (one way).
   const door = await page.evaluate(async () => {
     window.__holdSim = true;
@@ -157,7 +179,9 @@ async function story(browser) {
       stage: PalaceInterior.activeSealedChapter(), memory,
       backToPalaceBlocked: PalaceInterior.blocks(hero.position.x + 2.6, hero.position.z) };
   }));
-  await page.waitForFunction(() => __S.getObjectByName('MawOfTheAbyss_Dressing')?.userData.maw.phase === 'ready', null, { timeout: 900000, polling: 500 });
+  assert.equal(out.steps.r3.state, 'R3');
+  await page.waitForFunction(() => ['ready', 'failed'].includes(__S.getObjectByName('MawOfTheAbyss_Dressing')?.userData.maw.phase), null, { timeout: 900000, polling: 500 });
+  assert.equal(await page.evaluate(() => __S.getObjectByName('MawOfTheAbyss_Dressing').userData.maw.phase), 'ready');
   const assetsBeforeU1 = new Set(log.assets);
   // Put Sîn just outside the dock, then on its trigger. The game loop owns
   // the delay, blackout, resource release, loading, spawn and fade-in.
@@ -183,13 +207,12 @@ async function story(browser) {
       onFloor: Math.abs(PalaceInterior.floorAt(hero.position.x, hero.position.z, hero.position.y) - hero.position.y) < 0.05 };
   }, atTop));
   const underworldAsset = file => /^assets\/r3\/(?:harbor|underworld)\//.test(file);
-  const sealedOrUnderworld = file => /^assets\/r3\//.test(file);
-  out.assets = { palaceR3OrU1: [...assetsBeforeR3].filter(sealedOrUnderworld),
+  out.assets = { palaceR3OrU1: palaceAssets,
     r3U1: [...assetsBeforeU1].filter(underworldAsset),
     u1New: [...new Set(log.assets)].filter(a => !assetsBeforeU1.has(a)) };
   const { palace, r3, lift } = out.steps;
   out.checks = {
-    palaceIsolated: palace.cityReleased && palace.memory.released?.cityReleased && palace.isolated && out.assets.palaceR3OrU1.length === 0,
+    palaceIsolated: palace.cityReleased && palace.memory.released?.cityReleased && palace.isolated && palace.backToCityBlocked && out.assets.palaceR3OrU1.length === 0,
     r3Isolated: r3.stage === 'r3' && r3.backToPalaceBlocked &&
       r3.roots.join(',') === 'SinHeroRoot,R3Stage' && r3.memory.released?.roots.join(',') === 'SinHeroRoot' && out.assets.r3U1.length === 0,
     u1Isolated: lift.stage === 'u1' && lift.roots.join(',') === 'SinHeroRoot,U1Stage' &&
@@ -205,11 +228,14 @@ async function story(browser) {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   if (SCEN.includes('normal')) { report.results.normal = await normal(browser); save(); console.log('normal', JSON.stringify(report.results.normal).slice(0, 600)); }
+  if (SCEN.includes('palace')) { report.results.palace = await story(browser, true); save(); }
   if (SCEN.includes('story')) { report.results.story = await story(browser); save(); }
   save();
   await browser.close();
-  if (report.results.story) {
-    assert.ok(Object.values(report.results.story.checks).every(Boolean), JSON.stringify(report.results.story.checks));
-    assert.deepEqual(report.results.story.errors, []);
+  for (const name of ['palace', 'story']) {
+    const result = report.results[name];
+    if (!result) continue;
+    assert.ok(Object.values(result.checks).every(Boolean), JSON.stringify(result.checks));
+    assert.deepEqual(result.errors, []);
   }
 })().catch(e => { console.error(e); save(); process.exit(1); });

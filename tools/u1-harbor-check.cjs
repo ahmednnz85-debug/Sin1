@@ -57,7 +57,7 @@ async function open(browser, level) {
     const game = SinDevHub.game(), hero = game.hero(), camera = game.camera, scene = game.scene;
     const { stage, origin } = harborTestStage;
     const lift = SinR3Maw.lift, deep = scene.getObjectByName('U1_Underworld');
-    const room = stage.maw.room, savedRender = __R.render.bind(__R);
+    const room = stage.maw?.room, savedRender = __R.render.bind(__R);
     const at = (x, y, z, lower) => (lower ? deep : room).localToWorld(new THREE.Vector3(
       lift.center[0] + x, (lower ? lift.drop : 0) + y, lift.center[1] + z));
     const tick = () => stage.update(hero.position.x - origin.x, hero.position.y - origin.y, hero.position.z - origin.z);
@@ -85,12 +85,12 @@ async function open(browser, level) {
         requestAnimationFrame(frame);
       }) };
     __R.render = () => {};
-    const scenery = stage.underworld.status.ruinLandmarks;
-    const offstage = [[51, 41], [81, -40], [52, -76], [32, 64]].map(([x, z]) => at(x, 0, z, true));
+    const scenery = stage.underworld?.status.ruinLandmarks;
+    const offstage = deep ? [[51, 41], [81, -40], [52, -76], [32, 64]].map(([x, z]) => at(x, 0, z, true)) : [];
     return { spawn: hero.position.toArray(), readyMs: __sinDev.ms, state: PalaceInterior.state(),
       scenery: scenery ? { landmarks: scenery, unreachable: offstage.every(p => game.blocked(p.x, p.z)) } : null,
       blocked: game.blocked(hero.position.x, hero.position.z),
-      underworldAssets: stage.underworld.status.phase };
+      underworldAssets: stage.underworld?.status.phase ?? null };
   });
   return { page, launched, url: url.href };
 }
@@ -210,28 +210,26 @@ async function audit(page, level) {
 
 async function ride(page) {
   return page.evaluate(async () => {
-    const { at, hero, frames, game, room, deep, lift, tick } = harborTest;
+    const { at, hero, frames, game, scene, lift, tick } = harborTest;
     window.__holdSim = false;
-    const rides = [];
-    for (const fromBelow of [false, true]) {
-      hero.position.copy(at(-2.7, lift.deck, 0, fromBelow));
-      game.setFacing(-Math.PI / 2);
-      tick();
-      await frames(6);
-      hero.position.copy(at(0, lift.deck, 0, fromBelow));
-      const y = hero.position.y, start = performance.now();
-      let veil = 0;
-      while (performance.now() - start < 150000) {
-        await new Promise(resolve => setTimeout(resolve, 40));
-        const overlay = document.getElementById('r3-lift-veil');
-        veil = Math.max(veil, +(overlay?.style.opacity ?? 0));
-        if (veil === 1 && !overlay && Math.abs(hero.position.y - y) > 400) break;
-      }
-      rides.push({ offset: +(hero.position.y - y).toFixed(2), veil,
-        veilGone: !document.getElementById('r3-lift-veil'), visible: deep.visible ? 'U1' : room.visible ? 'R3' : null });
+    hero.position.copy(at(-2.7, lift.deck, 0, false));
+    game.setFacing(-Math.PI / 2);
+    tick();
+    await frames(6);
+    hero.position.copy(at(0, lift.deck, 0, false));
+    const y = hero.position.y, start = performance.now();
+    let veil = 0;
+    while (performance.now() - start < 150000 && PalaceInterior.state() !== 'R3_FAILED') {
+      await new Promise(resolve => setTimeout(resolve, 40));
+      const overlay = document.getElementById('r3-lift-veil');
+      veil = Math.max(veil, +(overlay?.style.opacity ?? 0));
+      if (!overlay && PalaceInterior.activeSealedChapter() === 'u1') break;
     }
+    const memory = PalaceInterior.underworldMemory();
     window.__holdSim = true;
-    return rides;
+    return { offset: +(hero.position.y - y).toFixed(2), veil,
+      veilGone: !document.getElementById('r3-lift-veil'), visible: PalaceInterior.activeSealedChapter(),
+      r3Gone: !scene.getObjectByName('R3Stage'), released: memory.released?.roots };
   });
 }
 
@@ -315,18 +313,18 @@ async function main() {
         result.audit = await audit(page, level);
         save();
         console.log(level, JSON.stringify(result.audit));
-        if (level === 'R3-03' && !cameraOnly) {
-          result.ride = await ride(page);
-          result.arrivalAssets = await page.evaluate(() => {
-            const state = harborTest.stage.underworld.status;
-            return { phase: state.phase, landmarks: state.ruinLandmarks };
-          });
-          save();
-        }
         if (!checksOnly) for (const view of views[level]) {
           if (cameraOnly && view.camera) continue;
           if (view.name) await capture(page, level, view, null);
           else if (!stillsOnly) frame = await capture(page, level, view, frame);
+          save();
+        }
+        if (level === 'R3-03' && !cameraOnly) {
+          result.ride = await ride(page);
+          result.arrivalAssets = await page.evaluate(() => {
+            const state = harborTestStage.stage.underworld?.status;
+            return { phase: state?.phase, landmarks: state?.ruinLandmarks };
+          });
           save();
         }
       } finally { await page.close(); }
@@ -352,7 +350,7 @@ async function main() {
     if (!cameraOnly && !harborOnly) {
       const maw = report.levels['R3-03'];
       assert.deepEqual(maw.ride,
-        [{ offset: -420, veil: 1, veilGone: true, visible: 'U1' }, { offset: 420, veil: 1, veilGone: true, visible: 'R3' }]);
+        { offset: -420, veil: 1, veilGone: true, visible: 'u1', r3Gone: true, released: ['SinHeroRoot'] });
       assert.deepEqual(maw.arrivalAssets, { phase: 'ready', landmarks: 7 });
     }
   } finally {
