@@ -115,7 +115,7 @@ async function main() {
     report.checks.directR3 = info.area === 'R3-03' && info.roots.length === 2 && info.roots.includes('R3Stage');
     report.checks.freeSpawn = info.spawnClear;
     report.checks.composition = info.counts.lift === 1 && info.counts.crown === 1 && info.counts.lamassu === 1 &&
-      info.counts.chainCourses === info.status.lift.courses && info.counts.arrival === 1 && info.counts.fire === 0;
+      info.counts.chainCourses === info.status.lift.courses && info.counts.arrival === 0 && info.counts.fire === 0;
     report.checks.solidCanyon = info.gorge.surfaces === 13 && info.gorge.dimensions[1] > 195;
     const landmarks = info.composition;
     report.checks.referenceLayout = landmarks.guardian[0] < 0.34 &&

@@ -905,7 +905,11 @@
     }
 
     return {
-      load, update, report: () => JSON.parse(JSON.stringify(report)),
+      load, update,
+      preview(show) {
+        for (const group of Object.values(sectors)) show(group, true);
+      },
+      report: () => JSON.parse(JSON.stringify(report)),
       // Read-only view of the resident props and relief maps. The R3-03
       // approach reuses them (shared GPU data, own materials) instead of
       // loading a second copy of the same stair kit.

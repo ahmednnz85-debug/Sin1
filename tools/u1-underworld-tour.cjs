@@ -3,8 +3,8 @@
    node static-server.mjs &
    NODE_PATH=… THREE_DIR=… node tools/u1-underworld-tour.cjs out [index URL]
    Opens ?dev=1&level=U1-01 (Sîn inside the arrival cabin), captures the
-   Anchorage, the Road of the Dead and the Gate, then rides the lift up to the
-   Maw and back down through the game's own loop. Output: out/tour.json + jpgs. */
+   Anchorage, the Road of the Dead and the Gate, then checks that the
+   arrival cabin stays in U1. Output: out/tour.json + jpgs. */
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -21,8 +21,7 @@ const views = {
   'road-of-the-dead': [[-20, 4, 6], [-60, -5, -20], 70, [-19, 0, 0]],
   'bridge': [[-47, 1.5, -24], [-95, -6, -27], 66, [-49, -6, -26]],
   'gate-of-irkalla': [[-112, 5, -26], [-158, 1, -26], 66, [-114, -7.5, -26]],
-  'overview': [[60, 40, 60], [-70, -10, -30], 60, [-8, 0, 0]],
-  'maw-lift': [[4.5, 422.4, 0], [0, 427.5, 0], 70, [-9.4, 420, 2.9]]
+  'overview': [[60, 40, 60], [-70, -10, -30], 60, [-8, 0, 0]]
 };
 
 async function main() {
@@ -52,13 +51,13 @@ async function main() {
       window.__u1 = { game, scene, hero, deep, room, renderer: __R, render: __R.render.bind(__R),
         at: (x, y, z) => deep.localToWorld(new THREE.Vector3(lift.center[0] + x, lift.drop + y, lift.center[1] + z)) };
       const local = deep.worldToLocal(hero.position.clone());
-      return { area: __sinDev.area.id, underworldVisible: deep.visible, mawVisible: room.visible, arrivalCabin: !!arrival,
+      return { area: __sinDev.area.id, underworldVisible: deep.visible, mawPresent: !!room, arrivalCabin: !!arrival,
         heroFromCabin: +Math.hypot(local.x - lift.center[0], local.z - lift.center[1]).toFixed(2),
         heroAboveDock: +(hero.position.y - origin.y).toFixed(2), blocked: game.blocked(hero.position.x, hero.position.z),
         greybox: scene.getObjectByName('U1_Irkalla_Greybox')?.parent && deep.children.length,
         status: PalaceInterior.r3Settled ? 'hub-waited' : null };
     });
-    report.checks.spawnInCabin = report.entry.area === 'U1-01' && report.entry.underworldVisible && !report.entry.mawVisible &&
+    report.checks.spawnInCabin = report.entry.area === 'U1-01' && report.entry.underworldVisible && !report.entry.mawPresent &&
       report.entry.arrivalCabin && report.entry.heroFromCabin < 0.6 && !report.entry.blocked;
     save();
     const frames = n => page.evaluate(count => new Promise(r => { let k = 0; (function f() { if (++k > count) r(); else requestAnimationFrame(f); })(); }), n);
@@ -83,35 +82,20 @@ async function main() {
       report.views[name] = r;
     }
     save();
-    // The lift through the game loop (rendering suspended so SwiftShader ticks at full rate).
-    report.ride = await page.evaluate(async () => {
-      const { hero, at, deep, room, renderer } = __u1;
-      const frames = n => new Promise(r => { let k = 0; (function f() { if (++k > n) r(); else requestAnimationFrame(f); })(); });
-      const wait = ms => new Promise(r => setTimeout(r, ms));
+    // Returning to the dock through the game loop keeps U1 resident.
+    report.dock = await page.evaluate(async () => {
+      const { hero, at, deep, scene, renderer } = __u1;
       renderer.render = () => {};
       window.__holdSim = false;
-      const legs = [];
-      // Down from the Maw deck, then back up from the Anchorage.
-      for (const [outside, inside] of [[[-8, 420, 2.9], [0, 420.59, 0]], [[-8, 0, 2.9], [0, 0.59, 0]]]) {
-        hero.position.copy(at(...outside)); await frames(5);
-        hero.position.copy(at(...inside)); await frames(2);
-        const y0 = hero.position.y;
-        let veilSeen = 0;
-        const t0 = performance.now();
-        while (performance.now() - t0 < 6000) {
-          await wait(100);
-          const v = document.getElementById('r3-lift-veil');
-          if (v) veilSeen = Math.max(veilSeen, +v.style.opacity);
-        }
-        legs.push({ moved: +(hero.position.y - y0).toFixed(2), veilPeak: veilSeen, veilGone: !document.getElementById('r3-lift-veil'),
-          underworldVisible: deep.visible, mawVisible: room.visible,
-          onFloor: Math.abs(PalaceInterior.floorAt(hero.position.x, hero.position.z, hero.position.y) - hero.position.y) < 0.05 });
-      }
-      return legs;
+      hero.position.copy(at(-8, 0, 2.9));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      hero.position.copy(at(0, SinR3Maw.lift.deck, 0));
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      return { moved: hero.position.y - at(0, SinR3Maw.lift.deck, 0).y, underworldVisible: deep.visible,
+        mawPresent: !!scene.getObjectByName('R3Stage'), veil: !!document.getElementById('r3-lift-veil') };
     });
-    const [down, up] = report.ride;
-    report.checks.rideDown = Math.abs(down.moved + 420) < 0.1 && down.veilPeak === 1 && down.veilGone && down.underworldVisible && !down.mawVisible && down.onFloor;
-    report.checks.rideUp = Math.abs(up.moved - 420) < 0.1 && up.veilPeak === 1 && up.veilGone && up.mawVisible && !up.underworldVisible && up.onFloor;
+    report.checks.dockStaysInU1 = Math.abs(report.dock.moved) < 0.05 && report.dock.underworldVisible &&
+      !report.dock.mawPresent && !report.dock.veil;
     save();
     assert.deepEqual(report.errors, []);
     assert.ok(Object.values(report.checks).every(Boolean), JSON.stringify(report.checks));

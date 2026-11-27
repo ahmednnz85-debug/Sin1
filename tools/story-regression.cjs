@@ -10,11 +10,12 @@
    story   the repository's story test path (startInHall + royalDoorTest +
            r3DoorTest, AGENTS.md rule 3): the real royal door transition into
            the palace (point of no return), the sealed R3 door, the one-way
-           passage-L0 transition into R3, then the Maw lift down to U1 and
-           back up — all through the game loop.
+           passage-L0 transition into R3, then the one-way Maw lift to U1,
+           all through the game loop.
    Output: <out>/report.json. */
 'use strict';
 const fs = require('fs'), path = require('path');
+const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
 const args = process.argv.slice(2);
 const opt = k => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : null; };
@@ -37,6 +38,31 @@ async function open(browser) {
     if (/^(assets|data)\//.test(u)) log.assets.push(u);
   });
   await page.addInitScript(() => {
+    // The story test observes the real simulation and loader. On software GL,
+    // draw only the first frame of each stage (and every release/black frame).
+    let renderer;
+    Object.defineProperty(window, '__R', {
+      configurable: true,
+      get: () => renderer,
+      set(value) {
+        if (!value || value === renderer) return;
+        renderer = value;
+        queueMicrotask(() => {
+          const normalRender = value.render;
+          let previousPhase;
+          value.render = function (scene, camera) {
+            if (!scene.isScene || !scene.getObjectByName('SinHeroRoot')) return normalRender.call(this, scene, camera);
+            window.__S = scene;
+            window.__C = camera;
+            const phase = [window.PalaceInterior?.state(), scene.children.length].join('/');
+            if (phase !== previousPhase) {
+              previousPhase = phase;
+              return normalRender.call(this, scene, camera);
+            }
+          };
+        });
+      }
+    });
     try { Object.defineProperty(Performance.prototype, 'memory', { get() { return undefined; }, configurable: true }); } catch (e) {}
   });
   if (process.env.THREE_DIR) await page.route(/cdn\.jsdelivr\.net\/npm\/three@0\.187\.0\/(.*)$/, r => r.fulfill({
@@ -87,14 +113,20 @@ async function normal(browser) {
 async function story(browser) {
   const { ctx, page, log } = await open(browser);
   const out = { steps: {} };
+  report.results.story = out;
   const t0 = Date.now();
-  const mark = (k, v) => { out.steps[k] = { t: (Date.now() - t0) / 1000, ...v }; console.log('story', k, JSON.stringify(out.steps[k]).slice(0, 300)); };
+  const mark = (k, v) => { out.steps[k] = { t: (Date.now() - t0) / 1000, ...v }; save(); console.log('story', k, JSON.stringify(out.steps[k]).slice(0, 300)); };
   await page.goto(BASE + '?startInHall=1&royalDoorTest=1&r3DoorTest=1');
   // 1. Royal door -> palace (the game's own door test path and palace loader).
   await page.waitForFunction(() => window.PalaceInterior && ['DONE', 'FAILED'].includes(PalaceInterior.state()) && window.__holdSim === false, null, { timeout: 1500000, polling: 1000 });
   await grab(page); await frames(page, 3);
-  mark('palace', await page.evaluate(() => ({ state: PalaceInterior.state(), cityReleased: !!window.__sinCityReleased,
-    floorY: PalaceInterior.floorY(), front: PalaceInterior.metrics().front, x: PalaceInterior.metrics().x })));
+  mark('palace', await page.evaluate(() => ({
+    state: PalaceInterior.state(), cityReleased: !!window.__sinCityReleased,
+    memory: { before: PalaceInterior.status().preTeardown, released: PalaceInterior.status().postTeardown },
+    roots: __S.children.map(o => o.name || o.type),
+    isolated: !!__S.getObjectByName('PalaceInterior') && !__S.getObjectByName('R3Stage') && !__S.getObjectByName('U1Stage'),
+    floorY: PalaceInterior.floorY(), front: PalaceInterior.metrics().front, x: PalaceInterior.metrics().x
+  })));
   const assetsBeforeR3 = new Set(log.assets);
   // 2. The sealed R3 door opens; Sîn walks through passage-L0 (one way).
   const door = await page.evaluate(async () => {
@@ -120,35 +152,50 @@ async function story(browser) {
   await page.waitForFunction(() => ['R3', 'R3_FAILED'].includes(PalaceInterior.state()), null, { timeout: 900000, polling: 1000 });
   await frames(page, 3);
   mark('r3', await page.evaluate(() => {
-    const hero = __S.getObjectByName('SinHeroRoot'), mem = PalaceInterior.r3Memory();
-    // One way: the palace is retired and the cap stands behind Sîn.
-    const back = PalaceInterior.blocks(hero.position.x + 2.6, hero.position.z);
-    return { state: PalaceInterior.state(), roots: __S.children.map(o => o.name), palaceGone: !__S.getObjectByName('PalaceInterior'),
-      backToPalaceBlocked: back, cityReleased: !!mem.loaded?.cityReleased, loaded: mem.loaded && { cpuMB: mem.loaded.cpuMB, gpuMB: mem.loaded.gpuMB } };
+    const hero = __S.getObjectByName('SinHeroRoot'), memory = PalaceInterior.r3Memory();
+    return { state: PalaceInterior.state(), roots: __S.children.map(o => o.name),
+      stage: PalaceInterior.activeSealedChapter(), memory,
+      backToPalaceBlocked: PalaceInterior.blocks(hero.position.x + 2.6, hero.position.z) };
   }));
-  out.assetsLoadedForR3 = [...new Set(log.assets)].filter(a => !assetsBeforeR3.has(a)).length;
-  // 3. The Maw lift: down to U1 and back up, through the game loop.
-  await page.waitForFunction(() => __S.getObjectByName('MawOfTheAbyss_Dressing')?.userData.maw.phase === 'ready', null, { timeout: 900000, polling: 1000 });
-  const ride = await page.evaluate(async () => {
+  await page.waitForFunction(() => __S.getObjectByName('MawOfTheAbyss_Dressing')?.userData.maw.phase === 'ready', null, { timeout: 900000, polling: 500 });
+  const assetsBeforeU1 = new Set(log.assets);
+  // Put Sîn just outside the dock, then on its trigger. The game loop owns
+  // the delay, blackout, resource release, loading, spawn and fade-in.
+  const atTop = await page.evaluate(async () => {
     const hero = __S.getObjectByName('SinHeroRoot'), room = __S.getObjectByName('MawOfTheAbyss_Dressing');
-    const deep = __S.getObjectByName('U1_Underworld'), L = SinR3Maw.lift;
-    const at = (x, y, z) => room.localToWorld(new THREE.Vector3(L.center[0] + x, y, L.center[1] + z));
-    const frames = n => new Promise(r => { let k = 0; (function f() { if (++k > n) r(); else requestAnimationFrame(f); })(); });
-    const wait = ms => new Promise(r => setTimeout(r, ms));
-    const R = window.__R, render = R.render; R.render = () => {};
-    const legs = [];
-    for (const [dy, label] of [[0, 'down'], [L.drop, 'up']]) {
-      hero.position.copy(at(-8, dy, 2.9)); await frames(5);
-      hero.position.copy(at(0, dy + L.deck + 0.01, 0)); await frames(2);
-      const y0 = hero.position.y, t0 = performance.now();
-      while (performance.now() - t0 < 8000) { await wait(100); if (Math.abs(hero.position.y - y0) > 400 && !document.getElementById('r3-lift-veil')) break; }
-      legs.push({ label, moved: +(hero.position.y - y0).toFixed(2), underworld: deep.visible, maw: room.visible,
-        veilGone: !document.getElementById('r3-lift-veil') });
-    }
-    R.render = render;
-    return legs;
+    const L = SinR3Maw.lift;
+    const put = (x, y, z) => hero.position.copy(room.localToWorld(new THREE.Vector3(L.center[0] + x, y, L.center[1] + z)));
+    put(-8, 0, 2.9);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    put(0, L.deck, 0);
+    window.__heroBeforeLift = hero;
+    return hero.position.y;
   });
-  mark('lift', { legs: ride });
+  await page.waitForFunction(() => PalaceInterior.state() === 'R3_FAILED' ||
+    (PalaceInterior.state() === 'R3' && PalaceInterior.activeSealedChapter() === 'u1'), null, { timeout: 900000, polling: 300 });
+  mark('lift', await page.evaluate(top => {
+    const hero = __S.getObjectByName('SinHeroRoot');
+    return { state: PalaceInterior.state(), stage: PalaceInterior.activeSealedChapter(),
+      roots: __S.children.map(o => o.name), memory: PalaceInterior.underworldMemory(),
+      sameHero: hero === window.__heroBeforeLift, moved: +(hero.position.y - top).toFixed(2),
+      arrivalCabin: !!__S.getObjectByName('Maw_Lift_Arrival'),
+      veilGone: !document.getElementById('r3-lift-veil'),
+      onFloor: Math.abs(PalaceInterior.floorAt(hero.position.x, hero.position.z, hero.position.y) - hero.position.y) < 0.05 };
+  }, atTop));
+  const underworldAsset = file => /^assets\/r3\/(?:harbor|underworld)\//.test(file);
+  const sealedOrUnderworld = file => /^assets\/r3\//.test(file);
+  out.assets = { palaceR3OrU1: [...assetsBeforeR3].filter(sealedOrUnderworld),
+    r3U1: [...assetsBeforeU1].filter(underworldAsset),
+    u1New: [...new Set(log.assets)].filter(a => !assetsBeforeU1.has(a)) };
+  const { palace, r3, lift } = out.steps;
+  out.checks = {
+    palaceIsolated: palace.cityReleased && palace.memory.released?.cityReleased && palace.isolated && out.assets.palaceR3OrU1.length === 0,
+    r3Isolated: r3.stage === 'r3' && r3.backToPalaceBlocked &&
+      r3.roots.join(',') === 'SinHeroRoot,R3Stage' && r3.memory.released?.roots.join(',') === 'SinHeroRoot' && out.assets.r3U1.length === 0,
+    u1Isolated: lift.stage === 'u1' && lift.roots.join(',') === 'SinHeroRoot,U1Stage' &&
+      lift.memory.released?.roots.join(',') === 'SinHeroRoot' && out.assets.u1New.some(underworldAsset),
+    liftArrived: lift.sameHero && Math.abs(lift.moved + 420) < 0.1 && lift.arrivalCabin && lift.veilGone && lift.onFloor
+  };
   out.errors = log.errors;
   await ctx.close();
   return out;
@@ -161,4 +208,8 @@ async function story(browser) {
   if (SCEN.includes('story')) { report.results.story = await story(browser); save(); }
   save();
   await browser.close();
+  if (report.results.story) {
+    assert.ok(Object.values(report.results.story.checks).every(Boolean), JSON.stringify(report.results.story.checks));
+    assert.deepEqual(report.results.story.errors, []);
+  }
 })().catch(e => { console.error(e); save(); process.exit(1); });

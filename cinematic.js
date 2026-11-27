@@ -405,7 +405,7 @@
           }
         }
       } catch (_) {}
-      if (isMain && ctx.interior() && window.PalaceWings && PalaceWings.beforePresent) {
+      if (isMain && !c.userData.independentView && ctx.interior() && window.PalaceWings && PalaceWings.beforePresent) {
         PalaceWings.beforePresent(s, c);
       }
       // Instance-level wrap shadows prototype hooks, so outdoor-perf must
@@ -583,6 +583,7 @@
     // it on the first DONE rAF stalled WebKit software GL for ~90 s before
     // the first present (and is the same spike on a real iPhone). The look
     // is unchanged: same texture, same applyInteriorLook, just earlier.
+    releaseExteriorLook(texture) { if (outdoorEnv === texture) outdoorEnv = null; },
     retireStageLook() {
       const resources = [interiorTarget, interiorEnv, outdoorEnv];
       stageLookRetired = true;

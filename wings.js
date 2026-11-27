@@ -4484,6 +4484,44 @@
       try { zoneStreamer.forceLoad(origin); } catch (e) { try { console.warn('[palace load] forceLoad', origin, e && (e.message || e)); } catch (_) {} }
     }
   }
+  // An inspection view can request the room it enters through the same
+  // admission and upload queues. The normal view and waiting doors stay
+  // protected, and the preview never advances movement or door animations.
+  function preview({ camera, show, stream }) {
+    if (!state.built || !state.routes || !state.ctx || !zoneStreamer) return;
+    const pos = state.root.position;
+    const view = cameraView(pos.x, pos.z, camera);
+    const viewer = viewerRegion(view);
+    const drawn = viewer || inHallBounds(view.x, view.z)
+      ? visibleRoutes(view) : new Set([...state.regionGroups.keys()].filter(zoneIsReady));
+    if (viewer) drawn.add(viewer);
+    completeArchitecture(view, drawn);
+    if (stream) {
+      const normal = state._streamSets;
+      const current = normal?.origin || state.current || 'Palace';
+      const visible = new Set([...(normal?.visible || []), ...(viewer ? drawn : [])]);
+      const retained = new Set([...state.templeDoors?.retainZones() || [], ...state.libraryDoors?.retainZones() || []]);
+      for (const door of state.doors) {
+        if (!door._roomDoor || door.state === 'Closed') continue;
+        if (door.state === 'Opening' || door.state === 'Closing' || doorCoordinates(door, state.ctx.hero.position).distance <= 5) {
+          retained.add(door.from);
+          retained.add(door.to);
+        }
+      }
+      const currentView = streamedRooms.has(viewer) ? [viewer] : [];
+      attachStreamer();
+      const level = zoneStreamer.sample(state.ctx.renderer).level;
+      zoneStreamer.update({ metric: true, current, visible, retained,
+        memoryLevel: level, approach: new Set(currentView), rank: new Map(currentView.map(id => [id, 1])),
+        allowBackgroundWarm: false });
+    }
+    show(state.root, true);
+    state.regionGroups.forEach((group, id) => show(group, drawn.has(id) && zoneIsReady(id)));
+    if (state.archiveScreen) show(state.archiveScreen, !zoneIsReady('L2'));
+    if (state.studyScreen) show(state.studyScreen, !zoneIsReady('L3'));
+    for (const screen of state.kingScreens || []) show(screen, !zoneIsReady('K5'));
+  }
+
   function updateCulling(force) {
     const _tr = (typeof window !== 'undefined' && window.__sinTrace) ? window.__sinTrace : null;
     if (_tr) _tr('updateCulling-enter force=' + !!force);
@@ -6372,7 +6410,7 @@
     purificationCamera: () => state.purificationHall && zoneIsReady('T2') ? state.purificationHall.camera : null,
     sanctuaryCamera: () => state.lunarSanctuary && zoneIsReady('T4') ? state.lunarSanctuary.camera : null,
     offeringsCamera: () => state.royalOfferings && zoneIsReady('T5') ? state.royalOfferings.camera : null,
-    beforePresent,
+    beforePresent, preview,
     // PalaceRoomManager diagnostics: lifecycle state per room, sight demand,
     // prefetch, cooldown, and frame-time percentiles.
     rooms: function () {

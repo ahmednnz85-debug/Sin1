@@ -3,13 +3,14 @@
 
    node static-server.mjs &
    THREE_DIR=/path/to/node_modules/three node tools/dev-hub-check.cjs --out hub-check \
-     [--mode gate|play|disabled|direct|cycle|storage|all] [--levels OUT-GATE,K3,R3-02] [--mobile 1] [--video 1]
+     [--mode gate|play|disabled|direct|fly|cycle|storage|all] [--levels OUT-GATE,K3,R3-02] [--mobile 1] [--video 1]
 
    gate     entry screen before any world asset; developer list; phone + desktop shots
    play     "بدء اللعبة" → original boot reaches the original main menu
    disabled ENABLED=false (served copy) → no entry screen, original boot
    direct   ?dev=1&level=<id> for each level: ready time, hero pose, collision at
             the spawn, renderer memory; screenshot
+   fly      real mouse, keyboard and phone touch controls, frozen player and camera restoration
    cycle    one palace session: every palace area in turn through the hub
             (in-place teleport), then back to the first: memory drift
    storage  real keys untouched by a dev session; dev keys carry the prefix
@@ -17,6 +18,7 @@
 'use strict';
 const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
+const assert = require('node:assert/strict');
 const args = process.argv.slice(2);
 const opt = k => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : null; };
 const OUT = opt('out') || 'hub-check';
@@ -154,6 +156,152 @@ async function direct(browser, levels) {
   }
   return out;
 }
+async function fly(browser, id) {
+  const results = {};
+  for (const mobile of [false, true]) {
+    const { ctx, page, log } = await open(browser, { mobile });
+    const name = mobile ? 'phone-touch' : 'desktop';
+    const url = BASE + '?dev=1&level=' + encodeURIComponent(id);
+    await page.goto(url);
+    await page.waitForFunction(() => window.__sinDev?.ready || window.__sinDev?.error, null, { timeout: 900000, polling: 500 });
+    await page.evaluate(() => {
+      if (!__sinDev.ready) throw new Error(__sinDev.error);
+      const game = SinDevHub.game(), renderer = game.renderer, render = renderer.render;
+      const pose = c => [...c.position.toArray(), ...c.quaternion.toArray(), c.fov, c.near, c.far, ...game.yaws()];
+      const hero = () => [...game.hero().position.toArray(), ...game.hero().quaternion.toArray()];
+      const probe = window.__flightQA = { samples: 0, saved: null, returned: null, drawNext: false, pose, hero };
+      // Keep the real renderer for captured frames. Skipping redundant software
+      // draws keeps input timings meaningful without skipping any game ticks.
+      renderer.render = function (scene, camera) {
+        if (scene === game.scene) {
+          if (camera !== game.camera) {
+            probe.samples++;
+            probe.saved ||= { camera: pose(game.camera), hero: hero() };
+            probe.camera = camera;
+          } else if (probe.saved && !probe.returned) {
+            probe.returned = { camera: pose(camera), hero: hero() };
+          }
+          if (!probe.drawNext) return;
+          probe.drawNext = false;
+        }
+        const result = render.call(this, scene, camera);
+        if (scene === game.scene && camera !== game.camera) probe.image = renderer.domElement.toDataURL('image/jpeg', 0.9).split(',')[1];
+        return result;
+      };
+    });
+    const take = () => page.evaluate(() => {
+      const p = window.__flightQA, c = p.camera;
+      return { pose: p.pose(c), heroStill: JSON.stringify(p.saved.hero) === JSON.stringify(p.hero()),
+        gameplayStill: JSON.stringify(p.saved.camera) === JSON.stringify(p.pose(SinDevHub.game().camera)),
+        blocked: SinDevHub.game().blocked(c.position.x, c.position.z) };
+    });
+    const frames = n => page.evaluate(n => new Promise(resolve => {
+      const step = () => { if (--n > 0) requestAnimationFrame(step); else resolve(); };
+      requestAnimationFrame(step);
+    }), n);
+    const collapse = '#sin-dev-fly [data-fly=';
+    const speed = page.locator('#sin-dev-fly input');
+    const button = (key) => page.locator(collapse + key + ']');
+    const dev = page.locator('#sin-dev-tool > button');
+    const launch = page.locator('#sin-dev-panel [data-t=fly]');
+    if (mobile) { await dev.tap(); await launch.tap(); } else { await dev.click(); await launch.click(); }
+    await page.waitForFunction(() => window.__flightQA.samples > 2);
+    const start = await take();
+    await page.evaluate(() => { window.__flightQA.drawNext = true; });
+    await page.waitForFunction(() => window.__flightQA.image, null, { timeout: 120000, polling: 250 });
+    const image = await page.evaluate(() => window.__flightQA.image);
+    fs.writeFileSync(path.join(OUT, 'flight-' + name + '.jpg'), Buffer.from(image, 'base64'));
+    await speed.fill('0');
+    assert.match(await page.locator('#sin-dev-fly output').innerText(), /0\.4/);
+    await speed.fill('100');
+    assert.match(await page.locator('#sin-dev-fly output').innerText(), /80\.0/);
+    let left, look, up, down;
+    if (mobile) {
+      const session = await ctx.newCDPSession(page);
+      const send = (type, touchPoints) => session.send('Input.dispatchTouchEvent', { type, touchPoints });
+      const center = async locator => {
+        const b = await locator.boundingBox();
+        return { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) };
+      };
+      const stick = await center(page.locator('#sin-dev-fly .fly-stick'));
+      const point = { x: stick.x, y: stick.y - 30, id: 1 };
+      await send('touchStart', [{ ...stick, id: 1 }]);
+      await send('touchMove', [point]);
+      await frames(34);
+      left = await take();
+      await send('touchEnd', []);
+      await frames(10);
+      const vertical = async key => {
+        await send('touchStart', [{ ...(await center(button(key))), id: 1 }]);
+        await frames(22);
+        const at = await take();
+        await send('touchEnd', []);
+        await frames(10);
+        return at;
+      };
+      up = await vertical('up');
+      down = await vertical('down');
+      const from = { x: 220, y: 140, id: 1 };
+      await send('touchStart', [from]);
+      await send('touchMove', [{ x: 440, y: 240, id: 1 }]);
+      await send('touchEnd', []);
+      await frames(18);
+      look = await take();
+      await button('hide').tap();
+      await button('exit').waitFor({ state: 'hidden', timeout: 2500 });
+      await button('reveal').tap();
+      await button('exit').waitFor({ state: 'visible', timeout: 2500 });
+    } else {
+      const move = async (key, count) => {
+        await page.keyboard.down(key);
+        await frames(count);
+        const at = await take();
+        await page.keyboard.up(key);
+        await frames(12);
+        return at;
+      };
+      left = await move('KeyW', 34);
+      up = await move('KeyE', 22);
+      down = await move('KeyQ', 22);
+      await page.mouse.move(190, 360);
+      await page.mouse.down();
+      await page.mouse.move(1100, 520, { steps: 8 });
+      await page.mouse.up();
+      await frames(18);
+      look = await take();
+      await page.keyboard.press('KeyH');
+      assert.equal(await button('exit').isVisible(), false);
+      await page.keyboard.press('KeyH');
+      assert.equal(await button('exit').isVisible(), true);
+    }
+    const travel = Math.hypot(left.pose[0] - start.pose[0], left.pose[2] - start.pose[2]);
+    const angular = 2 * Math.acos(Math.min(1, Math.abs(start.pose.slice(3, 7).reduce((n, v, i) => n + v * look.pose[3 + i], 0))));
+    assert.ok(travel > 15, 'fly distance ' + travel);
+    assert.ok(up.pose[1] - left.pose[1] > 5 && up.pose[1] - down.pose[1] > 5, 'vertical flight');
+    assert.ok(angular > 0.7, 'camera rotation ' + angular);
+    assert.ok([start, left, up, down, look].every(p => p.heroStill && p.gameplayStill), 'player and camera stayed untouched');
+    assert.ok(left.blocked || up.blocked || down.blocked, 'flight reached outside a walkable surface');
+    if (mobile) await button('exit').tap();
+    else {
+      await page.keyboard.down('KeyW');
+      await page.keyboard.press('Escape');
+      await page.keyboard.down('KeyW');
+      await page.keyboard.up('KeyW');
+    }
+    const restored = await page.evaluate(() => {
+      const p = window.__flightQA;
+      return { exact: JSON.stringify(p.saved) === JSON.stringify(p.returned),
+        simulationResumed: !window.__holdSim, roots: SinDevHub.game().scene.children.map(o => o.name), frames: p.samples };
+    });
+    assert.ok(restored.exact && restored.simulationResumed, JSON.stringify(restored));
+    assert.deepEqual(log.errors, []);
+    results[name] = { url, travel: +travel.toFixed(2), rotationRadians: +angular.toFixed(2), ...restored, errors: log.errors };
+    report.results.fly = results; save();
+    await ctx.close();
+  }
+  return results;
+}
+
 async function cycle(browser, ids, rounds = 2) {
   const { ctx, page, log } = await open(browser, { video: VIDEO });
   await page.goto(BASE + '?dev=1&level=' + ids[0]);
@@ -202,6 +350,7 @@ async function storage(browser) {
   if (want('play')) { report.results.play = await play(browser, false); save(); console.log('play', JSON.stringify(report.results.play).slice(0, 600)); }
   if (want('disabled')) { report.results.disabled = await play(browser, true); save(); console.log('disabled', JSON.stringify(report.results.disabled).slice(0, 600)); }
   if (want('direct')) await direct(browser, (opt('levels') || 'OUT-START,OUT-GATE,OUT-MARKET,OUT-PLAZA,OUT-PALACE,HALL,K3,L1,T3,R3-01,R3-02,R3-03').split(','));
+  if (MODE.split(',').includes('fly')) { report.results.fly = await fly(browser, opt('levels')?.split(',')[0] || 'U1-01'); save(); console.log('fly', JSON.stringify(report.results.fly)); }
   if (want('cycle')) { report.results.cycle = await cycle(browser, (opt('cycle') || 'HALL,K1,K2,K3,K4,K5,L1,L2,L3,L4,T1,T2,T3,T4,T5').split(','), +(opt('rounds') || 2)); save(); }
   save();
   await browser.close();

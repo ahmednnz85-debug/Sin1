@@ -27,10 +27,14 @@
    (the royal door, passage-L0, the Maw lift). Each stage's OWNER declares
    its chapter, in order, with the boundary it starts from and how to start
    play directly at that boundary:
-     SinAreas.chapter({ stage, order, ar, en, boundary, boot? }, from)
+     SinAreas.chapter({ stage, order, ar, en, boundary, boot?, preview? }, from)
        boot(ctx, area) → Promise   area: the target area (its spawn)
                             ctx: { hero, scene, camera, renderer, setFacing,
                              portal, floorY, place(x, y, z, yaw) }
+       preview({ camera, show, place, stream }) → optional inspection presentation.
+       show(node, visible) and place(node, position) apply only during that
+       render. stream is true on budgeted streaming ticks. A preview only
+       uses this chapter.
        The first chapter (no boot) is the game's own full start.
    A direct start (developer entry) boots only the chosen chapter; nothing
    of the chapters before it is loaded. Normal play never calls boot. */
