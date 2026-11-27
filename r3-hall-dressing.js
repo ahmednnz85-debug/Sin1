@@ -436,7 +436,8 @@
       const { KTX2Loader } = await window.THREE.loadKTX2Loader();
       const ktx = new KTX2Loader().setTranscoderPath(A.url('vendor/basis/')).setWorkerLimit(2).detectSupport(renderer);
       try {
-        const loader = new window.THREE.GLTFLoader().setKTX2Loader(ktx).setMeshoptDecoder(window.MeshoptDecoder);
+        const decoder = window.__sinMeshoptWorkers?.(window.MeshoptDecoder, true) || window.MeshoptDecoder;
+        const loader = new window.THREE.GLTFLoader().setKTX2Loader(ktx).setMeshoptDecoder(decoder);
         const result = await fetch(A.url(PROP));
         if (!result.ok) throw new Error('Hall GLB HTTP ' + result.status);
         const buffer = await result.arrayBuffer();

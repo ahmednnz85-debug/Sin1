@@ -27,7 +27,10 @@
 
    Usage:  node static-server.mjs &   (serves the repo on :8080)
            THREE_DIR=/path/to/node_modules/three node tools/palace-stream-probe.cjs \
-             [--rooms L1,T1,...] [--viewport 426x197] [--out probe.json] [--query '&lightrig=off'] */
+             [--rooms L1,T1,...] [--direct HALL] [--motion 1] [--viewport 426x197]
+             [--sample-every 6] [--max-wait 45] [--out probe.json] [--query '&lightrig=off']
+   Sampling retains the real preparation and input loop, but skips repeated
+   world draws in software GL. Its frame times are not gameplay FPS. */
 'use strict';
 const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
@@ -37,6 +40,10 @@ const ROOMS = (opt('rooms') || 'L1,L2,L3,L4,T1,T2,T3,T4,T5,K2,K3,K4,K5').split('
 const OUT = opt('out');
 const [VW, VH] = (opt('viewport') || '426x197').split('x').map(Number);
 const QUERY = opt('query') || '';
+const DIRECT = opt('direct');
+const MOTION = opt('motion') === '1';
+const SAMPLE_EVERY = Math.max(1, Number(opt('sample-every')) || 1);
+const MAX_WAIT = Math.max(5, Number(opt('max-wait')) || 150);
 const BASE = process.env.SIN1_URL || 'http://127.0.0.1:8080/index.html';
 const THREE_DIR = process.env.THREE_DIR;
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
@@ -77,6 +84,7 @@ const INSTRUMENT = `(() => {
 
 function summarize(rows) {
   const gaps = rows.map(r => r.gap).sort((a, b) => a - b);
+  const percentile = q => gaps[Math.ceil(gaps.length * q) - 1] || 0;
   const holeIds = {}; rows.forEach(r => r.holes.forEach(h => { holeIds[h] = (holeIds[h] || 0) + 1; }));
   // reveal frames: a zone switched to ready (state letter r) between rows
   let revealLinks = 0, revealFrames = 0, maxRevealGap = 0;
@@ -86,7 +94,8 @@ function summarize(rows) {
     if (revealed.length) for (let j = i; j < Math.min(rows.length, i + 3); j++) { revealLinks += rows[j].link; revealFrames++; maxRevealGap = Math.max(maxRevealGap, rows[j].gap); }
   }
   return {
-    frames: rows.length, maxGap: gaps[gaps.length - 1] || 0, p50: gaps[gaps.length >> 1] || 0, over100: gaps.filter(g => g > 100).length,
+    frames: rows.length, maxGap: percentile(1), p50: percentile(.5), p95: percentile(.95), p99: percentile(.99),
+    over33: gaps.filter(g => g > 33).length, over100: gaps.filter(g => g > 100).length,
     holeFrames: rows.filter(r => r.holes.length).length, holeIds, insideUnready: rows.filter(r => r.inside).length,
     links: rows.reduce((s, r) => s + r.link, 0), maxLinksInFrame: Math.max(0, ...rows.map(r => r.link)), revealLinks, maxRevealGap,
     queries: rows.reduce((s, r) => s + r.q, 0), maxQueryMsInFrame: Math.max(0, ...rows.map(r => r.qMs)),
@@ -105,10 +114,33 @@ function summarize(rows) {
   page.on('pageerror', e => logs.push('PAGEERROR ' + String(e).slice(0, 300)));
   if (THREE_DIR) await page.route(/cdn\.jsdelivr\.net\/npm\/three@0\.187\.0\/(.*)$/, r => r.fulfill({ path: path.join(THREE_DIR, r.request().url().replace(/^.*three@0\.187\.0\//, '').split('?')[0]), contentType: 'text/javascript' }));
   await page.addInitScript(INSTRUMENT);
+  if (SAMPLE_EVERY > 1) await page.addInitScript(every => {
+    let renderer;
+    Object.defineProperty(window, '__R', {
+      configurable: true, get: () => renderer,
+      set(value) {
+        if (!value || renderer === value) return;
+        renderer = value;
+        const draw = value.render.bind(value);
+        let i = 0, previous;
+        value.render = (scene, camera) => {
+          if (!scene.getObjectByName('SinHeroRoot') || value.getRenderTarget() || window.PalaceInterior?.state() !== 'DONE') return draw(scene, camera);
+          const region = PalaceWings.current();
+          if (region !== previous || ++i % every === 0) {
+            previous = region;
+            return draw(scene, camera);
+          }
+        };
+      }
+    });
+  }, SAMPLE_EVERY);
   const since = async t => page.evaluate(t0 => __probe.rows.filter(r => r.t >= t0), t);
   const nowMs = () => page.evaluate(() => performance.now());
   const zone = id => page.evaluate(id => { const z = PalaceWings.zones().zones[id]; return z ? z.state : 'none'; }, id);
-  const mem = () => page.evaluate(() => { const m = SinProcessMemory.last() || {}; return { processMB: m.processMB, gpuTexMB: m.gpuTexMB, programs: m.programs }; });
+  const mem = () => page.evaluate(() => {
+    const m = SinProcessMemory.last() || {};
+    return { processMB: m.processMB, gpuTexMB: m.gpuTexMB, programs: m.programs, peakProcessMB: SinProcessMemory.peak().processMB };
+  });
   // Stops early when the room is waiting for memory (it cannot be prepared here).
   const waitReady = async (id, maxS, memoryWaitS) => { const t0 = Date.now(); for (;;) {
     const z = await page.evaluate(id => { const z = PalaceWings.zones().zones[id]; return z ? { state: z.state, deferred: !!z.deferred } : { state: 'none' }; }, id);
@@ -123,10 +155,25 @@ function summarize(rows) {
     return n.includes('Palace') ? 'Palace' : n[0] || 'Palace';
   }, id);
 
-  const out = { started: new Date().toISOString(), viewport: [VW, VH], query: QUERY, rooms: {} };
+  const out = { started: new Date().toISOString(), viewport: [VW, VH], query: QUERY, direct: DIRECT, sampleEvery: SAMPLE_EVERY, rooms: {} };
   const T0 = Date.now();
-  await page.goto(BASE + '?sin=probe&startInHall=1&royalDoorTest=1' + QUERY);
-  await page.waitForFunction("window.PalaceInterior&&PalaceInterior.state&&(PalaceInterior.state()==='DONE'||PalaceInterior.state()==='FAILED')&&window.__holdSim===false", null, { timeout: 1800000, polling: 1000 });
+  if (DIRECT) {
+    await page.goto(BASE + '?dev=1&level=' + encodeURIComponent(DIRECT) + QUERY);
+    await page.waitForFunction(() => window.__sinDev?.ready || window.__sinDev?.error, null, { timeout: 180000, polling: 500 });
+    const error = await page.evaluate(() => __sinDev.error);
+    if (error) throw new Error(error);
+  } else {
+    await page.goto(BASE + '?sin=probe&startInHall=1&royalDoorTest=1' + QUERY);
+    await page.waitForFunction("window.PalaceInterior&&PalaceInterior.state&&(PalaceInterior.state()==='DONE'||PalaceInterior.state()==='FAILED')&&window.__holdSim===false", null, { timeout: 1800000, polling: 1000 });
+  }
+  async function walk() {
+    const pos = () => page.evaluate(() => window.SinDevHub.game().hero().position.toArray());
+    const start = await pos(), began = await nowMs();
+    await page.keyboard.down('KeyW');
+    try { await page.waitForTimeout(2200); } finally { await page.keyboard.up('KeyW'); }
+    const stop = await pos();
+    return { metres: +Math.hypot(stop[0] - start[0], stop[2] - start[2]).toFixed(2), ...summarize(await since(began)) };
+  }
   const tDone = await nowMs();
   await page.waitForTimeout(4000);
   out.entry = Object.assign({ seconds: (Date.now() - T0) / 1000, mem: await mem(), device: await page.evaluate(() => ({ constrained: PalaceWings.deviceProfile.constrained, budget: PalaceWings.deviceProfile.processBudgetMB })),
@@ -137,17 +184,20 @@ function summarize(rows) {
     for (const pass of ['first', 'return']) {
       const near = await approachOf(id);
       let t = await nowMs(); await tp(near);
-      const a = await waitReady(id, 150, 20);
+      const approaching = DIRECT && MOTION ? await walk() : null;
+      const a = await waitReady(id, MAX_WAIT, 20);
       await page.waitForTimeout(1500);
-      const approach = Object.assign({ at: near, readyBeforeEntering: a.state === 'ready', waitingForMemory: a.deferred, waitS: a.s, state: a.state }, summarize(await since(t)));
+      const approach = Object.assign({ at: near, readyBeforeEntering: a.state === 'ready', waitingForMemory: a.deferred, waitS: a.s, state: a.state, motion: approaching }, summarize(await since(t)));
       t = await nowMs(); await tp(id);
-      const e = await waitReady(id, 150);
+      const e = await waitReady(id, MAX_WAIT);
+      const motion = DIRECT && MOTION && e.state === 'ready' ? await walk() : null;
       await page.waitForTimeout(2500);
-      const enter = Object.assign({ waitS: e.s, state: e.state, mem: await mem() }, summarize(await since(t)));
+      const enter = Object.assign({ waitS: e.s, state: e.state, motion, mem: await mem() }, summarize(await since(t)));
       R[pass] = { approach, enter };
       if (pass === 'first') {
         const far = FAR[id[0]] || 'Palace';
-        t = await nowMs(); await tp(far); await waitReady(far, 150); await page.waitForTimeout(4500);
+        t = await nowMs(); await tp(far);
+        for (let i = 0; i < 12 && await zone(id) !== 'cold'; i++) await page.waitForTimeout(400);
         R.leave = Object.assign({ to: far, unloaded: (await zone(id)) === 'cold', mem: await mem() }, summarize(await since(t)));
       }
       console.log(id, pass, JSON.stringify({ approach: { at: near, ready: approach.readyBeforeEntering, memoryWait: approach.waitingForMemory, waitS: approach.waitS, holes: approach.holeFrames, maxGap: approach.maxGap, revealLinks: approach.revealLinks, maxRevealGap: approach.maxRevealGap },

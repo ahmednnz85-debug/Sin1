@@ -850,8 +850,8 @@
   // Meshopt buffers are decoded by two background workers (the same WASM
   // decoder, the same bytes): a large room GLB no longer blocks the main
   // thread while it is decompressed during the room's preparation.
-  function meshoptWorkers(D) {
-    if (inR3()) return D;
+  function meshoptWorkers(D, isolatedChapter = false) {
+    if (!isolatedChapter && inR3()) return D;
     try {
       if (D && !D.__sinWorkers && typeof D.useWorkers === 'function' && typeof Worker === 'function' && typeof Blob === 'function') {
         D.useWorkers(2);
@@ -4700,10 +4700,16 @@
     ctx.setFacing(facing);
     stage.update(...arrival);
     followCamera(ctx.camera, ctx.hero, facing, FOLLOW_PITCH, FOLLOW_DIST, 0.016, true, true);
+    const warmup = window.SinZoneStreamer?.prepareRender;
+    if (warmup) memory.prewarm = await warmup(THREE, ctx.renderer, ctx.scene, ctx.camera, {
+      roots: [envelope, ctx.hero],
+      shouldContinue: () => r3Stage === stage && envelope.parent === ctx.scene
+    });
     ctx.renderer.render(ctx.scene, ctx.camera);
     memory.loaded = { ...r3Snapshot(ctx, chapter + '-loaded'), budget: stage.budget, cost: stage.cost };
     r3Fade = 0;
     state = 'R3_FADING_IN';
+    stage.prefetch?.();
   }
 
   function failR3(error) {

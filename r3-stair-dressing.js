@@ -743,10 +743,11 @@
       };
       let gltf, lod = null;
       try {
-        const loader = new T.GLTFLoader().setKTX2Loader(ktx).setMeshoptDecoder(window.MeshoptDecoder);
+        const decoder = window.__sinMeshoptWorkers?.(window.MeshoptDecoder, true) || window.MeshoptDecoder;
+        const loader = new T.GLTFLoader().setKTX2Loader(ktx).setMeshoptDecoder(decoder);
         [gltf, lod] = await Promise.all([
           fetchGLB(api.base + GLB, loader),
-          fetchGLB(api.base + DIR + 'props_lod1.glb', new T.GLTFLoader().setMeshoptDecoder(window.MeshoptDecoder)).catch(error => { report.warnings.push('lod: ' + error.message); return null; })
+          fetchGLB(api.base + DIR + 'props_lod1.glb', new T.GLTFLoader().setMeshoptDecoder(decoder)).catch(error => { report.warnings.push('lod: ' + error.message); return null; })
         ]);
       } finally { ktx.dispose(); }
       // Assets keep their quantized geometry untouched: an inner matrix

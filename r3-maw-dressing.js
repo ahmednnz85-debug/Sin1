@@ -157,7 +157,8 @@
         document.head.appendChild(script);
       }).catch(error => { decoderReady = null; throw error; });
     }
-    return Promise.resolve(decoderReady).then(() => new T.GLTFLoader().setMeshoptDecoder(root.MeshoptDecoder)
+    return Promise.resolve(decoderReady).then(() => new T.GLTFLoader()
+      .setMeshoptDecoder(root.__sinMeshoptWorkers?.(root.MeshoptDecoder, true) || root.MeshoptDecoder)
       .loadAsync('assets/r3/maw/elevator.glb')).then(gltf => liftKit(T, gltf));
   }
 
@@ -477,7 +478,8 @@
       const started = performance.now();
       const mod = await import('three/addons/loaders/KTX2Loader.js');
       const basis = new mod.KTX2Loader().setTranscoderPath('vendor/basis/').setWorkerLimit(2).detectSupport(renderer);
-      const loader = new T.GLTFLoader().setKTX2Loader(basis).setMeshoptDecoder(root.MeshoptDecoder);
+      const decoder = root.__sinMeshoptWorkers?.(root.MeshoptDecoder, true) || root.MeshoptDecoder;
+      const loader = new T.GLTFLoader().setKTX2Loader(basis).setMeshoptDecoder(decoder);
       const files = ['abyss-ruins.glb', 'left-guardian.glb'];
       const liftDone = loadLift();
       try {
@@ -582,36 +584,18 @@
     }
 
     async function warm() {
-      if (!renderer?.compileAsync) return;
+      const prewarm = root.SinZoneStreamer?.prepareRender;
+      if (!renderer || !prewarm) return;
       let scene = room;
       while (scene.parent) scene = scene.parent;
       const camera = new T.PerspectiveCamera(60, 1.6, 0.1, 400);
       room.updateWorldMatrix(true, true);
       camera.position.setFromMatrixPosition(room.matrixWorld);
-      camera.updateMatrixWorld();
-      const shown = [room.visible, approachLook?.group.visible];
-      room.visible = true;
-      if (approachLook) approachLook.group.visible = true;
-      try {
-        await renderer.compileAsync(room, camera, scene);
-        if (approachLook) await renderer.compileAsync(approachLook.group, camera, scene);
-        // Push the textures to the GPU now rather than on the first frame.
-        const textures = new Set();
-        const visit = o => {
-          for (const m of [].concat(o.material || [])) {
-            for (const key of ['map', 'normalMap', 'roughnessMap', 'aoMap']) if (m[key]) textures.add(m[key]);
-          }
-        };
-        room.traverse(visit);
-        approachLook?.group.traverse(visit);
-        for (const t of approach.values()) visit({ material: t });
-        textures.forEach(t => renderer.initTexture?.(t));
-      } catch (error) {
-        console.warn('[R3-03] warm-up skipped', error);
-      } finally {
-        room.visible = shown[0];
-        if (approachLook) approachLook.group.visible = shown[1];
-      }
+      const roots = approachLook ? [room, approachLook.group] : [room];
+      status.prewarm = await prewarm(T, renderer, scene, camera, {
+        roots, budgetMs: 2,
+        shouldContinue: () => scene.getObjectById(room.id) === room
+      });
     }
     function start() {
       if (!pending && renderer) {

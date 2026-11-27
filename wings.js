@@ -42,6 +42,8 @@
     cacheZones: deviceProfile.cacheZones,
     uploadsPerFrame: deviceProfile.uploadsPerFrame,
     uploadMsPerFrame: deviceProfile.uploadMsPerFrame,
+    frameBudgetMs: 2,
+    hardCeiling: deviceProfile.constrained ? 1 : 1.1,
     graceMs: deviceProfile.graceMs,
     maxTextureSize: deviceProfile.maxTextureSize || 0,
     geometryBudget: deviceProfile.geometryBudget,
@@ -4059,8 +4061,9 @@
           miny: b.miny + origin.y, maxy: b.maxy + origin.y,
           minz: b.minz + origin.z, maxz: b.maxz + origin.z, _wing: true
         }));
+        const first = state.colliders.length;
         state.colliders.push(...state.library.colliders);
-        rebuildSpatial();
+        indexSpatialFrom(first);
         triCache.clear();
         setLibraryCeiling(api.group);
       },
@@ -4075,6 +4078,7 @@
         state.library = null;
         state.libraryLoad = null;
         state.colliders = state.colliders.filter(c => !c._library);
+        if (!retired) rebuildSpatial();
         triCache.clear();
         setLibraryCeiling(api.group);
       },
@@ -4363,7 +4367,7 @@
       now, heroRegion: origin, origin, distances: state.routes.pathDistances(origin, x, z, 200), pvs: state.pvs,
       status: id => zoneStreamer.status(id), leadSec: id => zoneStreamer.leadTime(id) });
     const plannedRooms = plan ? new Set(plan.approach) : new Set(['L1']);
-    zoneStreamer.update({ metric: true, current: origin, approach: plannedRooms, keep: plan ? plan.keep : plannedRooms,
+    zoneStreamer.update({ metric: true, loadingScreen: true, current: origin, approach: plannedRooms, keep: plan ? plan.keep : plannedRooms,
       rank: plan ? plan.rank : new Map([['L1', 0]]), visible: new Set(), retained: new Set(), allowBackgroundWarm: false });
     // The blackout waits only for what the first frames can show: rooms seen
     // from the spawn region. The rest of the plan keeps loading in play.
