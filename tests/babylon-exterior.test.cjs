@@ -34,6 +34,20 @@ test('Babylon runtime packs preserve the six authored elements and share maps at
   }
 });
 
+test('the exterior brazier pack contains only the three trimmed vessels with shared maps', () => {
+  const packed = glb('babylon/braziers.glb');
+  assert.deepEqual(packed.nodes.map(node => node.name), ['GateBrazier', 'IncenseStand', 'IncenseBowl']);
+  assert.equal(packed.images.length, 3);
+  assert.equal(packed.materials.length, 1);
+  const originalTriangles = [2700, 3326, 2986];
+  for (const [i, p] of primitives(packed).entries()) {
+    assert.equal(p.material, 0);
+    const triangles = packed.accessors[p.indices].count / 3;
+    assert.ok(triangles < originalTriangles[i] && triangles > originalTriangles[i] * .75);
+    assert.equal(packed.accessors[p.attributes.POSITION].min[1], 0);
+  }
+});
+
 test('the arch is flush through its full depth, and the walls close the market', () => {
   const space = createCollision();
   for (let z = -layout.gateHalfDepth; z <= layout.gateHalfDepth; z += .05) {

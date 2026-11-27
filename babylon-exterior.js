@@ -25,6 +25,15 @@
     ['Stall_Fruit', 'Stall_Rugs', 'Stall_Pottery']
   ];
   const houses = ['House_Cloth', 'House_Court', 'House_Lion'];
+  // The bowls and static flames are welded onto four stone seats in the gate GLB.
+  const gateHearth={x:11.69,z:7.0,seatY:3.24};
+  // Paired landmarks mark the arch exit and the market curbs.
+  const brazierRows = [
+    ...[-gateHearth.z,gateHearth.z].map(z=>({name:'GateBrazier',x:gateHearth.x,z,vesselHeight:1.2,seatY:gateHearth.seatY,flameHeight:1.02})),
+    {name:'IncenseStand', x:8.04, z:10.85, vesselHeight:1.29, plinthHeight:0, plinthWidth:0, flameHeight:.47},
+    {name:'IncenseBowl', x:8.02, z:25.1, vesselHeight:.31, plinthHeight:.73, plinthWidth:.72, flameHeight:.38},
+    {name:'IncenseBowl', x:8.02, z:51.8, vesselHeight:.31, plinthHeight:.73, plinthWidth:.72, flameHeight:.36}
+  ];
   function spatialBatches(points, span, splitSides = false) {
     const cells = new Map();
     for (const p of points) {
@@ -105,9 +114,10 @@
       return m;
     };
     status('جارٍ تركيب بوابة عشتار وطريق الموكب');
-    const [gatePack, marketPack, cityPack, palmPack, paving, medallion, brick, stone, rosette, binding, lion, lotus] = await Promise.all([
+    const [gatePack, marketPack, cityPack, palmPack, brazierPack, paving, medallion, brick, stone, rosette, binding, lion, lotus] = await Promise.all([
       loadDecoder().then(decoder => loader.setMeshoptDecoder(decoder).loadAsync('assets/بوابة عشتار.glb')),
       loader.loadAsync(PACK + 'market.glb'), loader.loadAsync(PACK + 'city.glb'), loader.loadAsync('assets/palm_new.glb'),
+      loader.loadAsync(PACK + 'braziers.glb'),
       surface('paving'), surface('medallion'), surface('brick'), surface('sandstone'),
       surface('rosette'), surface('binding'), surface('lion'), surface('lotus')
     ]);
@@ -121,8 +131,10 @@
     rawGate.scale.setScalar(gateScale);
     rawGate.position.set(-(box.max.x + box.min.x) * gateScale / 2, -box.min.y * gateScale - .06, layout.gate);
     rawGate.name = 'IshtarGate_Authored';
+    rawGate.updateMatrixWorld(true);
     gate.traverse(node => {
       if (!node.isMesh) return;
+      trimGateHearths(T,node);
       node.receiveShadow = true;
       node.castShadow = true;
       node.material.metalness *= .70;
@@ -296,6 +308,33 @@
         prior=x;
       }
     }
+    const vessels = new Map(brazierPack.scene.children.map(mesh => [mesh.name, mesh]));
+    const vesselPlacements = new Map();
+    const hearths = [];
+    for (const row of brazierRows) {
+      const {name,z,vesselHeight,seatY,plinthHeight=0,plinthWidth=0,flameHeight}=row;
+      const d=box.setFromObject(vessels.get(name)).getSize(dims);
+      const scale=vesselHeight/d.y, radius=Math.max(d.x,d.z)*scale*.5;
+      const placements=vesselPlacements.get(name)||[];
+      vesselPlacements.set(name,placements);
+      for (const side of [-1,1]) {
+        const x=side*row.x, floor=collision.floor(x,z), y=seatY??floor+plinthHeight;
+        const foot=plinthWidth*.5, footprint=Math.max(foot,radius*.84);
+        if (plinthHeight) {
+          slab(stone,x-foot,x+foot,floor,floor+.13,z-foot,z+foot,1);
+          const shaft=foot*.89;
+          slab(stone,x-shaft,x+shaft,floor+.13,y-.12,z-shaft,z+shaft,1);
+          slab(stone,x-foot,x+foot,y-.12,y,z-foot,z+foot,1);
+          const low=floor+.18, high=y-.17, faceX=x-side*(shaft+.006), faceZ=z-shaft-.006;
+          quad(lotus,[[x+shaft,low,faceZ],[x-shaft,low,faceZ],[x-shaft,high,faceZ],[x+shaft,high,faceZ]]);
+          quad(lotus,[[faceX,low,z-side*shaft],[faceX,low,z+side*shaft],
+            [faceX,high,z+side*shaft],[faceX,high,z-side*shaft]]);
+        }
+        placements.push({x,y,z,yaw:side<0?0:Math.PI,scale});
+        if(seatY==null)collision.obstacle(x-footprint,x+footprint,z-footprint,z+footprint);
+        hearths.push({x,y:y+vesselHeight-radius*.19,z,radius,flameHeight});
+      }
+    }
     for (const [mat, b] of batches) {
       const g = new T.BufferGeometry();
       g.setAttribute('position', new T.Float32BufferAttribute(b.position,3));
@@ -435,13 +474,11 @@
       }
     });
 
-    const fireAt = [];
-    for (const s of [-1,1]) {
-      fireAt.push([s*12.3,2.30,-8.13],[s*12.3,2.30,8.13]);
-      for (const z of [-58,-36,-20,19,38,57,82,111,136]) fireAt.push([s*9.1,2.43,z]);
+    for (const [name, placements] of vesselPlacements) {
+      instance(vessels.get(name),placements,stage,'Babylon_Vessel_'+name);
     }
-    const fire = makeFire(T,fireAt);
-    stage.add(fire.quads, ...fire.lights);
+    const fire=makeBrazierFire(T,hearths);
+    stage.add(fire);
 
     // Cull a row behind the gate only when its complete projected bounds
     // fit within one solid wing. The opening, crown and wing edges stay live.
@@ -481,7 +518,7 @@
         const lod=d>82 ? 2 : d>28 ? 1 : 0;
         for (const {batch,level} of batches) show(batch,lod===level);
       }
-      if (elapsed != null) fire.update(camera,elapsed);
+      fire.material.uniforms.time.value=elapsed??performance.now()*.001;
     }
     return {root:stage,collision,update,release(){
       collision.clear();
@@ -489,58 +526,118 @@
     }};
   }
 
-  function makeFire(T, points) {
-    const uniforms = { uTime:{value:0} };
-    const geom = new T.PlaneGeometry(1,1);
-    const inst = new T.InstancedBufferGeometry().copy(geom);
-    geom.dispose();
-    inst.setAttribute('place',new T.InstancedBufferAttribute(new Float32Array(points.flat()),3));
-    inst.instanceCount=points.length;
-    const shader = new T.ShaderMaterial({
-      uniforms, transparent:true, depthWrite:false, side:T.DoubleSide, blending:T.AdditiveBlending,
+  function trimGateHearths(T, mesh) {
+    // Filter just the bowls and flame silhouettes above the carved stone seats.
+    // The measured profile widens at the bowl lip and narrows around the flame.
+    const profile=[[gateHearth.seatY,.66],[3.47,.62],[3.72,.75],[3.95,1.20],[4.16,1.43],[4.35,1.46],[4.48,1.44],[4.52,.52],[6.55,.52]];
+    const maxY=profile.at(-1)[0];
+    const geometry=mesh.geometry, positions=geometry.attributes.position;
+    const world=new Float32Array(positions.count*3), point=new T.Vector3();
+    for(let i=0;i<positions.count;i++)point.fromBufferAttribute(positions,i).applyMatrix4(mesh.matrixWorld).toArray(world,i*3);
+    const indices=geometry.index.array;
+    let kept=0;
+    for(let i=0;i<indices.length;i+=3) {
+      const a=indices[i]*3,b=indices[i+1]*3,c=indices[i+2]*3;
+      const y=(world[a+1]+world[b+1]+world[c+1])/3;
+      if(y>gateHearth.seatY&&y<maxY) {
+        const x=Math.abs((world[a]+world[b]+world[c])/3)-gateHearth.x;
+        const z=Math.abs((world[a+2]+world[b+2]+world[c+2])/3)-gateHearth.z;
+        const distance=x*x+z*z;
+        if(distance<1.46**2) {
+          const j=profile.findIndex(([height])=>y<height);
+          const [low,inner]=profile[j-1], [high,outer]=profile[j];
+          const radius=T.MathUtils.lerp(inner,outer,(y-low)/(high-low));
+          if(distance<radius*radius)continue;
+        }
+      }
+      indices[kept++]=indices[i];indices[kept++]=indices[i+1];indices[kept++]=indices[i+2];
+    }
+    geometry.setDrawRange(0,kept);
+  }
+
+  function makeBrazierFire(T, hearths) {
+    const plane=new T.PlaneGeometry(1,1);
+    const geometry=new T.InstancedBufferGeometry().copy(plane);
+    plane.dispose();
+    const anchors=[], shapes=[];
+    const bounds=new T.Box3();
+    for (const [i,{x,y,z,radius,flameHeight}] of hearths.entries()) {
+      const spread=1.35+flameHeight*.9;
+      anchors.push(x,y,z,0,x-Math.sign(x)*.53,.012,z,1);
+      shapes.push(radius*2.38,flameHeight,i*1.37,spread*2,spread*1.8,i*1.37);
+      bounds.expandByPoint(new T.Vector3(x-spread-.53,.012,z-spread));
+      bounds.expandByPoint(new T.Vector3(x+spread+.53,y+flameHeight,z+spread));
+    }
+    geometry.setAttribute('anchor',new T.InstancedBufferAttribute(new Float32Array(anchors),4));
+    geometry.setAttribute('shape',new T.InstancedBufferAttribute(new Float32Array(shapes),3));
+    geometry.instanceCount=hearths.length*2;
+    geometry.boundingSphere=bounds.getBoundingSphere(new T.Sphere());
+    const material=new T.ShaderMaterial({
+      uniforms:{time:{value:0},curb:{value:road}}, transparent:true, depthWrite:false,
+      blending:T.AdditiveBlending, toneMapped:false,
       vertexShader:`
-        attribute vec3 place;
-        varying vec2 p; varying float seed;
-        void main(){
-          seed=place.z+place.x;
-          p=uv;
-          vec4 v=modelViewMatrix*vec4(place,1.);
-          float size=abs(place.z)<9.?1.04:.55;
-          v.xy+=vec2(position.x,position.y+.32)*size;
-          gl_Position=projectionMatrix*v;
+        attribute vec4 anchor;
+        attribute vec3 shape;
+        varying vec2 sampleUV;
+        varying float spill, phase, fade, worldX;
+        void main() {
+          vec3 center=(modelMatrix*vec4(anchor.xyz,1.)).xyz;
+          vec3 toEye=cameraPosition-center;
+          spill=anchor.w;
+          phase=shape.z;
+          sampleUV=uv;
+          fade=1.-smoothstep(1369.,5476.,dot(toEye,toEye));
+          if(spill>0.5) {
+            center.xz+=vec2(position.x,-position.y)*shape.xy;
+          } else {
+            vec2 across=normalize(vec2(toEye.z+0.0001,-toEye.x));
+            center.xz+=across*position.x*shape.x;
+            center.y+=uv.y*shape.y;
+          }
+          worldX=center.x;
+          gl_Position=projectionMatrix*viewMatrix*vec4(center,1.);
         }`,
       fragmentShader:`
-        uniform float uTime;
-        varying vec2 p; varying float seed;
-        void main(){
-          float y=p.y, t=uTime*7.+seed;
-          float x=p.x-.5-.068*sin(t+y*13.)*y-.038*sin(t*1.5-y*21.);
-          float body=exp(-pow(x/(.19*(1.18-y)),2.)*3.);
-          float envelope=smoothstep(0.,.23,y)*(1.-smoothstep(.54+.12*sin(t),.96,y));
-          float heat=body*envelope;
-          float aura=exp(-8.*(x*x+(y-.29)*(y-.29)))*(1.-smoothstep(.55,1.,y));
-          vec3 hue=mix(vec3(1.,.145,.018),vec3(1.,.70,.25),smoothstep(.08,.75,heat));
-          gl_FragColor=vec4(hue,heat*.90+aura*.075);
+        uniform float time,curb;
+        varying vec2 sampleUV;
+        varying float spill, phase, fade, worldX;
+        float tongue(float x,float y,float height,float width) {
+          float taper=width*(0.94-0.78*y/height);
+          float edge=1.-smoothstep(max(.006,taper*.36),max(.022,taper),abs(x));
+          return edge*(1.-smoothstep(height-.19,height,y));
+        }
+        void main() {
+          if(fade<.008) discard;
+          float clock=time+phase;
+          if(spill>0.5) {
+            vec2 d=sampleUV*2.-1.;
+            float edge=1.-smoothstep(0.,1.,dot(d,d));
+            float street=smoothstep(0.,.45,curb-abs(worldX));
+            float shimmer=.93+.07*sin(clock*8.)+.04*sin(clock*15.1);
+            gl_FragColor=vec4(1.,.29,.057,edge*edge*street*fade*.21*shimmer);
+          } else {
+            float y=sampleUV.y;
+            float x=sampleUV.x*2.-1.;
+            float wobble=sin(y*17.-clock*8.)*.105+sin(y*8.-clock*5.)*.15;
+            float center=x-wobble*y;
+            float tall=.91+.06*sin(clock*7.6)+.028*sin(clock*15.);
+            float main=tongue(center,y,tall,.55);
+            float left=tongue(center+.40-.18*y,y,.59+.12*sin(clock*10.+1.),.31);
+            float right=tongue(center-.37+.12*y,y,.70+.11*sin(clock*9.1+4.),.32);
+            float base=smoothstep(0.,.16,y);
+            float flame=max(main,max(left,right)*.88);
+            float heat=tongue(center,y,.51,.37);
+            float detail=.86+.14*sin(clock*18.-y*37.+x*6.);
+            vec3 hue=mix(vec3(1.,.20,.016),vec3(1.,.82,.36),heat);
+            float aura=pow(max(0.,1.-length(vec2(x*.79,(y-.21)*1.52))),3.)*.08;
+            gl_FragColor=vec4(hue,(flame*base*detail*.85+aura*base)*fade);
+          }
+          #include <colorspace_fragment>
         }`
     });
-    const quads=new T.Mesh(inst,shader);
-    quads.name='Babylon_Hearths';
-    quads.frustumCulled=false;
-    const lights=Array.from({length:2},()=>new T.PointLight(0xffad5f,10.4,7.4,2));
-    function update(camera,t) {
-      uniforms.uTime.value=t;
-      for (const [i,s] of [-1,1].entries()) {
-        let closest=null,best=Infinity;
-        for (const p of points) {
-          if (p[0]*s<=0) continue;
-          const d=(p[0]-camera.position.x)**2+(p[2]-camera.position.z)**2;
-          if(d<best){best=d;closest=p;}
-        }
-        lights[i].position.fromArray(closest);
-        lights[i].intensity=(10.8+1.8*Math.sin(t*15.1+i))*(1-T.MathUtils.smoothstep(best,65,370));
-      }
-    }
-    return {quads,lights,update};
+    const fire=new T.Mesh(geometry,material);
+    fire.name='Babylon_BrazierFire';
+    return fire;
   }
 
   root.SinBabylonExterior = { layout, create };

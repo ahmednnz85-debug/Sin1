@@ -59,13 +59,15 @@ def connected_indices(vertices, faces):
     return [faces[result == i] for i in range(count)]
 
 
-def pack(source, target, names, limits):
+def pack(source, target, names, limits, select_parts=None):
     doc, binary = read_glb(ROOT / source)
     prim = doc["meshes"][0]["primitives"][0]
     attrs = {key: accessor(doc, binary, i) for key, i in prim["attributes"].items()}
     pos = attrs["POSITION"]
     faces = accessor(doc, binary, prim["indices"]).reshape(-1, 3)
     parts = connected_indices(pos, faces)
+    if select_parts:
+        parts = select_parts(pos, parts)
     if len(parts) != len(names):
         raise ValueError(f"{source} has {len(parts)} connected models, expected {len(names)}")
     payloads, views, acc, meshes = [], [], [], []
@@ -123,6 +125,25 @@ def pack(source, target, names, limits):
         file.writelines(payloads)
 
 
+def pack_braziers():
+    # The furniture sheet is one mesh. Select the three vessels by the same
+    # component counts as royal-offerings.js, then trim the welded smoke and
+    # flame silhouettes at the rims. Leave the original stone and metal intact.
+    vessels = [("GateBrazier", 2700, .649), ("IncenseStand", 3326, .653), ("IncenseBowl", 2986, .399)]
+
+    def select(pos, parts):
+        by_count = {len(part): part for part in parts}
+        selected = []
+        for _, count, rim in vessels:
+            faces = by_count[count]
+            heights = pos[faces, 1]
+            cut = heights.min() + np.ptp(heights) * rim
+            selected.append(faces[heights.mean(axis=1) <= cut])
+        return selected
+
+    pack("اثاث القرابين.glb", "braziers.glb", [name for name, _, _ in vessels], (1024, 512, 256), select)
+
+
 def flatten(im, points, size):
     return im.transform(size, Image.Transform.QUAD, tuple(n for point in points for n in point),
                         Image.Resampling.BICUBIC)
@@ -176,4 +197,5 @@ if __name__ == "__main__":
          ["House_Cloth", "House_Court", "Stall_Rugs", "House_Lion", "Stall_Fruit", "Stall_Pottery"], (2048, 1024, 1024))
     pack("الزقورات والمدن البعيدة.glb", "city.glb",
          ["Ziggurat_Terraces", "City_West", "Ziggurat_Low", "City_Mid", "Ziggurat_Sanctuary", "City_East"], (1024, 512, 512))
+    pack_braziers()
     textures()
