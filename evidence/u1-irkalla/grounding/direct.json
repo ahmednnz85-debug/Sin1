@@ -1,0 +1,247 @@
+{
+ "base": "http://127.0.0.1:3111/index.html",
+ "results": {
+  "direct": {
+   "U1-01": {
+    "wallSeconds": 22.421,
+    "level": "U1-01",
+    "ready": true,
+    "ms": 6822,
+    "error": null,
+    "phase": "R3",
+    "hero": [
+     -103.78,
+     -434.57,
+     174.46
+    ],
+    "blockedAtHero": false,
+    "geometries": 35,
+    "textures": 30,
+    "calls": 45,
+    "triangles": 643198,
+    "est": {
+     "cpuMB": 42.5,
+     "gpuMB": 103.8
+    },
+    "url": "?dev=1&level=U1-01",
+    "movedAfterWalk": 1.16,
+    "heroAfterWalk": [
+     -102.62,
+     -434.57,
+     174.46
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 5,
+    "assets": {
+     "count": 38,
+     "MiB": 24.4,
+     "files": [
+      "assets/Sin_hero_runtime.glb",
+      "assets/ktx2/4cv0-rx5sve-1r31vq4.ktx2",
+      "assets/ktx2/4irg-7n6051-1aid0kh.ktx2",
+      "assets/ktx2/5v26-17oijkg-1cjfyjm.ktx2",
+      "assets/ktx2/9q9t-1uznd8u-1hsq3o8.ktx2",
+      "assets/ktx2/k2nu-6irt01-41jg04.ktx2",
+      "assets/ktx2/kyaf-107tleb-1ahwk5s.ktx2",
+      "assets/ktx2/manifest.json",
+      "assets/r3/harbor/architecture.glb",
+      "assets/r3/harbor/dais-border-normal.webp",
+      "assets/r3/harbor/dais-border.webp",
+      "assets/r3/harbor/dais-gold-normal.webp",
+      "assets/r3/harbor/dais-gold.webp",
+      "assets/r3/harbor/distant-ruins.glb",
+      "assets/r3/harbor/floor-inlay.webp",
+      "assets/r3/harbor/paving-normal.webp",
+      "assets/r3/harbor/paving-rough.webp",
+      "assets/r3/harbor/paving.webp",
+      "assets/r3/harbor/road-edge.webp",
+      "assets/r3/harbor/road-guardians.glb",
+      "assets/r3/harbor/road-medallion.webp",
+      "assets/r3/harbor/road-palms.webp",
+      "assets/r3/harbor/road-rail-normal.webp",
+      "assets/r3/harbor/road-rail.webp",
+      "assets/r3/harbor/road-relief-normal.webp",
+      "assets/r3/harbor/road-relief.webp",
+      "assets/r3/harbor/road-script.webp",
+      "assets/r3/harbor/road-stars-normal.webp",
+      "assets/r3/harbor/road-stars.webp",
+      "assets/r3/harbor/road-stone-normal.webp",
+      "assets/r3/harbor/road-stone-rough.webp",
+      "assets/r3/harbor/road-stone.webp",
+      "assets/r3/harbor/roof-band.webp",
+      "assets/r3/harbor/roof-oculus.webp",
+      "assets/r3/harbor/roof-rib.webp",
+      "assets/r3/harbor/roof-stone.webp",
+      "assets/r3/maw/elevator.glb",
+      "data/palace-colliders.json"
+     ]
+    },
+    "screenshot": true,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready U1-01 in 6822 ms"
+    ]
+   },
+   "U1-02": {
+    "wallSeconds": 19.585,
+    "level": "U1-02",
+    "ready": true,
+    "ms": 3574,
+    "error": null,
+    "phase": "R3",
+    "hero": [
+     -54.78,
+     -441.15,
+     148.46
+    ],
+    "blockedAtHero": false,
+    "geometries": 36,
+    "textures": 29,
+    "calls": 44,
+    "triangles": 403099,
+    "est": {
+     "cpuMB": 61.1,
+     "gpuMB": 79
+    },
+    "url": "?dev=1&level=U1-02",
+    "movedAfterWalk": 1.16,
+    "heroAfterWalk": [
+     -53.62,
+     -441.15,
+     148.46
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 5,
+    "assets": {
+     "count": 38,
+     "MiB": 24.4,
+     "files": [
+      "assets/Sin_hero_runtime.glb",
+      "assets/ktx2/4cv0-rx5sve-1r31vq4.ktx2",
+      "assets/ktx2/4irg-7n6051-1aid0kh.ktx2",
+      "assets/ktx2/5v26-17oijkg-1cjfyjm.ktx2",
+      "assets/ktx2/9q9t-1uznd8u-1hsq3o8.ktx2",
+      "assets/ktx2/k2nu-6irt01-41jg04.ktx2",
+      "assets/ktx2/kyaf-107tleb-1ahwk5s.ktx2",
+      "assets/ktx2/manifest.json",
+      "assets/r3/harbor/architecture.glb",
+      "assets/r3/harbor/dais-border-normal.webp",
+      "assets/r3/harbor/dais-border.webp",
+      "assets/r3/harbor/dais-gold-normal.webp",
+      "assets/r3/harbor/dais-gold.webp",
+      "assets/r3/harbor/distant-ruins.glb",
+      "assets/r3/harbor/floor-inlay.webp",
+      "assets/r3/harbor/paving-normal.webp",
+      "assets/r3/harbor/paving-rough.webp",
+      "assets/r3/harbor/paving.webp",
+      "assets/r3/harbor/road-edge.webp",
+      "assets/r3/harbor/road-guardians.glb",
+      "assets/r3/harbor/road-medallion.webp",
+      "assets/r3/harbor/road-palms.webp",
+      "assets/r3/harbor/road-rail-normal.webp",
+      "assets/r3/harbor/road-rail.webp",
+      "assets/r3/harbor/road-relief-normal.webp",
+      "assets/r3/harbor/road-relief.webp",
+      "assets/r3/harbor/road-script.webp",
+      "assets/r3/harbor/road-stars-normal.webp",
+      "assets/r3/harbor/road-stars.webp",
+      "assets/r3/harbor/road-stone-normal.webp",
+      "assets/r3/harbor/road-stone-rough.webp",
+      "assets/r3/harbor/road-stone.webp",
+      "assets/r3/harbor/roof-band.webp",
+      "assets/r3/harbor/roof-oculus.webp",
+      "assets/r3/harbor/roof-rib.webp",
+      "assets/r3/harbor/roof-stone.webp",
+      "assets/r3/maw/elevator.glb",
+      "data/palace-colliders.json"
+     ]
+    },
+    "screenshot": true,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready U1-02 in 3574 ms"
+    ]
+   },
+   "U1-03": {
+    "wallSeconds": 28.626,
+    "level": "U1-03",
+    "ready": true,
+    "ms": 5286,
+    "error": null,
+    "phase": "R3",
+    "hero": [
+     20.22,
+     -444.15,
+     148.46
+    ],
+    "blockedAtHero": false,
+    "geometries": 35,
+    "textures": 29,
+    "calls": 38,
+    "triangles": 386717,
+    "est": {
+     "cpuMB": 61.1,
+     "gpuMB": 79
+    },
+    "url": "?dev=1&level=U1-03",
+    "movedAfterWalk": 1.16,
+    "heroAfterWalk": [
+     21.38,
+     -444.15,
+     148.46
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 5,
+    "assets": {
+     "count": 38,
+     "MiB": 24.4,
+     "files": [
+      "assets/Sin_hero_runtime.glb",
+      "assets/ktx2/4cv0-rx5sve-1r31vq4.ktx2",
+      "assets/ktx2/4irg-7n6051-1aid0kh.ktx2",
+      "assets/ktx2/5v26-17oijkg-1cjfyjm.ktx2",
+      "assets/ktx2/9q9t-1uznd8u-1hsq3o8.ktx2",
+      "assets/ktx2/k2nu-6irt01-41jg04.ktx2",
+      "assets/ktx2/kyaf-107tleb-1ahwk5s.ktx2",
+      "assets/ktx2/manifest.json",
+      "assets/r3/harbor/architecture.glb",
+      "assets/r3/harbor/dais-border-normal.webp",
+      "assets/r3/harbor/dais-border.webp",
+      "assets/r3/harbor/dais-gold-normal.webp",
+      "assets/r3/harbor/dais-gold.webp",
+      "assets/r3/harbor/distant-ruins.glb",
+      "assets/r3/harbor/floor-inlay.webp",
+      "assets/r3/harbor/paving-normal.webp",
+      "assets/r3/harbor/paving-rough.webp",
+      "assets/r3/harbor/paving.webp",
+      "assets/r3/harbor/road-edge.webp",
+      "assets/r3/harbor/road-guardians.glb",
+      "assets/r3/harbor/road-medallion.webp",
+      "assets/r3/harbor/road-palms.webp",
+      "assets/r3/harbor/road-rail-normal.webp",
+      "assets/r3/harbor/road-rail.webp",
+      "assets/r3/harbor/road-relief-normal.webp",
+      "assets/r3/harbor/road-relief.webp",
+      "assets/r3/harbor/road-script.webp",
+      "assets/r3/harbor/road-stars-normal.webp",
+      "assets/r3/harbor/road-stars.webp",
+      "assets/r3/harbor/road-stone-normal.webp",
+      "assets/r3/harbor/road-stone-rough.webp",
+      "assets/r3/harbor/road-stone.webp",
+      "assets/r3/harbor/roof-band.webp",
+      "assets/r3/harbor/roof-oculus.webp",
+      "assets/r3/harbor/roof-rib.webp",
+      "assets/r3/harbor/roof-stone.webp",
+      "assets/r3/maw/elevator.glb",
+      "data/palace-colliders.json"
+     ]
+    },
+    "screenshot": true,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready U1-03 in 5286 ms"
+    ]
+   }
+  }
+ }
+}

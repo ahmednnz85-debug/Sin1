@@ -1,0 +1,35 @@
+{
+  "url": "http://127.0.0.1:3111/index.html?dev=1&level=U1-01",
+  "environment": "Chromium/SwiftShader on Linux, 960x540",
+  "checks": {
+    "spawnInCabin": true
+  },
+  "views": {
+    "east-bank": {
+      "frameMs": 1287.1,
+      "draws": 69,
+      "triangles": 597187,
+      "cpuMiB": 34,
+      "gpuMiB": 140.9
+    },
+    "bridge-join": {
+      "frameMs": 1752.9,
+      "draws": 39,
+      "triangles": 314965,
+      "cpuMiB": 34,
+      "gpuMiB": 140.9
+    }
+  },
+  "errors": [],
+  "bootSeconds": 3.702,
+  "entry": {
+    "area": "U1-01",
+    "underworldVisible": true,
+    "mawPresent": false,
+    "arrivalCabin": true,
+    "heroFromCabin": 0,
+    "heroAboveDock": 0.58,
+    "blocked": false,
+    "status": "hub-waited"
+  }
+}
