@@ -1,0 +1,683 @@
+{
+  "source": "assets/0A9D3E21-25A7-4290-9722-B68258367588.png",
+  "sourceSha256": "a0ae4ac0aa30db958c7ef09af96fb0bb5fefadb39d7fa9eeb0662e668eaae5ea",
+  "space": "sRGB",
+  "coverage": "straight alpha",
+  "gutter": 8,
+  "size": [
+    1024,
+    512
+  ],
+  "regions": [
+    [
+      0.00830078125,
+      0.6552734375,
+      0.2021484375,
+      0.328125
+    ],
+    [
+      0.25830078125,
+      0.6552734375,
+      0.2060546875,
+      0.328125
+    ],
+    [
+      0.50830078125,
+      0.6552734375,
+      0.2001953125,
+      0.328125
+    ],
+    [
+      0.75830078125,
+      0.6552734375,
+      0.201171875,
+      0.328125
+    ],
+    [
+      0.00830078125,
+      0.2880859375,
+      0.203125,
+      0.1953125
+    ],
+    [
+      0.25830078125,
+      0.2880859375,
+      0.201171875,
+      0.1953125
+    ]
+  ],
+  "tiles": [
+    {
+      "file": "energy/energy-01-01.png",
+      "sourceRect": [
+        0,
+        0,
+        208,
+        169
+      ],
+      "size": [
+        208,
+        169
+      ]
+    },
+    {
+      "file": "energy/energy-01-02.png",
+      "sourceRect": [
+        208,
+        0,
+        420,
+        169
+      ],
+      "size": [
+        212,
+        169
+      ]
+    },
+    {
+      "file": "energy/energy-01-03.png",
+      "sourceRect": [
+        420,
+        0,
+        632,
+        169
+      ],
+      "size": [
+        212,
+        169
+      ]
+    },
+    {
+      "file": "energy/energy-01-04.png",
+      "sourceRect": [
+        632,
+        0,
+        841,
+        169
+      ],
+      "size": [
+        209,
+        169
+      ]
+    },
+    {
+      "file": "energy/energy-01-05.png",
+      "sourceRect": [
+        841,
+        0,
+        1047,
+        169
+      ],
+      "size": [
+        206,
+        169
+      ]
+    },
+    {
+      "file": "energy/energy-01-06.png",
+      "sourceRect": [
+        1047,
+        0,
+        1254,
+        169
+      ],
+      "size": [
+        207,
+        169
+      ]
+    },
+    {
+      "file": "energy/energy-02-01.png",
+      "sourceRect": [
+        0,
+        169,
+        208,
+        330
+      ],
+      "size": [
+        208,
+        161
+      ]
+    },
+    {
+      "file": "energy/energy-02-02.png",
+      "sourceRect": [
+        208,
+        169,
+        420,
+        330
+      ],
+      "size": [
+        212,
+        161
+      ]
+    },
+    {
+      "file": "energy/energy-02-03.png",
+      "sourceRect": [
+        420,
+        169,
+        632,
+        330
+      ],
+      "size": [
+        212,
+        161
+      ]
+    },
+    {
+      "file": "energy/energy-02-04.png",
+      "sourceRect": [
+        632,
+        169,
+        841,
+        330
+      ],
+      "size": [
+        209,
+        161
+      ]
+    },
+    {
+      "file": "energy/energy-02-05.png",
+      "sourceRect": [
+        841,
+        169,
+        1047,
+        330
+      ],
+      "size": [
+        206,
+        161
+      ]
+    },
+    {
+      "file": "energy/energy-02-06.png",
+      "sourceRect": [
+        1047,
+        169,
+        1254,
+        330
+      ],
+      "size": [
+        207,
+        161
+      ]
+    },
+    {
+      "file": "energy/energy-03-01.png",
+      "sourceRect": [
+        0,
+        330,
+        208,
+        498
+      ],
+      "size": [
+        208,
+        168
+      ]
+    },
+    {
+      "file": "energy/energy-03-02.png",
+      "sourceRect": [
+        208,
+        330,
+        420,
+        498
+      ],
+      "size": [
+        212,
+        168
+      ]
+    },
+    {
+      "file": "energy/energy-03-03.png",
+      "sourceRect": [
+        420,
+        330,
+        632,
+        498
+      ],
+      "size": [
+        212,
+        168
+      ]
+    },
+    {
+      "file": "energy/energy-03-04.png",
+      "sourceRect": [
+        632,
+        330,
+        841,
+        498
+      ],
+      "size": [
+        209,
+        168
+      ]
+    },
+    {
+      "file": "energy/energy-03-05.png",
+      "sourceRect": [
+        841,
+        330,
+        1047,
+        498
+      ],
+      "size": [
+        206,
+        168
+      ]
+    },
+    {
+      "file": "energy/energy-03-06.png",
+      "sourceRect": [
+        1047,
+        330,
+        1254,
+        498
+      ],
+      "size": [
+        207,
+        168
+      ]
+    },
+    {
+      "file": "energy/energy-04-01.png",
+      "sourceRect": [
+        0,
+        498,
+        208,
+        637
+      ],
+      "size": [
+        208,
+        139
+      ]
+    },
+    {
+      "file": "energy/energy-04-02.png",
+      "sourceRect": [
+        208,
+        498,
+        420,
+        637
+      ],
+      "size": [
+        212,
+        139
+      ]
+    },
+    {
+      "file": "energy/energy-04-03.png",
+      "sourceRect": [
+        420,
+        498,
+        632,
+        637
+      ],
+      "size": [
+        212,
+        139
+      ]
+    },
+    {
+      "file": "energy/energy-04-04.png",
+      "sourceRect": [
+        632,
+        498,
+        841,
+        637
+      ],
+      "size": [
+        209,
+        139
+      ]
+    },
+    {
+      "file": "energy/energy-04-05.png",
+      "sourceRect": [
+        841,
+        498,
+        1047,
+        637
+      ],
+      "size": [
+        206,
+        139
+      ]
+    },
+    {
+      "file": "energy/energy-04-06.png",
+      "sourceRect": [
+        1047,
+        498,
+        1254,
+        637
+      ],
+      "size": [
+        207,
+        139
+      ]
+    },
+    {
+      "file": "energy/energy-05-01.png",
+      "sourceRect": [
+        0,
+        637,
+        208,
+        783
+      ],
+      "size": [
+        208,
+        146
+      ]
+    },
+    {
+      "file": "energy/energy-05-02.png",
+      "sourceRect": [
+        208,
+        637,
+        420,
+        783
+      ],
+      "size": [
+        212,
+        146
+      ]
+    },
+    {
+      "file": "energy/energy-05-03.png",
+      "sourceRect": [
+        420,
+        637,
+        632,
+        783
+      ],
+      "size": [
+        212,
+        146
+      ]
+    },
+    {
+      "file": "energy/energy-05-04.png",
+      "sourceRect": [
+        632,
+        637,
+        841,
+        783
+      ],
+      "size": [
+        209,
+        146
+      ]
+    },
+    {
+      "file": "energy/energy-05-05.png",
+      "sourceRect": [
+        841,
+        637,
+        1047,
+        783
+      ],
+      "size": [
+        206,
+        146
+      ]
+    },
+    {
+      "file": "energy/energy-05-06.png",
+      "sourceRect": [
+        1047,
+        637,
+        1254,
+        783
+      ],
+      "size": [
+        207,
+        146
+      ]
+    },
+    {
+      "file": "energy/energy-06-01.png",
+      "sourceRect": [
+        0,
+        783,
+        208,
+        908
+      ],
+      "size": [
+        208,
+        125
+      ]
+    },
+    {
+      "file": "energy/energy-06-02.png",
+      "sourceRect": [
+        208,
+        783,
+        420,
+        908
+      ],
+      "size": [
+        212,
+        125
+      ]
+    },
+    {
+      "file": "energy/energy-06-03.png",
+      "sourceRect": [
+        420,
+        783,
+        632,
+        908
+      ],
+      "size": [
+        212,
+        125
+      ]
+    },
+    {
+      "file": "energy/energy-06-04.png",
+      "sourceRect": [
+        632,
+        783,
+        841,
+        908
+      ],
+      "size": [
+        209,
+        125
+      ]
+    },
+    {
+      "file": "energy/energy-06-05.png",
+      "sourceRect": [
+        841,
+        783,
+        1047,
+        908
+      ],
+      "size": [
+        206,
+        125
+      ]
+    },
+    {
+      "file": "energy/energy-06-06.png",
+      "sourceRect": [
+        1047,
+        783,
+        1254,
+        908
+      ],
+      "size": [
+        207,
+        125
+      ]
+    },
+    {
+      "file": "energy/energy-07-01.png",
+      "sourceRect": [
+        0,
+        908,
+        208,
+        1009
+      ],
+      "size": [
+        208,
+        101
+      ]
+    },
+    {
+      "file": "energy/energy-07-02.png",
+      "sourceRect": [
+        208,
+        908,
+        420,
+        1009
+      ],
+      "size": [
+        212,
+        101
+      ]
+    },
+    {
+      "file": "energy/energy-07-03.png",
+      "sourceRect": [
+        420,
+        908,
+        632,
+        1009
+      ],
+      "size": [
+        212,
+        101
+      ]
+    },
+    {
+      "file": "energy/energy-07-04.png",
+      "sourceRect": [
+        632,
+        908,
+        841,
+        1009
+      ],
+      "size": [
+        209,
+        101
+      ]
+    },
+    {
+      "file": "energy/energy-07-05.png",
+      "sourceRect": [
+        841,
+        908,
+        1047,
+        1009
+      ],
+      "size": [
+        206,
+        101
+      ]
+    },
+    {
+      "file": "energy/energy-07-06.png",
+      "sourceRect": [
+        1047,
+        908,
+        1254,
+        1009
+      ],
+      "size": [
+        207,
+        101
+      ]
+    },
+    {
+      "file": "energy/energy-08-01.png",
+      "sourceRect": [
+        0,
+        1009,
+        208,
+        1234
+      ],
+      "size": [
+        208,
+        225
+      ]
+    },
+    {
+      "file": "energy/energy-08-02.png",
+      "sourceRect": [
+        208,
+        1009,
+        420,
+        1234
+      ],
+      "size": [
+        212,
+        225
+      ]
+    },
+    {
+      "file": "energy/energy-08-03.png",
+      "sourceRect": [
+        420,
+        1009,
+        632,
+        1234
+      ],
+      "size": [
+        212,
+        225
+      ]
+    },
+    {
+      "file": "energy/energy-08-04.png",
+      "sourceRect": [
+        632,
+        1009,
+        841,
+        1234
+      ],
+      "size": [
+        209,
+        225
+      ]
+    },
+    {
+      "file": "energy/energy-08-05.png",
+      "sourceRect": [
+        841,
+        1009,
+        1047,
+        1234
+      ],
+      "size": [
+        206,
+        225
+      ]
+    },
+    {
+      "file": "energy/energy-08-06.png",
+      "sourceRect": [
+        1047,
+        1009,
+        1254,
+        1234
+      ],
+      "size": [
+        207,
+        225
+      ]
+    }
+  ],
+  "regionTiles": [
+    "energy/energy-01-01.png",
+    "energy/energy-01-02.png",
+    "energy/energy-01-05.png",
+    "energy/energy-01-06.png",
+    "energy/energy-07-04.png",
+    "energy/energy-07-06.png"
+  ]
+}

@@ -1,0 +1,2220 @@
+{
+  "runtime": "Chromium / SwiftShader desktop. Mobile is Chromium touch + viewport emulation.",
+  "actions": [
+    {
+      "id": "SIN_AXE_LIGHT_TRAIL",
+      "max": {
+        "sparks": 3,
+        "dust": 0,
+        "rocks": 0,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 1
+      },
+      "wave": false,
+      "peak": 42,
+      "marker": [],
+      "duration": 0.35,
+      "stepCount": 294,
+      "memory": {
+        "geometries": 40,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 65,
+        "calls": 38,
+        "triangles": 338230,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "SIN_AXE_HEAVY_TRAIL",
+      "max": {
+        "sparks": 4,
+        "dust": 0,
+        "rocks": 0,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 1
+      },
+      "wave": false,
+      "peak": 114,
+      "marker": [],
+      "duration": 0.95,
+      "stepCount": 447,
+      "memory": {
+        "geometries": 40,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 69,
+        "calls": 34,
+        "triangles": 302470,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "SIN_AXE_COMBO_TRAIL",
+      "max": {
+        "sparks": 14,
+        "dust": 0,
+        "rocks": 2,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 1
+      },
+      "wave": false,
+      "peak": 42,
+      "marker": [
+        {
+          "id": "SIN_AXE_COMBO_TRAIL",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.5090085102645856,
+            1.3725661625718317,
+            0.9993489500288888
+          ],
+          "at": 9.225000000000117,
+          "clip": "Attack_Right",
+          "frame": 37,
+          "clipTime": 0.3083,
+          "sampled": [
+            -0.5090085102645856,
+            1.3725661625718317,
+            0.9993489500288888
+          ]
+        },
+        {
+          "id": "SIN_AXE_COMBO_TRAIL",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.39860964828235257,
+            0.6169244240389657,
+            1.0035330076517401
+          ],
+          "at": 10.333333333333387,
+          "clip": "Attack_Left",
+          "frame": 20,
+          "clipTime": 0.1667,
+          "sampled": [
+            -0.39860964828235257,
+            0.6169244240389657,
+            1.0035330076517401
+          ]
+        },
+        {
+          "id": "SIN_AXE_COMBO_TRAIL",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.7041729952425873,
+            0.8501137674471629,
+            1.0750635432059357
+          ],
+          "at": 12.191666666666615,
+          "clip": "Finisher_Heavy",
+          "frame": 93,
+          "clipTime": 0.775,
+          "sampled": [
+            -0.7041729952425873,
+            0.8501137674471629,
+            1.0750635432059357
+          ]
+        }
+      ],
+      "duration": 0.35,
+      "stepCount": 576,
+      "memory": {
+        "geometries": 40,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 72,
+        "calls": 37,
+        "triangles": 323982,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "SIN_AXE_FINISHER",
+      "max": {
+        "sparks": 23,
+        "dust": 0,
+        "rocks": 2,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 1
+      },
+      "wave": false,
+      "peak": 99,
+      "marker": [
+        {
+          "id": "SIN_AXE_FINISHER",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.7153614974132022,
+            0.9641582841189515,
+            1.082583723838096
+          ],
+          "at": 14.50833333333315,
+          "clip": "Finisher_Jump",
+          "frame": 95,
+          "clipTime": 0.7917,
+          "sampled": [
+            -0.7153614974132022,
+            0.9641582841189515,
+            1.082583723838096
+          ]
+        }
+      ],
+      "duration": 0.825,
+      "stepCount": 438,
+      "memory": {
+        "geometries": 40,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 75,
+        "calls": 38,
+        "triangles": 324032,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "SIN_AXE_METAL_IMPACT",
+      "max": {
+        "sparks": 18,
+        "dust": 0,
+        "rocks": 2,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 1
+      },
+      "wave": false,
+      "peak": 48,
+      "marker": [
+        {
+          "id": "SIN_AXE_METAL_IMPACT",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.5090085102645856,
+            1.3725661625718317,
+            0.9993489500288888
+          ],
+          "at": 17.67499999999964,
+          "clip": "Attack_Right",
+          "frame": 37,
+          "clipTime": 0.3083,
+          "sampled": [
+            -0.5090085102645856,
+            1.3725661625718317,
+            0.9993489500288888
+          ]
+        }
+      ],
+      "duration": 0.4,
+      "stepCount": 300,
+      "memory": {
+        "geometries": 40,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 78,
+        "calls": 38,
+        "triangles": 324052,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "SIN_AXE_GROUND_IMPACT",
+      "max": {
+        "sparks": 22,
+        "dust": 10,
+        "rocks": 12,
+        "decals": 1,
+        "ribbons": 1,
+        "edges": 1
+      },
+      "wave": false,
+      "peak": 99,
+      "marker": [
+        {
+          "id": "SIN_AXE_GROUND_IMPACT",
+          "kind": "impact",
+          "surface": "stone",
+          "point": [
+            0.4481184303343554,
+            0.4,
+            1.3155451376190728
+          ],
+          "at": 20.674999999999468,
+          "clip": "Finisher_Heavy",
+          "frame": 97,
+          "clipTime": 0.8083,
+          "sampled": [
+            0.4481184303343554,
+            0.4,
+            1.3155451376190728
+          ]
+        }
+      ],
+      "duration": 0.825,
+      "stepCount": 432,
+      "memory": {
+        "geometries": 40,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 81,
+        "calls": 38,
+        "triangles": 324040,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "SIN_AXE_LUNAR_BURST",
+      "max": {
+        "sparks": 22,
+        "dust": 0,
+        "rocks": 2,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 1
+      },
+      "wave": true,
+      "peak": 96,
+      "marker": [
+        {
+          "id": "SIN_AXE_LUNAR_BURST",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.7153614974132022,
+            0.9641582841189515,
+            1.082583723838096
+          ],
+          "at": 24.258333333332597,
+          "clip": "Finisher_Jump",
+          "frame": 95,
+          "clipTime": 0.7917,
+          "sampled": [
+            -0.7153614974132022,
+            0.9641582841189515,
+            1.082583723838096
+          ]
+        }
+      ],
+      "duration": 0.8,
+      "stepCount": 435,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 84,
+        "calls": 41,
+        "triangles": 324288,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "SIN_AXE_PARRY",
+      "max": {
+        "sparks": 35,
+        "dust": 0,
+        "rocks": 0,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 4
+      },
+      "wave": false,
+      "peak": 45,
+      "marker": [
+        {
+          "id": "SIN_AXE_PARRY",
+          "kind": "impact",
+          "surface": "parry",
+          "point": [
+            0.4373662146851022,
+            1.7138104433252697,
+            -1.8200488234740677
+          ],
+          "at": 27.458333333332416,
+          "clip": "Attack_Staff_Thrust",
+          "frame": 44,
+          "clipTime": 0.3667,
+          "sampled": [
+            0.4373662146851022,
+            1.7138104433252697,
+            -1.8200488234740677
+          ]
+        }
+      ],
+      "duration": 0.375,
+      "stepCount": 348,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 87,
+        "calls": 39,
+        "triangles": 324466,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "SIN_AXE_CHARGE",
+      "max": {
+        "sparks": 3,
+        "dust": 0,
+        "rocks": 0,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 1
+      },
+      "wave": false,
+      "peak": 54,
+      "marker": [],
+      "duration": 0.45,
+      "stepCount": 270,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 91,
+        "calls": 37,
+        "triangles": 303379,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_STAFF_LIGHT_TRAIL",
+      "max": {
+        "sparks": 4,
+        "dust": 0,
+        "rocks": 0,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 4
+      },
+      "wave": false,
+      "peak": 96,
+      "marker": [],
+      "duration": 0.8,
+      "stepCount": 426,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 94,
+        "calls": 37,
+        "triangles": 323970,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_STAFF_HEAVY_TRAIL",
+      "max": {
+        "sparks": 4,
+        "dust": 0,
+        "rocks": 0,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 5
+      },
+      "wave": false,
+      "peak": 111,
+      "marker": [],
+      "duration": 0.925,
+      "stepCount": 459,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 97,
+        "calls": 37,
+        "triangles": 292625,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_STAFF_BLADE_IMPACT",
+      "max": {
+        "sparks": 20,
+        "dust": 0,
+        "rocks": 2,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 4
+      },
+      "wave": false,
+      "peak": 168,
+      "marker": [
+        {
+          "id": "GUARDIAN_STAFF_BLADE_IMPACT",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            0.5411717134401545,
+            0.7467454773460566,
+            -2.004575197299949
+          ],
+          "at": 40.999999999998316,
+          "clip": "Attack_Staff_Overhead",
+          "frame": 166,
+          "clipTime": 1.3833,
+          "sampled": [
+            0.5411717134401545,
+            0.7467454773460566,
+            -2.004575197299949
+          ]
+        }
+      ],
+      "duration": 1.4,
+      "stepCount": 552,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 100,
+        "calls": 38,
+        "triangles": 299278,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_STAFF_CROWN_IMPACT",
+      "max": {
+        "sparks": 24,
+        "dust": 0,
+        "rocks": 2,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 5
+      },
+      "wave": false,
+      "peak": 231,
+      "marker": [
+        {
+          "id": "GUARDIAN_STAFF_CROWN_IMPACT",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            0.6271120435284889,
+            1.6365833860351426,
+            -1.1172618591916506
+          ],
+          "at": 46.07499999999803,
+          "clip": "Attack_Combo_02",
+          "frame": 223,
+          "clipTime": 1.8583,
+          "sampled": [
+            0.6271120435284889,
+            1.6365833860351426,
+            -1.1172618591916506
+          ]
+        }
+      ],
+      "duration": 1.925,
+      "stepCount": 771,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 103,
+        "calls": 38,
+        "triangles": 292701,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_STAFF_GROUND_SLAM",
+      "max": {
+        "sparks": 27,
+        "dust": 11,
+        "rocks": 12,
+        "decals": 1,
+        "ribbons": 1,
+        "edges": 4
+      },
+      "wave": true,
+      "peak": 192,
+      "marker": [
+        {
+          "id": "GUARDIAN_STAFF_GROUND_SLAM",
+          "kind": "impact",
+          "surface": "stone",
+          "point": [
+            0.24401453317899052,
+            0.1,
+            -0.9065584666290991
+          ],
+          "at": 52.23333333333101,
+          "clip": "Special_Ground_Slam",
+          "frame": 191,
+          "clipTime": 1.5917,
+          "sampled": [
+            0.24401453317899052,
+            0.1,
+            -0.9065584666290991
+          ]
+        }
+      ],
+      "duration": 1.6,
+      "stepCount": 648,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 107,
+        "calls": 39,
+        "triangles": 310054,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_STAFF_LEAP_SLAM",
+      "max": {
+        "sparks": 30,
+        "dust": 13,
+        "rocks": 12,
+        "decals": 1,
+        "ribbons": 1,
+        "edges": 4
+      },
+      "wave": true,
+      "peak": 228,
+      "marker": [
+        {
+          "id": "GUARDIAN_STAFF_LEAP_SLAM",
+          "kind": "impact",
+          "surface": "stone",
+          "point": [
+            0.142508040534048,
+            0.05,
+            -2.3319155912109966
+          ],
+          "at": 57.94166666666402,
+          "clip": "Special_Leap_Slam",
+          "frame": 228,
+          "clipTime": 1.9,
+          "sampled": [
+            0.142508040534048,
+            0.05,
+            -2.3319155912109966
+          ]
+        }
+      ],
+      "duration": 1.9,
+      "stepCount": 708,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 110,
+        "calls": 42,
+        "triangles": 293367,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_GOLDEN_SHOCKWAVE",
+      "max": {
+        "sparks": 24,
+        "dust": 10,
+        "rocks": 12,
+        "decals": 1,
+        "ribbons": 1,
+        "edges": 4
+      },
+      "wave": true,
+      "peak": 195,
+      "marker": [
+        {
+          "id": "GUARDIAN_GOLDEN_SHOCKWAVE",
+          "kind": "impact",
+          "surface": "stone",
+          "point": [
+            0.24401453317899052,
+            0.1,
+            -0.9065584666290991
+          ],
+          "at": 63.53333333333037,
+          "clip": "Special_Ground_Slam",
+          "frame": 191,
+          "clipTime": 1.5917,
+          "sampled": [
+            0.24401453317899052,
+            0.1,
+            -0.9065584666290991
+          ]
+        }
+      ],
+      "duration": 1.625,
+      "stepCount": 651,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 114,
+        "calls": 42,
+        "triangles": 304077,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_SPIRITUAL_BURST",
+      "max": {
+        "sparks": 26,
+        "dust": 10,
+        "rocks": 0,
+        "decals": 0,
+        "ribbons": 0,
+        "edges": 0
+      },
+      "wave": true,
+      "peak": 129,
+      "marker": [
+        {
+          "id": "GUARDIAN_SPIRITUAL_BURST",
+          "kind": "marker",
+          "surface": "seal",
+          "point": [
+            0.061168250525692074,
+            2.3454105242846315,
+            -0.32719558702761153
+          ],
+          "at": 68.4416666666672,
+          "clip": "Special_Energy_Release",
+          "frame": 129,
+          "clipTime": 1.075,
+          "sampled": [
+            0.061168250525692074,
+            2.3454105242846315,
+            -0.32719558702761153
+          ]
+        }
+      ],
+      "duration": 1.075,
+      "stepCount": 561,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 117,
+        "calls": 42,
+        "triangles": 293355,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_CHEST_SEAL_CHARGE",
+      "max": {
+        "sparks": 26,
+        "dust": 11,
+        "rocks": 0,
+        "decals": 0,
+        "ribbons": 0,
+        "edges": 0
+      },
+      "wave": false,
+      "peak": 273,
+      "marker": [
+        {
+          "id": "GUARDIAN_CHEST_SEAL_CHARGE",
+          "kind": "marker",
+          "surface": "seal",
+          "point": [
+            -0.09598079718414852,
+            2.443500379926636,
+            -0.3212670190312106
+          ],
+          "at": 74.30833333333854,
+          "clip": "Special_Seal_Activation",
+          "frame": 272,
+          "clipTime": 2.2667,
+          "sampled": [
+            -0.09598079718414852,
+            2.443500379926636,
+            -0.3212670190312106
+          ]
+        }
+      ],
+      "duration": 2.275,
+      "stepCount": 762,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 120,
+        "calls": 34,
+        "triangles": 280616,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_ENRAGED_AURA",
+      "max": {
+        "sparks": 50,
+        "dust": 16,
+        "rocks": 0,
+        "decals": 0,
+        "ribbons": 0,
+        "edges": 0
+      },
+      "wave": false,
+      "peak": 177,
+      "marker": [
+        {
+          "id": "GUARDIAN_ENRAGED_AURA",
+          "kind": "marker",
+          "surface": "seal",
+          "point": [
+            -0.07779139559483922,
+            2.262345333483409,
+            -0.3001890128285256
+          ],
+          "at": 79.85833333334296,
+          "clip": "Phase_Transition",
+          "frame": 176,
+          "clipTime": 1.4667,
+          "sampled": [
+            -0.07779139559483922,
+            2.262345333483409,
+            -0.3001890128285256
+          ]
+        }
+      ],
+      "duration": 1.475,
+      "stepCount": 837,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 124,
+        "calls": 33,
+        "triangles": 290952,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    },
+    {
+      "id": "GUARDIAN_CLAW_SLASH",
+      "max": {
+        "sparks": 22,
+        "dust": 9,
+        "rocks": 0,
+        "decals": 0,
+        "ribbons": 1,
+        "edges": 0
+      },
+      "wave": false,
+      "peak": 120,
+      "marker": [
+        {
+          "id": "GUARDIAN_CLAW_SLASH",
+          "kind": "impact",
+          "surface": "flesh",
+          "point": [
+            0.019905091232318095,
+            1.5986134432195476,
+            -1.0331047801086084
+          ],
+          "at": 86.25000000001471,
+          "clip": "Attack_Claw_Left",
+          "frame": 106,
+          "clipTime": 0.8833,
+          "sampled": [
+            0.019905091232318095,
+            1.5986134432195476,
+            -1.0331047801086084
+          ]
+        }
+      ],
+      "duration": 1,
+      "stepCount": 411,
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 127,
+        "calls": 33,
+        "triangles": 280252,
+        "points": 0,
+        "lines": 0
+      },
+      "visible": true
+    }
+  ],
+  "entry": {
+    "ready": true,
+    "sandbox": true,
+    "gameSmuggled": false,
+    "prewarm": {
+      "meshes": 59,
+      "textures": 66,
+      "slices": 34,
+      "maxSliceMs": 26.2,
+      "calibrated": 11
+    },
+    "assets": [
+      "VFXLabFloor",
+      "VFXLabSin",
+      "VFXLabGuardian",
+      "Harbor_Column",
+      "Harbor_Turquoise_Lamp",
+      "Harbor_Column",
+      "Harbor_Column",
+      "Harbor_Turquoise_Lamp",
+      "Harbor_Column",
+      "Harbor_Column",
+      "Harbor_Turquoise_Lamp",
+      "Harbor_Column",
+      "VFXLabContactSurface"
+    ]
+  },
+  "atlas": [
+    "ground",
+    "energy",
+    "sparks"
+  ],
+  "clock": {
+    "normal": 0.583,
+    "slow": 0.125
+  },
+  "team": {
+    "demo": {
+      "id": "SIN_AXE_LUNAR_BURST",
+      "mode": "demo",
+      "time": 29.067,
+      "clipTime": 1.983,
+      "clip": "Finisher_Jump",
+      "window": [
+        0.74,
+        0.94
+      ],
+      "surface": "armor",
+      "plan": null,
+      "done": true,
+      "hitCount": 10,
+      "contacts": [
+        {
+          "id": "SIN_AXE_COMBO_TRAIL",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.5090085102645856,
+            1.3725661625718317,
+            0.9993489500288888
+          ],
+          "at": 89.10000000001698,
+          "clip": "Attack_Right",
+          "frame": 37,
+          "clipTime": 0.3083,
+          "sampled": [
+            -0.5090085102645856,
+            1.3725661625718317,
+            0.9993489500288888
+          ]
+        },
+        {
+          "id": "SIN_AXE_COMBO_TRAIL",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.39860964828235257,
+            0.6169244240389657,
+            1.0035330076517401
+          ],
+          "at": 90.59166666668483,
+          "clip": "Attack_Left",
+          "frame": 20,
+          "clipTime": 0.1667,
+          "sampled": [
+            -0.39860964828235257,
+            0.6169244240389657,
+            1.0035330076517401
+          ]
+        },
+        {
+          "id": "SIN_AXE_COMBO_TRAIL",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.7041729952425873,
+            0.8501137674471629,
+            1.0750635432059357
+          ],
+          "at": 92.83333333335328,
+          "clip": "Finisher_Heavy",
+          "frame": 93,
+          "clipTime": 0.775,
+          "sampled": [
+            -0.7041729952425873,
+            0.8501137674471629,
+            1.0750635432059357
+          ]
+        },
+        {
+          "id": "GUARDIAN_STAFF_CROWN_IMPACT",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            0.6271120435284889,
+            1.6365833860351426,
+            -1.1172618591916506
+          ],
+          "at": 96.24166666668933,
+          "clip": "Attack_Combo_02",
+          "frame": 223,
+          "clipTime": 1.8583,
+          "sampled": [
+            0.6271120435284889,
+            1.6365833860351426,
+            -1.1172618591916506
+          ]
+        },
+        {
+          "id": "SIN_AXE_PARRY",
+          "kind": "impact",
+          "surface": "parry",
+          "point": [
+            0.4373662146851022,
+            1.7138104433252697,
+            -1.8200488234740677
+          ],
+          "at": 98.8000000000247,
+          "clip": "Attack_Staff_Thrust",
+          "frame": 44,
+          "clipTime": 0.3667,
+          "sampled": [
+            0.4373662146851022,
+            1.7138104433252697,
+            -1.8200488234740677
+          ]
+        },
+        {
+          "id": "GUARDIAN_STAFF_LEAP_SLAM",
+          "kind": "impact",
+          "surface": "stone",
+          "point": [
+            0.142508040534048,
+            0.05,
+            -2.3319155912109966
+          ],
+          "at": 102.40000000002756,
+          "clip": "Special_Leap_Slam",
+          "frame": 228,
+          "clipTime": 1.9,
+          "sampled": [
+            0.142508040534048,
+            0.05,
+            -2.3319155912109966
+          ]
+        },
+        {
+          "id": "GUARDIAN_CHEST_SEAL_CHARGE",
+          "kind": "marker",
+          "surface": "seal",
+          "point": [
+            -0.09598079718414852,
+            2.443500379926636,
+            -0.3212670190312106
+          ],
+          "at": 106.32500000003068,
+          "clip": "Special_Seal_Activation",
+          "frame": 272,
+          "clipTime": 2.2667,
+          "sampled": [
+            -0.09598079718414852,
+            2.443500379926636,
+            -0.3212670190312106
+          ]
+        },
+        {
+          "id": "GUARDIAN_ENRAGED_AURA",
+          "kind": "marker",
+          "surface": "seal",
+          "point": [
+            -0.07779139559483922,
+            2.262345333483409,
+            -0.3001890128285256
+          ],
+          "at": 109.15000000003293,
+          "clip": "Phase_Transition",
+          "frame": 176,
+          "clipTime": 1.4667,
+          "sampled": [
+            -0.07779139559483922,
+            2.262345333483409,
+            -0.3001890128285256
+          ]
+        },
+        {
+          "id": "GUARDIAN_SPIRITUAL_BURST",
+          "kind": "marker",
+          "surface": "seal",
+          "point": [
+            0.061168250525692074,
+            2.3454105242846315,
+            -0.32719558702761153
+          ],
+          "at": 113.80000000003663,
+          "clip": "Special_Energy_Release",
+          "frame": 129,
+          "clipTime": 1.075,
+          "sampled": [
+            0.061168250525692074,
+            2.3454105242846315,
+            -0.32719558702761153
+          ]
+        },
+        {
+          "id": "SIN_AXE_LUNAR_BURST",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.7153614974132022,
+            0.9641582841189515,
+            1.082583723838096
+          ],
+          "at": 116.66666666670558,
+          "clip": "Finisher_Jump",
+          "frame": 95,
+          "clipTime": 0.7917,
+          "sampled": [
+            -0.7153614974132022,
+            0.9641582841189515,
+            1.082583723838096
+          ]
+        }
+      ],
+      "summary": {
+        "mode": "demo",
+        "events": 10,
+        "id": "SIN_AXE_LUNAR_BURST"
+      },
+      "paused": true,
+      "stepCount": 14256,
+      "fps": 3.915177222034456,
+      "resize": [
+        599,
+        341
+      ],
+      "fx": {
+        "enabled": true,
+        "tier": 0.5,
+        "impacts": 117,
+        "stone": 9,
+        "metal": 0,
+        "armor": 19,
+        "flesh": 2,
+        "spirit": 84,
+        "parry": 3,
+        "samples": 102,
+        "activeSparks": 0,
+        "activeDust": 0,
+        "rocks": 0,
+        "cracks": 0,
+        "wave": false,
+        "activeRibbons": 0,
+        "activeEdges": 0,
+        "total": 117,
+        "last": {
+          "id": "SIN_AXE_LUNAR_BURST",
+          "kind": "impact",
+          "surface": "armor",
+          "point": [
+            -0.7153614974132022,
+            0.9641582841189515,
+            1.082583723838096
+          ],
+          "at": 116.66666666670558
+        },
+        "atlases": [
+          "ground",
+          "energy",
+          "sparks"
+        ]
+      },
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 130,
+        "calls": 34,
+        "triangles": 280238,
+        "points": 0,
+        "lines": 0
+      },
+      "estimated": {
+        "t": 1795864863426,
+        "phase": "vfx-lab",
+        "room": "—",
+        "cityReleased": false,
+        "geometries": 41,
+        "textures": 72,
+        "programs": 19,
+        "calls": 33,
+        "triangles": 290952,
+        "cpuImgMB": 69.2,
+        "cpuGeoMB": 11.8,
+        "cpuGltfMB": 0,
+        "cpuMB": 81,
+        "gpuTexMB": 84.2,
+        "gpuGeoMB": 11.8,
+        "gpuRTMB": 2.6,
+        "gpuMB": 98.6,
+        "programsMB": 11.4,
+        "heap": {
+          "usedMB": 124.9,
+          "totalMB": 141.1,
+          "limitMB": 3586
+        },
+        "texMB": 84.2,
+        "geoMB": 11.8,
+        "processMB": 298.9,
+        "webkitMB": 64,
+        "texSources": 69
+      },
+      "root": "VFXLabStage",
+      "assets": [
+        "VFXLabFloor",
+        "VFXLabSin",
+        "VFXLabGuardian",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "VFXLabContactSurface"
+      ]
+    },
+    "wall": {
+      "id": "SIN_AXE_GROUND_IMPACT",
+      "mode": "single",
+      "time": 2.767,
+      "clipTime": 2.767,
+      "clip": "Finisher_Heavy",
+      "window": [
+        0.7,
+        0.96
+      ],
+      "surface": "wall",
+      "plan": "wall",
+      "done": true,
+      "hitCount": 1,
+      "contacts": [
+        {
+          "id": "SIN_AXE_GROUND_IMPACT",
+          "kind": "impact",
+          "surface": "wall",
+          "point": [
+            -0.6773518657018635,
+            0.8654343974117119,
+            0.9494304870332116
+          ],
+          "at": 119.56666666670789,
+          "clip": "Finisher_Heavy",
+          "frame": 93,
+          "clipTime": 0.775,
+          "sampled": [
+            -0.6773518657018635,
+            0.8654343974117119,
+            0.9494304870332116
+          ]
+        }
+      ],
+      "summary": {
+        "mode": "single",
+        "events": 1,
+        "id": "SIN_AXE_GROUND_IMPACT"
+      },
+      "paused": true,
+      "stepCount": 14736,
+      "fps": 3.915177222034456,
+      "resize": [
+        768,
+        438
+      ],
+      "fx": {
+        "enabled": true,
+        "tier": 0.72,
+        "impacts": 118,
+        "stone": 10,
+        "metal": 0,
+        "armor": 19,
+        "flesh": 2,
+        "spirit": 84,
+        "parry": 3,
+        "samples": 102,
+        "activeSparks": 0,
+        "activeDust": 0,
+        "rocks": 0,
+        "cracks": 1,
+        "wave": false,
+        "activeRibbons": 0,
+        "activeEdges": 0,
+        "total": 118,
+        "last": {
+          "id": "SIN_AXE_GROUND_IMPACT",
+          "kind": "impact",
+          "surface": "wall",
+          "point": [
+            -0.6773518657018635,
+            0.8654343974117119,
+            0.9494304870332116
+          ],
+          "at": 119.56666666670789
+        },
+        "atlases": [
+          "ground",
+          "energy",
+          "sparks"
+        ]
+      },
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 130,
+        "calls": 34,
+        "triangles": 280238,
+        "points": 0,
+        "lines": 0
+      },
+      "estimated": {
+        "t": 1795864863426,
+        "phase": "vfx-lab",
+        "room": "—",
+        "cityReleased": false,
+        "geometries": 41,
+        "textures": 72,
+        "programs": 19,
+        "calls": 33,
+        "triangles": 290952,
+        "cpuImgMB": 69.2,
+        "cpuGeoMB": 11.8,
+        "cpuGltfMB": 0,
+        "cpuMB": 81,
+        "gpuTexMB": 84.2,
+        "gpuGeoMB": 11.8,
+        "gpuRTMB": 2.6,
+        "gpuMB": 98.6,
+        "programsMB": 11.4,
+        "heap": {
+          "usedMB": 124.9,
+          "totalMB": 141.1,
+          "limitMB": 3586
+        },
+        "texMB": 84.2,
+        "geoMB": 11.8,
+        "processMB": 298.9,
+        "webkitMB": 64,
+        "texSources": 69
+      },
+      "root": "VFXLabStage",
+      "assets": [
+        "VFXLabFloor",
+        "VFXLabSin",
+        "VFXLabGuardian",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "VFXLabContactSurface"
+      ]
+    },
+    "metal": {
+      "id": "SIN_AXE_METAL_IMPACT",
+      "mode": "single",
+      "time": 2.083,
+      "clipTime": 2.083,
+      "clip": "Attack_Right",
+      "window": [
+        0.27,
+        0.42
+      ],
+      "surface": "metal",
+      "plan": null,
+      "done": true,
+      "hitCount": 1,
+      "contacts": [
+        {
+          "id": "SIN_AXE_METAL_IMPACT",
+          "kind": "impact",
+          "surface": "metal",
+          "point": [
+            -0.5090085102645856,
+            1.3725661625718317,
+            0.9993489500288888
+          ],
+          "at": 123.10000000004403,
+          "clip": "Attack_Right",
+          "frame": 37,
+          "clipTime": 0.3083,
+          "sampled": [
+            -0.5090085102645856,
+            1.3725661625718317,
+            0.9993489500288888
+          ]
+        }
+      ],
+      "summary": {
+        "mode": "single",
+        "events": 1,
+        "id": "SIN_AXE_METAL_IMPACT"
+      },
+      "paused": true,
+      "stepCount": 15216,
+      "fps": 3.915177222034456,
+      "resize": [
+        768,
+        438
+      ],
+      "fx": {
+        "enabled": true,
+        "tier": 0.72,
+        "impacts": 119,
+        "stone": 10,
+        "metal": 1,
+        "armor": 19,
+        "flesh": 2,
+        "spirit": 84,
+        "parry": 3,
+        "samples": 102,
+        "activeSparks": 0,
+        "activeDust": 0,
+        "rocks": 0,
+        "cracks": 0,
+        "wave": false,
+        "activeRibbons": 0,
+        "activeEdges": 0,
+        "total": 119,
+        "last": {
+          "id": "SIN_AXE_METAL_IMPACT",
+          "kind": "impact",
+          "surface": "metal",
+          "point": [
+            -0.5090085102645856,
+            1.3725661625718317,
+            0.9993489500288888
+          ],
+          "at": 123.10000000004403
+        },
+        "atlases": [
+          "ground",
+          "energy",
+          "sparks"
+        ]
+      },
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 130,
+        "calls": 34,
+        "triangles": 280238,
+        "points": 0,
+        "lines": 0
+      },
+      "estimated": {
+        "t": 1795864863426,
+        "phase": "vfx-lab",
+        "room": "—",
+        "cityReleased": false,
+        "geometries": 41,
+        "textures": 72,
+        "programs": 19,
+        "calls": 33,
+        "triangles": 290952,
+        "cpuImgMB": 69.2,
+        "cpuGeoMB": 11.8,
+        "cpuGltfMB": 0,
+        "cpuMB": 81,
+        "gpuTexMB": 84.2,
+        "gpuGeoMB": 11.8,
+        "gpuRTMB": 2.6,
+        "gpuMB": 98.6,
+        "programsMB": 11.4,
+        "heap": {
+          "usedMB": 124.9,
+          "totalMB": 141.1,
+          "limitMB": 3586
+        },
+        "texMB": 84.2,
+        "geoMB": 11.8,
+        "processMB": 298.9,
+        "webkitMB": 64,
+        "texSources": 69
+      },
+      "root": "VFXLabStage",
+      "assets": [
+        "VFXLabFloor",
+        "VFXLabSin",
+        "VFXLabGuardian",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "VFXLabContactSurface"
+      ]
+    }
+  },
+  "perf": {
+    "simulationMs": 212.10000000149012,
+    "fixedSteps": 2982,
+    "initial": {
+      "geometries": 41,
+      "textures": 72
+    },
+    "high": {
+      "id": "GUARDIAN_STAFF_GROUND_SLAM",
+      "mode": "single",
+      "time": 1.775,
+      "clipTime": 1.775,
+      "clip": "Special_Ground_Slam",
+      "window": [
+        1.59,
+        1.88
+      ],
+      "surface": "stone",
+      "plan": "ledge",
+      "done": false,
+      "hitCount": 1,
+      "contacts": [
+        {
+          "id": "GUARDIAN_STAFF_GROUND_SLAM",
+          "kind": "impact",
+          "surface": "stone",
+          "point": [
+            0.24401453317899052,
+            0.1,
+            -0.9065584666290991
+          ],
+          "at": 128.3833333333809,
+          "clip": "Special_Ground_Slam",
+          "frame": 191,
+          "clipTime": 1.5917,
+          "sampled": [
+            0.24401453317899052,
+            0.1,
+            -0.9065584666290991
+          ]
+        }
+      ],
+      "summary": {
+        "mode": "single",
+        "events": 1,
+        "id": "SIN_AXE_METAL_IMPACT"
+      },
+      "paused": true,
+      "stepCount": 15429,
+      "fps": 3.941983620733421,
+      "resize": [
+        768,
+        438
+      ],
+      "fx": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 120,
+        "stone": 11,
+        "metal": 1,
+        "armor": 19,
+        "flesh": 2,
+        "spirit": 84,
+        "parry": 3,
+        "samples": 102,
+        "activeSparks": 25,
+        "activeDust": 16,
+        "rocks": 17,
+        "cracks": 1,
+        "wave": true,
+        "activeRibbons": 1,
+        "activeEdges": 4,
+        "total": 120,
+        "last": {
+          "id": "GUARDIAN_STAFF_GROUND_SLAM",
+          "kind": "impact",
+          "surface": "stone",
+          "point": [
+            0.24401453317899052,
+            0.1,
+            -0.9065584666290991
+          ],
+          "at": 128.3833333333809
+        },
+        "atlases": [
+          "ground",
+          "energy",
+          "sparks"
+        ]
+      },
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 131,
+        "calls": 48,
+        "triangles": 357867,
+        "points": 0,
+        "lines": 0
+      },
+      "estimated": {
+        "t": 1795864863426,
+        "phase": "vfx-lab",
+        "room": "—",
+        "cityReleased": false,
+        "geometries": 41,
+        "textures": 72,
+        "programs": 19,
+        "calls": 33,
+        "triangles": 290952,
+        "cpuImgMB": 69.2,
+        "cpuGeoMB": 11.8,
+        "cpuGltfMB": 0,
+        "cpuMB": 81,
+        "gpuTexMB": 84.2,
+        "gpuGeoMB": 11.8,
+        "gpuRTMB": 2.6,
+        "gpuMB": 98.6,
+        "programsMB": 11.4,
+        "heap": {
+          "usedMB": 124.9,
+          "totalMB": 141.1,
+          "limitMB": 3586
+        },
+        "texMB": 84.2,
+        "geoMB": 11.8,
+        "processMB": 298.9,
+        "webkitMB": 64,
+        "texSources": 69
+      },
+      "root": "VFXLabStage",
+      "assets": [
+        "VFXLabFloor",
+        "VFXLabSin",
+        "VFXLabGuardian",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "VFXLabContactSurface"
+      ]
+    },
+    "low": {
+      "id": "GUARDIAN_STAFF_GROUND_SLAM",
+      "mode": "single",
+      "time": 1.775,
+      "clipTime": 1.775,
+      "clip": "Special_Ground_Slam",
+      "window": [
+        1.59,
+        1.88
+      ],
+      "surface": "stone",
+      "plan": "ledge",
+      "done": false,
+      "hitCount": 1,
+      "contacts": [
+        {
+          "id": "GUARDIAN_STAFF_GROUND_SLAM",
+          "kind": "impact",
+          "surface": "stone",
+          "point": [
+            0.24401453317899052,
+            0.1,
+            -0.9065584666290991
+          ],
+          "at": 130.1583333333793,
+          "clip": "Special_Ground_Slam",
+          "frame": 191,
+          "clipTime": 1.5917,
+          "sampled": [
+            0.24401453317899052,
+            0.1,
+            -0.9065584666290991
+          ]
+        }
+      ],
+      "summary": {
+        "mode": "single",
+        "events": 1,
+        "id": "SIN_AXE_METAL_IMPACT"
+      },
+      "paused": true,
+      "stepCount": 15642,
+      "fps": 3.941983620733421,
+      "resize": [
+        599,
+        341
+      ],
+      "fx": {
+        "enabled": true,
+        "tier": 0.5,
+        "impacts": 121,
+        "stone": 12,
+        "metal": 1,
+        "armor": 19,
+        "flesh": 2,
+        "spirit": 84,
+        "parry": 3,
+        "samples": 102,
+        "activeSparks": 11,
+        "activeDust": 8,
+        "rocks": 9,
+        "cracks": 1,
+        "wave": true,
+        "activeRibbons": 1,
+        "activeEdges": 4,
+        "total": 121,
+        "last": {
+          "id": "GUARDIAN_STAFF_GROUND_SLAM",
+          "kind": "impact",
+          "surface": "stone",
+          "point": [
+            0.24401453317899052,
+            0.1,
+            -0.9065584666290991
+          ],
+          "at": 130.1583333333793
+        },
+        "atlases": [
+          "ground",
+          "energy",
+          "sparks"
+        ]
+      },
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      },
+      "draw": {
+        "frame": 132,
+        "calls": 48,
+        "triangles": 357661,
+        "points": 0,
+        "lines": 0
+      },
+      "estimated": {
+        "t": 1795864863426,
+        "phase": "vfx-lab",
+        "room": "—",
+        "cityReleased": false,
+        "geometries": 41,
+        "textures": 72,
+        "programs": 19,
+        "calls": 33,
+        "triangles": 290952,
+        "cpuImgMB": 69.2,
+        "cpuGeoMB": 11.8,
+        "cpuGltfMB": 0,
+        "cpuMB": 81,
+        "gpuTexMB": 84.2,
+        "gpuGeoMB": 11.8,
+        "gpuRTMB": 2.6,
+        "gpuMB": 98.6,
+        "programsMB": 11.4,
+        "heap": {
+          "usedMB": 124.9,
+          "totalMB": 141.1,
+          "limitMB": 3586
+        },
+        "texMB": 84.2,
+        "geoMB": 11.8,
+        "processMB": 298.9,
+        "webkitMB": 64,
+        "texSources": 69
+      },
+      "root": "VFXLabStage",
+      "assets": [
+        "VFXLabFloor",
+        "VFXLabSin",
+        "VFXLabGuardian",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "Harbor_Column",
+        "Harbor_Turquoise_Lamp",
+        "Harbor_Column",
+        "VFXLabContactSurface"
+      ]
+    },
+    "before": {
+      "geometries": 41,
+      "textures": 72
+    },
+    "after": {
+      "ms": 0.900000000372529,
+      "draw": {
+        "frame": 133,
+        "calls": 38,
+        "triangles": 344504,
+        "points": 0,
+        "lines": 0
+      },
+      "memory": {
+        "geometries": 41,
+        "textures": 72
+      }
+    },
+    "estimates": {
+      "t": 1795864865211,
+      "phase": "VFX-LAB",
+      "room": "—",
+      "cityReleased": false,
+      "geometries": 41,
+      "textures": 72,
+      "programs": 19,
+      "calls": 38,
+      "triangles": 344504,
+      "cpuImgMB": 69.2,
+      "cpuGeoMB": 11.8,
+      "cpuGltfMB": 0,
+      "cpuMB": 81,
+      "gpuTexMB": 84.2,
+      "gpuGeoMB": 11.8,
+      "gpuRTMB": 1.6,
+      "gpuMB": 97.6,
+      "programsMB": 11.4,
+      "heap": {
+        "usedMB": 124.9,
+        "totalMB": 141.1,
+        "limitMB": 3586
+      },
+      "texMB": 84.2,
+      "geoMB": 11.8,
+      "processMB": 297.9,
+      "webkitMB": 64,
+      "texSources": 69
+    },
+    "renderSubmitMs": [
+      0.5,
+      0.19999999925494194,
+      0.8000000007450581,
+      0.40000000037252903,
+      0.40000000037252903,
+      0.2999999988824129,
+      0.30000000074505806,
+      0.2999999988824129
+    ],
+    "churn": [
+      23,
+      13,
+      20,
+      12,
+      24,
+      13,
+      30,
+      16,
+      20,
+      14,
+      24,
+      15,
+      21,
+      16
+    ],
+    "rest": {
+      "enabled": true,
+      "tier": 0.5,
+      "impacts": 135,
+      "stone": 26,
+      "metal": 1,
+      "armor": 19,
+      "flesh": 2,
+      "spirit": 84,
+      "parry": 3,
+      "samples": 102,
+      "activeSparks": 0,
+      "activeDust": 0,
+      "rocks": 0,
+      "cracks": 0,
+      "wave": false,
+      "activeRibbons": 0,
+      "activeEdges": 0,
+      "total": 135,
+      "last": {
+        "id": "GUARDIAN_STAFF_GROUND_SLAM",
+        "kind": "impact",
+        "surface": "stone",
+        "point": [
+          0.24401453317899052,
+          0.1,
+          -0.9065584666290991
+        ],
+        "at": 155.0083333333567
+      },
+      "atlases": [
+        "ground",
+        "energy",
+        "sparks"
+      ]
+    }
+  },
+  "frameIntervals": {
+    "idle": [
+      16.6,
+      16.7,
+      33.3,
+      66.6,
+      16.8,
+      33.3,
+      16.6,
+      16.7,
+      16.7,
+      266.7,
+      283.2,
+      16.7
+    ],
+    "active": [
+      16.7,
+      16.7,
+      16.7,
+      16.6,
+      16.7,
+      16.7,
+      16.6,
+      16.7,
+      33.4,
+      16.6,
+      16.7,
+      1766.5
+    ]
+  },
+  "sinFilm": [
+    {
+      "id": "SIN_AXE_LIGHT_TRAIL",
+      "start": 0,
+      "end": 18
+    },
+    {
+      "id": "SIN_AXE_HEAVY_TRAIL",
+      "start": 18,
+      "end": 42
+    },
+    {
+      "id": "SIN_AXE_COMBO_TRAIL",
+      "start": 42,
+      "end": 81
+    },
+    {
+      "id": "SIN_AXE_LUNAR_BURST",
+      "start": 81,
+      "end": 106
+    },
+    {
+      "id": "SIN_AXE_PARRY",
+      "start": 106,
+      "end": 128
+    }
+  ],
+  "guardianFilm": [
+    {
+      "id": "GUARDIAN_STAFF_BLADE_IMPACT",
+      "start": 0,
+      "end": 28
+    },
+    {
+      "id": "GUARDIAN_STAFF_CROWN_IMPACT",
+      "start": 28,
+      "end": 56
+    },
+    {
+      "id": "GUARDIAN_STAFF_GROUND_SLAM",
+      "start": 56,
+      "end": 84
+    },
+    {
+      "id": "GUARDIAN_STAFF_LEAP_SLAM",
+      "start": 84,
+      "end": 112
+    },
+    {
+      "id": "GUARDIAN_SPIRITUAL_BURST",
+      "start": 112,
+      "end": 140
+    },
+    {
+      "id": "GUARDIAN_ENRAGED_AURA",
+      "start": 140,
+      "end": 168
+    }
+  ],
+  "duelFilm": [
+    "Attack_Right",
+    "Attack_Right",
+    "Attack_Right",
+    "Attack_Right",
+    "Attack_Right",
+    "Attack_Right",
+    "Attack_Left",
+    "Attack_Left",
+    "Attack_Left",
+    "Attack_Left",
+    "Attack_Left",
+    "Attack_Left",
+    "Attack_Left",
+    "Attack_Left",
+    "Attack_Left",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Finisher_Heavy",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Combo_02",
+    "Attack_Staff_Thrust",
+    "Attack_Staff_Thrust",
+    "Attack_Staff_Thrust",
+    "Attack_Staff_Thrust",
+    "Attack_Staff_Thrust",
+    "Attack_Staff_Thrust",
+    "Attack_Staff_Thrust",
+    "Attack_Staff_Thrust",
+    "Attack_Staff_Thrust",
+    "Attack_Staff_Thrust",
+    "Attack_Staff_Thrust",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Leap_Slam",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Special_Seal_Activation",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Phase_Transition",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Special_Energy_Release",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump",
+    "Finisher_Jump"
+  ],
+  "requests": [
+    "/vfx-lab/area.js",
+    "/vfx-lab/laboratory.mjs",
+    "/vfx-lab/manager.mjs",
+    "/vfx-lab/choreography.mjs",
+    "/vfx-lab/presets.mjs",
+    "/vfx-lab/atlas.mjs",
+    "/vfx-lab/laboratory.css",
+    "/vfx-lab/shaders/material.glsl",
+    "/vfx-lab/shaders/edge.frag.glsl",
+    "/vfx-lab/shaders/ribbon.frag.glsl",
+    "/vfx-lab/shaders/sparks.frag.glsl",
+    "/vfx-lab/shaders/dust.frag.glsl",
+    "/vfx-lab/shaders/decal.frag.glsl",
+    "/vfx-lab/shaders/wave.frag.glsl",
+    "/assets/Sin_hero_runtime.glb",
+    "/assets/Guardian_of_the_Covenant.glb",
+    "/assets/r3/harbor/architecture.glb",
+    "/assets/r3/harbor/road-stone.webp",
+    "/assets/r3/harbor/road-stone-normal.webp",
+    "/assets/r3/harbor/road-stone-rough.webp",
+    "/assets/r3/harbor/road-medallion.webp",
+    "/vfx-lab/materials/ground/regions.json",
+    "/vfx-lab/materials/energy/regions.json",
+    "/vfx-lab/materials/sparks/regions.json",
+    "/vfx-lab/materials/ground/atlas.webp",
+    "/vfx-lab/materials/energy/atlas.webp",
+    "/vfx-lab/materials/sparks/atlas.webp"
+  ],
+  "errors": [],
+  "phone": {
+    "ready": true,
+    "state": true,
+    "width": 393
+  }
+}

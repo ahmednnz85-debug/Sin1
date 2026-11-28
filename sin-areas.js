@@ -71,6 +71,10 @@
     },
     chapters: () => [...chapters.values()].sort((a, b) => a.order - b.order),
     chapterOf: stage => chapters.get(stage) || null,
+    sandboxFor(id) {
+      const area = statics.find(entry => entry.id === id);
+      return area && chapters.get(area.stage)?.sandbox;
+    },
     // All areas: static registrations plus every provider, de-duplicated,
     // grouped and ordered. A failing provider is reported, not fatal.
     list() {

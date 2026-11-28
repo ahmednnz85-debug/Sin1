@@ -1,0 +1,397 @@
+{
+  "source": "assets/1F9C927B-4439-48C5-86A6-F5E9C8C2C7BD.png",
+  "sourceSha256": "51eb4654a9ca83249ae42c0811b4de0c11633c7fd75b208d4c0158ef4209b5f2",
+  "space": "sRGB",
+  "coverage": "straight alpha",
+  "gutter": 8,
+  "size": [
+    1024,
+    512
+  ],
+  "regions": [
+    [
+      0.00830078125,
+      0.6455078125,
+      0.2333984375,
+      0.337890625
+    ],
+    [
+      0.25830078125,
+      0.7470703125,
+      0.2333984375,
+      0.236328125
+    ],
+    [
+      0.50830078125,
+      0.5673828125,
+      0.1513671875,
+      0.416015625
+    ],
+    [
+      0.75830078125,
+      0.5673828125,
+      0.162109375,
+      0.416015625
+    ],
+    [
+      0.00830078125,
+      0.0673828125,
+      0.1669921875,
+      0.416015625
+    ],
+    [
+      0.25830078125,
+      0.1337890625,
+      0.2333984375,
+      0.349609375
+    ]
+  ],
+  "tiles": [
+    {
+      "file": "ground/ground-01-01.png",
+      "sourceRect": [
+        0,
+        0,
+        313,
+        227
+      ],
+      "size": [
+        313,
+        227
+      ]
+    },
+    {
+      "file": "ground/ground-01-02.png",
+      "sourceRect": [
+        313,
+        0,
+        628,
+        227
+      ],
+      "size": [
+        315,
+        227
+      ]
+    },
+    {
+      "file": "ground/ground-01-03.png",
+      "sourceRect": [
+        628,
+        0,
+        944,
+        227
+      ],
+      "size": [
+        316,
+        227
+      ]
+    },
+    {
+      "file": "ground/ground-01-04.png",
+      "sourceRect": [
+        944,
+        0,
+        1254,
+        227
+      ],
+      "size": [
+        310,
+        227
+      ]
+    },
+    {
+      "file": "ground/ground-02-01.png",
+      "sourceRect": [
+        0,
+        227,
+        313,
+        447
+      ],
+      "size": [
+        313,
+        220
+      ]
+    },
+    {
+      "file": "ground/ground-02-02.png",
+      "sourceRect": [
+        313,
+        227,
+        628,
+        447
+      ],
+      "size": [
+        315,
+        220
+      ]
+    },
+    {
+      "file": "ground/ground-02-03.png",
+      "sourceRect": [
+        628,
+        227,
+        944,
+        447
+      ],
+      "size": [
+        316,
+        220
+      ]
+    },
+    {
+      "file": "ground/ground-02-04.png",
+      "sourceRect": [
+        944,
+        227,
+        1254,
+        447
+      ],
+      "size": [
+        310,
+        220
+      ]
+    },
+    {
+      "file": "ground/ground-03-01.png",
+      "sourceRect": [
+        0,
+        447,
+        313,
+        661
+      ],
+      "size": [
+        313,
+        214
+      ]
+    },
+    {
+      "file": "ground/ground-03-02.png",
+      "sourceRect": [
+        313,
+        447,
+        628,
+        661
+      ],
+      "size": [
+        315,
+        214
+      ]
+    },
+    {
+      "file": "ground/ground-03-03.png",
+      "sourceRect": [
+        628,
+        447,
+        944,
+        661
+      ],
+      "size": [
+        316,
+        214
+      ]
+    },
+    {
+      "file": "ground/ground-03-04.png",
+      "sourceRect": [
+        944,
+        447,
+        1254,
+        661
+      ],
+      "size": [
+        310,
+        214
+      ]
+    },
+    {
+      "file": "ground/ground-04-01.png",
+      "sourceRect": [
+        0,
+        661,
+        313,
+        851
+      ],
+      "size": [
+        313,
+        190
+      ]
+    },
+    {
+      "file": "ground/ground-04-02.png",
+      "sourceRect": [
+        313,
+        661,
+        628,
+        851
+      ],
+      "size": [
+        315,
+        190
+      ]
+    },
+    {
+      "file": "ground/ground-04-03.png",
+      "sourceRect": [
+        628,
+        661,
+        944,
+        851
+      ],
+      "size": [
+        316,
+        190
+      ]
+    },
+    {
+      "file": "ground/ground-04-04.png",
+      "sourceRect": [
+        944,
+        661,
+        1254,
+        851
+      ],
+      "size": [
+        310,
+        190
+      ]
+    },
+    {
+      "file": "ground/ground-05-01.png",
+      "sourceRect": [
+        0,
+        851,
+        313,
+        1011
+      ],
+      "size": [
+        313,
+        160
+      ]
+    },
+    {
+      "file": "ground/ground-05-02.png",
+      "sourceRect": [
+        313,
+        851,
+        628,
+        1011
+      ],
+      "size": [
+        315,
+        160
+      ]
+    },
+    {
+      "file": "ground/ground-05-03.png",
+      "sourceRect": [
+        628,
+        851,
+        944,
+        1011
+      ],
+      "size": [
+        316,
+        160
+      ]
+    },
+    {
+      "file": "ground/ground-05-04.png",
+      "sourceRect": [
+        944,
+        851,
+        1254,
+        1011
+      ],
+      "size": [
+        310,
+        160
+      ]
+    },
+    {
+      "file": "ground/ground-06-01.png",
+      "sourceRect": [
+        0,
+        1011,
+        191,
+        1225
+      ],
+      "size": [
+        191,
+        214
+      ]
+    },
+    {
+      "file": "ground/ground-06-02.png",
+      "sourceRect": [
+        191,
+        1011,
+        347,
+        1225
+      ],
+      "size": [
+        156,
+        214
+      ]
+    },
+    {
+      "file": "ground/ground-06-03.png",
+      "sourceRect": [
+        347,
+        1011,
+        514,
+        1225
+      ],
+      "size": [
+        167,
+        214
+      ]
+    },
+    {
+      "file": "ground/ground-06-04.png",
+      "sourceRect": [
+        514,
+        1011,
+        686,
+        1225
+      ],
+      "size": [
+        172,
+        214
+      ]
+    },
+    {
+      "file": "ground/ground-06-05.png",
+      "sourceRect": [
+        686,
+        1011,
+        972,
+        1225
+      ],
+      "size": [
+        286,
+        214
+      ]
+    },
+    {
+      "file": "ground/ground-06-06.png",
+      "sourceRect": [
+        972,
+        1011,
+        1254,
+        1225
+      ],
+      "size": [
+        282,
+        214
+      ]
+    }
+  ],
+  "regionTiles": [
+    "ground/ground-01-01.png",
+    "ground/ground-05-02.png",
+    "ground/ground-06-02.png",
+    "ground/ground-06-03.png",
+    "ground/ground-06-04.png",
+    "ground/ground-06-05.png"
+  ]
+}

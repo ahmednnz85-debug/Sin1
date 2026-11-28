@@ -1,0 +1,462 @@
+{
+  "source": "assets/3F580150-FF2A-4AD4-A87E-599574FB4ABA.png",
+  "sourceSha256": "8102888db80ab1998922ed30d1073326f073b46fc62a619067f2d88a41a2a58e",
+  "space": "sRGB",
+  "coverage": "straight alpha",
+  "gutter": 8,
+  "size": [
+    1024,
+    512
+  ],
+  "regions": [
+    [
+      0.00830078125,
+      0.5283203125,
+      0.15625,
+      0.455078125
+    ],
+    [
+      0.25830078125,
+      0.6787109375,
+      0.2333984375,
+      0.3046875
+    ],
+    [
+      0.50830078125,
+      0.6728515625,
+      0.2333984375,
+      0.310546875
+    ],
+    [
+      0.75830078125,
+      0.6845703125,
+      0.2333984375,
+      0.298828125
+    ],
+    [
+      0.00830078125,
+      0.0302734375,
+      0.2060546875,
+      0.453125
+    ],
+    [
+      0.25830078125,
+      0.0302734375,
+      0.2080078125,
+      0.453125
+    ]
+  ],
+  "tiles": [
+    {
+      "file": "sparks/sparks-01-01.png",
+      "sourceRect": [
+        0,
+        0,
+        245,
+        234
+      ],
+      "size": [
+        245,
+        234
+      ]
+    },
+    {
+      "file": "sparks/sparks-01-02.png",
+      "sourceRect": [
+        245,
+        0,
+        475,
+        234
+      ],
+      "size": [
+        230,
+        234
+      ]
+    },
+    {
+      "file": "sparks/sparks-01-03.png",
+      "sourceRect": [
+        475,
+        0,
+        696,
+        234
+      ],
+      "size": [
+        221,
+        234
+      ]
+    },
+    {
+      "file": "sparks/sparks-01-04.png",
+      "sourceRect": [
+        696,
+        0,
+        929,
+        234
+      ],
+      "size": [
+        233,
+        234
+      ]
+    },
+    {
+      "file": "sparks/sparks-01-05.png",
+      "sourceRect": [
+        929,
+        0,
+        1090,
+        234
+      ],
+      "size": [
+        161,
+        234
+      ]
+    },
+    {
+      "file": "sparks/sparks-01-06.png",
+      "sourceRect": [
+        1090,
+        0,
+        1254,
+        234
+      ],
+      "size": [
+        164,
+        234
+      ]
+    },
+    {
+      "file": "sparks/sparks-02-01.png",
+      "sourceRect": [
+        0,
+        234,
+        285,
+        426
+      ],
+      "size": [
+        285,
+        192
+      ]
+    },
+    {
+      "file": "sparks/sparks-02-02.png",
+      "sourceRect": [
+        285,
+        234,
+        538,
+        426
+      ],
+      "size": [
+        253,
+        192
+      ]
+    },
+    {
+      "file": "sparks/sparks-02-03.png",
+      "sourceRect": [
+        538,
+        234,
+        814,
+        426
+      ],
+      "size": [
+        276,
+        192
+      ]
+    },
+    {
+      "file": "sparks/sparks-02-04.png",
+      "sourceRect": [
+        814,
+        234,
+        1030,
+        426
+      ],
+      "size": [
+        216,
+        192
+      ]
+    },
+    {
+      "file": "sparks/sparks-02-05.png",
+      "sourceRect": [
+        1030,
+        234,
+        1254,
+        426
+      ],
+      "size": [
+        224,
+        192
+      ]
+    },
+    {
+      "file": "sparks/sparks-03-01.png",
+      "sourceRect": [
+        0,
+        426,
+        255,
+        642
+      ],
+      "size": [
+        255,
+        216
+      ]
+    },
+    {
+      "file": "sparks/sparks-03-02.png",
+      "sourceRect": [
+        255,
+        426,
+        517,
+        642
+      ],
+      "size": [
+        262,
+        216
+      ]
+    },
+    {
+      "file": "sparks/sparks-03-03.png",
+      "sourceRect": [
+        517,
+        426,
+        766,
+        642
+      ],
+      "size": [
+        249,
+        216
+      ]
+    },
+    {
+      "file": "sparks/sparks-03-04.png",
+      "sourceRect": [
+        766,
+        426,
+        1026,
+        642
+      ],
+      "size": [
+        260,
+        216
+      ]
+    },
+    {
+      "file": "sparks/sparks-03-05.png",
+      "sourceRect": [
+        1026,
+        426,
+        1254,
+        642
+      ],
+      "size": [
+        228,
+        216
+      ]
+    },
+    {
+      "file": "sparks/sparks-04-01.png",
+      "sourceRect": [
+        0,
+        642,
+        251,
+        811
+      ],
+      "size": [
+        251,
+        169
+      ]
+    },
+    {
+      "file": "sparks/sparks-04-02.png",
+      "sourceRect": [
+        251,
+        642,
+        510,
+        811
+      ],
+      "size": [
+        259,
+        169
+      ]
+    },
+    {
+      "file": "sparks/sparks-04-03.png",
+      "sourceRect": [
+        510,
+        642,
+        764,
+        811
+      ],
+      "size": [
+        254,
+        169
+      ]
+    },
+    {
+      "file": "sparks/sparks-04-04.png",
+      "sourceRect": [
+        764,
+        642,
+        1027,
+        811
+      ],
+      "size": [
+        263,
+        169
+      ]
+    },
+    {
+      "file": "sparks/sparks-04-05.png",
+      "sourceRect": [
+        1027,
+        642,
+        1254,
+        811
+      ],
+      "size": [
+        227,
+        169
+      ]
+    },
+    {
+      "file": "sparks/sparks-05-01.png",
+      "sourceRect": [
+        0,
+        811,
+        212,
+        1044
+      ],
+      "size": [
+        212,
+        233
+      ]
+    },
+    {
+      "file": "sparks/sparks-05-02.png",
+      "sourceRect": [
+        212,
+        811,
+        426,
+        1044
+      ],
+      "size": [
+        214,
+        233
+      ]
+    },
+    {
+      "file": "sparks/sparks-05-03.png",
+      "sourceRect": [
+        426,
+        811,
+        641,
+        1044
+      ],
+      "size": [
+        215,
+        233
+      ]
+    },
+    {
+      "file": "sparks/sparks-05-04.png",
+      "sourceRect": [
+        641,
+        811,
+        849,
+        1044
+      ],
+      "size": [
+        208,
+        233
+      ]
+    },
+    {
+      "file": "sparks/sparks-05-05.png",
+      "sourceRect": [
+        849,
+        811,
+        1054,
+        1044
+      ],
+      "size": [
+        205,
+        233
+      ]
+    },
+    {
+      "file": "sparks/sparks-05-06.png",
+      "sourceRect": [
+        1054,
+        811,
+        1254,
+        1044
+      ],
+      "size": [
+        200,
+        233
+      ]
+    },
+    {
+      "file": "sparks/sparks-06-01.png",
+      "sourceRect": [
+        0,
+        1044,
+        347,
+        1216
+      ],
+      "size": [
+        347,
+        172
+      ]
+    },
+    {
+      "file": "sparks/sparks-06-02.png",
+      "sourceRect": [
+        347,
+        1044,
+        640,
+        1216
+      ],
+      "size": [
+        293,
+        172
+      ]
+    },
+    {
+      "file": "sparks/sparks-06-03.png",
+      "sourceRect": [
+        640,
+        1044,
+        951,
+        1216
+      ],
+      "size": [
+        311,
+        172
+      ]
+    },
+    {
+      "file": "sparks/sparks-06-04.png",
+      "sourceRect": [
+        951,
+        1044,
+        1254,
+        1216
+      ],
+      "size": [
+        303,
+        172
+      ]
+    }
+  ],
+  "regionTiles": [
+    "sparks/sparks-01-05.png",
+    "sparks/sparks-04-02.png",
+    "sparks/sparks-04-03.png",
+    "sparks/sparks-04-04.png",
+    "sparks/sparks-05-01.png",
+    "sparks/sparks-05-02.png"
+  ]
+}
