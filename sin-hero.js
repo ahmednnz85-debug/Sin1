@@ -573,6 +573,8 @@
     const combat = { act: null, hits: new Set(), hitstop: 0, block: 0, blocking: false, dodge: null, react: null, iframes: false, pending: null };
     const push = { mode: null, w: 0, blend: 0, scale: 0.52 };
     const targets = new Set();
+    const vitals = window.SinCombat?.createVitals(window.SinCombat.RULES.hero);
+    let opponent = null, guardSince = -Infinity, guardHeld = false, guardRecoil = 0, dead = false;
     const interactables = [];
     let facing = 0, tNow = 0, lastDt = 1 / 60, wasIdle = true, lastIdleKey = 'idle';
     const lastPos = new T.Vector3(); let hasLast = false;
@@ -645,10 +647,18 @@
     // ================================================================== CombatController
     function startAttack(key, inDir) {
       const A = ATTACKS[key], s = S[key];
+      let yaw = inDir ? Math.atan2(inDir.x, inDir.z) : null;
+      const target = opponent?.aim();
+      if (target) {
+        const tx = target.x - root.position.x, tz = target.z - root.position.z;
+        const bearing = Math.atan2(tx, tz), base = yaw ?? facing;
+        const delta = wrapA(bearing - base);
+        if (Math.hypot(tx, tz) < 5 && Math.abs(delta) < 1.05) yaw = base + clamp(delta, -.65, .65);
+      }
       const chain = !!combat.act;
       if (combat.dodge) { combat.dodge = null; combat.iframes = false; }
       s.time = 0; s.prev = 0;
-      combat.act = { key, A, st: s, queued: null, impactFired: false, landFired: false, yaw: inDir ? Math.atan2(inDir.x, inDir.z) : null };
+      combat.act = { key, A, st: s, queued: null, impactFired: false, landFired: false, yaw };
       beginAction({ kind: 'attack', st: s, adv: true }, chain ? XF.chain : A.blendIn);
       combat.hits.clear();
       events.emit('combat:attack', { key });
@@ -665,13 +675,41 @@
     }
     // swept test: blade segment (mid -> head) between two frames against each target's vertical capsule
     const segA = new T.Vector3(), segB = new T.Vector3();
+    const [blade0, blade1, blade2, blade3] = Array.from({ length: 4 }, () => new T.Vector3());
     function sweepHits(act) {
       const A = act.A, t = act.st.time;
-      if (t < A.act[0] || t > A.act[1]) return;
+      const previous = act.sampleTime ?? t;
+      act.sampleTime = t;
+      if (t < A.act[0] || (t > A.act[1] && previous >= A.act[1])) return;
       const speed = axeHead.distanceTo(axeHeadPrev) / Math.max(1e-3, lastDt);
       if (speed < 2.2) return;                                              // a resting / slow axe does not wound
       targets.forEach(tg => {
         if (combat.hits.has(tg) || (tg.alive && !tg.alive())) return;
+        if (tg.volumes && window.SinCombat) {
+          const span = t - previous || 1;
+          const start = clamp((A.act[0] - previous) / span, 0, 1);
+          const end = clamp((A.act[1] - previous) / span, 0, 1);
+          blade0.lerpVectors(axeMidPrev, axeMid, start);
+          blade1.lerpVectors(axeHeadPrev, axeHead, start);
+          blade2.lerpVectors(axeMidPrev, axeMid, end);
+          blade3.lerpVectors(axeHeadPrev, axeHead, end);
+          const hit = window.SinCombat.sweep(blade0, blade1, blade2, blade3, .105, tg.volumes(), segA);
+          if (hit && (!tg.validate || tg.validate(segA))) {
+            combat.hits.add(tg);
+            const dir = segB.copy(tg.position()).sub(root.position);
+            dir.y = 0;
+            dir.normalize();
+            const info = { attack: act.key, damage: A.dmg, heavy: !!A.heavy, point: segA,
+              dir, push: A.push, time: t, region: hit.name };
+            const result = tg.onHit?.(info);
+            if (result) {
+              combat.hitstop = A.heavy ? .075 : .035;
+              events.emit('combat:hit', info);
+            }
+          }
+          return;
+        }
+        if (t > A.act[1]) return;
         const p = tg.position(), r = (tg.radius || 0.4) + 0.12, h0 = p.y + 0.1, h1 = p.y + (tg.height || 1.8);
         for (let i = 0; i <= 4; i++) {
           const u = i / 4;
@@ -693,11 +731,13 @@
         }
       });
     }
-    function startDodge(dirLocalX) {
+    function startDodge(dirLocalX, direction) {
       combat.act = null;
       const s = dirLocalX < -0.25 ? S.dodgeM : S.dodge;
+      const dodgeYaw = opponent && direction ? wrapA(Math.atan2(direction.x, direction.z) + Math.PI) : facing;
+      facing = dodgeYaw;
       s.time = DODGE.from; s.prev = s.time;
-      combat.dodge = { st: s, curve: dirLocalX < -0.25 ? motion.root.dodgeM : motion.root.dodge, yaw: facing };
+      combat.dodge = { st: s, curve: dirLocalX < -0.25 ? motion.root.dodgeM : motion.root.dodge, yaw: dodgeYaw };
       beginAction({ kind: 'dodge', st: s, adv: true }, DODGE.blendIn);
       events.emit('combat:dodge');
     }
@@ -711,6 +751,26 @@
       beginAction({ kind: 'react', st: s, adv: true }, 0.05);
       events.emit('hero:hit', info || {});
       return true;
+    }
+
+    function resetCombat() {
+      dead = false;
+      combat.act = combat.dodge = combat.react = combat.pending = null;
+      combat.iframes = combat.blocking = guardHeld = false;
+      guardSince = -Infinity;
+      guardRecoil = 0;
+      combat.hitstop = 0;
+      combat.hits.clear();
+      action.cur = null;
+      action.fading.length = 0;
+      hasLast = false;
+    }
+    function die(direction) {
+      combat.iframes = false;
+      hitReaction({ dir: direction, heavy: false });
+      dead = true;
+      combat.pending = null;
+      combat.blocking = false;
     }
 
     // ================================================================== push (door cinematics) — same contract as before
@@ -799,8 +859,8 @@
       // hit-stop: the pose holds for a few frames after a hit (nothing moves meanwhile: attacks are in place)
       let dt = dt0;
       if (combat.hitstop > 0) { combat.hitstop -= dt0; dt = dt0 * 0.05; }
-      const allowAct = !!ctx.allowAct && !push.mode;
-      const mag = ctx.allowMove ? ctx.mag : 0;
+      const allowAct = !!ctx.allowAct && !push.mode && !dead;
+      const mag = ctx.allowMove && !dead ? ctx.mag : 0;
       const hasDir = mag >= STICK.dead;
       if (hasDir) inDir.set(ctx.dirX, 0, ctx.dirZ).normalize(); else inDir.set(0, 0, 0);
 
@@ -816,7 +876,7 @@
           if (!act && !combat.dodge && !combat.react) (weapon.state === 'Holstered' || weapon.state === 'Unequipping') ? requestEquip() : requestUnequip();
         } else if (n === 'dodge') {
           const canD = !combat.react && !combat.dodge && (!act || act.st.time < A.act[0] || act.st.time >= A.impact);
-          if (canD) startDodge(hasDir ? (inDir.x * Math.cos(facing) - inDir.z * Math.sin(facing)) : 0); else used = false;
+          if (canD) startDodge(hasDir ? (inDir.x * Math.cos(facing) - inDir.z * Math.sin(facing)) : 0, hasDir ? inDir : null); else used = false;
         } else if (n === 'light' || n === 'heavy') {
           if (weapon.state !== 'Equipped') { if (!combat.react && !combat.dodge) { requestEquip(); combat.pending = { name: n, t: tNow }; } }   // draw, then swing
           else if (!combat.react && !combat.dodge) {
@@ -852,8 +912,8 @@
       }
       if (combat.react) {
         const R = combat.react, t0 = R.st.time; R.st.time = Math.min(R.st.dur - 1e-4, t0 + dt);
-        rootMotion(R.curve, R.yaw, t0, R.st.time, action.cur ? action.cur.w : 1);
-        if (R.st.time >= R.end) { combat.react = null; endAction(XF.actionToIdle); }
+        if (!dead) rootMotion(R.curve, R.yaw, t0, R.st.time, action.cur ? action.cur.w : 1);
+        if (!dead && R.st.time >= R.end) { combat.react = null; endAction(XF.actionToIdle); }
       } else if (combat.dodge) {
         const D = combat.dodge, t0 = D.st.time; D.st.time = Math.min(DODGE.to, t0 + dt);
         rootMotion(D.curve, D.yaw, t0, D.st.time, action.cur ? action.cur.w : 1);
@@ -878,6 +938,8 @@
 
       // ---------- 4. locomotion state + facing
       const blocking = blockHeld && weapon.state === 'Equipped' && !owned;
+      if (blockHeld && !guardHeld) guardSince = tNow;
+      guardHeld = blockHeld;
       if (blockHeld && weapon.state === 'Holstered' && !owned) requestEquip();
       combat.blocking = blocking;
       const cap = Math.min(ctx.cap == null ? 99 : ctx.cap, blocking ? 1.5 : 99);
@@ -948,7 +1010,9 @@
       if (pushing) { S.push.b = push.w * (push.mode === 'enter' ? 0 : push.mode === 'blend' ? 1 - push.blend : 1); S.pushEnter.b = push.w - S.push.b; }
       S.idle.time += dt; S.cidle.time += dt;
       combat.block += ((blocking ? 1 : 0) - combat.block) * damp(blocking ? 16 : 10, dt);
-      S.guard.u = combat.block < 1e-3 ? 0 : combat.block; S.guard.time = GUARD_T;
+      guardRecoil = Math.max(0, guardRecoil - dt0 * 5.8);
+      S.guard.u = combat.block < 1e-3 ? 0 : combat.block;
+      S.guard.time = GUARD_T + .16 * Math.sin(guardRecoil * Math.PI);
       S.grip.time = 0;
       anim.evaluate(dt);
       maintainWeaponAttachment();
@@ -972,14 +1036,18 @@
 
     // ================================================================== public
     const hero = {
-      root, model, mixer: anim.mixer, events, lib, rig, motion,
+      root, model, mixer: anim.mixer, events, lib, rig, motion, vitals,
       update,
       speeds: () => ({ walk: V.walk, run: V.run }),
       weapon: { state: () => weapon.state, equip: requestEquip, unequip: requestUnequip, seat: () => weapon.seat, canThrow: () => false },
       combat: {
         state: () => combat.act ? combat.act.key : combat.dodge ? 'dodge' : combat.react ? (combat.react.heavy ? 'knockdown' : 'stagger') : combat.blocking ? 'block' : 'none',
         registerTarget(t) { targets.add(t); return () => targets.delete(t); }, targets: () => targets.size,
-        hit: hitReaction, blocking: () => combat.blocking, invulnerable: () => combat.iframes
+        hit: hitReaction, guardImpact: () => { guardRecoil = .98; }, blocking: () => combat.blocking, guardAge: () => tNow - guardSince,
+        invulnerable: () => combat.iframes, fight(target) { opponent = target; }, reset: resetCombat, die,
+        timeline: () => ({ clip: action.cur?.st.clip.name ?? LOCO_KEYS.find(k => loco.w[k] > .5),
+          time: action.cur?.st.time, window: combat.act?.A.act, dodge: combat.dodge ? DODGE.iframes : null }),
+        axeContact: () => [axeMid, axeHead]
       },
       interact: { register: registerInteractable, available: availableInteract },
       // compatibility facade used by the royal door, temple doors and wing doors

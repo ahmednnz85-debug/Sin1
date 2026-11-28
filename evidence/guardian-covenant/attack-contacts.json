@@ -1,0 +1,370 @@
+[
+  {
+    "name": "Attack_Staff_Swing_Left",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0,
+        "damage": 24,
+        "attackPositions": [
+          39.72232671380043,
+          148.4583380615711
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": 0.75,
+        "damage": 13,
+        "attackPositions": [
+          39.827589819133166,
+          148.51681756453385
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Attack_Staff_Swing_Right",
+    "contacts": [
+      {
+        "distance": 1.75,
+        "lateral": -0.75,
+        "damage": 13,
+        "attackPositions": [
+          40.48746516856893,
+          148.01583023454793
+        ]
+      },
+      {
+        "distance": 1.75,
+        "lateral": -1.4,
+        "damage": 10,
+        "attackPositions": [
+          40.44032209911295,
+          147.91370229573934
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Attack_Staff_Overhead",
+    "contacts": [
+      {
+        "distance": 1.75,
+        "lateral": 0,
+        "damage": 23,
+        "attackPositions": [
+          40.72968270326409,
+          147.9939386706941
+        ]
+      },
+      {
+        "distance": 1.75,
+        "lateral": -0.75,
+        "damage": 23,
+        "attackPositions": [
+          40.72968270326409,
+          147.9939386706941
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Attack_Staff_Thrust",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0.75,
+        "damage": 17,
+        "attackPositions": [
+          40.97857901236729,
+          147.5106777222438
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": -1.4,
+        "damage": 34,
+        "attackPositions": [
+          41.08384211770003,
+          147.45219821928106
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Attack_Staff_Sweep",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0,
+        "damage": 17,
+        "attackPositions": [
+          41.162676511185694,
+          147.37196184432628
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": 0.75,
+        "damage": 17,
+        "attackPositions": [
+          41.26793961651843,
+          147.43044134728902
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Attack_Staff_Spin_360",
+    "contacts": [
+      {
+        "distance": 2.2,
+        "lateral": 0.75,
+        "damage": 17,
+        "attackPositions": [
+          40.833401122427304,
+          147.9888676109359
+        ]
+      },
+      {
+        "distance": 2.65,
+        "lateral": 0.75,
+        "damage": 17,
+        "attackPositions": [
+          40.513095786133036,
+          147.01942522115337
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Attack_Claw_Left",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0,
+        "damage": 11,
+        "attackPositions": [
+          40.45247680524615,
+          147.03658153649874
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": -0.75,
+        "damage": 17,
+        "attackPositions": [
+          40.45247680524615,
+          147.03658153649874
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Attack_Kick",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0,
+        "damage": 11,
+        "attackPositions": [
+          40.55773991057889,
+          147.09506103946148
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": 0.75,
+        "damage": 30,
+        "attackPositions": [
+          40.66300301591163,
+          147.15354054242422
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Attack_Combo_01",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0.75,
+        "damage": 25,
+        "attackPositions": [
+          40.873529226577105,
+          147.15354054242422
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": 1.4,
+        "damage": 15,
+        "attackPositions": [
+          40.978792331909844,
+          147.09506103946148
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Special_Ground_Slam",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0,
+        "damage": 19,
+        "attackPositions": [
+          40.978792331909844,
+          147.09506103946148
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": -0.75,
+        "damage": 19,
+        "attackPositions": [
+          40.978792331909844,
+          147.09506103946148
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Counter_Attack",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0,
+        "damage": 11,
+        "attackPositions": [
+          41.08405543724258,
+          147.15354054242422
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": 1.4,
+        "damage": 17,
+        "attackPositions": [
+          41.211532546405536,
+          147.2294061090652
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Special_Charge",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": -0.75,
+        "damage": 20,
+        "attackPositions": [
+          39.72232671380043,
+          148.4583380615711
+        ]
+      },
+      {
+        "distance": 1.75,
+        "lateral": 0.75,
+        "damage": 20,
+        "attackPositions": [
+          35.31800702301119,
+          150.3011101236107
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Special_Leap_Slam",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0,
+        "damage": 24,
+        "attackPositions": [
+          19.42898814238103,
+          153.23470496940712
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": -0.75,
+        "damage": 24,
+        "attackPositions": [
+          19.42898814238103,
+          153.23470496940712
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Special_Enraged_Combo",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": -0.75,
+        "damage": 13,
+        "attackPositions": [
+          19.53425124771401,
+          153.29318447236986
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": -1.4,
+        "damage": 22,
+        "attackPositions": [
+          19.53425124771401,
+          153.29318447236986
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Special_Seal_Activation",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0,
+        "damage": 18,
+        "attackPositions": [
+          19.53425124771401,
+          153.29318447236986
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": -0.75,
+        "damage": 18,
+        "attackPositions": [
+          19.53425124771401,
+          153.29318447236986
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Special_Energy_Release",
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": 0,
+        "damage": 22,
+        "attackPositions": [
+          19.63951435304699,
+          153.3516639753326
+        ]
+      },
+      {
+        "distance": 1.35,
+        "lateral": -0.75,
+        "damage": 22,
+        "attackPositions": [
+          19.63951435304699,
+          153.3516639753326
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,88 @@
+{
+ "base": "http://127.0.0.1:3111/index.html",
+ "results": {
+  "direct": {
+   "U1-03": {
+    "wallSeconds": 43.934,
+    "level": "U1-03",
+    "ready": true,
+    "ms": 24795,
+    "error": null,
+    "phase": "R3",
+    "hero": [
+     20.22,
+     -444.15,
+     148.46
+    ],
+    "blockedAtHero": false,
+    "geometries": 107,
+    "textures": 126,
+    "calls": 86,
+    "triangles": 700748,
+    "est": {
+     "cpuMB": 73.1,
+     "gpuMB": 153.1
+    },
+    "url": "?dev=1&level=U1-03",
+    "movedAfterWalk": 1.17,
+    "heroAfterWalk": [
+     21.39,
+     -444.15,
+     148.46
+    ],
+    "blockedAfterWalk": false,
+    "glbRequests": 7,
+    "assets": {
+     "count": 39,
+     "MiB": 49.6,
+     "files": [
+      "assets/Guardian_of_the_Covenant.glb",
+      "assets/Sin_hero_runtime.glb",
+      "assets/ktx2/4cv0-rx5sve-1r31vq4.ktx2",
+      "assets/ktx2/4irg-7n6051-1aid0kh.ktx2",
+      "assets/ktx2/5v26-17oijkg-1cjfyjm.ktx2",
+      "assets/ktx2/9q9t-1uznd8u-1hsq3o8.ktx2",
+      "assets/ktx2/k2nu-6irt01-41jg04.ktx2",
+      "assets/ktx2/kyaf-107tleb-1ahwk5s.ktx2",
+      "assets/ktx2/manifest.json",
+      "assets/r3/harbor/architecture.glb",
+      "assets/r3/harbor/dais-border-normal.webp",
+      "assets/r3/harbor/dais-border.webp",
+      "assets/r3/harbor/dais-gold-normal.webp",
+      "assets/r3/harbor/dais-gold.webp",
+      "assets/r3/harbor/distant-ruins.glb",
+      "assets/r3/harbor/floor-inlay.webp",
+      "assets/r3/harbor/paving-normal.webp",
+      "assets/r3/harbor/paving-rough.webp",
+      "assets/r3/harbor/paving.webp",
+      "assets/r3/harbor/road-edge.webp",
+      "assets/r3/harbor/road-guardians.glb",
+      "assets/r3/harbor/road-medallion.webp",
+      "assets/r3/harbor/road-palms.webp",
+      "assets/r3/harbor/road-rail-normal.webp",
+      "assets/r3/harbor/road-rail.webp",
+      "assets/r3/harbor/road-relief-normal.webp",
+      "assets/r3/harbor/road-relief.webp",
+      "assets/r3/harbor/road-stars-normal.webp",
+      "assets/r3/harbor/road-stars.webp",
+      "assets/r3/harbor/road-stone-normal.webp",
+      "assets/r3/harbor/road-stone-rough.webp",
+      "assets/r3/harbor/road-stone.webp",
+      "assets/r3/harbor/roof-band.webp",
+      "assets/r3/harbor/roof-oculus.webp",
+      "assets/r3/harbor/roof-rib.webp",
+      "assets/r3/harbor/roof-stone.webp",
+      "assets/r3/maw/elevator.glb",
+      "assets/بوابة اركالا.glb",
+      "data/palace-colliders.json"
+     ]
+    },
+    "screenshot": true,
+    "errors": [],
+    "console": [
+     "info: [dev-hub] ready U1-03 in 24795 ms"
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,135 @@
+.covenant {
+  --covenant-gold: #b78b53;
+  --covenant-text: #f2dfb9;
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  color: var(--covenant-text);
+  pointer-events: none;
+  font-family: inherit;
+}
+.covenant > * { display: none; }
+.covenant button {
+  pointer-events: auto;
+  color: inherit;
+  background: #151414ed;
+  border: 1px solid var(--covenant-gold);
+  border-radius: .35rem;
+  font: inherit;
+  padding: .55em .9em;
+}
+.covenant[data-view="active"] :is(.covenant-hero, .covenant-boss),
+.covenant[data-view="heroFalling"] .covenant-defeat,
+.covenant[data-view="lost"] .covenant-defeat,
+.covenant[data-view="awakening"] .covenant-skip,
+.covenant[data-view="intro"] :is(.covenant-dialog, .covenant-skip),
+.covenant[data-view="won"].has-objective .covenant-objective { display: block; }
+.covenant[data-view="active"] .covenant-hero { display: flex; }
+.covenant-hero, .covenant-boss {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 3.25rem);
+}
+.covenant-hero {
+  left: max(1rem, env(safe-area-inset-left, 0px));
+  width: clamp(6.2rem, 23vw, 15rem);
+  align-items: center;
+  gap: .45rem;
+  direction: ltr;
+}
+.covenant-hero > span {
+  color: #d9b77c;
+  font-size: 1.6rem;
+  line-height: 1;
+  text-shadow: 0 1px 4px black;
+}
+.covenant-boss {
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(30rem, 41vw);
+  text-align: center;
+  text-shadow: 1px 1px 5px black, 0 1px 6px black;
+}
+.covenant-boss strong { display: block; margin-bottom: .38rem; }
+.covenant-life {
+  position: relative;
+  width: 100%;
+  height: .56rem;
+  background: #211a17;
+  border: 1px solid #c79c5f;
+  box-shadow: 0 0 0 2px #201a15, 0 2px 8px #000c;
+}
+.covenant-life :is(i, b) {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transition: transform .14s ease-out;
+  background: #cc9862;
+}
+.covenant-life.sin b { background: linear-gradient(#4a9f8c, #155046); }
+.covenant-life.guardian b { background: linear-gradient(#a6533e, #562a25); }
+.covenant-life.guardian::before, .covenant-life.guardian::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  width: .55rem;
+  height: .55rem;
+  transform: rotate(45deg);
+  border: 1px solid #d5ab6f;
+  background: #775337;
+}
+.covenant-life.guardian::before { left: -.33rem; }
+.covenant-life.guardian::after { right: -.33rem; }
+.covenant-life em { position: absolute; left: 50%; top: -2px; bottom: -2px; border-left: 1px solid #f4cd93; }
+.covenant-posture { height: 2px; margin-top: .42rem; background: #231e19; }
+.covenant-posture i { display: block; height: 100%; background: #d9ad67; transform-origin: left; }
+.covenant-boss small { display: block; min-height: 1rem; margin-top: .37rem; }
+.covenant.unblockable .covenant-boss small { color: #c3fbf2; }
+.covenant.broken .guardian { box-shadow: 0 0 .85rem #eeb35f80; }
+.covenant.critical .sin { box-shadow: 0 0 .85rem #be302d80; }
+.covenant-skip { position: absolute; top: max(1.2rem, env(safe-area-inset-top, 0px)); right: max(1rem, env(safe-area-inset-right, 0px)); }
+.covenant-dialog, .covenant-objective {
+  position: absolute;
+  bottom: max(6%, calc(env(safe-area-inset-bottom, 0px) + 1.25rem));
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 86%;
+  margin: 0;
+  border-inline-start: 2px solid var(--covenant-gold);
+  padding: .7rem 1rem;
+  background: #111416dc;
+  text-align: center;
+}
+.covenant-objective { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 3.7rem); }
+.covenant-defeat {
+  position: absolute;
+  inset: 0;
+  background: #070808f2;
+  text-align: center;
+  align-content: center;
+  animation: covenant-defeat 1.5s both;
+}
+.covenant-defeat strong { display: block; margin: .65rem; font-size: 2rem; color: #d5ad74; }
+.covenant[data-view="heroFalling"] .covenant-defeat :is(strong, button) { visibility: hidden; }
+.covenant[data-view="lost"] .covenant-defeat { animation: none; }
+@keyframes covenant-defeat { from { opacity: 0; } to { opacity: 1; } }
+body.covenant-cutscene :is(#hud, #hint, #stick, #combat-pad) { visibility: hidden; pointer-events: none; }
+html.sin-dev-fly-active .covenant, html.sin-dev-clean .covenant { visibility: hidden; }
+@media (max-width: 460px) {
+  .covenant-hero { width: 24vw; gap: .25rem; }
+  .covenant-boss { width: 36vw; }
+  .covenant-boss small, .covenant-dialog { font-size: .8rem; }
+}
+.covenant[data-view="active"] .covenant-lock {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 3.35rem);
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  width: 2.65rem;
+  height: 2.65rem;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 1.35rem;
+}
+.covenant-lock[aria-pressed="true"] { color: #b7f5eb; border-color: #84ccc5; }

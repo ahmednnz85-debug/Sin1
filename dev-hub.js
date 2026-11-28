@@ -409,7 +409,8 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
       <button data-t="respawn">إعادة البطل للظهور</button><button data-t="fps">عداد FPS</button>
       <button data-t="mem">مراقب الذاكرة</button><button data-t="fly">الكاميرا الحرة</button>
       <button data-t="col">إظهار التصادمات</button><button data-t="clean">إخفاء الواجهة</button>
-      <button data-t="copy">نسخ رابط المنطقة</button><button data-t="exit">الخروج من وضع المطور</button></div><div class="msg"></div>`;
+      <button data-t="copy">نسخ رابط المنطقة</button><button data-t="exit">الخروج من وضع المطور</button>
+      ${root.SinAreas.chapterOf(session.area.stage)?.id === 'u1' || root.PalaceInterior?.encounter?.() ? '<button data-t="combatLab">مختبر القتال</button>' : ''}</div><div class="msg"></div>`;
     doc.body.appendChild(tool); doc.body.appendChild(panel);
     refreshTag();
     tool.addEventListener('click', ev => { if (ev.target.closest('button')) panel.classList.toggle('open'); });
@@ -422,6 +423,10 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
       if (t === 'fps') setFps(!flags.fps);
       if (t === 'mem') setMem(!flags.mem);
       if (t === 'fly') setFly(!flags.fly);
+      if (t === 'combatLab') {
+        panel.classList.remove('open');
+        setCombatLab(!flags.combatLab);
+      }
       if (t === 'col') setCollisions(!flags.col);
       if (t === 'clean') { flags.clean = !flags.clean; doc.documentElement.classList.toggle('sin-dev-clean', flags.clean); if (flags.clean) panel.classList.remove('open'); }
       if (t === 'copy') copyLink();
@@ -448,6 +453,112 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
       try { doc.execCommand('copy'); done(); } catch (_) { msg(url); } t.remove();
     }
   }
+  let combatLab;
+  function setCombatLab(on) {
+    if (!on) { combatLab?.close(); return; }
+    const encounter = root.PalaceInterior?.encounter?.();
+    if (!encounter) return msg('مواجهة حارس العهد غير متاحة هنا');
+    const T = root.THREE, statusBox = el('section', { class: 'sin-dev-combat-lab' });
+    const diagnostic = new T.Group();
+    diagnostic.name = 'DevCombatContacts';
+    game.scene.add(diagnostic);
+    statusBox.dir = 'rtl';
+    statusBox.innerHTML = `<div><strong>مختبر القتال</strong> <button data-lab="close">إغلاق</button></div>
+      <label><input type="checkbox" data-lab="volumes"> حجم الإصابة ونقاط السلاح</label>
+      <label><input type="checkbox" data-lab="pause"> إيقاف الحارس</label>
+      <div><button data-lab="step">خطوة 1/120 ثانية</button><button data-lab="reset">إعادة المواجهة</button></div>
+      <div><label>سين <input data-health="hero" type="number" min="1" max="100" value="100"></label>
+      <label>الحارس <input data-health="boss" type="number" min="1" max="1500" value="1500"></label></div>
+      <button data-lab="phase2">المرحلة الثانية</button>
+      <select aria-label="حركة الحارس"></select><button data-lab="attack">نفّذ</button>
+      <pre></pre><ol></ol>`;
+    statusBox.style.cssText = 'position:fixed;z-index:12100;right:8px;top:4.3rem;max-width:min(28rem,95vw);' +
+      'max-height:71vh;overflow:auto;padding:.65rem;background:#101616ed;border:1px solid #b99667;color:#f5e4c9;pointer-events:auto';
+    for (const control of statusBox.querySelectorAll('input[type=number]')) control.style.width = '5em';
+    const attack = statusBox.querySelector('select'), info = statusBox.querySelector('pre'), list = statusBox.querySelector('ol');
+    for (const name of encounter.debug().attacks) attack.add(new Option(name, name));
+    const sphere = new T.SphereGeometry(1, 10, 8);
+    const heroMat = new T.MeshBasicMaterial({ color: 0x56e8e2, wireframe: true, depthTest: false });
+    const bossMat = new T.MeshBasicMaterial({ color: 0xf0b350, wireframe: true, depthTest: false });
+    const jointMat = new T.MeshBasicMaterial({ color: 0xfc6767, wireframe: true, depthTest: false });
+    const helpers = { volumes: [], sockets: [] };
+    function mark(pool, i, material, point, radius) {
+      if (!pool[i]) { pool[i] = new T.Mesh(sphere, material); diagnostic.add(pool[i]); }
+      pool[i].position.copy(point);
+      pool[i].scale.setScalar(radius);
+    }
+    const midpoint = new T.Vector3(), socket = new T.Vector3();
+    function drawVolumes() {
+      const data = encounter.lab.volumes();
+      data.forEach((v, i) => {
+        const mat = i < data.length / 2 ? bossMat : heroMat;
+        mark(helpers.volumes, i * 3, mat, v.a, v.radius);
+        mark(helpers.volumes, i * 3 + 1, mat, midpoint.lerpVectors(v.a, v.b, .5), v.radius);
+        mark(helpers.volumes, i * 3 + 2, mat, v.b, v.radius);
+      });
+      encounter.lab.sockets().forEach(([, p], i) => mark(helpers.sockets, i, jointMat, socket.fromArray(p), .075));
+      encounter.lab.axe().forEach((p, i) => mark(helpers.sockets, 24 + i, heroMat, p, .085));
+    }
+    let frameDelta = 0, start = performance.now(), rAF;
+    function refresh(ts) {
+      frameDelta = frameDelta ? .86 * frameDelta + .14 * (ts - start) : ts - start;
+      start = ts;
+      if (diagnostic.visible) drawVolumes();
+      rAF = requestAnimationFrame(refresh);
+    }
+    const timer = setInterval(() => {
+      const s = encounter.debug(), g = game.renderer.info;
+      const frame = frameDelta.toFixed(1);
+      info.textContent = [
+        s.phase + ' / ' + s.ai + ' / ' + s.phaseNumber,
+        s.clip + ' ' + (s.time || 0).toFixed(3), s.sinClip?.clip || '—',
+        'HP ' + Math.ceil(s.hero?.health || 0) + ' / ' + Math.ceil(s.guardian.health),
+        'Hit ' + (s.windows || []).map(h => h.from + '–' + h.to).join(', '),
+        'Parry ' + (Number.isFinite(s.parryAge) ? s.parryAge.toFixed(2) : '—') + ' Dodge ' + Boolean(s.invulnerable),
+        (1000 / Math.max(1, frameDelta)).toFixed(1) + ' FPS / ' + frame + ' ms',
+        g.render.calls + ' calls / ' + g.memory.geometries + ' meshes / ' + g.memory.textures + ' textures',
+        performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MiB JS heap' : 'ذاكرة JS غير متاحة'
+      ].join('\n');
+      list.replaceChildren(...s.hits.slice(-5).map(event => el('li', {}, event.type + ' ' + event.attack +
+        (event.damage ? ' · ' + event.damage.toFixed(1) : ''))));
+    }, 230);
+    statusBox.addEventListener('change', ev => {
+      const input = ev.target;
+      if (input.dataset.lab === 'volumes') diagnostic.visible = input.checked;
+      if (input.dataset.lab === 'pause') encounter.lab.pause(input.checked);
+      if (input.dataset.health) encounter.lab.health(input.dataset.health, input.value);
+    });
+    statusBox.addEventListener('click', ev => {
+      switch (ev.target.dataset.lab) {
+        case 'close': combatLab.close(); break;
+        case 'step': encounter.lab.single(); break;
+        case 'reset': encounter.lab.fresh(); break;
+        case 'phase2': encounter.lab.health('boss', 749); break;
+        case 'attack': encounter.lab.attack(attack.value); break;
+      }
+    });
+    statusBox.addEventListener('pointerdown', ev => ev.stopPropagation());
+    statusBox.addEventListener('keydown', ev => ev.stopPropagation());
+    diagnostic.visible = false;
+    doc.body.append(statusBox);
+    rAF = requestAnimationFrame(refresh);
+    combatLab = {
+      close() {
+        encounter.lab.pause(false);
+        cancelAnimationFrame(rAF);
+        clearInterval(timer);
+        diagnostic.removeFromParent();
+        sphere.dispose();
+        for (const mat of [heroMat, bossMat, jointMat]) mat.dispose();
+        statusBox.remove();
+        combatLab = null;
+        flags.combatLab = false;
+        syncButtons();
+      }
+    };
+    flags.combatLab = true;
+  }
+
   // FPS: frame times from requestAnimationFrame, plus draw calls / triangles.
   let fpsRaf = 0;
   function setFps(on) {
@@ -650,6 +761,7 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
       }
     }
 
+    combatLab?.close();
     fly = state;
     flags.fly = true;
     game.releaseInput?.();
