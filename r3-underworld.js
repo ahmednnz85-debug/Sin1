@@ -728,14 +728,18 @@
     let pending;
     const bedHeight=(x,z)=>-120+7*Math.sin(x*.023+z*.032)+5*Math.cos(z*.043-x*.015);
 
-    async function loadGate(renderer, decoder) {
+    let encounter = null;
+    async function loadEncounterAssets(renderer, decoder) {
       const { KTX2Loader } = await T.loadKTX2Loader();
       const textures = new KTX2Loader().setTranscoderPath('vendor/basis/').setWorkerLimit(2).detectSupport(renderer);
       try {
         const loader = new T.GLTFLoader().setMeshoptDecoder(decoder).setKTX2Loader(textures);
-        const gltf = await loader.loadAsync(root.__sinAsset?.(gateAsset) || encodeURI(gateAsset));
+        const paths = [gateAsset];
+        if (root.SinGuardianEncounter) paths.push(root.SinGuardianEncounter.asset);
+        const [gltf, guardian] = await Promise.all(paths.map(path => loader.loadAsync(root.__sinAsset?.(path) || encodeURI(path))));
         gate = mountGate(gltf);
         status.gate = gate.state;
+        return guardian;
       } finally {
         textures.dispose();
       }
@@ -751,12 +755,17 @@
       model.scale.setScalar(gateScale);
       model.rotation.y = Math.PI / 2;
       model.position.fromArray(L(gateX - hingeDepth * gateScale, gateFloor - .045 * gateScale, gateZ));
-      const shared = new Set();
+      const shared = new Set(), inscriptionMats = new Set();
+      const inscriptionColor = new T.Color(0x51cfbb);
       model.traverse(mesh => {
         if (!mesh.isMesh) return;
         if (!shared.has(mesh.material)) {
           finish(mesh.material);
           shared.add(mesh.material);
+          if (/Arkila_Inscribed|Arkila_Bronze_Door/.test(mesh.material.name)) {
+            inscriptionMats.add(mesh.material);
+            if (root.SinGuardianEncounter) mesh.material.emissiveMap = mesh.material.map;
+          }
         }
       });
       world.add(model);
@@ -899,7 +908,14 @@
         return cameraBoxes;
       }
       pose(0);
-      return { state, update, frameCamera, blocks, cameraBoxesAt, restore: () => hands?.restore() };
+      return {
+        state, model, update, frameCamera, blocks, cameraBoxesAt, restore: () => hands?.restore(),
+        encounterPose(fraction, energy = 0) {
+          for (const material of inscriptionMats) material.emissive.copy(inscriptionColor).multiplyScalar(.34 * energy);
+          pose(Math.min(1, fraction) * clip.duration);
+          state.phase = fraction >= 1 ? 'open' : fraction > 0 ? 'opening' : 'closed';
+        }
+      };
     }
 
     // A continuous ravine floor and terraced banks hold the authored ruins.
@@ -983,7 +999,7 @@
       world.add(canyon);
     }
 
-    async function loadHarbor(renderer) {
+    async function loadHarbor(renderer, architecture) {
       const textureLoader = new T.TextureLoader();
       const files = 'assets/r3/harbor/';
       const maps = new Map();
@@ -1033,8 +1049,17 @@
           materials.get(key).needsUpdate=true;
         }
       }));
-      const [kit, ruins, guardians] = await Promise.all([loader.loadAsync(files + 'architecture.glb'),
-        loader.loadAsync(files + 'distant-ruins.glb'),loader.loadAsync(files + 'road-guardians.glb'), loadGate(renderer, decoder), ...loadingMaps]);
+      const [kit, ruins, guardians, guardian] = await Promise.all([loader.loadAsync(files + 'architecture.glb'),
+        loader.loadAsync(files + 'distant-ruins.glb'),loader.loadAsync(files + 'road-guardians.glb'), loadEncounterAssets(renderer, decoder), ...loadingMaps]);
+      if (guardian) {
+        const [, x, z, , y] = DISCS.find(disc => disc[0] === 'U1-03');
+        encounter = root.SinGuardianEncounter.mount({
+          T, model: guardian.scene, animations: guardian.animations, world,
+          arena: new T.Vector3().fromArray(L(x, y, z)),
+          checkpoint: new T.Vector3().fromArray(L(...SPAWNS['U1-03'])),
+          gate: () => gate, architecture
+        });
+      }
       const stamp = new T.Object3D();
       function instance(name, geometry, material, positions, parent=world) {
         const mesh = new T.InstancedMesh(geometry, material, positions.length);
@@ -1343,14 +1368,18 @@
       gateBlocks: (x, z, radius) => gate
         ? gate.blocks(x - A.x, z - A.z, radius)
         : Math.abs(z - A.z - gateZ) < gateHalfWidth && Math.abs(x - A.x - gateX) < 1.3,
-      tickGate: (dt, ctx, towardGate) => gate?.update(dt, ctx, towardGate),
+      tickGate(dt, ctx, towardGate) {
+        if (encounter) encounter.tick(dt, ctx);
+        else gate?.update(dt, ctx, towardGate);
+      },
+      encounter: () => encounter,
       gateCamera: (camera, safeFollow) => gate?.frameCamera(camera, safeFollow),
       gateCameraBoxes: (x, z) => gate?.cameraBoxesAt(x - A.x, z - A.z),
       restoreGatePose: () => gate?.restore(),
-      gateActive: () => !!gate && gate.state.phase !== 'closed' && gate.state.phase !== 'open',
+      gateActive: () => encounter ? encounter.locked() : !!gate && gate.state.phase !== 'closed' && gate.state.phase !== 'open',
       gateApproach: () => gate?.state.phase === 'approach',
-      ready(renderer) {
-        if (!pending) pending = loadHarbor(renderer).catch(error => {
+      ready(renderer, architecture) {
+        if (!pending) pending = loadHarbor(renderer, architecture).catch(error => {
           status.phase = 'failed';
           status.error = error.message;
           console.error('[U1] Anchorage assets', error);

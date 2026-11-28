@@ -4676,6 +4676,7 @@
     const chapter = r3Entry.chapter || 'r3';
     const memory = chapter === 'u1' ? underworldMemory : r3Memory;
     const releaseStage = retireBeforeChapter(ctx, R3, memory, r3Stage?.detachedAssets?.());
+    r3Stage?.dispose?.();
     r3Stage = null;
     await releaseStage;
     const origin = new THREE.Vector3(portalX, floorY, portalFront);
@@ -4702,7 +4703,7 @@
     followCamera(ctx.camera, ctx.hero, facing, FOLLOW_PITCH, FOLLOW_DIST, 0.016, true, true);
     const warmup = window.SinZoneStreamer?.prepareRender;
     if (warmup) memory.prewarm = await warmup(THREE, ctx.renderer, ctx.scene, ctx.camera, {
-      roots: [envelope, ctx.hero],
+      roots: [envelope, ctx.hero, ...(stage.encounter?.()?.prepare || [])],
       shouldContinue: () => r3Stage === stage && envelope.parent === ctx.scene
     });
     ctx.renderer.render(ctx.scene, ctx.camera);
@@ -5771,6 +5772,23 @@
     restoreGatePose: () => r3Stage?.restoreGatePose?.(),
     gateCamera: (cam, hero, yaw, pitch, dist, dt) =>
       r3Stage?.gateCamera?.(cam, () => followCamera(cam, hero, yaw, pitch, dist, dt, false, false)),
+    encounter: () => r3Stage?.encounter?.(),
+    combatCamera(cam, hero, yaw, pitch, dist, dt, manual) {
+      return r3Stage?.encounter?.()?.frameCamera(cam, hero, dt, manual,
+        wider => followCamera(cam, hero, yaw, pitch, dist + wider, dt, false, false),
+        (lens, feet) => {
+          const dx = lens.position.x - feet.x, dy = lens.position.y - feet.y - CAM_PIVOT;
+          const dz = lens.position.z - feet.z, length = Math.hypot(dx, dy, dz);
+          if (length < .01) return;
+          const angle = Math.atan2(-dx, -dz), elevation = Math.asin(dy / length);
+          const boxes = r3Stage.cameraBoxesAt(feet.x - portalX, feet.z - portalFront, feet.y - floorY) || noCameraColliders;
+          const hit = testSealedView(feet, angle, elevation, length, boxes, sealedView);
+          if (!hit.clearBody) followCamera(lens, feet, yaw, pitch, dist, dt, false, false);
+          else if (hit.length < length) lens.position.set(feet.x + hit.x * hit.length,
+            feet.y + CAM_PIVOT + hit.y * hit.length, feet.z + hit.z * hit.length);
+          rig.fresh = true;
+        });
+    },
     clampFollowTarget: clampFollowTarget,
     ownsGround: function () { return inR3() || state === 'FADING_OUT' || state === 'LOADING' || state === 'SETUP' || state === 'REVEAL' || state === 'FADING_IN' || state === 'FAILED' || (state === 'DONE' && occupant); },
     blocks: blocks,
