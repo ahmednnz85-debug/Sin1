@@ -155,11 +155,13 @@ const cam = (page, pos, tgt) => page.evaluate(([p, t]) => { const L = window.__v
       // groups: list of takes; each frame rendered deterministically at 30 fps simulation time
       const groups = JSON.parse(opt('groups', 'null')) || {
         'sin-axe': [['clip', 'sin', 'Attack_Right'], ['combo'], ['clip', 'sin', 'Finisher_Jump'], ['clip', 'sin', 'Finisher_Heavy', 0.35]],
-        'guardian-staff': [['clip', 'guardian', 'Attack_Staff_Swing_Right'], ['clip', 'guardian', 'Attack_Staff_Overhead'], ['clip', 'guardian', 'Attack_Claw_Combo']],
-        'guardian-slams': [['clip', 'guardian', 'Special_Ground_Slam'], ['clip', 'guardian', 'Special_Leap_Slam', 0.3]],
+        'guardian-staff': [['clip', 'guardian', 'Attack_Staff_Swing_Right'], ['clip', 'guardian', 'Attack_Staff_Overhead'], ['clip', 'guardian', 'Attack_Claw_Combo'], ['clip', 'guardian', 'Attack_Staff_Overhead', 0.3]],
+        'guardian-slams': [['clip', 'guardian', 'Special_Ground_Slam'], ['clip', 'guardian', 'Special_Leap_Slam', 0.5]],
         'impacts': [['effect', 'SIN_AXE_METAL_IMPACT', 'armor'], ['effect', 'SIN_AXE_PARRY', 'staff'], ['effect', 'IMPACT_WEAPON_CLASH', 'staff'], ['effect', 'IMPACT_METAL_METAL', 'metal'], ['effect', 'GUARDIAN_STAFF_CROWN_IMPACT', 'stone'], ['effect', 'IMPACT_WEAPON_WALL', 'wall']],
         'seal-enraged': [['clip', 'guardian', 'Special_Seal_Activation'], ['clip', 'guardian', 'Phase_Transition'], ['clip', 'guardian', 'Enraged_Idle', 1, 3.0]],
         'bursts': [['effect', 'SIN_AXE_LUNAR_BURST', 'stone'], ['effect', 'GUARDIAN_SPIRITUAL_BURST', 'stone'], ['effect', 'GUARDIAN_GOLDEN_SHOCKWAVE', 'stone']],
+        'weapons-motion': [['weapon', 'sin', 'Axe_CombatIdle', 1, 2.5], ['weapon', 'sin', 'walk_casual', 1, 3.0], ['weapon', 'sin', 'sprint_loop_quaternius', 1, 2.5], ['effect', 'SIN_AXE_CHARGE', 'stone'],
+          ['weapon', 'guardian', 'Combat_Idle', 1, 3.0], ['weapon', 'guardian', 'Walk_Forward', 1, 3.0], ['clip', 'guardian', 'Attack_Staff_Swing_Right', 0.3], ['clip', 'sin', 'Attack_Left', 0.25]],
         'duel': [['duel']]
       };
       const only = opt('only', '');
@@ -171,9 +173,14 @@ const cam = (page, pos, tgt) => page.evaluate(([p, t]) => { const L = window.__v
         const dir = path.join(OUT, 'frames-' + g); fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
         let f = 0;
         for (const tk of takes) {
-          const speed = tk[0] === 'clip' ? (tk[3] || 1) : tk[0] === 'effect' ? 1 : 1;
+          const speed = (tk[0] === 'clip' || tk[0] === 'weapon') ? (tk[3] || 1) : 1;
           const len = await page.evaluate(tk => {
             const L = window.__vfxLab; L.clear();
+            ['x', 'y', 'z', 'w', 'sigil'].forEach(k => { L.weaponBase('axe', k === 'sigil' ? 'x' : k, 0); L.weaponBase('staff', k, 0); });
+            if (tk[0] === 'weapon') {        // the weapon energy layer on its own, standing and moving
+              if (tk[1] === 'sin') L.weaponBase('axe', 'x', 0.9); else { L.weaponBase('staff', 'x', 0.8); L.weaponBase('staff', 'y', 0.8); L.weaponBase('staff', 'w', 0.7); L.weaponBase('staff', 'sigil', 1.2); }
+              L.playClip(tk[1], tk[2], { loop: true }); return tk[4];
+            }
             if (tk[0] === 'clip') { L.playClip(tk[1], tk[2], { loop: /Idle/.test(tk[2]) }); const c = (tk[1] === 'sin' ? L.sin : L.gdn).clips[tk[2]]; return tk[4] || c.duration + 1.6; }
             if (tk[0] === 'combo') { L.combo(); return 3.6; }
             if (tk[0] === 'duel') { L.duel(); return L.duelLength() + 0.5; }
@@ -187,7 +194,7 @@ const cam = (page, pos, tgt) => page.evaluate(([p, t]) => { const L = window.__v
               const L = window.__vfxLab;
               L.advance(dt, 1, false);
               // slow orbit in front of the acting character (its own facing), framing the weapon and the floor
-              const ch = tk[0] === 'clip' ? tk[1] : (tk[0] === 'combo' ? 'sin' : null);
+              const ch = (tk[0] === 'clip' || tk[0] === 'weapon') ? tk[1] : (tk[0] === 'combo' || tk[1] === 'SIN_AXE_CHARGE' ? 'sin' : null);
               const V = L.THREE.Vector3;
               let tgt, d, h, fwd, a0 = 0.75, a1 = 1.25;
               if (tk[0] === 'duel') { tgt = L.sin.root.position.clone().lerp(L.gdn.root.position, 0.45); tgt.y = 1.9; fwd = new V(1, 0, 0); d = 9.5; h = 0.9; a0 = -0.25; a1 = 0.25; }

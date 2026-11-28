@@ -163,15 +163,15 @@
      "type": "burst",
      "sprite": "spark_dot",
      "ramp": "spark",
-     "count": 84,
+     "count": 46,
      "surfaceKey": "sparks",
      "life": [
-      0.2875,
-      0.92
+      0.244,
+      0.782
      ],
      "speed": [
-      4.6,
-      13.8
+      2.76,
+      8.28
      ],
      "dir": "reflect",
      "spread": 60,
@@ -182,7 +182,7 @@
       0.0086,
       0.0216
      ],
-     "stretch": 0.0715,
+     "stretch": 0.0429,
      "aspect": 4,
      "intensity": 2.8,
      "fadeOut": 0.45,
@@ -193,14 +193,14 @@
      "type": "burst",
      "sprite": "spark_dot",
      "ramp": "spark",
-     "count": 17,
+     "count": 9,
      "life": [
-      0.69,
-      1.495
+      0.586,
+      1.271
      ],
      "speed": [
-      1.15,
-      3.45
+      0.69,
+      2.07
      ],
      "dir": "reflect",
      "spread": 80,
@@ -211,7 +211,7 @@
       0.0151,
       0.0281
      ],
-     "stretch": 0.026,
+     "stretch": 0.0156,
      "aspect": 3,
      "intensity": 2.0,
      "fadeOut": 0.6,
@@ -271,15 +271,15 @@
      "type": "burst",
      "sprite": "spark_dot",
      "ramp": "spark",
-     "count": 48,
+     "count": 26,
      "surfaceKey": "sparks",
      "life": [
-      0.2875,
-      0.805
+      0.244,
+      0.684
      ],
      "speed": [
-      3.45,
-      9.2
+      2.07,
+      5.52
      ],
      "dir": "reflect",
      "spread": 55,
@@ -290,7 +290,7 @@
       0.0108,
       0.0238
      ],
-     "stretch": 0.065,
+     "stretch": 0.039,
      "aspect": 4,
      "intensity": 2.4,
      "fadeOut": 0.45,
@@ -424,15 +424,15 @@
      "type": "burst",
      "sprite": "spark_dot",
      "ramp": "spark",
-     "count": 36,
+     "count": 19,
      "surfaceKey": "sparks",
      "life": [
-      0.23,
-      0.69
+      0.196,
+      0.586
      ],
      "speed": [
-      3.45,
-      9.2
+      2.07,
+      5.52
      ],
      "dir": "reflect",
      "spread": 50,
@@ -443,7 +443,7 @@
       0.0086,
       0.0194
      ],
-     "stretch": 0.065,
+     "stretch": 0.039,
      "aspect": 4,
      "intensity": 2.4,
      "fadeOut": 0.45,
@@ -594,14 +594,14 @@
      "type": "burst",
      "sprite": "spark_dot",
      "ramp": "spark",
-     "count": 77,
+     "count": 42,
      "life": [
-      0.2875,
-      0.805
+      0.244,
+      0.684
      ],
      "speed": [
-      4.6,
-      11.5
+      2.76,
+      6.9
      ],
      "dir": "normal",
      "spread": 80,
@@ -612,7 +612,7 @@
       0.0086,
       0.0216
      ],
-     "stretch": 0.0715,
+     "stretch": 0.0429,
      "aspect": 4,
      "intensity": 2.8,
      "fadeOut": 0.45,
