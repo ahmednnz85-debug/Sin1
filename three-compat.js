@@ -196,7 +196,8 @@ window.__SIN_THREE_VERSION__ = ThreeModule.REVISION;
 // origin body (GitHub Pages serves the same file for any query string).
 async function bootLegacyScripts() {
   const scripts = [...document.querySelectorAll('script[data-legacy-script]')];
-  for (const original of scripts) {
+  const loaded = new Set();
+  async function load(original) {
     if (original.dataset.src) {
       const url = new URL(original.dataset.src, document.baseURI).href;
       const res = await fetch(url, { cache: 'no-store' });
@@ -210,7 +211,15 @@ async function bootLegacyScripts() {
       document.body.appendChild(script);
       script.remove();
     }
+    loaded.add(original);
   }
+  const query = new URLSearchParams(location.search);
+  const level = query.get('level');
+  if (query.get('dev') === '1' && level) {
+    for (const script of scripts) if (script.hasAttribute('data-sandbox-registry')) await load(script);
+    if (window.SinAreas?.sandboxFor(level) && !document.dispatchEvent(new Event('sin-sandbox-entry', { cancelable: true }))) return;
+  }
+  for (const script of scripts) if (!loaded.has(script)) await load(script);
 }
 
 bootLegacyScripts().catch(error => {

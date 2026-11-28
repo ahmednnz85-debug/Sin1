@@ -248,6 +248,12 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     if (AUTOMATION.some(k => qs.has(k))) return start();
     showGate(start);
   }
+  if (devSession) doc.addEventListener?.('sin-sandbox-entry', event => {
+    if (!root.SinAreas?.sandboxFor(qs.get('level'))) return;
+    event.preventDefault();
+    startSession(qs.get('level'));
+  });
+
   async function startSession(id, start) {
     let a = null;
     try { await catalog(); a = byId.get(id); } catch (e) { console.error('[dev-hub]', e); }
@@ -258,8 +264,13 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     style();
     status('وضع المطور: تحميل ' + a.ar + ' (' + a.id + ')');
     // The first chapter is the game's own start; any later one boots alone.
-    const begin = session.direct ? game.chapter(a.stage, a) : (start(), null);
-    Promise.resolve(begin).then(() => { session.bootMs = Math.round(performance.now() - session.t0); return enter(a); }).then(() => {
+    const sandbox = chapter?.sandbox;
+    session.sandbox = !!sandbox;
+    const begin = sandbox ? sandbox(a).then(bind) : session.direct ? game.chapter(a.stage, a) : (start(), null);
+    Promise.resolve(begin).then(() => {
+      session.bootMs = Math.round(performance.now() - session.t0);
+      if (!sandbox) return enter(a);
+    }).then(() => {
       session.ready = true; session.ms = Math.round(performance.now() - session.t0);
       root.history.replaceState(null, '', link(a.id));
       status(''); toolbar();
@@ -380,6 +391,7 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
   function respawn() {
     if (!session || !session.ready) return;
     stopFly();
+    if (session.sandbox) return game.reset?.();
     const stage = activeChapter();
     const a = session.area.stage !== stage ? areas.find(area => area.stage === stage) : session.area;
     if (!a) return;
@@ -407,8 +419,8 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     panel.innerHTML = `<div class="tools">
       <button data-t="areas">قائمة المناطق</button><button data-t="reload">إعادة تحميل المنطقة</button>
       <button data-t="respawn">إعادة البطل للظهور</button><button data-t="fps">عداد FPS</button>
-      <button data-t="mem">مراقب الذاكرة</button><button data-t="fly">الكاميرا الحرة</button>
-      <button data-t="col">إظهار التصادمات</button><button data-t="clean">إخفاء الواجهة</button>
+      ${session.sandbox ? '' : '<button data-t="mem">مراقب الذاكرة</button>'}<button data-t="fly">الكاميرا الحرة</button>
+      ${session.sandbox ? '' : '<button data-t="col">إظهار التصادمات</button>'}<button data-t="clean">إخفاء الواجهة</button>
       <button data-t="copy">نسخ رابط المنطقة</button><button data-t="exit">الخروج من وضع المطور</button>
       ${root.SinAreas.chapterOf(session.area.stage)?.id === 'u1' || root.PalaceInterior?.encounter?.() ? '<button data-t="combatLab">مختبر القتال</button>' : ''}</div><div class="msg"></div>`;
     doc.body.appendChild(tool); doc.body.appendChild(panel);
@@ -439,6 +451,10 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
   function syncButtons() { if (panel) panel.querySelectorAll('[data-t]').forEach(b => b.classList.toggle('on', !!flags[b.dataset.t])); }
   function msg(t) { if (panel) panel.querySelector('.msg').textContent = t; }
   function openAreas() {
+    if (session?.sandbox) {
+      root.location.href = '?dev=1';
+      return;
+    }
     const host = el('div', { id: 'sin-dev-gate' });
     doc.body.appendChild(host);
     showList(host, () => host.remove());

@@ -62,10 +62,10 @@ const assetsOf = log => {
 };
 async function snapshot(page) {
   return page.evaluate(() => {
-    const r = window.__R, i = r && r.info, s = window.__sinDev;
+    const g = window.SinDevHub?.game(), r = window.__R || g?.renderer, i = r && r.info, s = window.__sinDev;
     let hero = null, blocked = null, est = null;
     try {
-      const g = window.SinDevHub && SinDevHub.game(), h = g && g.hero();
+      const h = g?.hero();
       hero = h && [+h.position.x.toFixed(2), +h.position.y.toFixed(2), +h.position.z.toFixed(2)];
       blocked = h ? g.blocked(h.position.x, h.position.z) : null;
       let sc = h; while (sc && sc.parent) sc = sc.parent;
@@ -155,6 +155,16 @@ async function direct(browser, levels) {
     try {
       await page.waitForFunction("window.__sinDev && (window.__sinDev.ready || window.__sinDev.error)", null, { timeout: 1500000, polling: 1000 });
       await page.waitForTimeout(3000);
+      if (await page.evaluate(() => !!window.__sinDev?.sandbox)) {
+        const shot = await page.screenshot({ path: path.join(OUT, `level-${id}.png`), timeout: 90000 }).then(() => true, () => false);
+        out[id] = { wallSeconds: (Date.now() - t0) / 1000, ...(await snapshot(page)), sandbox: true,
+          glbRequests: glbs(log), assets: assetsOf(log), errors: log.errors, screenshot: shot };
+        console.log(id, JSON.stringify(out[id]).slice(0,400));
+        report.results.direct = out;
+        save();
+        await ctx.close();
+        continue;
+      }
       // Walk a second forward with the controller: movement, camera, collisions.
       if(sampled){
         await page.evaluate(() => { window.__sinCaptureSample = true; });

@@ -30,7 +30,7 @@
     #include <colorspace_fragment>
   `;
 
-  function create(T, parent, tier = () => 'high', profiles = PROFILES) {
+  function create(T, parent, tier = () => 'high', profiles = PROFILES, lab) {
     const clock = { value: 0 }, textureFallback = new T.DataTexture(new Uint8Array([255,255,255,255]), 1, 1);
     textureFallback.needsUpdate = true;
     const rootSpace = new T.Group();
@@ -38,8 +38,8 @@
     parent.add(rootSpace);
     const keep = [], bindings = new Map();
     const tmp = new T.Vector3(), tmpB = new T.Vector3(), tmpC = new T.Vector3(), scratch = new T.Vector3();
-    const inverse = new T.Matrix4(), transpose = new T.Matrix4();
-    const color = new T.Color(), up = new T.Vector3(0, 1, 0);
+    const inverse = new T.Matrix4();
+    const color = new T.Color(), up = new T.Vector3(0, 1, 0), decalAxis = new T.Vector3(0,0,1);
     const prepared = [];
     let enabled = true, preview = '', forcedTier = 'auto', pressure = 0;
     let randomState = 118371;
@@ -55,6 +55,14 @@
       return current === 'low' || (forcedTier === 'auto' && pressure > 1) ? .5 : current === 'medium' ? .72 : 1;
     }
     function own(object) { keep.push(object); return object; }
+    function shader(layer, material) {
+      if (lab?.shaders[layer]) {
+        material.fragmentShader = lab.shaders[layer];
+        Object.assign(material.uniforms, lab.uniforms, lab.atlases[layer]);
+      }
+      return material;
+    }
+    const display = layer => !lab || lab.layers[layer] !== false;
     function mount(mesh) {
       mesh.name = 'CombatFX_' + mesh.name;
       rootSpace.add(mesh);
@@ -125,6 +133,7 @@
           }
         `
       }));
+      shader(isDust ? 'dust' : 'sparks', material);
       const mesh = new T.Mesh(geometry, material);
       mesh.name = name;
       mesh.frustumCulled = false;
@@ -152,7 +161,7 @@
           if (dirty) for (const buffer of Object.values(attr)) buffer.needsUpdate = true;
           dirty = false;
           geometry.instanceCount = used;
-          mesh.visible = enabled && used !== 0;
+          mesh.visible = enabled && used !== 0 && display(isDust ? 'dust' : 'sparks');
         },
         clear() { end.fill(0); used = cursor = 0; mesh.visible = false; },
         count() {
@@ -216,7 +225,7 @@
         rock.instanceColor.needsUpdate = true;
       }
       rock.count = count;
-      rock.visible = enabled && count > 0;
+      rock.visible = enabled && count > 0 && display('debris');
     }
 
     const crackGeometry = own(new T.PlaneGeometry(2,2));
@@ -241,6 +250,7 @@
           }
         `
       }));
+      shader('decal', material);
       const mesh = new T.Mesh(crackGeometry, material);
       mesh.name = 'ImpactCracks';
       mesh.rotation.x = -Math.PI/2;
@@ -248,14 +258,20 @@
       return { mesh, end: 0 };
     });
     let crackCursor = 0;
-    function decal(point, strength) {
+    function decal(point, strength, normal, scale) {
       const c = cracks[crackCursor++ % cracks.length];
       c.mesh.position.copy(point);
-      c.mesh.position.y += .018;
-      c.mesh.scale.setScalar(.62 + .68*strength);
-      c.mesh.rotation.z = random()*6.283;
+      if (lab) {
+        c.mesh.position.addScaledVector(normal,.012);
+        c.mesh.quaternion.setFromUnitVectors(decalAxis,normal);
+        c.mesh.rotateZ(random()*6.283);
+      } else {
+        c.mesh.position.y += .018;
+        c.mesh.rotation.z = random()*6.283;
+      }
+      c.mesh.scale.setScalar((.62 + .68*strength)*scale);
       c.mesh.material.uniforms.seed.value = 37*random();
-      c.end = clock.value + 3.25;
+      c.end = clock.value + 3.25*(lab?.settings.duration ?? 1);
     }
 
     const waveMesh = mount(new T.Mesh(own(new T.CylinderGeometry(1,1,1,52,4,true)),
@@ -292,6 +308,7 @@
         `
       }))));
     waveMesh.name = 'ShockFront';
+    shader('wave', waveMesh.material);
 
     const transfer = mount(new T.Mesh(own(new T.CylinderGeometry(.025,.09,1,12,7,true)),
       own(new T.ShaderMaterial({
@@ -433,6 +450,7 @@
           }
         `
       }));
+      shader('edge', material);
       const shell=new T.Mesh(source.geometry,material);
       shell.name='CombatFX_WeaponSurface';
       shell.userData.combatGlow=true;
@@ -474,6 +492,7 @@
           }
         `
       }));
+      shader('ribbon', material);
       const mesh=mount(new T.Mesh(geometry,material));
       mesh.name='WeaponRibbon';
       mesh.frustumCulled=false;
@@ -483,7 +502,8 @@
       function sample(weapon, path, intensity, dt) {
         if(clock.value-lastTime<.011) return 0;
         lastTime=clock.value;
-        localMatrix.multiplyMatrices(transpose.copy(rootSpace.matrixWorld).invert(),weapon.matrixWorld);
+        localMatrix.copy(rootSpace.matrixWorld).invert();
+        if(weapon)localMatrix.multiply(weapon.matrixWorld);
         tmp.copy(path[1]).applyMatrix4(localMatrix);
         const speed=prevValid?tmp.distanceTo(previous)/Math.max(.012,dt):0;
         previous.copy(tmp); prevValid=true;
@@ -492,7 +512,7 @@
         next.time=clock.value;
         next.weight=clamp((speed-.5)*.15,.16,.92)*intensity;
         for(let i=0;i<STRANDS;i++) {
-          const width=clamp(.48+speed*.066,.52,1.0);
+          const width=clamp((.48+speed*.066)*(lab?.settings.scale ?? 1),.42,1.22);
           next.points[i].copy(path[1]).lerp(path[i],width).applyMatrix4(localMatrix);
         }
         cursor=(cursor+1)%samples.length;
@@ -505,8 +525,9 @@
         for(let i=0;i<length;i++) {
           const s=samples[(cursor-1-i+samples.length)%samples.length];
           const age=clock.value-s.time;
-          if(age>config.length) break;
-          fade=(1-age/config.length)*s.weight;
+          const lifetime = config.length * (lab?.settings.duration ?? 1);
+          if(age>lifetime) break;
+          fade=(1-age/lifetime)*s.weight;
           const leading=i===0&&!active?.65:1;
           for(let j=0;j<STRANDS;j++){
             const p=s.points[j],n=count*STRANDS+j;
@@ -515,16 +536,24 @@
           }
           count++;
         }
-        mesh.visible=enabled&&count>1;
+        mesh.visible=enabled&&count>1&&display('ribbon');
         if(mesh.visible) {
           position.needsUpdate=true;
           life.needsUpdate=true;
           geometry.setDrawRange(0,(count-1)*(STRANDS-1)*6);
         }
       }
-      return {sample,update,clear(){length=0;prevValid=false;mesh.visible=false;}};
+      return {sample,update,visible:()=>mesh.visible,clear(){length=0;prevValid=false;mesh.visible=false;}};
     }
 
+    const socketTrails=new Map();
+    function bindRibbon(name,tint,length) {
+      if(!socketTrails.has(name))socketTrails.set(name,ribbon({tint,length}));
+    }
+    function traceRibbon(name,points,amount,dt) {
+      const r=socketTrails.get(name);
+      if(r && enabled && amount>.09)r.sample(null,points,amount,dt);
+    }
     function bindWeapon(weapon,names) {
       if(!weapon) return;
       for(const name of names) {
@@ -544,7 +573,7 @@
       p.level+=(amount-p.level)*(1-Math.exp(-dt*(amount>p.level?31:15)));
       p.active=intensity>.13&&enabled;
       for(const mask of p.masks) {
-        mask.visible=p.level>.018;
+        mask.visible=p.level>.018&&display('edge');
         mask.material.uniforms.amount.value=p.level;
       }
       if(!enabled||amount<.13) return;
@@ -559,16 +588,17 @@
         spark.spawn(tmp,scratch,.105+random()*.17,.005+random()*.005,color.setHex(p.config.tint));
       }
     }
-    function impact(point, {surface='metal',velocity,normal=up,strength=1,moon=false,fracture=false,floor}={}) {
+    function impact(point, {surface='metal',velocity,normal=up,strength=1,moon=false,fracture=false,floor,scale=1,decalScale=1,palette,durationScale=1}={}) {
       if(!enabled) return;
-      const spec=SURFACES[surface]||SURFACES.metal, quality=budget();
+      const spec=SURFACES[surface]||SURFACES.metal, quality=budget()*(lab?.settings.density ?? 1);
+      const lifetime = (lab?.settings.duration ?? 1)*durationScale;
       metrics.impacts++;
       if(surface in metrics)metrics[surface]++;
       const force=clamp(strength,.4,1.8), mild=surface==='flesh';
-      const rgb=color.setHex(moon&&surface!=='parry'?0x90bdff:spec.tint);
+      const rgb=color.setHex(palette ?? (moon&&surface!=='parry'?0x90bdff:spec.tint));
       if (surface !== 'flesh' && (surface === 'parry' || force > 1.12)) {
         scratch.copy(normal).multiplyScalar(.24);
-        spark.spawn(point,scratch,.079,.043*force,rgb,true);
+        spark.spawn(point,scratch,.079*lifetime,.043*force*scale,rgb,true);
       }
       const direction=tmpB.copy(velocity||up);
       const length=direction.length();
@@ -577,19 +607,19 @@
         const a=random()*6.283,s=.64+random()*3.95;
         tmpC.set(Math.cos(a)*s,.24+random()*2.7,Math.sin(a)*s).multiplyScalar(force)
           .addScaledVector(direction,1.55+random()*1.55).addScaledVector(normal,.34);
-        spark.spawn(point,tmpC,.095+random()*(mild?.13:.33),(.004+random()*.008)*force,rgb);
+        spark.spawn(point,tmpC,(.095+random()*(mild?.13:.33))*lifetime,(.004+random()*.008)*force*scale,rgb);
       }
       for(let n=0;n<Math.round(spec.dust*quality*force);n++){
         const a=random()*6.283,s=.65+random()*1.58;
         tmpC.set(Math.cos(a)*s,.065+random()*.24,Math.sin(a)*s).addScaledVector(direction,.28);
         tmp.copy(point).y+=.08+random()*.09;
-        dust.spawn(tmp,tmpC,.5+random()*.65,(.15+random()*.19)*force,color.setHex(surface==='spirit'?0x47777d:0x68675d));
+        dust.spawn(tmp,tmpC,(.5+random()*.65)*lifetime,(.15+random()*.19)*force*scale,color.setHex(surface==='spirit'?0x47777d:0x68675d));
       }
-      if(spec.fragments) stone(point,normal,mild?.017:.044,force,Math.round(spec.fragments*quality),floor);
-      if(fracture&&surface==='stone') decal(point,force);
+      if(spec.fragments) stone(point,normal,(mild?.017:.044)*scale,force,Math.round(spec.fragments*quality),floor);
+      if(fracture&&surface==='stone') decal(point,force,normal,scale*decalScale);
     }
-    function shockwave(position,radius,maximum,variant) {
-      const visible=enabled&&!!position&&radius>0;
+    function shockwave(position,radius,maximum,variant,palette) {
+      const visible=enabled&&!!position&&radius>0&&display('wave');
       waveMesh.visible=visible;
       if(!visible) return;
       const uniforms=waveMesh.material.uniforms;
@@ -598,7 +628,7 @@
       waveMesh.scale.set(radius,(earth?.26:.55)+.18*radius,radius);
       uniforms.progress.value=clamp(radius/maximum,0,1);
       uniforms.energy.value=earth?.96:1.18;
-      uniforms.hue.value.setHex(earth?0xe6a367:0x68d3d6);
+      uniforms.hue.value.setHex(palette ?? (earth?0xe6a367:0x68d3d6));
     }
     function beam(from,to) {
       transfer.visible=enabled&&!!from;
@@ -613,10 +643,11 @@
       if(frameDt>0) frame(frameDt);
       spark.update();dust.update();updateStone(dt);
       for(const c of cracks){
-        c.mesh.visible=enabled&&c.end>clock.value;
+        c.mesh.visible=enabled&&c.end>clock.value&&display('decal');
         c.mesh.material.uniforms.opacity.value=.78*clamp((c.end-clock.value)*.64,0,1);
       }
       for(const part of bindings.values())part.ribbon.update(part.active);
+      for(const trace of socketTrails.values())trace.update(true);
     }
     function frame(dt) {
       pressure=clamp(pressure+((dt>.025?.95:-.75)*dt),0,1.4);
@@ -629,11 +660,19 @@
         p.ribbon.clear();p.level=0;p.active=false;
         for(const m of p.masks)m.visible=false;
       }
+      for(const trace of socketTrails.values())trace.clear();
       waveMesh.visible=transfer.visible=false;
     }
 
     return {
-      prepare:prepared,bindWeapon,weapon,impact,update,frame,shockwave,beam,clear,
+      sample(name, points) {
+        const part = bindings.get(name);
+        if (!part) return false;
+        part.weapon.updateWorldMatrix(true,false);
+        points.forEach((point,index) => point.copy(part.surface.path[index]).applyMatrix4(part.weapon.matrixWorld));
+        return true;
+      },
+      prepare:prepared,bindWeapon,bindRibbon,traceRibbon,weapon,impact,update,frame,shockwave,beam,clear,
       preview(name){preview=profiles[name]?name:'';},
       enable(visible){enabled=visible;if(!enabled)clear();},
       setTier(value){forcedTier=['high','medium','low'].includes(value)?value:'auto';},
@@ -655,7 +694,10 @@
       },
       stats(){
         return {enabled,tier:budget(),...metrics,activeSparks:spark.count(),activeDust:dust.count(),rocks:rock.count,
-          cracks:cracks.filter(c=>c.mesh.visible).length,wave:waveMesh.visible};
+          cracks:cracks.filter(c=>c.mesh.visible).length,wave:waveMesh.visible,
+          activeRibbons:[...bindings.values()].filter(p=>p.ribbon.visible()).length+
+            [...socketTrails.values()].filter(r=>r.visible()).length,
+          activeEdges:[...bindings.values()].reduce((n,p)=>n+p.masks.filter(mask=>mask.visible).length,0)};
       },
       dispose() {
         clear();

@@ -1,0 +1,73 @@
+html.sin-vfx-lab, html.sin-vfx-lab body { margin:0; width:100%; height:100%; overflow:hidden; }
+html.sin-vfx-lab body > :not(#vfx-lab, #sin-dev-tool, #sin-dev-panel, #sin-dev-status, #sin-dev-fly, #sin-dev-fps) {
+  display:none!important;
+}
+#vfx-lab {
+  --paper:#f0e4d1; --bronze:#dcb37a; --night:#11151e;
+  position:fixed;inset:0;z-index:30;display:grid;grid-template-columns:minmax(290px,352px) minmax(0,1fr);
+  color:var(--paper);background:var(--night);font:14px system-ui,sans-serif;grid-template-rows:minmax(0,1fr);
+}
+#vfx-lab *, #vfx-lab *::before,#vfx-lab *::after { box-sizing:border-box; }
+#vfx-lab > canvas { grid-column:2;grid-row:1;display:block;width:100%;height:100%;touch-action:none; }
+.vfx-controls {
+  grid-column:1;grid-row:1;overflow:auto;padding: max(60px, env(safe-area-inset-top)) 18px 19px;
+  background:linear-gradient(155deg,#252124 0,#131820 64%);border-inline-end:1px solid #755b423c;
+}
+.vfx-controls header p { margin:0;color:var(--bronze);font:12px Georgia,serif;letter-spacing:.24em;direction:ltr;text-align:right; }
+.vfx-controls header p span { color:#a57249; }
+.vfx-controls h1 { font:600 clamp(18px,3.6vw,24px) system-ui,sans-serif;margin:.13em 0 .88em; }
+#vfx-lab button,#vfx-lab select {
+  border:1px solid #765d45;color:var(--paper);background:#171920;padding:7px 10px;
+  font:inherit;border-radius:5px;min-height:37px;cursor:pointer;
+}
+#vfx-lab :is(button,select,input):focus-visible { outline:2px solid #92c4ef;outline-offset:2px; }
+#vfx-lab button:hover { background:#392e29; }
+#vfx-lab .vfx-primary { background:#ac824c;color:#15100c;font-weight:700; }
+#vfx-lab .vfx-demo { width:100%;margin-top:8px;border-color:#7b9baf;color:#d3e9ff; }
+.vfx-field {display:flex;flex-direction:column;gap:4px;min-width:0;color:#dbc8af;margin-bottom:8px;font-size:12px;}
+.vfx-field select {width:100%;font-size:14px;}
+.vfx-pair,.vfx-buttons { display:grid;gap:6px;grid-template-columns:1fr 1fr; }
+.vfx-buttons { grid-template-columns:repeat(4,1fr); }
+.vfx-buttons button {white-space:nowrap;}
+.vfx-check { display:block;margin:8px 0 11px; }
+.vfx-check input,.vfx-color input { vertical-align:middle; }
+#vfx-lab input { accent-color:#d0a369; }
+.vfx-timeline { border-top:1px solid #775d43aa;margin:8px 0 12px;padding:7px 0;color:#d1d8e2;font-size:11px; }
+.vfx-timeline > div { display:flex;justify-content:space-between;gap:5px;padding:3px 0; }
+.vfx-timeline dd { margin:0;overflow-wrap:anywhere;font:11px ui-monospace,monospace; }
+.vfx-controls details { border-top:1px solid #6049376b;padding:7px 0; }
+.vfx-controls summary { cursor:pointer;color:var(--bronze);padding:3px 0; }
+.vfx-sliders,.vfx-layers { display:grid;grid-template-columns:1fr 1fr;gap:6px 13px; }
+.vfx-sliders label { display:grid;grid-template-columns:1fr auto;font-size:11px;align-items:center; }
+.vfx-sliders input { grid-column:span 2;width:100%;margin:1px 0 3px; }
+.vfx-sliders output { font:10px ui-monospace,monospace;color:#93c5f0; }
+.vfx-layers,.vfx-file,.vfx-color { font-size:11px; }
+.vfx-color { display:flex;align-items:center;gap:6px;margin-bottom:6px; }
+.vfx-file {display:block;padding:4px 0;}
+.vfx-file input{display:block;width:100%;font-size:11px;}
+.vfx-note,#vfx-sheets { display:block;color:#a9bed1;font-size:11px;margin:6px 0; }
+.vfx-presets { grid-template-columns:1fr 1fr;margin-top:10px; }
+.vfx-show,.vfx-perf {
+  position:absolute;z-index:1;background:#121923db!important;border:1px solid #8e7153aa;padding:6px 9px;border-radius:5px;
+  bottom:max(11px,env(safe-area-inset-bottom));left:max(12px,env(safe-area-inset-left));color:#e0e1e5;
+}
+.vfx-show { bottom:auto;top:max(14px,env(safe-area-inset-top)); }
+.vfx-perf { font:11px/1.3 ui-monospace,monospace;pointer-events:none; }
+#vfx-lab.vfx-hidden,html.sin-dev-fly-active #vfx-lab {grid-template-columns:0 minmax(0,1fr);}
+#vfx-lab.vfx-hidden .vfx-controls,html.sin-dev-fly-active #vfx-lab :is(.vfx-controls,.vfx-show,.vfx-perf) {display:none;}
+@media(max-width:720px) {
+  #vfx-lab {grid-template-columns:minmax(205px,42%) minmax(0,1fr);}
+  .vfx-controls {padding-inline:10px;}
+  .vfx-perf {max-width:53vw;font-size:9px;}
+}
+@media(max-width:540px) and (orientation:portrait) {
+  #vfx-lab {grid-template-columns:1fr;grid-template-rows:minmax(200px,55vh) minmax(0,1fr);}
+  #vfx-lab>canvas {grid-column:1;grid-row:1;}
+  .vfx-controls {grid-column:1;grid-row:2;padding:12px 13px max(15px,env(safe-area-inset-bottom));}
+  .vfx-perf {bottom:auto;top:calc(55vh - 33px);max-width:95vw;}
+  #vfx-lab.vfx-hidden,html.sin-dev-fly-active #vfx-lab {grid-template-columns:1fr;grid-template-rows:1fr;}
+}
+
+html.sin-vfx-lab #sin-build {display:none!important;}
+
+.vfx-download {color:#bcddf9;font-size:11px;}
