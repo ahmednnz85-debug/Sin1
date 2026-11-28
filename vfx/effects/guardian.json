@@ -1,0 +1,3110 @@
+{
+ "set": "guardian",
+ "note": "Guardian of the Covenant. Palette: cursed gold with violet undertone (gold_* elements). The Guardian is ~4.8 m tall and its staff ~3.9 m, so sizes are larger than Sîn's. Effects with impactAt are multi-phase: preparation before impactAt, the hit at impactAt, decay after. An animation binding starts them at (impact time - impactAt).",
+ "effects": [
+  {
+   "id": "GUARDIAN_STAFF_LIGHT_TRAIL",
+   "group": "guardian",
+   "ar": "أثر الصولجان الخفيف",
+   "en": "Staff light trail",
+   "duration": 0.8,
+   "loop": true,
+   "palette": "gold",
+   "kind": "trail",
+   "layers": [
+    {
+     "name": "part-glow",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "intensity": 1.0,
+     "rise": 0.08,
+     "release": 0.35,
+     "flow": 0.8,
+     "edgeOnly": 0.75
+    },
+    {
+     "name": "rim-glow",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "intensity": 0.6,
+     "rise": 0.08,
+     "release": 0.35
+    },
+    {
+     "name": "part",
+     "type": "trail",
+     "rails": "@part_curve",
+     "sprite": "gold_streak",
+     "sprite2": "gold_wave",
+     "ramp": "gold",
+     "length": 0.13,
+     "speedRef": 10,
+     "minSpeed": 1.8,
+     "intensity": 0.9,
+     "edge": 1.2,
+     "flow": 0.08,
+     "dissolve": 0.85,
+     "sparks": {
+      "blend": "add",
+      "sprite": "spark_dot",
+      "ramp": "spark",
+      "size": [
+       0.012,
+       0.022
+      ],
+      "life": [
+       0.3,
+       0.7
+      ],
+      "speed": [
+       0.5,
+       2.0
+      ],
+      "dir": "outward",
+      "spread": 180,
+      "gravity": 3.5,
+      "drag": 1.8,
+      "stretch": 0.04,
+      "aspect": 3,
+      "perMeter": 2.5,
+      "inherit": 0.2,
+      "intensity": 2.0,
+      "soft": 0.03
+     },
+     "profile": "along"
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Attack_Staff_Swing_Right"
+   }
+  },
+  {
+   "id": "GUARDIAN_STAFF_HEAVY_TRAIL",
+   "group": "guardian",
+   "ar": "أثر الصولجان الثقيل",
+   "en": "Staff heavy trail",
+   "duration": 1.2,
+   "loop": true,
+   "palette": "gold",
+   "kind": "trail",
+   "layers": [
+    {
+     "name": "part-glow",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "intensity": 1.4,
+     "rise": 0.08,
+     "release": 0.35,
+     "flow": 0.8,
+     "edgeOnly": 0.75
+    },
+    {
+     "name": "rim-glow",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "intensity": 0.84,
+     "rise": 0.08,
+     "release": 0.35
+    },
+    {
+     "name": "sigils",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "shaft",
+     "intensity": 0.25,
+     "sigil": 1.4,
+     "rise": 0.15,
+     "release": 0.5
+    },
+    {
+     "name": "part",
+     "type": "trail",
+     "rails": "@part_curve",
+     "sprite": "gold_streak",
+     "sprite2": "gold_ground_wave",
+     "ramp": "gold",
+     "length": 0.15,
+     "speedRef": 10,
+     "minSpeed": 1.8,
+     "intensity": 1.2,
+     "edge": 1.5,
+     "flow": 0.12,
+     "dissolve": 0.85,
+     "sparks": {
+      "blend": "add",
+      "sprite": "spark_dot",
+      "ramp": "spark",
+      "size": [
+       0.012,
+       0.022
+      ],
+      "life": [
+       0.4,
+       0.9
+      ],
+      "speed": [
+       0.6,
+       2.5
+      ],
+      "dir": "outward",
+      "spread": 180,
+      "gravity": 4,
+      "drag": 1.6,
+      "stretch": 0.04,
+      "aspect": 3,
+      "perMeter": 4,
+      "inherit": 0.25,
+      "intensity": 2.2,
+      "soft": 0.03
+     },
+     "profile": "along"
+    },
+    {
+     "name": "shaft",
+     "type": "trail",
+     "rails": "staff_shaft",
+     "sprite": "gold_wave",
+     "sprite2": "gold_streak",
+     "ramp": "gold",
+     "length": 0.3,
+     "speedRef": 10,
+     "minSpeed": 1.8,
+     "widthMin": 0.8,
+     "width": 1.0,
+     "intensity": 0.53,
+     "edge": 0.2,
+     "flow": 0.2,
+     "dissolve": 0.9
+    },
+    {
+     "name": "spirits",
+     "type": "stream",
+     "at": "weapon",
+     "sprite": "mote",
+     "ramp": "ember",
+     "rate": 30,
+     "life": [
+      0.6,
+      1.2
+     ],
+     "size": [
+      0.051,
+      0.102
+     ],
+     "sizeEnd": 0.3,
+     "speed": [
+      0.1,
+      0.5
+     ],
+     "dir": "up",
+     "spread": 70,
+     "gravity": -0.6,
+     "drag": 1.2,
+     "intensity": 1.6,
+     "fadeOut": 0.6,
+     "soft": 0.05,
+     "weapon": "staff",
+     "part": "@part_edge"
+    },
+    {
+     "name": "haze",
+     "type": "stream",
+     "blend": "distort",
+     "at": "weapon",
+     "sprite": "soft_glow",
+     "rate": 30,
+     "life": [
+      0.25,
+      0.45
+     ],
+     "size": [
+      0.5,
+      0.8
+     ],
+     "sizeEnd": 1.6,
+     "speed": [
+      0.1,
+      0.3
+     ],
+     "dir": "up",
+     "spread": 60,
+     "intensity": 0.8,
+     "minTier": "medium",
+     "weapon": "staff",
+     "part": "@part_edge"
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Attack_Staff_Overhead"
+   }
+  },
+  {
+   "id": "GUARDIAN_STAFF_BLADE_IMPACT",
+   "group": "guardian",
+   "ar": "ضربة النصل السفلي الحاد",
+   "en": "Lower blade impact",
+   "duration": 1.2,
+   "tail": 5,
+   "palette": "gold",
+   "kind": "impact",
+   "surface": "stone",
+   "layers": [
+    {
+     "name": "blade-flare",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "blade",
+     "intensity": 1.6,
+     "rise": 0.02,
+     "end": 0.2,
+     "release": 0.45,
+     "edgeOnly": 0.9
+    },
+    {
+     "name": "cut",
+     "type": "sprite",
+     "orient": "swing",
+     "sprite": "gold_slash_thin",
+     "size": 1.6,
+     "sizeEnd": 1.1,
+     "life": 0.22,
+     "fadeIn": 0.02,
+     "fadeOut": 0.75,
+     "intensity": 1.8,
+     "offset": [
+      0.3,
+      -0.3,
+      0
+     ],
+     "dissolve": 0.8,
+     "soft": 0.3
+    },
+    {
+     "name": "spray",
+     "type": "sprite",
+     "orient": "billboard",
+     "sprite": [
+      "spark_burst_b",
+      "spark_star",
+      "spark_burst_e"
+     ],
+     "size": 1.4,
+     "sizeEnd": 1.9,
+     "life": 0.16,
+     "fadeIn": 0.01,
+     "fadeOut": 0.75,
+     "intensity": 1.3,
+     "offset": [
+      0.2,
+      0,
+      0
+     ],
+     "soft": 0.2
+    },
+    {
+     "name": "lens",
+     "type": "sprite",
+     "sprite": "gold_lens",
+     "rotation": 0,
+     "size": 0.4,
+     "sizeEnd": 0.7,
+     "aspect": 6,
+     "life": 0.12,
+     "fadeIn": 0.01,
+     "fadeOut": 0.8,
+     "intensity": 2.2,
+     "offset": [
+      0.15,
+      0,
+      0
+     ],
+     "soft": 0.2
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "color": [
+      1.0,
+      0.72,
+      0.35
+     ],
+     "intensity": 6.16,
+     "life": 0.18,
+     "range": 6,
+     "lift": 0.6
+    },
+    {
+     "name": "sparks",
+     "type": "burst",
+     "sprite": "spark_dot",
+     "ramp": "spark",
+     "count": 70,
+     "surfaceKey": "sparks",
+     "life": [
+      0.2875,
+      0.805
+     ],
+     "speed": [
+      6.9,
+      17.25
+     ],
+     "dir": "reflect",
+     "reflectBlend": 0.25,
+     "spread": 24,
+     "gravity": 9.8,
+     "drag": 1.05,
+     "bounce": 0.3,
+     "size": [
+      0.0108,
+      0.0259
+     ],
+     "stretch": 0.065,
+     "aspect": 4,
+     "intensity": 2.8,
+     "fadeOut": 0.45,
+     "soft": 0.02
+    },
+    {
+     "name": "shards",
+     "type": "burst",
+     "sprite": "gold_shards",
+     "count": 3,
+     "life": [
+      0.2,
+      0.3
+     ],
+     "speed": [
+      1,
+      2
+     ],
+     "dir": "reflect",
+     "spread": 30,
+     "size": [
+      0.5,
+      0.7
+     ],
+     "sizeEnd": 1.3,
+     "drag": 3,
+     "intensity": 1.4,
+     "fadeIn": 0.02,
+     "fadeOut": 0.7,
+     "dissolve": 0.7,
+     "soft": 0.3
+    },
+    {
+     "name": "debris",
+     "type": "debris",
+     "count": 6,
+     "speed": [
+      2.5,
+      6
+     ],
+     "dir": "reflect",
+     "spread": 30,
+     "size": [
+      0.04,
+      0.1
+     ],
+     "life": [
+      1.8,
+      2.8
+     ],
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "dust",
+     "type": "burst",
+     "blend": "alpha",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "surfaceTint": true,
+     "tint": [
+      0.3,
+      0.27,
+      0.24
+     ],
+     "count": 7,
+     "life": [
+      1.0,
+      1.8
+     ],
+     "speed": [
+      1.0,
+      2.4
+     ],
+     "dir": "reflect",
+     "spread": 35,
+     "drag": 2.4,
+     "gravity": -0.1,
+     "size": [
+      0.35,
+      0.6
+     ],
+     "sizeEnd": 1.76,
+     "sizeCurve": 0.6,
+     "spin": [
+      -25,
+      25
+     ],
+     "intensity": 0.525,
+     "fadeIn": 0.08,
+     "fadeOut": 0.65,
+     "dissolve": 0.5,
+     "soft": 0.35,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "gash",
+     "type": "decal",
+     "sprite": [
+      "crack_line",
+      "crack_web"
+     ],
+     "size": 1.8,
+     "life": 6,
+     "glow": 1.35,
+     "glowTime": 0.64,
+     "surfaces": [
+      "stone",
+      "sand"
+     ]
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "amount": 0.28,
+     "freq": 26
+    },
+    {
+     "name": "edge-sparks",
+     "type": "burst",
+     "at": "weapon",
+     "weapon": "staff",
+     "part": "blade_edge",
+     "sprite": "spark_dot",
+     "ramp": "spark",
+     "count": 30,
+     "life": [
+      0.2,
+      0.5
+     ],
+     "speed": [
+      2,
+      6
+     ],
+     "dir": "surface",
+     "spread": 30,
+     "gravity": 9.8,
+     "drag": 1.4,
+     "size": [
+      0.008,
+      0.016
+     ],
+     "stretch": 0.06,
+     "aspect": 3,
+     "intensity": 2.6,
+     "soft": 0.02
+    }
+   ]
+  },
+  {
+   "id": "GUARDIAN_STAFF_CROWN_IMPACT",
+   "group": "guardian",
+   "ar": "ضربة الرأس العلوي الثقيل",
+   "en": "Crown head impact",
+   "duration": 1.8,
+   "tail": 7,
+   "palette": "gold",
+   "kind": "impact",
+   "surface": "stone",
+   "layers": [
+    {
+     "name": "crown-flare",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "crown",
+     "intensity": 1.6,
+     "rise": 0.02,
+     "end": 0.3,
+     "release": 0.6,
+     "edgeOnly": 0.5
+    },
+    {
+     "name": "crown-rim",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "intensity": 1.4,
+     "rise": 0.02,
+     "end": 0.3,
+     "release": 0.6
+    },
+    {
+     "name": "flash",
+     "type": "sprite",
+     "sprite": "gold_flower",
+     "size": 1.8,
+     "sizeEnd": 2.8,
+     "life": 0.2,
+     "fadeIn": 0.02,
+     "fadeOut": 0.8,
+     "intensity": 0.98,
+     "offset": [
+      0.4,
+      0,
+      0
+     ],
+     "soft": 0.4
+    },
+    {
+     "name": "spray",
+     "type": "sprite",
+     "orient": "billboard",
+     "sprite": [
+      "spark_burst_b",
+      "spark_star",
+      "spark_burst_e"
+     ],
+     "size": 1.4,
+     "sizeEnd": 1.9,
+     "life": 0.16,
+     "fadeIn": 0.01,
+     "fadeOut": 0.75,
+     "intensity": 1.3,
+     "offset": [
+      0.2,
+      0,
+      0
+     ],
+     "soft": 0.2
+    },
+    {
+     "name": "burst",
+     "type": "sprite",
+     "orient": "axial",
+     "sprite": "gold_ground_burst",
+     "size": 1.6,
+     "sizeEnd": 2.2,
+     "life": 0.3,
+     "fadeIn": 0.02,
+     "fadeOut": 0.7,
+     "intensity": 0.735,
+     "soft": 0.3
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "color": [
+      1.0,
+      0.68,
+      0.3
+     ],
+     "intensity": 9.24,
+     "life": 0.4,
+     "range": 9,
+     "lift": 0.8
+    },
+    {
+     "name": "ring",
+     "type": "shockwave",
+     "kind": "ring",
+     "ramp": "gold",
+     "radius0": 0.3,
+     "radius": 3.6,
+     "life": 0.6,
+     "intensity": 1.2,
+     "start": 0.02,
+     "surfaces": [
+      "stone",
+      "sand"
+     ]
+    },
+    {
+     "name": "haze",
+     "type": "shockwave",
+     "kind": "distort",
+     "radius0": 0.3,
+     "radius": 4.0,
+     "life": 0.5,
+     "intensity": 1.3,
+     "start": 0.02,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "sparks",
+     "type": "burst",
+     "sprite": "spark_dot",
+     "ramp": "spark",
+     "count": 98,
+     "surfaceKey": "sparks",
+     "life": [
+      0.345,
+      1.035
+     ],
+     "speed": [
+      4.6,
+      12.65
+     ],
+     "dir": "normal",
+     "spread": 70,
+     "gravity": 9.8,
+     "drag": 0.975,
+     "bounce": 0.35,
+     "size": [
+      0.0129,
+      0.0324
+     ],
+     "stretch": 0.065,
+     "aspect": 4,
+     "intensity": 2.6,
+     "fadeOut": 0.45,
+     "soft": 0.02
+    },
+    {
+     "name": "debris",
+     "type": "debris",
+     "count": 14,
+     "speed": [
+      3,
+      7.5
+     ],
+     "dir": "normal",
+     "spread": 60,
+     "radius": 0.4,
+     "shape": "disc",
+     "size": [
+      0.06,
+      0.18
+     ],
+     "life": [
+      2.4,
+      3.6
+     ],
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "dust",
+     "type": "burst",
+     "blend": "alpha",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "surfaceTint": true,
+     "tint": [
+      0.3,
+      0.27,
+      0.24
+     ],
+     "count": 18,
+     "life": [
+      1.6,
+      3.0
+     ],
+     "speed": [
+      1.8,
+      4.2
+     ],
+     "dir": "radial",
+     "lift": [
+      0.05,
+      0.3
+     ],
+     "drag": 2.2,
+     "gravity": -0.12,
+     "size": [
+      0.6,
+      1.1
+     ],
+     "sizeEnd": 2.24,
+     "sizeCurve": 0.6,
+     "spin": [
+      -20,
+      20
+     ],
+     "intensity": 0.595,
+     "fadeIn": 0.08,
+     "fadeOut": 0.65,
+     "dissolve": 0.5,
+     "start": 0.03,
+     "soft": 0.5,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "cracks",
+     "type": "decal",
+     "sprite": [
+      "crack_radial_hole",
+      "crack_star_plate"
+     ],
+     "size": 3.0,
+     "life": 8,
+     "glow": 1.6,
+     "glowTime": 0.88,
+     "surfaces": [
+      "stone",
+      "sand"
+     ]
+    },
+    {
+     "name": "embers",
+     "type": "burst",
+     "sprite": "mote",
+     "ramp": "ember",
+     "count": 40,
+     "life": [
+      1.0,
+      2.2
+     ],
+     "speed": [
+      0.5,
+      2.0
+     ],
+     "dir": "radial",
+     "lift": [
+      0.6,
+      1.4
+     ],
+     "radius": 0.6,
+     "shape": "disc",
+     "gravity": -0.6,
+     "drag": 1.4,
+     "size": [
+      0.051,
+      0.102
+     ],
+     "sizeEnd": 0.3,
+     "intensity": 1.5,
+     "fadeOut": 0.7,
+     "start": 0.05,
+     "soft": 0.05
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "amount": 0.55,
+     "freq": 22
+    },
+    {
+     "name": "crown-embers",
+     "type": "burst",
+     "at": "weapon",
+     "weapon": "staff",
+     "part": "rim",
+     "sprite": "mote",
+     "ramp": "ember",
+     "count": 45,
+     "life": [
+      0.5,
+      1.1
+     ],
+     "speed": [
+      0.6,
+      2.0
+     ],
+     "dir": "surface",
+     "spread": 40,
+     "gravity": -0.4,
+     "drag": 1.8,
+     "size": [
+      0.03,
+      0.06
+     ],
+     "sizeEnd": 0.3,
+     "intensity": 1.8,
+     "fadeOut": 0.7,
+     "soft": 0.04
+    }
+   ]
+  },
+  {
+   "id": "GUARDIAN_STAFF_GROUND_SLAM",
+   "group": "guardian",
+   "ar": "ضربة الصولجان الساحقة",
+   "en": "Staff ground slam",
+   "duration": 3.2,
+   "tail": 9,
+   "impactAt": 0.9,
+   "palette": "gold",
+   "kind": "phased",
+   "surface": "stone",
+   "layers": [
+    {
+     "name": "prep-part",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "start": 0.0,
+     "end": 0.9500000000000001,
+     "intensity": 1.3,
+     "rise": 0.765,
+     "release": 0.9,
+     "pulse": 2.2,
+     "flow": 0.6,
+     "edgeOnly": 0.6
+    },
+    {
+     "name": "prep-rim",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "start": 0.0,
+     "end": 0.9500000000000001,
+     "intensity": 0.9,
+     "rise": 0.765,
+     "release": 0.9
+    },
+    {
+     "name": "prep-shaft",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "shaft",
+     "start": 0.2,
+     "end": 0.9500000000000001,
+     "intensity": 0.35,
+     "sigil": 1.8,
+     "rise": 0.54,
+     "release": 1.1
+    },
+    {
+     "name": "impact-flare",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "start": 0.9,
+     "end": 1.15,
+     "intensity": 2.0,
+     "rise": 0.02,
+     "release": 0.7
+    },
+    {
+     "name": "prep-sigils",
+     "type": "glow",
+     "material": "Covenant_Staff_Sigil_Emission",
+     "start": 0.0,
+     "end": 1.05,
+     "rise": 0.8,
+     "peak": 5,
+     "pulse": 2.2,
+     "release": 0.9
+    },
+    {
+     "name": "prep-fissures",
+     "type": "glow",
+     "material": "Covenant_Golden_Fissures_Emission",
+     "start": 0.2,
+     "end": 1.1,
+     "rise": 0.7,
+     "peak": 3,
+     "release": 1.2
+    },
+    {
+     "name": "prep-gather",
+     "type": "stream",
+     "at": "weapon",
+     "sprite": "mote",
+     "ramp": "ember",
+     "start": 0.0,
+     "end": 0.85,
+     "rate": 150,
+     "ramp_up": 0.6,
+     "life": [
+      0.4,
+      0.7
+     ],
+     "radius": [
+      0.4,
+      1.0
+     ],
+     "shape": "shell",
+     "dir": "inward",
+     "size": [
+      0.03,
+      0.06
+     ],
+     "sizeEnd": 0.4,
+     "intensity": 2.2,
+     "fadeIn": 0.3,
+     "fadeOut": 0.25,
+     "soft": 0.05,
+     "weapon": "staff",
+     "part": "@part_edge"
+    },
+    {
+     "name": "prep-spirits",
+     "type": "stream",
+     "at": "weapon",
+     "sprite": "wisp",
+     "ramp": "gold",
+     "orient": "axial",
+     "start": 0.1,
+     "end": 0.9,
+     "rate": 26,
+     "life": [
+      0.4,
+      0.7
+     ],
+     "size": [
+      0.3,
+      0.55
+     ],
+     "aspect": 0.45,
+     "speed": [
+      0.3,
+      0.8
+     ],
+     "dir": "up",
+     "spread": 25,
+     "intensity": 1.4,
+     "fadeIn": 0.25,
+     "fadeOut": 0.6,
+     "soft": 0.1,
+     "weapon": "staff",
+     "part": "@part"
+    },
+    {
+     "name": "prep-haze",
+     "type": "stream",
+     "blend": "distort",
+     "at": "weapon",
+     "sprite": "soft_glow",
+     "start": 0.2,
+     "end": 0.9,
+     "rate": 26,
+     "life": [
+      0.35,
+      0.6
+     ],
+     "size": [
+      0.5,
+      0.8
+     ],
+     "sizeEnd": 1.6,
+     "speed": [
+      0.2,
+      0.5
+     ],
+     "dir": "up",
+     "spread": 40,
+     "intensity": 0.7,
+     "minTier": "medium",
+     "weapon": "staff",
+     "part": "@part"
+    },
+    {
+     "name": "swing",
+     "type": "trail",
+     "rails": "@part_curve",
+     "sprite": "gold_streak",
+     "sprite2": "gold_ground_wave",
+     "ramp": "gold",
+     "start": 0.55,
+     "end": 0.93,
+     "length": 0.15,
+     "speedRef": 10,
+     "minSpeed": 1.8,
+     "intensity": 1.27,
+     "edge": 1.5,
+     "flow": 0.12,
+     "dissolve": 0.85,
+     "sparks": {
+      "blend": "add",
+      "sprite": "spark_dot",
+      "ramp": "spark",
+      "size": [
+       0.0225,
+       0.0525
+      ],
+      "life": [
+       0.35,
+       0.8
+      ],
+      "speed": [
+       0.6,
+       2.5
+      ],
+      "dir": "outward",
+      "spread": 180,
+      "gravity": 4,
+      "drag": 1.6,
+      "stretch": 0.04,
+      "aspect": 3,
+      "perMeter": 5,
+      "inherit": 0.3,
+      "intensity": 2.4,
+      "soft": 0.03
+     },
+     "profile": "along"
+    },
+    {
+     "name": "flash",
+     "type": "sprite",
+     "start": 0.9,
+     "sprite": "gold_flower",
+     "size": 2.6,
+     "sizeEnd": 3.6,
+     "life": 0.18,
+     "fadeIn": 0.015,
+     "fadeOut": 0.85,
+     "intensity": 1.1,
+     "offset": [
+      0.5,
+      0,
+      0
+     ],
+     "soft": 0.5
+    },
+    {
+     "name": "star",
+     "type": "sprite",
+     "start": 0.9,
+     "sprite": "gold_star",
+     "size": 1.4,
+     "sizeEnd": 0.6,
+     "life": 0.14,
+     "fadeIn": 0.01,
+     "fadeOut": 0.7,
+     "intensity": 1.6,
+     "offset": [
+      0.3,
+      0,
+      0
+     ],
+     "soft": 0.3
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "start": 0.9,
+     "color": [
+      1.0,
+      0.66,
+      0.28
+     ],
+     "intensity": 15.12,
+     "life": 0.6,
+     "range": 12,
+     "lift": 1.0
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "start": 0.9,
+     "amount": 0.8,
+     "freq": 20
+    },
+    {
+     "name": "metal-sparks",
+     "type": "burst",
+     "start": 0.9,
+     "sprite": "spark_dot",
+     "ramp": "spark",
+     "count": 126,
+     "surfaceKey": "sparks",
+     "life": [
+      0.345,
+      1.0925
+     ],
+     "speed": [
+      5.75,
+      14.95
+     ],
+     "dir": "normal",
+     "spread": 72,
+     "gravity": 9.8,
+     "drag": 0.975,
+     "bounce": 0.35,
+     "size": [
+      0.0129,
+      0.0345
+     ],
+     "stretch": 0.065,
+     "aspect": 4,
+     "intensity": 2.8,
+     "fadeOut": 0.45,
+     "soft": 0.02
+    },
+    {
+     "name": "spark-sprites",
+     "type": "burst",
+     "start": 0.9,
+     "sprite": [
+      "spark_comet_a",
+      "spark_comet_b",
+      "spark_arc"
+     ],
+     "count": 4,
+     "life": [
+      0.12,
+      0.2
+     ],
+     "speed": [
+      0.5,
+      1.0
+     ],
+     "dir": "radial",
+     "lift": 0.8,
+     "size": [
+      0.9,
+      1.3
+     ],
+     "orient": "billboard",
+     "drag": 3,
+     "intensity": 1.6,
+     "fadeIn": 0.01,
+     "fadeOut": 0.8,
+     "soft": 0.2
+    },
+    {
+     "name": "debris",
+     "type": "debris",
+     "start": 0.9,
+     "count": 22,
+     "speed": [
+      3.5,
+      9
+     ],
+     "dir": "normal",
+     "spread": 62,
+     "radius": 0.7,
+     "shape": "disc",
+     "size": [
+      0.07,
+      0.24
+     ],
+     "life": [
+      2.6,
+      4.0
+     ],
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "dust-low",
+     "type": "burst",
+     "start": 0.92,
+     "blend": "alpha",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "surfaceTint": true,
+     "tint": [
+      0.3,
+      0.27,
+      0.24
+     ],
+     "count": 30,
+     "life": [
+      2.0,
+      3.6
+     ],
+     "speed": [
+      3.0,
+      6.5
+     ],
+     "dir": "radial",
+     "lift": [
+      0.0,
+      0.15
+     ],
+     "radius": 0.6,
+     "shape": "disc",
+     "drag": 2.0,
+     "gravity": -0.08,
+     "size": [
+      0.7,
+      1.2
+     ],
+     "sizeEnd": 2.56,
+     "sizeCurve": 0.55,
+     "spin": [
+      -15,
+      15
+     ],
+     "intensity": 0.63,
+     "fadeIn": 0.06,
+     "fadeOut": 0.6,
+     "dissolve": 0.5,
+     "soft": 0.6,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "dust-column",
+     "type": "burst",
+     "start": 0.95,
+     "blend": "alpha",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "surfaceTint": true,
+     "tint": [
+      0.3,
+      0.27,
+      0.24
+     ],
+     "count": 10,
+     "life": [
+      1.8,
+      3.0
+     ],
+     "speed": [
+      1.2,
+      2.6
+     ],
+     "dir": "normal",
+     "spread": 35,
+     "drag": 1.8,
+     "gravity": -0.2,
+     "size": [
+      0.6,
+      1.0
+     ],
+     "sizeEnd": 2.08,
+     "sizeCurve": 0.6,
+     "spin": [
+      -20,
+      20
+     ],
+     "intensity": 0.49,
+     "fadeIn": 0.1,
+     "fadeOut": 0.6,
+     "dissolve": 0.5,
+     "soft": 0.6,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "cracks",
+     "type": "decal",
+     "start": 0.9,
+     "sprite": [
+      "crack_radial_hole",
+      "crack_star_plate",
+      "crack_crater"
+     ],
+     "size": 4.4,
+     "life": 9,
+     "glow": 1.6,
+     "glowTime": 1.04,
+     "glowHold": 0.25,
+     "surfaces": [
+      "stone",
+      "sand"
+     ]
+    },
+    {
+     "name": "ring",
+     "type": "shockwave",
+     "start": 0.92,
+     "kind": "ring",
+     "ramp": "gold",
+     "radius0": 0.5,
+     "radius": 7.0,
+     "life": 0.85,
+     "intensity": 1.5
+    },
+    {
+     "name": "wall",
+     "type": "shockwave",
+     "start": 0.93,
+     "kind": "wall",
+     "sprite": "gold_ground_wave",
+     "radius0": 0.5,
+     "radius": 5.6,
+     "height": 1.3,
+     "life": 0.75,
+     "intensity": 0.9,
+     "repeat": 8
+    },
+    {
+     "name": "haze",
+     "type": "shockwave",
+     "start": 0.92,
+     "kind": "distort",
+     "radius0": 0.5,
+     "radius": 7.5,
+     "life": 0.7,
+     "intensity": 1.6
+    },
+    {
+     "name": "burst",
+     "type": "sprite",
+     "start": 0.91,
+     "orient": "axial",
+     "sprite": "gold_ground_burst",
+     "size": 2.4,
+     "sizeEnd": 3.2,
+     "life": 0.35,
+     "fadeIn": 0.02,
+     "fadeOut": 0.7,
+     "intensity": 0.9,
+     "soft": 0.4
+    },
+    {
+     "name": "embers",
+     "type": "burst",
+     "start": 0.95,
+     "sprite": "mote",
+     "ramp": "ember",
+     "count": 70,
+     "life": [
+      1.4,
+      2.8
+     ],
+     "speed": [
+      0.6,
+      2.4
+     ],
+     "dir": "radial",
+     "lift": [
+      0.5,
+      1.4
+     ],
+     "radius": 1.2,
+     "shape": "disc",
+     "gravity": -0.5,
+     "drag": 1.3,
+     "size": [
+      0.051,
+      0.119
+     ],
+     "sizeEnd": 0.25,
+     "intensity": 1.6,
+     "fadeOut": 0.75,
+     "soft": 0.05
+    },
+    {
+     "name": "settle",
+     "type": "stream",
+     "start": 1.2,
+     "end": 3.0,
+     "at": "origin",
+     "sprite": "mote",
+     "ramp": "ember",
+     "rate": 12,
+     "life": [
+      1.0,
+      1.8
+     ],
+     "radius": [
+      0.5,
+      2.5
+     ],
+     "shape": "disc",
+     "speed": [
+      0.2,
+      0.6
+     ],
+     "dir": "up",
+     "spread": 30,
+     "gravity": -0.3,
+     "drag": 1.0,
+     "size": [
+      0.0425,
+      0.085
+     ],
+     "sizeEnd": 0.2,
+     "intensity": 1.2,
+     "fadeOut": 0.7,
+     "soft": 0.05
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Special_Ground_Slam"
+   }
+  },
+  {
+   "id": "GUARDIAN_STAFF_LEAP_SLAM",
+   "group": "guardian",
+   "ar": "قفزة الحارس وضرب الأرض",
+   "en": "Leap slam",
+   "duration": 3.6,
+   "tail": 10,
+   "impactAt": 1.0,
+   "palette": "gold",
+   "kind": "phased",
+   "surface": "stone",
+   "layers": [
+    {
+     "name": "prep-part",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "start": 0.0,
+     "end": 1.05,
+     "intensity": 1.3,
+     "rise": 0.85,
+     "release": 0.9,
+     "pulse": 2.2,
+     "flow": 0.6,
+     "edgeOnly": 0.6
+    },
+    {
+     "name": "prep-rim",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "start": 0.0,
+     "end": 1.05,
+     "intensity": 0.9,
+     "rise": 0.85,
+     "release": 0.9
+    },
+    {
+     "name": "prep-shaft",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "shaft",
+     "start": 0.2,
+     "end": 1.05,
+     "intensity": 0.35,
+     "sigil": 1.8,
+     "rise": 0.6,
+     "release": 1.1
+    },
+    {
+     "name": "impact-flare",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "start": 1.0,
+     "end": 1.25,
+     "intensity": 2.0,
+     "rise": 0.02,
+     "release": 0.7
+    },
+    {
+     "name": "prep-sigils",
+     "type": "glow",
+     "material": "Covenant_Staff_Sigil_Emission",
+     "start": 0.0,
+     "end": 1.15,
+     "rise": 0.6,
+     "peak": 6,
+     "pulse": 2.6,
+     "release": 1.0
+    },
+    {
+     "name": "prep-fissures",
+     "type": "glow",
+     "material": "Covenant_Golden_Fissures_Emission",
+     "start": 0.0,
+     "end": 1.2,
+     "rise": 0.6,
+     "peak": 3.5,
+     "release": 1.4
+    },
+    {
+     "name": "prep-gather",
+     "type": "stream",
+     "at": "weapon",
+     "sprite": "mote",
+     "ramp": "ember",
+     "start": 0.0,
+     "end": 0.95,
+     "rate": 150,
+     "life": [
+      0.35,
+      0.6
+     ],
+     "radius": [
+      0.4,
+      1.0
+     ],
+     "shape": "shell",
+     "dir": "inward",
+     "size": [
+      0.03,
+      0.06
+     ],
+     "sizeEnd": 0.4,
+     "intensity": 2.2,
+     "fadeIn": 0.3,
+     "fadeOut": 0.25,
+     "soft": 0.05,
+     "weapon": "staff",
+     "part": "@part_edge"
+    },
+    {
+     "name": "air-trail",
+     "type": "trail",
+     "rails": "@part_curve",
+     "sprite": "gold_streak",
+     "sprite2": "gold_ground_wave",
+     "ramp": "gold",
+     "start": 0.35,
+     "end": 1.03,
+     "length": 0.15,
+     "speedRef": 10,
+     "minSpeed": 1.8,
+     "intensity": 1.35,
+     "edge": 1.5,
+     "flow": 0.12,
+     "dissolve": 0.85,
+     "sparks": {
+      "blend": "add",
+      "sprite": "spark_dot",
+      "ramp": "spark",
+      "size": [
+       0.0225,
+       0.0525
+      ],
+      "life": [
+       0.35,
+       0.8
+      ],
+      "speed": [
+       0.6,
+       2.5
+      ],
+      "dir": "outward",
+      "spread": 180,
+      "gravity": 4,
+      "drag": 1.6,
+      "stretch": 0.04,
+      "aspect": 3,
+      "perMeter": 5,
+      "inherit": 0.3,
+      "intensity": 2.4,
+      "soft": 0.03
+     },
+     "profile": "along"
+    },
+    {
+     "name": "flash",
+     "type": "sprite",
+     "start": 1.0,
+     "sprite": "gold_flower",
+     "size": 3.2,
+     "sizeEnd": 4.4,
+     "life": 0.2,
+     "fadeIn": 0.015,
+     "fadeOut": 0.85,
+     "intensity": 1.1,
+     "offset": [
+      0.6,
+      0,
+      0
+     ],
+     "soft": 0.5
+    },
+    {
+     "name": "seal",
+     "type": "sprite",
+     "start": 1.0,
+     "orient": "normal",
+     "sprite": "gold_seal",
+     "size": 3.0,
+     "sizeEnd": 6.0,
+     "sizeCurve": 0.5,
+     "life": 0.6,
+     "fadeIn": 0.02,
+     "fadeOut": 0.7,
+     "intensity": 1.3,
+     "spin": 25,
+     "rotation": 0,
+     "offset": [
+      0.06,
+      0,
+      0
+     ],
+     "dissolve": 0.8,
+     "soft": 0.1
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "start": 1.0,
+     "color": [
+      1.0,
+      0.64,
+      0.26
+     ],
+     "intensity": 20.16,
+     "life": 0.7,
+     "range": 14,
+     "lift": 1.2
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "start": 1.0,
+     "amount": 1.0,
+     "freq": 18
+    },
+    {
+     "name": "metal-sparks",
+     "type": "burst",
+     "start": 1.0,
+     "sprite": "spark_dot",
+     "ramp": "spark",
+     "count": 154,
+     "surfaceKey": "sparks",
+     "life": [
+      0.345,
+      1.15
+     ],
+     "speed": [
+      5.75,
+      16.1
+     ],
+     "dir": "normal",
+     "spread": 75,
+     "gravity": 9.8,
+     "drag": 0.975,
+     "bounce": 0.35,
+     "size": [
+      0.0129,
+      0.0367
+     ],
+     "stretch": 0.065,
+     "aspect": 4,
+     "intensity": 2.8,
+     "fadeOut": 0.45,
+     "soft": 0.02
+    },
+    {
+     "name": "debris",
+     "type": "debris",
+     "start": 1.0,
+     "count": 30,
+     "speed": [
+      4,
+      10
+     ],
+     "dir": "normal",
+     "spread": 65,
+     "radius": 0.9,
+     "shape": "disc",
+     "size": [
+      0.07,
+      0.28
+     ],
+     "life": [
+      2.8,
+      4.4
+     ],
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "dust-low",
+     "type": "burst",
+     "start": 1.02,
+     "blend": "alpha",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "surfaceTint": true,
+     "tint": [
+      0.3,
+      0.27,
+      0.24
+     ],
+     "count": 40,
+     "life": [
+      2.2,
+      4.0
+     ],
+     "speed": [
+      3.5,
+      7.5
+     ],
+     "dir": "radial",
+     "lift": [
+      0.0,
+      0.12
+     ],
+     "radius": 0.8,
+     "shape": "disc",
+     "drag": 1.9,
+     "gravity": -0.08,
+     "size": [
+      0.8,
+      1.3
+     ],
+     "sizeEnd": 2.8,
+     "sizeCurve": 0.55,
+     "spin": [
+      -15,
+      15
+     ],
+     "intensity": 0.63,
+     "fadeIn": 0.06,
+     "fadeOut": 0.6,
+     "dissolve": 0.5,
+     "soft": 0.6,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "dust-column",
+     "type": "burst",
+     "start": 1.05,
+     "blend": "alpha",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "surfaceTint": true,
+     "tint": [
+      0.3,
+      0.27,
+      0.24
+     ],
+     "count": 14,
+     "life": [
+      2.0,
+      3.2
+     ],
+     "speed": [
+      1.5,
+      3.0
+     ],
+     "dir": "normal",
+     "spread": 35,
+     "drag": 1.8,
+     "gravity": -0.2,
+     "size": [
+      0.7,
+      1.1
+     ],
+     "sizeEnd": 2.4,
+     "sizeCurve": 0.6,
+     "spin": [
+      -20,
+      20
+     ],
+     "intensity": 0.49,
+     "fadeIn": 0.1,
+     "fadeOut": 0.6,
+     "dissolve": 0.5,
+     "soft": 0.6,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "cracks",
+     "type": "decal",
+     "start": 1.0,
+     "sprite": [
+      "crack_crater",
+      "crack_radial_hole"
+     ],
+     "size": 5.4,
+     "life": 10,
+     "glow": 1.6,
+     "glowTime": 1.2,
+     "glowHold": 0.3,
+     "surfaces": [
+      "stone",
+      "sand"
+     ]
+    },
+    {
+     "name": "cracks-relief",
+     "type": "decal",
+     "start": 1.0,
+     "sprite": [
+      "crack_lamassu",
+      "crack_ziggurat",
+      "crack_sun_disc",
+      "crack_relief_disc"
+     ],
+     "size": 3.2,
+     "life": 10,
+     "glow": 1.35,
+     "glowTime": 0.96,
+     "offset": [
+      0,
+      1.6,
+      1.2
+     ],
+     "surfaces": [
+      "stone"
+     ]
+    },
+    {
+     "name": "ring",
+     "type": "shockwave",
+     "start": 1.02,
+     "kind": "ring",
+     "ramp": "gold",
+     "radius0": 0.6,
+     "radius": 9.0,
+     "life": 0.95,
+     "intensity": 1.65
+    },
+    {
+     "name": "ring-2",
+     "type": "shockwave",
+     "start": 1.16,
+     "kind": "ring",
+     "ramp": "seal",
+     "radius0": 0.6,
+     "radius": 6.0,
+     "life": 0.8,
+     "intensity": 0.975
+    },
+    {
+     "name": "wall",
+     "type": "shockwave",
+     "start": 1.03,
+     "kind": "wall",
+     "sprite": "gold_ground_wave",
+     "radius0": 0.6,
+     "radius": 7.0,
+     "height": 1.6,
+     "life": 0.85,
+     "intensity": 0.9,
+     "repeat": 8
+    },
+    {
+     "name": "haze",
+     "type": "shockwave",
+     "start": 1.02,
+     "kind": "distort",
+     "radius0": 0.6,
+     "radius": 9.5,
+     "life": 0.8,
+     "intensity": 1.8
+    },
+    {
+     "name": "embers",
+     "type": "burst",
+     "start": 1.05,
+     "sprite": "mote",
+     "ramp": "ember",
+     "count": 90,
+     "life": [
+      1.4,
+      3.0
+     ],
+     "speed": [
+      0.6,
+      2.6
+     ],
+     "dir": "radial",
+     "lift": [
+      0.5,
+      1.4
+     ],
+     "radius": 1.5,
+     "shape": "disc",
+     "gravity": -0.5,
+     "drag": 1.3,
+     "size": [
+      0.051,
+      0.119
+     ],
+     "sizeEnd": 0.25,
+     "intensity": 1.6,
+     "fadeOut": 0.75,
+     "soft": 0.05
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Special_Leap_Slam"
+   }
+  },
+  {
+   "id": "GUARDIAN_LEAP_TAKEOFF",
+   "group": "guardian",
+   "ar": "انطلاق قفزة الحارس",
+   "en": "Leap take-off",
+   "duration": 1.2,
+   "palette": "gold",
+   "kind": "impact",
+   "surface": "stone",
+   "layers": [
+    {
+     "name": "dust",
+     "type": "burst",
+     "blend": "alpha",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "surfaceTint": true,
+     "tint": [
+      0.3,
+      0.27,
+      0.24
+     ],
+     "count": 14,
+     "life": [
+      1.2,
+      2.2
+     ],
+     "speed": [
+      1.8,
+      3.6
+     ],
+     "dir": "radial",
+     "lift": [
+      0.0,
+      0.2
+     ],
+     "radius": 0.8,
+     "shape": "ring",
+     "drag": 2.4,
+     "gravity": -0.1,
+     "size": [
+      0.6,
+      0.9
+     ],
+     "sizeEnd": 1.92,
+     "spin": [
+      -20,
+      20
+     ],
+     "intensity": 0.56,
+     "fadeIn": 0.06,
+     "fadeOut": 0.6,
+     "dissolve": 0.5,
+     "soft": 0.5,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "pebbles",
+     "type": "debris",
+     "count": 6,
+     "speed": [
+      1.5,
+      3.5
+     ],
+     "dir": "radial",
+     "lift": 0.8,
+     "radius": 0.6,
+     "shape": "ring",
+     "size": [
+      0.03,
+      0.07
+     ],
+     "life": [
+      1.4,
+      2.2
+     ],
+     "surfaces": [
+      "stone",
+      "sand"
+     ]
+    },
+    {
+     "name": "ring",
+     "type": "shockwave",
+     "kind": "distort",
+     "radius0": 0.5,
+     "radius": 3.0,
+     "life": 0.4,
+     "intensity": 1.0
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Special_Leap_Slam"
+   }
+  },
+  {
+   "id": "GUARDIAN_GOLDEN_SHOCKWAVE",
+   "group": "guardian",
+   "ar": "الموجة الصدمية الذهبية",
+   "en": "Golden shockwave",
+   "duration": 1.4,
+   "palette": "gold",
+   "kind": "burst",
+   "layers": [
+    {
+     "name": "ring",
+     "type": "shockwave",
+     "kind": "ring",
+     "ramp": "gold",
+     "radius0": 0.5,
+     "radius": 8.0,
+     "life": 0.9,
+     "intensity": 1.5
+    },
+    {
+     "name": "ring-2",
+     "type": "shockwave",
+     "start": 0.14,
+     "kind": "ring",
+     "ramp": "seal",
+     "radius0": 0.4,
+     "radius": 5.5,
+     "life": 0.8,
+     "intensity": 0.975
+    },
+    {
+     "name": "wall",
+     "type": "shockwave",
+     "kind": "wall",
+     "sprite": "gold_ground_wave",
+     "radius0": 0.5,
+     "radius": 6.5,
+     "height": 1.4,
+     "life": 0.8,
+     "intensity": 1.125,
+     "repeat": 6,
+     "start": 0.02
+    },
+    {
+     "name": "ground-ring",
+     "type": "sprite",
+     "orient": "normal",
+     "sprite": "gold_ground_ring",
+     "size": 2.0,
+     "sizeEnd": 7.0,
+     "sizeCurve": 0.5,
+     "life": 0.6,
+     "fadeIn": 0.03,
+     "fadeOut": 0.7,
+     "intensity": 0.9,
+     "rotation": 0,
+     "offset": [
+      0.05,
+      0,
+      0
+     ],
+     "soft": 0.1,
+     "aspect": 1.0
+    },
+    {
+     "name": "haze",
+     "type": "shockwave",
+     "kind": "distort",
+     "radius0": 0.5,
+     "radius": 8.5,
+     "life": 0.8,
+     "intensity": 1.7
+    },
+    {
+     "name": "embers",
+     "type": "burst",
+     "sprite": "mote",
+     "ramp": "ember",
+     "count": 60,
+     "life": [
+      0.8,
+      1.6
+     ],
+     "speed": [
+      3.0,
+      7.0
+     ],
+     "dir": "radial",
+     "lift": [
+      0.1,
+      0.5
+     ],
+     "radius": 0.6,
+     "shape": "ring",
+     "gravity": -0.2,
+     "drag": 1.6,
+     "size": [
+      0.051,
+      0.102
+     ],
+     "sizeEnd": 0.25,
+     "intensity": 1.6,
+     "fadeOut": 0.7,
+     "soft": 0.05
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "color": [
+      1.0,
+      0.68,
+      0.3
+     ],
+     "intensity": 8.4,
+     "life": 0.5,
+     "range": 10,
+     "lift": 0.6
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "amount": 0.4
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Special_Roar"
+   }
+  },
+  {
+   "id": "GUARDIAN_SPIRITUAL_BURST",
+   "group": "guardian",
+   "ar": "الانفجار الروحي",
+   "en": "Spiritual burst",
+   "duration": 2.0,
+   "palette": "gold",
+   "kind": "burst",
+   "layers": [
+    {
+     "name": "core",
+     "type": "sprite",
+     "sprite": "gold_flower",
+     "size": 1.6,
+     "sizeEnd": 3.4,
+     "sizeCurve": 0.5,
+     "life": 0.45,
+     "fadeIn": 0.03,
+     "fadeOut": 0.7,
+     "intensity": 0.882,
+     "offset": [
+      2.4,
+      0,
+      0
+     ],
+     "dissolve": 0.7,
+     "soft": 0.5
+    },
+    {
+     "name": "vortex",
+     "type": "sprite",
+     "sprite": "gold_vortex",
+     "size": 2.2,
+     "sizeEnd": 4.0,
+     "life": 0.7,
+     "fadeIn": 0.05,
+     "fadeOut": 0.7,
+     "intensity": 1.2,
+     "spin": 140,
+     "rotation": 0,
+     "offset": [
+      2.4,
+      0,
+      0
+     ],
+     "dissolve": 0.7,
+     "soft": 0.5
+    },
+    {
+     "name": "star",
+     "type": "sprite",
+     "sprite": "gold_star",
+     "size": 1.6,
+     "sizeEnd": 0.6,
+     "life": 0.2,
+     "fadeIn": 0.01,
+     "fadeOut": 0.7,
+     "intensity": 1.82,
+     "offset": [
+      2.4,
+      0,
+      0
+     ],
+     "soft": 0.4
+    },
+    {
+     "name": "spirits",
+     "type": "burst",
+     "sprite": "mote",
+     "ramp": "ember",
+     "count": 140,
+     "life": [
+      1.0,
+      2.2
+     ],
+     "speed": [
+      2,
+      6
+     ],
+     "dir": "outward",
+     "radius": 0.4,
+     "shape": "sphere",
+     "offset": [
+      2.4,
+      0,
+      0
+     ],
+     "gravity": -0.4,
+     "drag": 2.0,
+     "size": [
+      0.051,
+      0.119
+     ],
+     "sizeEnd": 0.25,
+     "intensity": 1.7,
+     "fadeOut": 0.7,
+     "soft": 0.05
+    },
+    {
+     "name": "wisps",
+     "type": "burst",
+     "sprite": [
+      "gold_slash_feather",
+      "gold_slash_thin",
+      "gold_crescent"
+     ],
+     "count": 7,
+     "life": [
+      0.45,
+      0.7
+     ],
+     "speed": [
+      0.8,
+      1.8
+     ],
+     "dir": "outward",
+     "offset": [
+      2.4,
+      0,
+      0
+     ],
+     "size": [
+      1.0,
+      1.6
+     ],
+     "sizeEnd": 1.8,
+     "drag": 2.2,
+     "intensity": 1.0,
+     "fadeIn": 0.05,
+     "fadeOut": 0.7,
+     "dissolve": 0.8,
+     "soft": 0.4
+    },
+    {
+     "name": "smoke",
+     "type": "burst",
+     "blend": "alpha",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "tint": [
+      0.22,
+      0.12,
+      0.26
+     ],
+     "count": 10,
+     "life": [
+      1.2,
+      2.0
+     ],
+     "speed": [
+      1.0,
+      2.2
+     ],
+     "dir": "outward",
+     "offset": [
+      2.4,
+      0,
+      0
+     ],
+     "drag": 2.0,
+     "gravity": -0.3,
+     "size": [
+      0.8,
+      1.2
+     ],
+     "sizeEnd": 2.08,
+     "spin": [
+      -30,
+      30
+     ],
+     "intensity": 0.385,
+     "fadeIn": 0.1,
+     "fadeOut": 0.6,
+     "dissolve": 0.6,
+     "soft": 0.5
+    },
+    {
+     "name": "haze",
+     "type": "burst",
+     "blend": "distort",
+     "sprite": "soft_glow",
+     "count": 3,
+     "life": 0.5,
+     "size": 2.0,
+     "sizeEnd": 5.0,
+     "offset": [
+      2.4,
+      0,
+      0
+     ],
+     "intensity": 1.2,
+     "minTier": "medium"
+    },
+    {
+     "name": "ring",
+     "type": "shockwave",
+     "kind": "ring",
+     "ramp": "gold",
+     "radius0": 0.4,
+     "radius": 5.0,
+     "life": 0.7,
+     "intensity": 0.975,
+     "start": 0.04
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "color": [
+      1.0,
+      0.7,
+      0.35
+     ],
+     "intensity": 10.08,
+     "life": 0.6,
+     "range": 10,
+     "lift": 2.4
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "amount": 0.35
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Special_Energy_Release"
+   }
+  },
+  {
+   "id": "GUARDIAN_CHEST_SEAL_CHARGE",
+   "group": "guardian",
+   "ar": "تفعيل ختم الصدر",
+   "en": "Chest seal charge",
+   "duration": 2.8,
+   "palette": "gold",
+   "kind": "charge",
+   "followSocket": true,
+   "layers": [
+    {
+     "name": "seal-glow",
+     "type": "glow",
+     "material": "Covenant_Chest_Seal_Emission",
+     "start": 0.0,
+     "end": 2.5,
+     "rise": 1.8,
+     "peak": 7,
+     "pulse": 1.6,
+     "release": 0.8
+    },
+    {
+     "name": "eyes",
+     "type": "glow",
+     "material": "Covenant_Eyes_Emission",
+     "start": 0.6,
+     "end": 2.6,
+     "rise": 1.0,
+     "peak": 3,
+     "release": 0.8
+    },
+    {
+     "name": "converge",
+     "type": "stream",
+     "at": "socket",
+     "socket": "chest_seal",
+     "sprite": "mote",
+     "ramp": "ember",
+     "start": 0.0,
+     "end": 2.3,
+     "rate": 110,
+     "ramp_up": 1.2,
+     "life": [
+      0.45,
+      0.8
+     ],
+     "radius": [
+      1.0,
+      1.9
+     ],
+     "shape": "shell",
+     "dir": "inward",
+     "size": [
+      0.0425,
+      0.102
+     ],
+     "sizeEnd": 0.4,
+     "intensity": 2.21,
+     "fadeIn": 0.3,
+     "fadeOut": 0.2,
+     "soft": 0.05
+    },
+    {
+     "name": "streams",
+     "type": "stream",
+     "at": "socket",
+     "socket": "chest_seal",
+     "sprite": "spark_dot",
+     "ramp": "gold",
+     "start": 0.4,
+     "end": 2.3,
+     "rate": 40,
+     "ramp_up": 1.0,
+     "life": [
+      0.3,
+      0.5
+     ],
+     "radius": [
+      1.2,
+      2.2
+     ],
+     "shape": "shell",
+     "dir": "inward",
+     "size": [
+      0.016,
+      0.028
+     ],
+     "stretch": 0.08,
+     "aspect": 4,
+     "intensity": 2.6,
+     "fadeIn": 0.3,
+     "fadeOut": 0.2,
+     "soft": 0.05
+    },
+    {
+     "name": "sigil",
+     "type": "sprite",
+     "follow": true,
+     "socket": "chest_seal",
+     "at": "socket",
+     "sprite": "gold_seal",
+     "size": 0.8,
+     "sizeEnd": 1.7,
+     "sizeCurve": 0.7,
+     "life": 2.5,
+     "fadeIn": 0.35,
+     "fadeOut": 0.12,
+     "intensity": 1.3,
+     "spin": 18,
+     "rotation": 0,
+     "soft": 0.2,
+     "start": 0.1
+    },
+    {
+     "name": "core",
+     "type": "sprite",
+     "follow": true,
+     "socket": "chest_seal",
+     "at": "socket",
+     "sprite": "gold_star",
+     "size": 0.6,
+     "sizeEnd": 1.2,
+     "life": 2.4,
+     "fadeIn": 0.5,
+     "fadeOut": 0.1,
+     "intensity": 0.882,
+     "rotation": 0,
+     "soft": 0.2,
+     "start": 0.2
+    },
+    {
+     "name": "haze",
+     "type": "stream",
+     "blend": "distort",
+     "at": "socket",
+     "socket": "chest_seal",
+     "sprite": "soft_glow",
+     "start": 0.3,
+     "end": 2.4,
+     "rate": 20,
+     "life": [
+      0.3,
+      0.5
+     ],
+     "size": [
+      0.8,
+      1.2
+     ],
+     "sizeEnd": 1.8,
+     "intensity": 0.7,
+     "minTier": "medium"
+    },
+    {
+     "name": "release-flash",
+     "type": "sprite",
+     "start": 2.45,
+     "at": "socket",
+     "socket": "chest_seal",
+     "sprite": "gold_flower",
+     "size": 1.8,
+     "sizeEnd": 3.2,
+     "life": 0.25,
+     "fadeIn": 0.02,
+     "fadeOut": 0.8,
+     "intensity": 1.078,
+     "soft": 0.4
+    },
+    {
+     "name": "release-ring",
+     "type": "burst",
+     "start": 2.45,
+     "at": "socket",
+     "socket": "chest_seal",
+     "sprite": "mote",
+     "ramp": "ember",
+     "count": 80,
+     "life": [
+      0.6,
+      1.2
+     ],
+     "speed": [
+      3,
+      6
+     ],
+     "dir": "outward",
+     "gravity": -0.2,
+     "drag": 2.4,
+     "size": [
+      0.051,
+      0.102
+     ],
+     "sizeEnd": 0.25,
+     "intensity": 1.7,
+     "fadeOut": 0.7,
+     "soft": 0.05
+    },
+    {
+     "name": "release-light",
+     "type": "light",
+     "start": 2.45,
+     "at": "socket",
+     "socket": "chest_seal",
+     "color": [
+      1.0,
+      0.7,
+      0.3
+     ],
+     "intensity": 10.08,
+     "life": 0.5,
+     "range": 9,
+     "lift": 0.6
+    },
+    {
+     "name": "release-shake",
+     "type": "shake",
+     "start": 2.45,
+     "amount": 0.35
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Special_Seal_Activation"
+   }
+  },
+  {
+   "id": "GUARDIAN_ENRAGED_AURA",
+   "group": "guardian",
+   "ar": "هالة غضب حارس العهد",
+   "en": "Enraged aura",
+   "duration": 4.0,
+   "loop": true,
+   "palette": "gold",
+   "kind": "aura",
+   "layers": [
+    {
+     "name": "staff-energy",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "intensity": 0.7,
+     "rise": 0.8,
+     "release": 0.8,
+     "pulse": 1.1,
+     "sigil": 1.2
+    },
+    {
+     "name": "staff-crown",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "crown",
+     "intensity": 0.35,
+     "rise": 0.8,
+     "release": 0.8,
+     "pulse": 1.1
+    },
+    {
+     "name": "fissures",
+     "type": "glow",
+     "material": "Covenant_Golden_Fissures_Emission",
+     "start": 0.0,
+     "end": 4.0,
+     "rise": 0.8,
+     "peak": 3.2,
+     "pulse": 1.1,
+     "release": 1.0
+    },
+    {
+     "name": "eyes",
+     "type": "glow",
+     "material": "Covenant_Eyes_Emission",
+     "start": 0.0,
+     "end": 4.0,
+     "rise": 0.5,
+     "peak": 4,
+     "pulse": 1.7,
+     "release": 0.8
+    },
+    {
+     "name": "staff",
+     "type": "glow",
+     "material": "Covenant_Staff_Sigil_Emission",
+     "start": 0.0,
+     "end": 4.0,
+     "rise": 0.8,
+     "peak": 3,
+     "pulse": 0.9,
+     "release": 1.0
+    },
+    {
+     "name": "flames",
+     "type": "stream",
+     "at": "bones",
+     "sprite": "wisp",
+     "ramp": "gold",
+     "orient": "axial",
+     "rate": 24,
+     "life": [
+      0.5,
+      0.9
+     ],
+     "radius": 0.15,
+     "shape": "sphere",
+     "size": [
+      0.3,
+      0.55
+     ],
+     "aspect": 0.45,
+     "speed": [
+      0.6,
+      1.4
+     ],
+     "dir": "up",
+     "spread": 18,
+     "drag": 0.8,
+     "intensity": 0.5,
+     "fadeIn": 0.2,
+     "fadeOut": 0.6,
+     "dissolve": 0.5,
+     "soft": 0.15,
+     "ramp_up": 0.6
+    },
+    {
+     "name": "embers",
+     "type": "stream",
+     "at": "bones",
+     "sprite": "mote",
+     "ramp": "ember",
+     "rate": 40,
+     "life": [
+      0.9,
+      1.8
+     ],
+     "radius": 0.2,
+     "shape": "sphere",
+     "speed": [
+      0.3,
+      1.0
+     ],
+     "dir": "up",
+     "spread": 45,
+     "gravity": -0.8,
+     "drag": 1.0,
+     "size": [
+      0.04,
+      0.08
+     ],
+     "sizeEnd": 0.2,
+     "intensity": 1.6,
+     "fadeOut": 0.7,
+     "soft": 0.05
+    },
+    {
+     "name": "smoke",
+     "type": "stream",
+     "blend": "alpha",
+     "at": "bones",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "tint": [
+      0.16,
+      0.09,
+      0.2
+     ],
+     "rate": 6,
+     "life": [
+      1.4,
+      2.2
+     ],
+     "radius": 0.2,
+     "shape": "sphere",
+     "speed": [
+      0.3,
+      0.7
+     ],
+     "dir": "up",
+     "spread": 30,
+     "gravity": -0.25,
+     "drag": 1.2,
+     "size": [
+      0.5,
+      0.8
+     ],
+     "sizeEnd": 1.6,
+     "spin": [
+      -25,
+      25
+     ],
+     "intensity": 0.315,
+     "fadeIn": 0.2,
+     "fadeOut": 0.6,
+     "dissolve": 0.6,
+     "soft": 0.4,
+     "minTier": "medium"
+    },
+    {
+     "name": "haze",
+     "type": "stream",
+     "blend": "distort",
+     "at": "bones",
+     "sprite": "soft_glow",
+     "rate": 26,
+     "life": [
+      0.4,
+      0.7
+     ],
+     "size": [
+      0.6,
+      1.0
+     ],
+     "sizeEnd": 1.6,
+     "speed": [
+      0.4,
+      0.9
+     ],
+     "dir": "up",
+     "spread": 20,
+     "intensity": 0.8,
+     "minTier": "medium"
+    },
+    {
+     "name": "ground",
+     "type": "stream",
+     "at": "origin",
+     "sprite": "mote",
+     "ramp": "ember",
+     "rate": 16,
+     "life": [
+      0.8,
+      1.4
+     ],
+     "radius": [
+      1.5,
+      2.6
+     ],
+     "shape": "ring",
+     "speed": [
+      0.3,
+      0.8
+     ],
+     "dir": "up",
+     "spread": 15,
+     "gravity": -0.4,
+     "size": [
+      0.0425,
+      0.085
+     ],
+     "intensity": 1.4,
+     "fadeOut": 0.7,
+     "soft": 0.05
+    },
+    {
+     "name": "staff-embers",
+     "type": "stream",
+     "at": "weapon",
+     "weapon": "staff",
+     "part": "rim_edge",
+     "sprite": "mote",
+     "ramp": "ember",
+     "rate": 18,
+     "life": [
+      0.6,
+      1.2
+     ],
+     "speed": [
+      0.2,
+      0.6
+     ],
+     "dir": "up",
+     "spread": 30,
+     "gravity": -0.6,
+     "drag": 1.2,
+     "size": [
+      0.03,
+      0.05
+     ],
+     "sizeEnd": 0.2,
+     "intensity": 1.6,
+     "fadeOut": 0.7,
+     "soft": 0.04
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Enraged_Idle"
+   }
+  },
+  {
+   "id": "GUARDIAN_CLAW_SLASH",
+   "group": "guardian",
+   "ar": "ضربة المخالب",
+   "en": "Claw slash",
+   "duration": 0.8,
+   "loop": true,
+   "palette": "gold",
+   "kind": "trail",
+   "layers": [
+    {
+     "name": "index",
+     "type": "trail",
+     "rails": "claw_index",
+     "sprite": "gold_streak",
+     "sprite2": "gold_wave",
+     "ramp": "gold",
+     "length": 0.14,
+     "speedRef": 12,
+     "minSpeed": 2,
+     "widthMin": 0.8,
+     "width": 1.0,
+     "intensity": 1.4,
+     "edge": 1.6,
+     "flow": 0.08,
+     "dissolve": 0.6
+    },
+    {
+     "name": "middle",
+     "type": "trail",
+     "rails": "claw_middle",
+     "sprite": "gold_streak",
+     "sprite2": "gold_wave",
+     "ramp": "gold",
+     "length": 0.15,
+     "speedRef": 12,
+     "minSpeed": 2,
+     "widthMin": 0.8,
+     "width": 1.0,
+     "intensity": 1.5,
+     "edge": 1.6,
+     "flow": 0.08,
+     "dissolve": 0.6
+    },
+    {
+     "name": "ring",
+     "type": "trail",
+     "rails": "claw_ring",
+     "sprite": "gold_streak",
+     "sprite2": "gold_wave",
+     "ramp": "gold",
+     "length": 0.13,
+     "speedRef": 12,
+     "minSpeed": 2,
+     "widthMin": 0.8,
+     "width": 1.0,
+     "intensity": 1.3,
+     "edge": 1.6,
+     "flow": 0.08,
+     "dissolve": 0.6
+    },
+    {
+     "name": "embers",
+     "type": "stream",
+     "at": "socket",
+     "socket": "claw_r",
+     "sprite": "mote",
+     "ramp": "ember",
+     "rate": 30,
+     "life": [
+      0.4,
+      0.8
+     ],
+     "speed": [
+      0.2,
+      0.7
+     ],
+     "dir": "up",
+     "spread": 80,
+     "gravity": -0.5,
+     "drag": 1.6,
+     "size": [
+      0.0425,
+      0.085
+     ],
+     "intensity": 1.5,
+     "fadeOut": 0.7,
+     "soft": 0.05
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Attack_Claw_Combo"
+   }
+  },
+  {
+   "id": "GUARDIAN_CLAW_HIT",
+   "group": "guardian",
+   "ar": "إصابة المخالب",
+   "en": "Claw hit",
+   "duration": 0.8,
+   "palette": "gold",
+   "kind": "impact",
+   "surface": "spirit",
+   "layers": [
+    {
+     "name": "claw",
+     "type": "sprite",
+     "orient": "swing",
+     "sprite": "gold_claw",
+     "size": 1.4,
+     "sizeEnd": 1.0,
+     "life": 0.25,
+     "fadeIn": 0.02,
+     "fadeOut": 0.75,
+     "intensity": 1.8,
+     "dissolve": 0.8,
+     "soft": 0.3
+    },
+    {
+     "name": "sparks",
+     "type": "burst",
+     "sprite": "spark_dot",
+     "ramp": "gold",
+     "count": 36,
+     "life": [
+      0.23,
+      0.575
+     ],
+     "speed": [
+      3.45,
+      9.2
+     ],
+     "dir": "direction",
+     "spread": 40,
+     "gravity": 5,
+     "drag": 1.5,
+     "size": [
+      0.0108,
+      0.0238
+     ],
+     "stretch": 0.065,
+     "aspect": 4,
+     "intensity": 2.4,
+     "fadeOut": 0.5,
+     "soft": 0.02
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "color": [
+      1.0,
+      0.7,
+      0.35
+     ],
+     "intensity": 5.04,
+     "life": 0.18,
+     "range": 5,
+     "lift": 0.6
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "amount": 0.22
+    }
+   ],
+   "demo": {
+    "character": "guardian",
+    "clip": "Attack_Claw_Combo"
+   }
+  }
+ ]
+}

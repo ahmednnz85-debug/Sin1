@@ -190,7 +190,7 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
   function fillList(wrap, card, onClose) {
     const by = {};
     areas.forEach(a => (by[a.group] || (by[a.group] = [])).push(a));
-    let html = `<div class="bar"><h2>وضع المطور · المناطق</h2><button data-act="back">${onClose ? 'إغلاق' : 'رجوع'}</button></div>
+    let html = `<div class="bar"><h2>وضع المطور · المناطق</h2><button data-act="vfx" title="vfx-lab.html">مختبر المؤثرات</button><button data-act="back">${onClose ? 'إغلاق' : 'رجوع'}</button></div>
       <input type="search" placeholder="بحث: K3 ، المكتبة ، R3-02 …" aria-label="search">`;
     const declared = SinAreas.groups();
     declared.map(g => [g.id, g.ar, g.en]).concat(Object.keys(by).filter(g => !declared.some(x => x.id === g)).map(g => [g, g, g])).forEach(([g, ar, en]) => {
@@ -209,6 +209,8 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     wrap.addEventListener('click', ev => {
       const b = ev.target.closest('button'); if (!b) return;
       if (b.dataset.act === 'back') { wrap.remove(); if (card) card.style.display = ''; if (onClose) onClose(); return; }
+      // The VFX Laboratory is a separate light page (vfx-lab.html), not a game area: it loads no world.
+      if (b.dataset.act === 'vfx') { root.location.href = new URL('vfx-lab.html', root.location.href).href; return; }
       if (b.dataset.id) go(b.dataset.id);
     });
   }
@@ -409,7 +411,7 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
       <button data-t="respawn">إعادة البطل للظهور</button><button data-t="fps">عداد FPS</button>
       <button data-t="mem">مراقب الذاكرة</button><button data-t="fly">الكاميرا الحرة</button>
       <button data-t="col">إظهار التصادمات</button><button data-t="clean">إخفاء الواجهة</button>
-      <button data-t="copy">نسخ رابط المنطقة</button><button data-t="exit">الخروج من وضع المطور</button>
+      <button data-t="copy">نسخ رابط المنطقة</button><button data-t="vfx">مختبر المؤثرات</button><button data-t="exit">الخروج من وضع المطور</button>
       ${root.SinAreas.chapterOf(session.area.stage)?.id === 'u1' || root.PalaceInterior?.encounter?.() ? '<button data-t="combatLab">مختبر القتال</button>' : ''}</div><div class="msg"></div>`;
     doc.body.appendChild(tool); doc.body.appendChild(panel);
     refreshTag();
@@ -431,6 +433,7 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
       if (t === 'clean') { flags.clean = !flags.clean; doc.documentElement.classList.toggle('sin-dev-clean', flags.clean); if (flags.clean) panel.classList.remove('open'); }
       if (t === 'copy') copyLink();
       if (t === 'exit') root.location.href = new URL('index.html', root.location.href).href;
+      if (t === 'vfx') root.location.href = new URL('vfx-lab.html', root.location.href).href;
       syncButtons();
     });
     // Leave the clean frame with a tap on the faint DEV button.

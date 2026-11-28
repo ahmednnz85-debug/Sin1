@@ -1,0 +1,544 @@
+{
+ "note": "Guardian of the Covenant combat timing, measured by the VFX Laboratory from the motion of the GLB's own sockets (staff_crown, staff_blade, staff_tip, claw_r/l, foot_r/l) sampled at 60 Hz. The repository has no Guardian_Combat_Animations.json; when that authored file is added under assets/, the lab reads it first. Fields (seconds, clip time): windup, active (hit window), impact, contact (staff end struck into the floor: fast descent near the strike), takeoff / landing (both feet off / back on the floor), leading (weapon socket), peakSpeed (m/s).",
+ "generator": "vfx-lab.js analyseGuardian()",
+ "clips": {
+  "Attack_Staff_Swing_Left": {
+   "duration": 1.81,
+   "leading": "staff_blade",
+   "peakSpeed": 8.682,
+   "windup": {
+    "start": 0,
+    "end": 1.2
+   },
+   "active": {
+    "start": 1.2,
+    "end": 1.7
+   },
+   "impact": 1.7,
+   "contact": {
+    "socket": "staff_blade",
+    "t": 1.7,
+    "height": 0.103
+   },
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Staff_Swing_Right": {
+   "duration": 1.96,
+   "leading": "staff_blade",
+   "peakSpeed": 6.841,
+   "windup": {
+    "start": 0,
+    "end": 0.833
+   },
+   "active": {
+    "start": 0.833,
+    "end": 1.1
+   },
+   "impact": 0.967,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Staff_Overhead": {
+   "duration": 2.26,
+   "leading": "staff_blade",
+   "peakSpeed": 21.156,
+   "windup": {
+    "start": 0,
+    "end": 1.05
+   },
+   "active": {
+    "start": 1.05,
+    "end": 1.25
+   },
+   "impact": 1.15,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Staff_Thrust": {
+   "duration": 1.58,
+   "leading": "staff_blade",
+   "peakSpeed": 10.05,
+   "windup": {
+    "start": 0,
+    "end": 0
+   },
+   "active": {
+    "start": 0,
+    "end": 0.4
+   },
+   "impact": 0.2,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Staff_Uppercut": {
+   "duration": 1.93,
+   "leading": "staff_blade",
+   "peakSpeed": 19.466,
+   "windup": {
+    "start": 0,
+    "end": 0
+   },
+   "active": {
+    "start": 0,
+    "end": 0.183
+   },
+   "impact": 0.183,
+   "contact": {
+    "socket": "staff_blade",
+    "t": 0.183,
+    "height": -0.137
+   },
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Staff_Sweep": {
+   "duration": 2.04,
+   "leading": "staff_blade",
+   "peakSpeed": 9.766,
+   "windup": {
+    "start": 0,
+    "end": 1.35
+   },
+   "active": {
+    "start": 1.35,
+    "end": 1.85
+   },
+   "impact": 1.85,
+   "contact": {
+    "socket": "staff_blade",
+    "t": 1.85,
+    "height": 0.031
+   },
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Staff_Spin_360": {
+   "duration": 2.44,
+   "leading": "staff_blade",
+   "peakSpeed": 31.861,
+   "windup": {
+    "start": 0.7,
+    "end": 0.933
+   },
+   "active": {
+    "start": 0.933,
+    "end": 1.55
+   },
+   "impact": 1.25,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Claw_Left": {
+   "duration": 1.48,
+   "leading": "claw_l",
+   "peakSpeed": 24.203,
+   "windup": {
+    "start": 0.45,
+    "end": 0.717
+   },
+   "active": {
+    "start": 0.717,
+    "end": 0.817
+   },
+   "impact": 0.767,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Claw_Combo": {
+   "duration": 2.38,
+   "leading": "claw_l",
+   "peakSpeed": 7.92,
+   "windup": {
+    "start": 0.533,
+    "end": 1.267
+   },
+   "active": {
+    "start": 1.267,
+    "end": 1.417
+   },
+   "impact": 1.35,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Kick": {
+   "duration": 1.63,
+   "leading": "foot_l",
+   "peakSpeed": 9.012,
+   "windup": {
+    "start": 0.383,
+    "end": 0.583
+   },
+   "active": {
+    "start": 0.583,
+    "end": 0.7
+   },
+   "impact": 0.65,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Combo_01": {
+   "duration": 3.29,
+   "leading": "staff_blade",
+   "peakSpeed": 22.096,
+   "windup": {
+    "start": 1.717,
+    "end": 1.75
+   },
+   "active": {
+    "start": 1.75,
+    "end": 1.883
+   },
+   "impact": 1.817,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Attack_Combo_02": {
+   "duration": 3.56,
+   "leading": "staff_blade",
+   "peakSpeed": 23.972,
+   "windup": {
+    "start": 0,
+    "end": 2.283
+   },
+   "active": {
+    "start": 2.283,
+    "end": 2.4
+   },
+   "impact": 2.35,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Special_Ground_Slam": {
+   "duration": 2.86,
+   "leading": "staff_blade",
+   "peakSpeed": 3.096,
+   "windup": {
+    "start": 0,
+    "end": 1.317
+   },
+   "active": {
+    "start": 1.317,
+    "end": 1.667
+   },
+   "impact": 1.667,
+   "contact": {
+    "socket": "staff_blade",
+    "t": 1.667,
+    "height": 0.044
+   },
+   "takeoff": null,
+   "landing": null
+  },
+  "Special_Leap_Slam": {
+   "duration": 3.07,
+   "leading": "staff_blade",
+   "peakSpeed": 13.946,
+   "windup": {
+    "start": 1.433,
+    "end": 1.433
+   },
+   "active": {
+    "start": 1.433,
+    "end": 1.933
+   },
+   "impact": 1.933,
+   "contact": {
+    "socket": "staff_blade",
+    "t": 1.933,
+    "height": 0.021
+   },
+   "takeoff": 0.767,
+   "landing": 1.9
+  },
+  "Special_Charge": {
+   "duration": 2.72,
+   "leading": "staff_blade",
+   "peakSpeed": 7.016,
+   "windup": {
+    "start": 0,
+    "end": 0
+   },
+   "active": {
+    "start": 0,
+    "end": 0.567
+   },
+   "impact": 0.283,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Special_Seal_Activation": {
+   "duration": 3.14,
+   "leading": "staff_blade",
+   "peakSpeed": 10.908,
+   "windup": {
+    "start": 0,
+    "end": 0.3
+   },
+   "active": {
+    "start": 0.3,
+    "end": 0.417
+   },
+   "impact": 0.367,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Special_Energy_Release": {
+   "duration": 2.66,
+   "leading": "staff_blade",
+   "peakSpeed": 25.607,
+   "windup": {
+    "start": 0.817,
+    "end": 0.95
+   },
+   "active": {
+    "start": 0.95,
+    "end": 1.133
+   },
+   "impact": 1.05,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Special_Enraged_Combo": {
+   "duration": 3.92,
+   "leading": "staff_blade",
+   "peakSpeed": 65.468,
+   "windup": {
+    "start": 3.533,
+    "end": 3.533
+   },
+   "active": {
+    "start": 3.533,
+    "end": 3.617
+   },
+   "impact": 3.617,
+   "contact": {
+    "socket": "staff_blade",
+    "t": 3.617,
+    "height": 0.141
+   },
+   "takeoff": null,
+   "landing": null
+  },
+  "Special_Roar": {
+   "duration": 2.83,
+   "leading": "staff_blade",
+   "peakSpeed": 14.296,
+   "windup": {
+    "start": 2.417,
+    "end": 2.45
+   },
+   "active": {
+    "start": 2.45,
+    "end": 2.5
+   },
+   "impact": 2.5,
+   "contact": {
+    "socket": "staff_blade",
+    "t": 2.5,
+    "height": 0.159
+   },
+   "takeoff": null,
+   "landing": null
+  },
+  "Special_Execution": {
+   "duration": 3.75,
+   "leading": "staff_blade",
+   "peakSpeed": 10.853,
+   "windup": {
+    "start": 1.883,
+    "end": 2.433
+   },
+   "active": {
+    "start": 2.433,
+    "end": 2.783
+   },
+   "impact": 2.617,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Block_Idle": {
+   "duration": 2.72,
+   "leading": "staff_blade",
+   "peakSpeed": 0.434,
+   "windup": {
+    "start": 0,
+    "end": 0
+   },
+   "active": {
+    "start": 0,
+    "end": 0.4
+   },
+   "impact": 0.2,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Block_Impact": {
+   "duration": 0.81,
+   "leading": "staff_blade",
+   "peakSpeed": 9.592,
+   "windup": {
+    "start": 0,
+    "end": 0.117
+   },
+   "active": {
+    "start": 0.117,
+    "end": 0.217
+   },
+   "impact": 0.167,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Parry": {
+   "duration": 0.88,
+   "leading": "staff_blade",
+   "peakSpeed": 13.265,
+   "windup": {
+    "start": 0.05,
+    "end": 0.133
+   },
+   "active": {
+    "start": 0.133,
+    "end": 0.233
+   },
+   "impact": 0.183,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Counter_Attack": {
+   "duration": 1.64,
+   "leading": "staff_blade",
+   "peakSpeed": 8.013,
+   "windup": {
+    "start": 0,
+    "end": 0
+   },
+   "active": {
+    "start": 0,
+    "end": 0.583
+   },
+   "impact": 0.3,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Dodge_Left": {
+   "duration": 1.12,
+   "leading": "staff_blade",
+   "peakSpeed": 6.877,
+   "windup": {
+    "start": 0.117,
+    "end": 0.217
+   },
+   "active": {
+    "start": 0.217,
+    "end": 0.4
+   },
+   "impact": 0.317,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Dodge_Right": {
+   "duration": 1.12,
+   "leading": "staff_blade",
+   "peakSpeed": 5.83,
+   "windup": {
+    "start": 0.117,
+    "end": 0.217
+   },
+   "active": {
+    "start": 0.217,
+    "end": 0.4
+   },
+   "impact": 0.317,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Dodge_Backward": {
+   "duration": 1.21,
+   "leading": "staff_blade",
+   "peakSpeed": 5.391,
+   "windup": {
+    "start": 0.133,
+    "end": 0.233
+   },
+   "active": {
+    "start": 0.233,
+    "end": 0.433
+   },
+   "impact": 0.333,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Cinematic_Awakening": {
+   "duration": 5.35,
+   "leading": "staff_blade",
+   "peakSpeed": 0.857,
+   "windup": {
+    "start": 1.317,
+    "end": 1.9
+   },
+   "active": {
+    "start": 1.9,
+    "end": 3.5
+   },
+   "impact": 2.7,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Cinematic_Intro": {
+   "duration": 4.68,
+   "leading": "staff_blade",
+   "peakSpeed": 19.998,
+   "windup": {
+    "start": 3.717,
+    "end": 3.75
+   },
+   "active": {
+    "start": 3.75,
+    "end": 3.833
+   },
+   "impact": 3.8,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  },
+  "Phase_Transition": {
+   "duration": 4.55,
+   "leading": "staff_blade",
+   "peakSpeed": 1.662,
+   "windup": {
+    "start": 3.167,
+    "end": 3.367
+   },
+   "active": {
+    "start": 3.367,
+    "end": 4.017
+   },
+   "impact": 3.7,
+   "contact": null,
+   "takeoff": null,
+   "landing": null
+  }
+ }
+}

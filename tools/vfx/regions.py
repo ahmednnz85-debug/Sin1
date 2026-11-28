@@ -1,0 +1,82 @@
+"""Element regions of the three VFX source sheets (1254 x 1254 px, assets/vfx/source).
+
+Each entry: id -> (sheet, x0, y0, x1, y1, kind)
+  kind 'add'   : emissive element on black, used with additive blending
+  kind 'stone' : stone crack / relief element on black, alpha-blended decal
+The sheets are static texture boards, not flipbooks: every element is extracted
+on its own and is never played as a frame sequence."""
+E, C, S = 'energy-sheet', 'stone-cracks-sheet', 'metal-sparks-sheet'
+
+REGIONS = {
+  # ---- Guardian of the Covenant: cursed gold (energy sheet, top half)
+  'gold_crescent':      (E,   8,   4, 405, 205, 'add'),
+  'gold_slash_thin':    (E, 395,  10, 738, 186, 'add'),
+  'gold_slash_feather': (E, 712,   6, 1052, 190, 'add'),
+  'gold_claw':          (E, 1032, 16, 1244, 172, 'add'),
+  'gold_streak':        (E,   8, 196, 572, 282, 'add'),
+  'gold_wave':          (E,  28, 280, 572, 330, 'add'),
+  'gold_ground_wave':   (E, 592, 184, 960, 328, 'add'),
+  'gold_ground_burst':  (E, 980, 186, 1248, 328, 'add'),
+  'gold_seal':          (E,   4, 318, 306, 524, 'add'),
+  'gold_star':          (E, 322, 330, 478, 516, 'add'),
+  'gold_vortex':        (E, 494, 338, 738, 504, 'add'),
+  'gold_flower':        (E, 744, 342, 936, 500, 'add'),
+  'gold_ground_ring':   (E, 950, 334, 1248, 500, 'add'),
+  'gold_lens':          (E,  12, 524, 276, 576, 'add'),
+  'gold_shards_streak': (E, 286, 516, 466, 590, 'add'),
+  'gold_shards':        (E, 484, 512, 664, 594, 'add'),
+  'gold_spark_streak':  (E, 672, 510, 882, 590, 'add'),
+  'gold_fan':           (E, 900, 510, 1064, 590, 'add'),
+  'gold_glitter':       (E, 1072, 518, 1248, 592, 'add'),
+  # ---- Sîn: lunar silver-blue (energy sheet, bottom half)
+  'moon_crescent':      (E,   6, 594, 408, 808, 'add'),
+  'moon_slash_thin':    (E, 398, 608, 736, 770, 'add'),
+  'moon_slash_feather': (E, 712, 604, 1056, 792, 'add'),
+  'moon_claw':          (E, 1036, 616, 1246, 770, 'add'),
+  'moon_streak':        (E,  12, 796, 606, 884, 'add'),
+  'moon_wave':          (E,  34, 884, 606, 930, 'add'),
+  'moon_ground_wave':   (E, 562, 784, 964, 932, 'add'),
+  'moon_ground_burst':  (E, 972, 790, 1248, 934, 'add'),
+  'moon_seal':          (E,   4, 918, 306, 1148, 'add'),
+  'moon_star':          (E, 326, 926, 464, 1146, 'add'),
+  'moon_vortex':        (E, 474, 940, 716, 1116, 'add'),
+  'moon_flower':        (E, 720, 942, 940, 1112, 'add'),
+  'moon_ground_ring':   (E, 944, 940, 1248, 1116, 'add'),
+  'moon_lens':          (E,  20, 1138, 282, 1206, 'add'),
+  'moon_shards_streak': (E, 280, 1124, 466, 1220, 'add'),
+  'moon_shards':        (E, 466, 1128, 666, 1230, 'add'),
+  'moon_spark_streak':  (E, 668, 1134, 866, 1220, 'add'),
+  'moon_fan':           (E, 866, 1128, 1056, 1220, 'add'),
+  'moon_glitter':       (E, 1060, 1134, 1250, 1230, 'add'),
+  # ---- metal sparks (orange-gold, additive)
+  'spark_burst_a':      (S,  10,  10, 270, 280, 'add'),
+  'spark_comet_a':      (S, 292,   4, 700, 236, 'add'),
+  'spark_burst_b':      (S, 712,  14, 960, 268, 'add'),
+  'spark_scatter_a':    (S, 980,   4, 1248, 258, 'add'),
+  'spark_low_streak':   (S,  10, 316, 318, 506, 'add'),
+  'spark_burst_sparse': (S, 336, 282, 560, 512, 'add'),
+  'spark_comet_b':      (S, 576, 286, 984, 528, 'add'),
+  'spark_star':         (S, 990, 296, 1248, 500, 'add'),
+  'spark_embers_a':     (S,  10, 556, 268, 744, 'add'),
+  'spark_burst_c':      (S, 284, 534, 530, 758, 'add'),
+  'spark_embers_b':     (S, 590, 552, 930, 730, 'add'),
+  'spark_arc':          (S, 960, 552, 1248, 756, 'add'),
+  'spark_burst_d':      (S,  12, 756, 248, 990, 'add'),
+  'spark_comet_c':      (S, 252, 772, 680, 978, 'add'),
+  'spark_burst_e':      (S, 720, 752, 940, 990, 'add'),
+  'spark_embers_c':     (S, 960, 752, 1248, 970, 'add'),
+  'spark_embers_v':     (S,  12, 996, 210, 1252, 'add'),
+  'spark_burst_f':      (S, 232, 1002, 480, 1248, 'add'),
+  'spark_embers_d':     (S, 520, 1012, 790, 1228, 'add'),
+  'spark_comet_d':      (S, 800, 994, 1250, 1230, 'add'),
+  # ---- stone cracks and relief breaks (alpha-blended decals)
+  'crack_star_plate':   (C,  12,  12, 468, 418, 'stone'),
+  'crack_relief_disc':  (C, 476,  22, 884, 386, 'stone'),
+  'crack_web':          (C, 862,  14, 1252, 416, 'stone'),
+  'crack_ziggurat':     (C,   6, 442, 460, 770, 'stone'),
+  'crack_radial_hole':  (C, 456, 396, 856, 806, 'stone'),
+  'crack_sun_disc':     (C, 864, 414, 1252, 768, 'stone'),
+  'crack_line':         (C,   2, 762, 346, 1248, 'stone'),
+  'crack_lamassu':      (C, 362, 792, 826, 1188, 'stone'),
+  'crack_crater':       (C, 834, 792, 1252, 1196, 'stone'),
+}

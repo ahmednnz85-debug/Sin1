@@ -1,0 +1,1970 @@
+{
+ "version": 1,
+ "textures": {
+  "energy": {
+   "file": "vfx-energy.webp",
+   "low": "vfx-energy-1k.webp",
+   "size": [
+    2048,
+    2048
+   ],
+   "blend": "additive",
+   "colorSpace": "srgb",
+   "scale": 1.0
+  },
+  "stone": {
+   "file": "vfx-stone.webp",
+   "aux": "vfx-stone-aux.webp",
+   "size": [
+    2048,
+    1536
+   ],
+   "blend": "alpha",
+   "colorSpace": "srgb"
+  },
+  "noise": {
+   "file": "vfx-noise.webp",
+   "size": [
+    512,
+    512
+   ],
+   "colorSpace": "linear",
+   "wrap": "repeat",
+   "channels": {
+    "r": "fbm",
+    "g": "cellular",
+    "ba": "curl flow (0.5 = 0)"
+   }
+  },
+  "shapes": {
+   "file": "vfx-shapes.webp",
+   "size": [
+    1024,
+    512
+   ],
+   "colorSpace": "linear"
+  },
+  "ramps": {
+   "file": "vfx-ramps.png",
+   "size": [
+    256,
+    16
+   ],
+   "colorSpace": "srgb",
+   "rows": [
+    "spark",
+    "gold",
+    "moon",
+    "dust",
+    "ember",
+    "seal"
+   ]
+  }
+ },
+ "regions": {
+  "gold_crescent": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.278564,
+    0.531982,
+    0.471924,
+    0.629639
+   ],
+   "px": [
+    570,
+    758,
+    397,
+    201
+   ],
+   "aspect": 1.9751,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     8,
+     4,
+     405,
+     205
+    ]
+   }
+  },
+  "gold_slash_thin": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.424072,
+    0.440674,
+    0.591064,
+    0.526123
+   ],
+   "px": [
+    868,
+    970,
+    343,
+    176
+   ],
+   "aspect": 1.9489,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     395,
+     10,
+     738,
+     186
+    ]
+   }
+  },
+  "gold_slash_feather": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.084229,
+    0.436768,
+    0.249756,
+    0.526123
+   ],
+   "px": [
+    172,
+    970,
+    340,
+    184
+   ],
+   "aspect": 1.8478,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     712,
+     6,
+     1052,
+     190
+    ]
+   }
+  },
+  "gold_claw": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.543213,
+    0.355713,
+    0.64624,
+    0.431396
+   ],
+   "px": [
+    1112,
+    1164,
+    212,
+    156
+   ],
+   "aspect": 1.359,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     1032,
+     16,
+     1244,
+     172
+    ]
+   }
+  },
+  "gold_streak": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.298096,
+    0.230713,
+    0.572998,
+    0.272217
+   ],
+   "px": [
+    610,
+    1490,
+    564,
+    86
+   ],
+   "aspect": 6.5581,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     8,
+     196,
+     572,
+     282
+    ]
+   }
+  },
+  "gold_wave": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.450439,
+    0.201416,
+    0.715576,
+    0.225342
+   ],
+   "px": [
+    922,
+    1586,
+    544,
+    50
+   ],
+   "aspect": 10.88,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     28,
+     280,
+     572,
+     330
+    ]
+   }
+  },
+  "gold_ground_wave": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.00415,
+    0.276611,
+    0.18335,
+    0.346436
+   ],
+   "px": [
+    8,
+    1338,
+    368,
+    144
+   ],
+   "aspect": 2.5556,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     592,
+     184,
+     960,
+     328
+    ]
+   }
+  },
+  "gold_ground_burst": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.326416,
+    0.277588,
+    0.456787,
+    0.346436
+   ],
+   "px": [
+    668,
+    1338,
+    268,
+    142
+   ],
+   "aspect": 1.8873,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     980,
+     186,
+     1248,
+     328
+    ]
+   }
+  },
+  "gold_seal": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.768799,
+    0.640869,
+    0.915771,
+    0.740967
+   ],
+   "px": [
+    1574,
+    530,
+    302,
+    206
+   ],
+   "aspect": 1.466,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     4,
+     318,
+     306,
+     524
+    ]
+   }
+  },
+  "gold_star": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.00415,
+    0.435791,
+    0.079834,
+    0.526123
+   ],
+   "px": [
+    8,
+    970,
+    156,
+    186
+   ],
+   "aspect": 0.8387,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     322,
+     330,
+     478,
+     516
+    ]
+   }
+  },
+  "gold_vortex": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.153564,
+    0.35083,
+    0.272217,
+    0.431396
+   ],
+   "px": [
+    314,
+    1164,
+    244,
+    166
+   ],
+   "aspect": 1.4699,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     494,
+     338,
+     738,
+     504
+    ]
+   }
+  },
+  "gold_flower": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.445557,
+    0.354736,
+    0.538818,
+    0.431396
+   ],
+   "px": [
+    912,
+    1164,
+    192,
+    158
+   ],
+   "aspect": 1.2152,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     744,
+     342,
+     936,
+     500
+    ]
+   }
+  },
+  "gold_ground_ring": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.00415,
+    0.35083,
+    0.14917,
+    0.431396
+   ],
+   "px": [
+    8,
+    1164,
+    298,
+    166
+   ],
+   "aspect": 1.7952,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     950,
+     334,
+     1248,
+     500
+    ]
+   }
+  },
+  "gold_lens": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.317627,
+    0.200439,
+    0.446045,
+    0.225342
+   ],
+   "px": [
+    650,
+    1586,
+    264,
+    52
+   ],
+   "aspect": 5.0769,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     12,
+     524,
+     276,
+     576
+    ]
+   }
+  },
+  "gold_shards_streak": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.00415,
+    0.189697,
+    0.091553,
+    0.225342
+   ],
+   "px": [
+    8,
+    1586,
+    180,
+    74
+   ],
+   "aspect": 2.4324,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     286,
+     516,
+     466,
+     590
+    ]
+   }
+  },
+  "gold_shards": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.677979,
+    0.232666,
+    0.765381,
+    0.272217
+   ],
+   "px": [
+    1388,
+    1490,
+    180,
+    82
+   ],
+   "aspect": 2.1951,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     484,
+     512,
+     664,
+     594
+    ]
+   }
+  },
+  "gold_spark_streak": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.769775,
+    0.233643,
+    0.871826,
+    0.272217
+   ],
+   "px": [
+    1576,
+    1490,
+    210,
+    80
+   ],
+   "aspect": 2.625,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     672,
+     510,
+     882,
+     590
+    ]
+   }
+  },
+  "gold_fan": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.876221,
+    0.233643,
+    0.955811,
+    0.272217
+   ],
+   "px": [
+    1794,
+    1490,
+    164,
+    80
+   ],
+   "aspect": 2.05,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     900,
+     510,
+     1064,
+     590
+    ]
+   }
+  },
+  "gold_glitter": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.095947,
+    0.189697,
+    0.181396,
+    0.225342
+   ],
+   "px": [
+    196,
+    1586,
+    176,
+    74
+   ],
+   "aspect": 2.3784,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     1072,
+     518,
+     1248,
+     592
+    ]
+   }
+  },
+  "moon_crescent": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.355713,
+    0.636963,
+    0.551514,
+    0.740967
+   ],
+   "px": [
+    728,
+    530,
+    402,
+    214
+   ],
+   "aspect": 1.8785,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     6,
+     594,
+     408,
+     808
+    ]
+   }
+  },
+  "moon_slash_thin": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.276611,
+    0.352783,
+    0.441162,
+    0.431396
+   ],
+   "px": [
+    566,
+    1164,
+    338,
+    162
+   ],
+   "aspect": 2.0864,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     398,
+     608,
+     736,
+     770
+    ]
+   }
+  },
+  "moon_slash_feather": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.630615,
+    0.53833,
+    0.798096,
+    0.629639
+   ],
+   "px": [
+    1291,
+    758,
+    344,
+    188
+   ],
+   "aspect": 1.8298,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     712,
+     604,
+     1056,
+     792
+    ]
+   }
+  },
+  "moon_claw": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.650635,
+    0.356689,
+    0.752686,
+    0.431396
+   ],
+   "px": [
+    1332,
+    1164,
+    210,
+    154
+   ],
+   "aspect": 1.3636,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     1036,
+     616,
+     1246,
+     770
+    ]
+   }
+  },
+  "moon_streak": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.00415,
+    0.229736,
+    0.293701,
+    0.272217
+   ],
+   "px": [
+    8,
+    1490,
+    594,
+    88
+   ],
+   "aspect": 6.75,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     12,
+     796,
+     606,
+     884
+    ]
+   }
+  },
+  "moon_wave": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.00415,
+    0.16333,
+    0.282959,
+    0.185303
+   ],
+   "px": [
+    8,
+    1668,
+    572,
+    46
+   ],
+   "aspect": 12.4348,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     34,
+     884,
+     606,
+     930
+    ]
+   }
+  },
+  "moon_ground_wave": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.75708,
+    0.359619,
+    0.952881,
+    0.431396
+   ],
+   "px": [
+    1550,
+    1164,
+    402,
+    148
+   ],
+   "aspect": 2.7162,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     562,
+     784,
+     964,
+     932
+    ]
+   }
+  },
+  "moon_ground_burst": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.187744,
+    0.276611,
+    0.322021,
+    0.346436
+   ],
+   "px": [
+    384,
+    1338,
+    276,
+    144
+   ],
+   "aspect": 1.9167,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     972,
+     790,
+     1248,
+     934
+    ]
+   }
+  },
+  "moon_seal": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.550049,
+    0.748291,
+    0.697021,
+    0.860107
+   ],
+   "px": [
+    1126,
+    286,
+    302,
+    230
+   ],
+   "aspect": 1.313,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     4,
+     918,
+     306,
+     1148
+    ]
+   }
+  },
+  "moon_star": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.00415,
+    0.634033,
+    0.071045,
+    0.740967
+   ],
+   "px": [
+    8,
+    530,
+    138,
+    220
+   ],
+   "aspect": 0.6273,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     326,
+     926,
+     464,
+     1146
+    ]
+   }
+  },
+  "moon_vortex": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.747803,
+    0.440674,
+    0.865479,
+    0.526123
+   ],
+   "px": [
+    1531,
+    970,
+    242,
+    176
+   ],
+   "aspect": 1.375,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     474,
+     940,
+     716,
+     1116
+    ]
+   }
+  },
+  "moon_flower": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.869873,
+    0.443604,
+    0.976807,
+    0.526123
+   ],
+   "px": [
+    1781,
+    970,
+    220,
+    170
+   ],
+   "aspect": 1.2941,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     720,
+     942,
+     940,
+     1112
+    ]
+   }
+  },
+  "moon_ground_ring": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.595459,
+    0.440674,
+    0.743408,
+    0.526123
+   ],
+   "px": [
+    1219,
+    970,
+    304,
+    176
+   ],
+   "aspect": 1.7273,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     944,
+     940,
+     1248,
+     1116
+    ]
+   }
+  },
+  "moon_lens": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.185791,
+    0.192627,
+    0.313232,
+    0.225342
+   ],
+   "px": [
+    380,
+    1586,
+    262,
+    68
+   ],
+   "aspect": 3.8529,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     20,
+     1138,
+     282,
+     1206
+    ]
+   }
+  },
+  "moon_shards_streak": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.659424,
+    0.300049,
+    0.749756,
+    0.346436
+   ],
+   "px": [
+    1350,
+    1338,
+    186,
+    96
+   ],
+   "aspect": 1.9375,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     280,
+     1124,
+     466,
+     1220
+    ]
+   }
+  },
+  "moon_shards": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.461182,
+    0.297119,
+    0.55835,
+    0.346436
+   ],
+   "px": [
+    944,
+    1338,
+    200,
+    102
+   ],
+   "aspect": 1.9608,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     466,
+     1128,
+     666,
+     1230
+    ]
+   }
+  },
+  "moon_spark_streak": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.577393,
+    0.230713,
+    0.673584,
+    0.272217
+   ],
+   "px": [
+    1182,
+    1490,
+    198,
+    86
+   ],
+   "aspect": 2.3023,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     668,
+     1134,
+     866,
+     1220
+    ]
+   }
+  },
+  "moon_fan": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.75415,
+    0.302002,
+    0.846436,
+    0.346436
+   ],
+   "px": [
+    1544,
+    1338,
+    190,
+    92
+   ],
+   "aspect": 2.0652,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     866,
+     1128,
+     1056,
+     1220
+    ]
+   }
+  },
+  "moon_glitter": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.562744,
+    0.300049,
+    0.655029,
+    0.346436
+   ],
+   "px": [
+    1152,
+    1338,
+    190,
+    96
+   ],
+   "aspect": 1.9792,
+   "source": {
+    "sheet": "energy-sheet",
+    "rect": [
+     1060,
+     1134,
+     1250,
+     1230
+    ]
+   }
+  },
+  "spark_burst_a": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.00415,
+    0.864502,
+    0.130615,
+    0.99585
+   ],
+   "px": [
+    8,
+    8,
+    260,
+    270
+   ],
+   "aspect": 0.963,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     10,
+     10,
+     270,
+     280
+    ]
+   }
+  },
+  "spark_comet_a": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.346924,
+    0.747314,
+    0.545654,
+    0.860107
+   ],
+   "px": [
+    710,
+    286,
+    408,
+    232
+   ],
+   "aspect": 1.7586,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     292,
+     4,
+     700,
+     236
+    ]
+   }
+  },
+  "spark_burst_b": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.370361,
+    0.872314,
+    0.490967,
+    0.99585
+   ],
+   "px": [
+    758,
+    8,
+    248,
+    254
+   ],
+   "aspect": 0.9764,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     712,
+     14,
+     960,
+     268
+    ]
+   }
+  },
+  "spark_scatter_a": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.235596,
+    0.872314,
+    0.365967,
+    0.99585
+   ],
+   "px": [
+    482,
+    8,
+    268,
+    254
+   ],
+   "aspect": 1.0551,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     980,
+     4,
+     1248,
+     258
+    ]
+   }
+  },
+  "spark_low_streak": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.476318,
+    0.537354,
+    0.626221,
+    0.629639
+   ],
+   "px": [
+    975,
+    758,
+    308,
+    190
+   ],
+   "aspect": 1.6211,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     10,
+     316,
+     318,
+     506
+    ]
+   }
+  },
+  "spark_burst_sparse": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.701416,
+    0.748291,
+    0.810303,
+    0.860107
+   ],
+   "px": [
+    1436,
+    286,
+    224,
+    230
+   ],
+   "aspect": 0.9739,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     336,
+     282,
+     560,
+     512
+    ]
+   }
+  },
+  "spark_comet_b": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.620361,
+    0.878174,
+    0.819092,
+    0.99585
+   ],
+   "px": [
+    1270,
+    8,
+    408,
+    242
+   ],
+   "aspect": 1.686,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     576,
+     286,
+     984,
+     528
+    ]
+   }
+  },
+  "spark_star": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.148682,
+    0.530518,
+    0.27417,
+    0.629639
+   ],
+   "px": [
+    304,
+    758,
+    258,
+    204
+   ],
+   "aspect": 1.2647,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     990,
+     296,
+     1248,
+     500
+    ]
+   }
+  },
+  "spark_embers_a": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.80249,
+    0.53833,
+    0.927979,
+    0.629639
+   ],
+   "px": [
+    1643,
+    758,
+    258,
+    188
+   ],
+   "aspect": 1.3723,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     10,
+     556,
+     268,
+     744
+    ]
+   }
+  },
+  "spark_burst_c": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.814697,
+    0.751221,
+    0.934326,
+    0.860107
+   ],
+   "px": [
+    1668,
+    286,
+    246,
+    224
+   ],
+   "aspect": 1.0982,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     284,
+     534,
+     530,
+     758
+    ]
+   }
+  },
+  "spark_embers_b": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.25415,
+    0.439697,
+    0.419678,
+    0.526123
+   ],
+   "px": [
+    520,
+    970,
+    340,
+    178
+   ],
+   "aspect": 1.9101,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     590,
+     552,
+     930,
+     730
+    ]
+   }
+  },
+  "spark_arc": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.00415,
+    0.530518,
+    0.144287,
+    0.629639
+   ],
+   "px": [
+    8,
+    758,
+    288,
+    204
+   ],
+   "aspect": 1.4118,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     960,
+     552,
+     1248,
+     756
+    ]
+   }
+  },
+  "spark_burst_d": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.227783,
+    0.746338,
+    0.342529,
+    0.860107
+   ],
+   "px": [
+    466,
+    286,
+    236,
+    234
+   ],
+   "aspect": 1.0085,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     12,
+     756,
+     248,
+     990
+    ]
+   }
+  },
+  "spark_comet_c": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.555908,
+    0.640869,
+    0.764404,
+    0.740967
+   ],
+   "px": [
+    1138,
+    530,
+    428,
+    206
+   ],
+   "aspect": 2.0777,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     252,
+     772,
+     680,
+     978
+    ]
+   }
+  },
+  "spark_burst_e": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.823486,
+    0.880127,
+    0.93042,
+    0.99585
+   ],
+   "px": [
+    1686,
+    8,
+    220,
+    238
+   ],
+   "aspect": 0.9244,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     720,
+     752,
+     940,
+     990
+    ]
+   }
+  },
+  "spark_embers_c": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.075439,
+    0.63501,
+    0.215576,
+    0.740967
+   ],
+   "px": [
+    154,
+    530,
+    288,
+    218
+   ],
+   "aspect": 1.3211,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     960,
+     752,
+     1248,
+     970
+    ]
+   }
+  },
+  "spark_embers_v": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.13501,
+    0.871338,
+    0.231201,
+    0.99585
+   ],
+   "px": [
+    276,
+    8,
+    198,
+    256
+   ],
+   "aspect": 0.7734,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     12,
+     996,
+     210,
+     1252
+    ]
+   }
+  },
+  "spark_burst_f": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.495361,
+    0.876221,
+    0.615967,
+    0.99585
+   ],
+   "px": [
+    1014,
+    8,
+    248,
+    246
+   ],
+   "aspect": 1.0081,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     232,
+     1002,
+     480,
+     1248
+    ]
+   }
+  },
+  "spark_embers_d": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.219971,
+    0.635986,
+    0.351318,
+    0.740967
+   ],
+   "px": [
+    450,
+    530,
+    270,
+    216
+   ],
+   "aspect": 1.25,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     520,
+     1012,
+     790,
+     1228
+    ]
+   }
+  },
+  "spark_comet_d": {
+   "tex": "energy",
+   "kind": "add",
+   "uv": [
+    0.00415,
+    0.745361,
+    0.223389,
+    0.860107
+   ],
+   "px": [
+    8,
+    286,
+    450,
+    236
+   ],
+   "aspect": 1.9068,
+   "source": {
+    "sheet": "metal-sparks-sheet",
+    "rect": [
+     800,
+     994,
+     1250,
+     1230
+    ]
+   }
+  },
+  "crack_star_plate": {
+   "tex": "stone",
+   "kind": "stone",
+   "uv": [
+    0.00415,
+    0.69043,
+    0.24585,
+    0.976888
+   ],
+   "px": [
+    8,
+    35,
+    496,
+    441
+   ],
+   "aspect": 1.1247,
+   "source": {
+    "sheet": "stone-cracks-sheet",
+    "rect": [
+     12,
+     12,
+     468,
+     418
+    ]
+   }
+  },
+  "crack_relief_disc": {
+   "tex": "stone",
+   "kind": "stone",
+   "uv": [
+    0.25415,
+    0.689779,
+    0.495361,
+    0.976888
+   ],
+   "px": [
+    520,
+    35,
+    495,
+    442
+   ],
+   "aspect": 1.1199,
+   "source": {
+    "sheet": "stone-cracks-sheet",
+    "rect": [
+     476,
+     22,
+     884,
+     386
+    ]
+   }
+  },
+  "crack_web": {
+   "tex": "stone",
+   "kind": "stone",
+   "uv": [
+    0.507568,
+    0.672201,
+    0.741943,
+    0.994466
+   ],
+   "px": [
+    1039,
+    8,
+    481,
+    496
+   ],
+   "aspect": 0.9698,
+   "source": {
+    "sheet": "stone-cracks-sheet",
+    "rect": [
+     862,
+     14,
+     1252,
+     416
+    ]
+   }
+  },
+  "crack_ziggurat": {
+   "tex": "stone",
+   "kind": "stone",
+   "uv": [
+    0.75415,
+    0.717122,
+    0.99585,
+    0.949544
+   ],
+   "px": [
+    1544,
+    77,
+    496,
+    358
+   ],
+   "aspect": 1.3855,
+   "source": {
+    "sheet": "stone-cracks-sheet",
+    "rect": [
+     6,
+     442,
+     460,
+     770
+    ]
+   }
+  },
+  "crack_radial_hole": {
+   "tex": "stone",
+   "kind": "stone",
+   "uv": [
+    0.00708,
+    0.338867,
+    0.242432,
+    0.661133
+   ],
+   "px": [
+    14,
+    520,
+    483,
+    496
+   ],
+   "aspect": 0.9738,
+   "source": {
+    "sheet": "stone-cracks-sheet",
+    "rect": [
+     456,
+     396,
+     856,
+     806
+    ]
+   }
+  },
+  "crack_sun_disc": {
+   "tex": "stone",
+   "kind": "stone",
+   "uv": [
+    0.25415,
+    0.35319,
+    0.495361,
+    0.64681
+   ],
+   "px": [
+    520,
+    542,
+    495,
+    452
+   ],
+   "aspect": 1.0951,
+   "source": {
+    "sheet": "stone-cracks-sheet",
+    "rect": [
+     864,
+     414,
+     1252,
+     768
+    ]
+   }
+  },
+  "crack_line": {
+   "tex": "stone",
+   "kind": "stone",
+   "uv": [
+    0.539307,
+    0.338867,
+    0.710205,
+    0.661133
+   ],
+   "px": [
+    1104,
+    520,
+    351,
+    496
+   ],
+   "aspect": 0.7077,
+   "source": {
+    "sheet": "stone-cracks-sheet",
+    "rect": [
+     2,
+     762,
+     346,
+     1248
+    ]
+   }
+  },
+  "crack_lamassu": {
+   "tex": "stone",
+   "kind": "stone",
+   "uv": [
+    0.75415,
+    0.362956,
+    0.995361,
+    0.637695
+   ],
+   "px": [
+    1544,
+    556,
+    495,
+    423
+   ],
+   "aspect": 1.1702,
+   "source": {
+    "sheet": "stone-cracks-sheet",
+    "rect": [
+     362,
+     792,
+     826,
+     1188
+    ]
+   }
+  },
+  "crack_crater": {
+   "tex": "stone",
+   "kind": "stone",
+   "uv": [
+    0.00415,
+    0.011393,
+    0.24585,
+    0.322591
+   ],
+   "px": [
+    8,
+    1040,
+    496,
+    479
+   ],
+   "aspect": 1.0355,
+   "source": {
+    "sheet": "stone-cracks-sheet",
+    "rect": [
+     834,
+     792,
+     1252,
+     1196
+    ]
+   }
+  },
+  "dust_0": {
+   "tex": "shapes",
+   "kind": "shape",
+   "uv": [
+    0.000488,
+    0.500977,
+    0.249512,
+    0.999023
+   ],
+   "px": [
+    0,
+    0,
+    256,
+    256
+   ],
+   "aspect": 1.0,
+   "source": "procedural"
+  },
+  "dust_1": {
+   "tex": "shapes",
+   "kind": "shape",
+   "uv": [
+    0.250488,
+    0.500977,
+    0.499512,
+    0.999023
+   ],
+   "px": [
+    256,
+    0,
+    256,
+    256
+   ],
+   "aspect": 1.0,
+   "source": "procedural"
+  },
+  "dust_2": {
+   "tex": "shapes",
+   "kind": "shape",
+   "uv": [
+    0.500488,
+    0.500977,
+    0.749512,
+    0.999023
+   ],
+   "px": [
+    512,
+    0,
+    256,
+    256
+   ],
+   "aspect": 1.0,
+   "source": "procedural"
+  },
+  "dust_3": {
+   "tex": "shapes",
+   "kind": "shape",
+   "uv": [
+    0.750488,
+    0.500977,
+    0.999512,
+    0.999023
+   ],
+   "px": [
+    768,
+    0,
+    256,
+    256
+   ],
+   "aspect": 1.0,
+   "source": "procedural"
+  },
+  "soft_glow": {
+   "tex": "shapes",
+   "kind": "shape",
+   "uv": [
+    0.000488,
+    0.000977,
+    0.249512,
+    0.499023
+   ],
+   "px": [
+    0,
+    256,
+    256,
+    256
+   ],
+   "aspect": 1.0,
+   "source": "procedural"
+  },
+  "spark_dot": {
+   "tex": "shapes",
+   "kind": "shape",
+   "uv": [
+    0.250488,
+    0.375977,
+    0.499512,
+    0.499023
+   ],
+   "px": [
+    256,
+    256,
+    256,
+    64
+   ],
+   "aspect": 4.0,
+   "source": "procedural"
+  },
+  "mote": {
+   "tex": "shapes",
+   "kind": "shape",
+   "uv": [
+    0.250488,
+    0.125977,
+    0.374512,
+    0.374023
+   ],
+   "px": [
+    256,
+    320,
+    128,
+    128
+   ],
+   "aspect": 1.0,
+   "source": "procedural"
+  },
+  "ring": {
+   "tex": "shapes",
+   "kind": "shape",
+   "uv": [
+    0.375488,
+    0.125977,
+    0.499512,
+    0.374023
+   ],
+   "px": [
+    384,
+    320,
+    128,
+    128
+   ],
+   "aspect": 1.0,
+   "source": "procedural"
+  },
+  "wisp": {
+   "tex": "shapes",
+   "kind": "shape",
+   "uv": [
+    0.500488,
+    0.000977,
+    0.624512,
+    0.499023
+   ],
+   "px": [
+    512,
+    256,
+    128,
+    256
+   ],
+   "aspect": 0.5,
+   "source": "procedural"
+  }
+ }
+}
