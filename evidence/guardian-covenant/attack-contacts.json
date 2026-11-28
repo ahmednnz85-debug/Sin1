@@ -254,7 +254,26 @@
   },
   {
     "name": "Special_Charge",
-    "contacts": []
+    "contacts": [
+      {
+        "distance": 1.35,
+        "lateral": -0.75,
+        "damage": 20,
+        "attackPositions": [
+          39.72232671380043,
+          148.4583380615711
+        ]
+      },
+      {
+        "distance": 1.75,
+        "lateral": 0.75,
+        "damage": 20,
+        "attackPositions": [
+          35.31800702301119,
+          150.3011101236107
+        ]
+      }
+    ]
   },
   {
     "name": "Special_Leap_Slam",
