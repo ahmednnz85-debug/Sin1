@@ -579,6 +579,29 @@
     let facing = 0, tNow = 0, lastDt = 1 / 60, wasIdle = true, lastIdleKey = 'idle';
     const lastPos = new T.Vector3(); let hasLast = false;
     const axeHead = new T.Vector3(), axeHeadPrev = new T.Vector3(), axeMid = new T.Vector3(), axeMidPrev = new T.Vector3();
+    // The runtime axe's positive Z rim is the cutting surface. Recover
+    // three real points once, leaving the older practice targets' sweep intact.
+    const guide = [new T.Vector3(0,.24,.125), new T.Vector3(0,.30,.145), new T.Vector3(0,.37,.128)];
+    const edge = guide.map(local => ({
+      local: local.clone(), previous: new T.Vector3(), current: new T.Vector3(), score: -Infinity
+    }));
+    const axeVertices = axe.geometry?.attributes.position;
+    if (axeVertices) {
+      const vertex = new T.Vector3();
+      for (let i = 0; i < axeVertices.count; i++) {
+        vertex.fromBufferAttribute(axeVertices, i);
+        for (let j = 0; j < edge.length; j++) {
+          const offset = Math.abs(vertex.y - guide[j].y);
+          if (offset > .027) continue;
+          const score = vertex.z - offset * .62 - Math.abs(vertex.x) * .26;
+          const point = edge[j];
+          if (score > point.score) {
+            point.score = score;
+            point.local.copy(vertex);
+          }
+        }
+      }
+    }
     const HEAD_LOCAL = new T.Vector3(0, 0.40, 0), MID_LOCAL = new T.Vector3(0, 0.22, 0);
     const rmA = { x: 0, z: 0 }, rmB = { x: 0, z: 0 };
     seat('back');
@@ -658,7 +681,7 @@
       const chain = !!combat.act;
       if (combat.dodge) { combat.dodge = null; combat.iframes = false; }
       s.time = 0; s.prev = 0;
-      combat.act = { key, A, st: s, queued: null, impactFired: false, landFired: false, yaw };
+      combat.act = { key, A, st: s, queued: null, impactFired: false, landFired: false, yaw, started: tNow };
       beginAction({ kind: 'attack', st: s, adv: true }, chain ? XF.chain : A.blendIn);
       combat.hits.clear();
       events.emit('combat:attack', { key });
@@ -672,10 +695,15 @@
       axeHeadPrev.copy(axeHead); axeMidPrev.copy(axeMid);
       axeHead.copy(HEAD_LOCAL).applyMatrix4(axe.matrixWorld); axeMid.copy(MID_LOCAL).applyMatrix4(axe.matrixWorld);
       if (reset) { axeHeadPrev.copy(axeHead); axeMidPrev.copy(axeMid); }
+      for (const point of edge) {
+        point.previous.copy(point.current);
+        point.current.copy(point.local).applyMatrix4(axe.matrixWorld);
+        if (reset) point.previous.copy(point.current);
+      }
     }
     // swept test: blade segment (mid -> head) between two frames against each target's vertical capsule
     const segA = new T.Vector3(), segB = new T.Vector3();
-    const [blade0, blade1, blade2, blade3] = Array.from({ length: 4 }, () => new T.Vector3());
+    const [blade0, blade1, blade2, blade3, bladeVelocity] = Array.from({ length: 5 }, () => new T.Vector3());
     function sweepHits(act) {
       const A = act.A, t = act.st.time;
       const previous = act.sampleTime ?? t;
@@ -689,18 +717,23 @@
           const span = t - previous || 1;
           const start = clamp((A.act[0] - previous) / span, 0, 1);
           const end = clamp((A.act[1] - previous) / span, 0, 1);
-          blade0.lerpVectors(axeMidPrev, axeMid, start);
-          blade1.lerpVectors(axeHeadPrev, axeHead, start);
-          blade2.lerpVectors(axeMidPrev, axeMid, end);
-          blade3.lerpVectors(axeHeadPrev, axeHead, end);
-          const hit = window.SinCombat.sweep(blade0, blade1, blade2, blade3, .105, tg.volumes(), segA);
+          const volumes = tg.volumes();
+          let hit = null;
+          for (let i = 0; i < edge.length - 1 && !hit; i++) {
+            const a = edge[i], b = edge[i + 1];
+            blade0.lerpVectors(a.previous, a.current, start);
+            blade1.lerpVectors(b.previous, b.current, start);
+            blade2.lerpVectors(a.previous, a.current, end);
+            blade3.lerpVectors(b.previous, b.current, end);
+            hit = window.SinCombat.sweep(blade0, blade1, blade2, blade3, .085, volumes, segA);
+          }
           if (hit && (!tg.validate || tg.validate(segA))) {
             combat.hits.add(tg);
             const dir = segB.copy(tg.position()).sub(root.position);
             dir.y = 0;
             dir.normalize();
             const info = { attack: act.key, damage: A.dmg, heavy: !!A.heavy, point: segA,
-              dir, push: A.push, time: t, region: hit.name };
+              dir, push: A.push, time: t, region: hit.name, weaponVelocity: bladeVelocity.subVectors(axeHead,axeHeadPrev).divideScalar(lastDt) };
             const result = tg.onHit?.(info);
             if (result) {
               combat.hitstop = A.heavy ? .075 : .035;
@@ -1046,8 +1079,8 @@
         hit: hitReaction, guardImpact: () => { guardRecoil = .98; }, blocking: () => combat.blocking, guardAge: () => tNow - guardSince,
         invulnerable: () => combat.iframes, fight(target) { opponent = target; }, reset: resetCombat, die,
         timeline: () => ({ clip: action.cur?.st.clip.name ?? LOCO_KEYS.find(k => loco.w[k] > .5),
-          time: action.cur?.st.time, window: combat.act?.A.act, dodge: combat.dodge ? DODGE.iframes : null }),
-        axeContact: () => [axeMid, axeHead]
+          time: action.cur?.st.time, window: combat.act?.A.act, started: combat.act?.started, dodge: combat.dodge ? DODGE.iframes : null }),
+        axeContact: () => [edge[0].current, edge[2].current]
       },
       interact: { register: registerInteractable, available: availableInteract },
       // compatibility facade used by the royal door, temple doors and wing doors

@@ -4689,7 +4689,7 @@
     key.position.set(3, 9, -4);
     envelope.add(key);
     ctx.scene.add(envelope);
-    await stage.ready(ctx.renderer);
+    await stage.ready(ctx.renderer, ctx.hero);
     r3Stage = stage;
     const arrival = r3Entry.arrival || stage.spawn;
     if (r3Entry.arrival) arrival[1] = stage.nearFloor(arrival[0], arrival[2], arrival[1])?.y ?? arrival[1];
