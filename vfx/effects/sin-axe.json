@@ -13,28 +13,37 @@
    "kind": "trail",
    "layers": [
     {
+     "name": "edge-glow",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "edge",
+     "intensity": 0.63,
+     "rise": 0.05,
+     "release": 0.3,
+     "flow": 1.4,
+     "edgeOnly": 0.9
+    },
+    {
      "name": "blade",
      "type": "trail",
-     "rails": "axe",
+     "rails": "axe_edge",
      "sprite": "moon_streak",
      "sprite2": "moon_wave",
      "ramp": "moon",
      "length": 0.15,
      "speedRef": 10,
      "minSpeed": 2.0,
-     "widthMin": 0.55,
-     "width": 0.95,
-     "intensity": 1.6,
+     "intensity": 0.96,
      "edge": 1.5,
      "flow": 0.07,
-     "dissolve": 0.7,
+     "dissolve": 0.75,
      "sparks": {
       "blend": "add",
       "sprite": "mote",
       "ramp": "moon",
       "size": [
-       0.015,
-       0.035
+       0.008,
+       0.016
       ],
       "life": [
        0.22,
@@ -53,8 +62,11 @@
       "perMeter": 4,
       "inherit": 0.18,
       "intensity": 1.4,
-      "soft": 0.05
-     }
+      "soft": 0.05,
+      "stretch": 0.05,
+      "aspect": 3
+     },
+     "profile": "along"
     }
    ],
    "demo": {
@@ -73,28 +85,46 @@
    "kind": "trail",
    "layers": [
     {
+     "name": "edge-glow",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "edge",
+     "intensity": 0.94,
+     "rise": 0.05,
+     "release": 0.3,
+     "flow": 1.4,
+     "edgeOnly": 0.9
+    },
+    {
+     "name": "head-glow",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "head",
+     "intensity": 0.17,
+     "rise": 0.1,
+     "release": 0.4
+    },
+    {
      "name": "blade",
      "type": "trail",
-     "rails": "axe",
+     "rails": "axe_edge",
      "sprite": "moon_streak",
      "sprite2": "moon_ground_wave",
      "ramp": "moon",
      "length": 0.2,
      "speedRef": 11,
      "minSpeed": 1.6,
-     "widthMin": 0.55,
-     "width": 1.15,
-     "intensity": 1.7,
+     "intensity": 1.02,
      "edge": 1.6,
      "flow": 0.11,
-     "dissolve": 0.55,
+     "dissolve": 0.75,
      "sparks": {
       "blend": "add",
-      "sprite": "mote",
+      "sprite": "spark_dot",
       "ramp": "moon",
       "size": [
-       0.02,
-       0.05
+       0.008,
+       0.016
       ],
       "life": [
        0.3,
@@ -113,32 +143,33 @@
       "perMeter": 9,
       "inherit": 0.22,
       "intensity": 1.6,
-      "soft": 0.05
-     }
+      "soft": 0.05,
+      "stretch": 0.05,
+      "aspect": 3
+     },
+     "profile": "along"
     },
     {
      "name": "afterglow",
      "type": "trail",
-     "rails": "axe",
+     "rails": "axe_edge",
      "sprite": "moon_wave",
      "sprite2": "moon_streak",
      "ramp": "moon",
      "length": 0.42,
      "speedRef": 11,
      "minSpeed": 1.6,
-     "widthMin": 0.7,
-     "width": 1.35,
-     "intensity": 0.32,
+     "intensity": 0.19,
      "edge": 0.0,
      "flow": 0.18,
-     "dissolve": 0.9
+     "dissolve": 0.9,
+     "profile": "along"
     },
     {
      "name": "haze",
      "type": "stream",
      "blend": "distort",
-     "at": "rails",
-     "rails": "axe",
+     "at": "weapon",
      "sprite": "soft_glow",
      "rate": 40,
      "life": [
@@ -157,7 +188,9 @@
      "dir": "up",
      "spread": 60,
      "intensity": 0.8,
-     "minTier": "medium"
+     "minTier": "medium",
+     "weapon": "axe",
+     "part": "edge_edge"
     }
    ],
    "demo": {
@@ -176,31 +209,37 @@
    "kind": "trail",
    "layers": [
     {
+     "name": "edge-glow",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "edge",
+     "intensity": 0.77,
+     "rise": 0.05,
+     "release": 0.3,
+     "flow": 1.4,
+     "edgeOnly": 0.9
+    },
+    {
      "name": "blade",
      "type": "trail",
-     "rails": "axe",
+     "rails": "axe_edge",
      "sprite": "moon_streak",
      "sprite2": "moon_wave",
      "ramp": "moon",
      "length": 0.15,
      "speedRef": 10,
      "minSpeed": 1.8,
-     "widthMin": 0.5,
-     "width": 1.05,
-     "intensity": 1.4,
+     "intensity": 0.84,
      "edge": 1.4,
      "flow": 0.09,
-     "dissolve": 0.6,
+     "dissolve": 0.75,
      "sparks": {
       "blend": "add",
-      "sprite": [
-       "mote",
-       "spark_dot"
-      ],
+      "sprite": "spark_dot",
       "ramp": "moon",
       "size": [
-       0.015,
-       0.04
+       0.008,
+       0.016
       ],
       "life": [
        0.3,
@@ -219,31 +258,32 @@
       "perMeter": 7,
       "inherit": 0.25,
       "intensity": 1.5,
-      "soft": 0.05
-     }
+      "soft": 0.05,
+      "stretch": 0.05,
+      "aspect": 3
+     },
+     "profile": "along"
     },
     {
      "name": "ghost",
      "type": "trail",
-     "rails": "axe",
+     "rails": "axe_edge",
      "sprite": "moon_wave",
      "sprite2": "moon_streak",
      "ramp": "moon",
      "length": 0.55,
      "speedRef": 10,
      "minSpeed": 1.5,
-     "widthMin": 0.8,
-     "width": 1.25,
-     "intensity": 0.28,
+     "intensity": 0.17,
      "edge": 0.0,
      "flow": 0.2,
-     "dissolve": 0.95
+     "dissolve": 0.95,
+     "profile": "along"
     },
     {
      "name": "motes",
      "type": "stream",
-     "at": "rails",
-     "rails": "axe",
+     "at": "weapon",
      "sprite": "mote",
      "ramp": "moon",
      "rate": 26,
@@ -266,7 +306,9 @@
      "drag": 1.5,
      "intensity": 1.2,
      "fadeOut": 0.7,
-     "soft": 0.05
+     "soft": 0.05,
+     "weapon": "axe",
+     "part": "edge_edge"
     }
    ]
   },
@@ -281,6 +323,16 @@
    "kind": "impact",
    "surface": "stone",
    "layers": [
+    {
+     "name": "blade-flare",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "edge",
+     "intensity": 1.12,
+     "rise": 0.02,
+     "end": 0.5,
+     "release": 0.35
+    },
     {
      "name": "crescent",
      "type": "sprite",
@@ -407,8 +459,8 @@
      "drag": 1.05,
      "bounce": 0.3,
      "size": [
-      0.0259,
-      0.0605
+      0.0129,
+      0.0302
      ],
      "stretch": 0.065,
      "aspect": 4,
@@ -518,9 +570,9 @@
      "ramp": "dust",
      "surfaceTint": true,
      "tint": [
-      0.42,
-      0.39,
-      0.36
+      0.3,
+      0.27,
+      0.24
      ],
      "count": 16,
      "life": [
@@ -542,13 +594,13 @@
       0.6,
       1.0
      ],
-     "sizeEnd": 2.6,
+     "sizeEnd": 2.08,
      "sizeCurve": 0.6,
      "spin": [
       -20,
       20
      ],
-     "intensity": 0.85,
+     "intensity": 0.595,
      "fadeIn": 0.08,
      "fadeOut": 0.65,
      "dissolve": 0.5,
@@ -597,6 +649,16 @@
    "kind": "impact",
    "surface": "armor",
    "layers": [
+    {
+     "name": "blade-flare",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "edge",
+     "intensity": 0.84,
+     "rise": 0.02,
+     "end": 0.18,
+     "release": 0.35
+    },
     {
      "name": "flash",
      "type": "sprite",
@@ -676,8 +738,8 @@
      "drag": 1.2,
      "bounce": 0.35,
      "size": [
-      0.0173,
-      0.0432
+      0.0086,
+      0.0216
      ],
      "stretch": 0.0715,
      "aspect": 4,
@@ -705,8 +767,8 @@
      "drag": 0.6,
      "bounce": 0.45,
      "size": [
-      0.0302,
-      0.0562
+      0.0151,
+      0.0281
      ],
      "stretch": 0.039,
      "aspect": 3,
@@ -771,6 +833,16 @@
    "surface": "stone",
    "layers": [
     {
+     "name": "blade-flare",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "edge",
+     "intensity": 0.7,
+     "rise": 0.02,
+     "end": 0.2,
+     "release": 0.35
+    },
+    {
      "name": "glint",
      "type": "sprite",
      "sprite": "moon_star",
@@ -834,8 +906,8 @@
      "drag": 1.2,
      "bounce": 0.3,
      "size": [
-      0.0173,
-      0.0389
+      0.0086,
+      0.0194
      ],
      "stretch": 0.065,
      "aspect": 4,
@@ -880,9 +952,9 @@
      "ramp": "dust",
      "surfaceTint": true,
      "tint": [
-      0.42,
-      0.39,
-      0.36
+      0.3,
+      0.27,
+      0.24
      ],
      "count": 8,
      "life": [
@@ -905,13 +977,13 @@
       0.25,
       0.45
      ],
-     "sizeEnd": 2.4,
+     "sizeEnd": 1.92,
      "sizeCurve": 0.6,
      "spin": [
       -25,
       25
      ],
-     "intensity": 0.8,
+     "intensity": 0.56,
      "fadeIn": 0.08,
      "fadeOut": 0.65,
      "dissolve": 0.5,
@@ -1135,6 +1207,16 @@
    "surface": "staff",
    "layers": [
     {
+     "name": "blade-flare",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "edge",
+     "intensity": 1.12,
+     "rise": 0.02,
+     "end": 0.22,
+     "release": 0.35
+    },
+    {
      "name": "star",
      "type": "sprite",
      "sprite": "moon_star",
@@ -1228,8 +1310,8 @@
      "drag": 1.125,
      "bounce": 0.35,
      "size": [
-      0.0173,
-      0.0432
+      0.0086,
+      0.0216
      ],
      "stretch": 0.065,
      "aspect": 4,
@@ -1256,8 +1338,8 @@
      "gravity": 4,
      "drag": 1.5,
      "size": [
-      0.0216,
-      0.0432
+      0.0108,
+      0.0216
      ],
      "stretch": 0.065,
      "aspect": 4,
@@ -1284,109 +1366,147 @@
    "kind": "charge",
    "layers": [
     {
+     "name": "edge-glow",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "edge",
+     "intensity": 0.98,
+     "rise": 1.1,
+     "release": 0.4,
+     "pulse": 1.6,
+     "flow": 0.9,
+     "edgeOnly": 0.85
+    },
+    {
+     "name": "head-glow",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "head",
+     "intensity": 0.21,
+     "rise": 1.4,
+     "release": 0.4,
+     "pulse": 1.6
+    },
+    {
+     "name": "back-glow",
+     "type": "weaponGlow",
+     "weapon": "axe",
+     "part": "back",
+     "intensity": 0.49,
+     "rise": 1.3,
+     "release": 0.4
+    },
+    {
      "name": "converge",
      "type": "stream",
-     "at": "rails",
-     "rails": "axe",
+     "at": "weapon",
+     "weapon": "axe",
+     "part": "edge_edge",
      "sprite": "mote",
      "ramp": "moon",
-     "rate": 70,
+     "rate": 80,
+     "ramp_up": 0.6,
      "life": [
       0.35,
       0.6
      ],
      "radius": [
-      0.35,
-      0.7
+      0.18,
+      0.45
      ],
      "shape": "shell",
      "dir": "inward",
-     "drag": 0.0001,
      "size": [
-      0.02,
-      0.045
+      0.012,
+      0.026
      ],
-     "sizeEnd": 0.4,
-     "intensity": 1.6,
+     "sizeEnd": 0.35,
+     "intensity": 2.0,
      "fadeIn": 0.3,
      "fadeOut": 0.2,
-     "soft": 0.04,
-     "ramp_up": 0.5
+     "soft": 0.02
     },
     {
-     "name": "edge",
+     "name": "crackle",
      "type": "stream",
-     "at": "rails",
-     "rails": "axe",
-     "sprite": "soft_glow",
+     "at": "weapon",
+     "weapon": "axe",
+     "part": "edge_edge",
+     "sprite": "spark_dot",
      "ramp": "moon",
-     "rate": 90,
+     "rate": 30,
+     "ramp_up": 1.0,
      "life": [
-      0.12,
-      0.22
+      0.08,
+      0.16
      ],
+     "speed": [
+      0.2,
+      0.6
+     ],
+     "dir": "surface",
+     "spread": 35,
      "size": [
-      0.07,
-      0.12
+      0.006,
+      0.012
      ],
-     "sizeEnd": 0.5,
-     "speed": 0,
-     "intensity": 1.4,
-     "fadeIn": 0.2,
-     "fadeOut": 0.6,
-     "soft": 0.02,
-     "ramp_up": 0.8
+     "stretch": 0.08,
+     "aspect": 3,
+     "intensity": 2.4,
+     "soft": 0.01
     },
     {
      "name": "wisps",
      "type": "stream",
-     "at": "rails",
-     "rails": "axe",
+     "at": "weapon",
+     "weapon": "axe",
+     "part": "edge_edge",
      "sprite": "wisp",
      "ramp": "moon",
      "orient": "axial",
-     "rate": 14,
+     "rate": 12,
+     "ramp_up": 0.8,
      "life": [
       0.3,
-      0.55
+      0.5
      ],
      "size": [
-      0.12,
-      0.22
+      0.08,
+      0.15
      ],
-     "aspect": 0.5,
+     "aspect": 0.45,
      "speed": [
-      0.2,
-      0.5
+      0.15,
+      0.35
      ],
      "dir": "up",
      "spread": 20,
-     "intensity": 1.2,
-     "fadeIn": 0.2,
+     "intensity": 1.0,
+     "fadeIn": 0.25,
      "fadeOut": 0.6,
-     "soft": 0.05,
-     "ramp_up": 0.6
+     "soft": 0.03
     },
     {
      "name": "haze",
      "type": "stream",
      "blend": "distort",
-     "at": "rails",
-     "rails": "axe",
+     "at": "weapon",
+     "weapon": "axe",
+     "part": "edge",
      "sprite": "soft_glow",
-     "rate": 16,
+     "rate": 14,
      "life": [
       0.3,
       0.5
      ],
      "size": [
-      0.2,
-      0.3
+      0.15,
+      0.25
      ],
      "sizeEnd": 1.5,
      "speed": [
       0.1,
-      0.4
+      0.3
      ],
      "dir": "up",
      "spread": 30,

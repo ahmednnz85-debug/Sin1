@@ -33,10 +33,14 @@ void main() {
   c += c * burn * 1.5;
   gl_FragColor = vec4(c, 0.0);
 #elif MODE == 1
-  float dens = tex.a * fade * keep * soft * ramp.a * vCol.a * uOpacity;
+  // fbm erosion that drifts with time: wispy edges and holes instead of a solid puff
+  float er = texture2D(tNoise, vLocal * 1.3 + vMisc.w * 5.7 + vec2(uTime * 0.04, -uTime * 0.03)).r;
+  float er2 = texture2D(tNoise, vLocal * 3.1 + vMisc.w * 2.3 - vec2(uTime * 0.07, 0.0)).r;
+  float shape = smoothstep(0.32, 0.78, tex.a * (0.55 + er * 0.9) + (er2 - 0.5) * 0.25);
+  float dens = shape * fade * keep * soft * ramp.a * vCol.a * uOpacity * 0.75;
   // dust is lit: shading from the puff's own relief + key light from above + ambient
   float lit = clamp(dot(normalize(uLightDir), vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5, 0.0, 1.0);
-  vec3 c = vCol.rgb * (uAmbient + lit * tex.rgb * 0.85);
+  vec3 c = vCol.rgb * (uAmbient * 0.9 + lit * tex.rgb * 0.45) * (0.75 + er * 0.35);
   if (dens < 0.003) discard;
   gl_FragColor = vec4(c * dens, dens);
 #else

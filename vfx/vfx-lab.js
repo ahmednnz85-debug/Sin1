@@ -103,6 +103,7 @@ async function main() {
   const vfx = await SinVFX.create({ THREE, renderer, scene, camera, base: '', quality: qs.get('quality') || 'auto', forceTier: qs.has('quality'), groundY: 0 });
   vfx.setLighting({ dir: moon.position.clone(), color: new THREE.Color(0.75, 0.8, 1.0), ambient: new THREE.Color(0.2, 0.19, 0.22) });
   registerRigs();
+  registerWeapons();
   setMsg('prewarm…');
   const warmMs = await vfx.prewarm();
 
@@ -215,6 +216,68 @@ async function main() {
     ch.idle(0); mixer.update(0);
     return ch;
   }
+  // ---- weapons: energy shaped by their real geometry (profiles measured from the meshes at load)
+  function profile(points, key, val, binW) {          // per-bin extreme of val(p) along key(p)
+    const m = new Map();
+    for (const p of points) { const b = Math.round(key(p) / binW); const x = val(p); if (!m.has(b) || x > m.get(b)) m.set(b, x); }
+    const keys = [...m.keys()].sort((a, b) => a - b);
+    return k => { const b = k / binW, i0 = Math.floor(b), f = b - i0; const a = m.get(i0), c = m.get(i0 + 1); if (a == null && c == null) { let best = null, d = 1e9; for (const kk of keys) if (Math.abs(kk - b) < d) { d = Math.abs(kk - b); best = m.get(kk); } return best; } if (a == null) return c; if (c == null) return a; return a + (c - a) * f; };
+  }
+  function localPoints(root) {
+    root.updateMatrixWorld(true); const inv = root.matrixWorld.clone().invert(), out = [], v = new THREE.Vector3();
+    root.traverse(o => { if (!o.isMesh || o.userData.sinVfx) return; const rel = inv.clone().multiply(o.matrixWorld), P = o.geometry.attributes.position; for (let i = 0; i < P.count; i++) out.push(v.fromBufferAttribute(P, i).applyMatrix4(rel).clone()); });
+    return out;
+  }
+  function ss(a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+  function registerWeapons() {
+    // Sîn's axe: handle along local +y, main crescent edge on +z, small rear blade on -z
+    const axeMesh = sin.axe.isMesh ? sin.axe : sin.axe.getObjectByProperty('isMesh', true);
+    const ap = localPoints(axeMesh);
+    const HEAD = 0.185;
+    const head = ap.filter(p => p.y > HEAD);
+    const zMax = profile(head, p => p.y, p => p.z, 0.01), zMin = profile(head, p => p.y, p => -p.z, 0.01);
+    const yTop = Math.max(...head.filter(p => p.z > 0.05).map(p => p.y)), yBot = Math.min(...head.filter(p => p.z > 0.05).map(p => p.y));
+    const curve = (y0, y1, n, f, sign) => Array.from({ length: n }, (_, i) => { const y = y0 + (y1 - y0) * i / (n - 1); return new THREE.Vector3(0, y, sign * f(y)); });
+    const backPts = head.filter(p => p.z < -0.04); const bTop = Math.max(...backPts.map(p => p.y)), bBot = Math.min(...backPts.map(p => p.y));
+    const axeInfo = vfx.registerWeapon('axe', {
+      root: axeMesh, rig: 'sin', parts: ['edge', 'back', 'head', 'handle'], energy: 'moon_wave', ramp: 'moon', push: 0.0035, scale: 9,
+      classify(p) {
+        const h = ss(HEAD - 0.01, HEAD + 0.02, p.y);
+        const ef = p.z > 0 ? (1 - ss(0.0, 0.02, zMax(p.y) - p.z)) * ss(0.04, 0.08, p.z) * h : 0;
+        const eb = p.z < 0 ? (1 - ss(0.0, 0.022, zMin(p.y) + p.z)) * ss(0.025, 0.05, -p.z) * h : 0;
+        return { mask: [ef, eb, h, 1 - h], edge: Math.max(ef, eb) };
+      },
+      curves: { axe_edge: { choose: [curve(yBot + 0.004, yTop - 0.004, 7, zMax, 1), curve(bBot + 0.003, bTop - 0.003, 5, zMin, -1)], center: new THREE.Vector3(0, (yTop + yBot) / 2, 0) } }
+    });
+    // Guardian's staff (Guardian_Staff node space, y up): flat lower blade (wide in x), shaft, round crown disc in the XY plane
+    const sp = localPoints(gdn.staff);
+    const BLADE = -1.15, CROWN = 0.05;
+    const blade = sp.filter(p => p.y < BLADE), crown = sp.filter(p => p.y > CROWN);
+    const xr = profile(blade, p => p.y, p => Math.abs(p.x), 0.04);
+    const cy = crown.reduce((a, p) => a + p.y, 0) / crown.length, cx = crown.reduce((a, p) => a + p.x, 0) / crown.length;
+    const ang = p => Math.atan2(p.y - cy, p.x - cx), rad = p => Math.hypot(p.x - cx, p.y - cy);
+    const rimR = profile(crown, ang, rad, 0.12);
+    const bMin = Math.min(...blade.map(p => p.y));
+    const bladeCurve = sign => Array.from({ length: 7 }, (_, i) => { const y = bMin + 0.04 + (BLADE - 0.1 - bMin - 0.04) * i / 6; return new THREE.Vector3(sign * xr(y), y, 0); });
+    const rim = (a0, a1) => Array.from({ length: 7 }, (_, i) => { const a = a0 + (a1 - a0) * i / 6; const r = rimR(a); return new THREE.Vector3(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 0); });
+    const staffInfo = vfx.registerWeapon('staff', {
+      root: gdn.staff, rig: 'guardian', parts: ['crown', 'blade', 'shaft', 'rim'], energy: 'gold_wave', ramp: 'gold', push: 0.006, scale: 2.2,
+      sigilMaterial: 'Covenant_Staff_Sigil_Emission',
+      classify(p) {
+        const c = ss(CROWN - 0.05, CROWN + 0.08, p.y), b = 1 - ss(BLADE - 0.06, BLADE + 0.06, p.y), sh = Math.max(0, 1 - c - b);
+        const rimE = c * (1 - ss(0, 0.07, rimR(ang(p)) - rad(p)));
+        const bladeE = b * (1 - ss(0, 0.04, xr(p.y) - Math.abs(p.x)));
+        return { mask: [c, b, sh, rimE], edge: Math.max(rimE, bladeE) };
+      },
+      curves: {
+        blade_curve: { choose: [bladeCurve(1), bladeCurve(-1)], center: new THREE.Vector3(0, (bMin + BLADE) / 2, 0) },
+        crown_curve: { choose: [0, 1, 2, 3, 4, 5].map(k => rim(k * Math.PI / 3 - Math.PI / 3, k * Math.PI / 3 + Math.PI / 3)), center: new THREE.Vector3(cx, cy, 0) }
+      }
+    });
+    lab.weaponInfo = { axe: axeInfo, staff: staffInfo, crownCenter: [cx, cy] };
+    // the left-claw rig shares the staff rails
+    const gl2 = vfx.rigs.get('guardian_l'); gl2.rails = Object.assign({}, vfx.rigs.get('guardian').rails, gdn.railsL);
+  }
   function registerRigs() {
     vfx.registerRig('sin', { sockets: { axe_edge: sin.rails.edgeSocket, hand: sin.model.getObjectByName('hand_r'), root: sin.root }, rails: { axe: sin.rails.axe }, bones: [] });
     const gr = { sockets: gdn.sockets, rails: gdn.rails, bones: gdn.bones, materials: gdn.materials };
@@ -252,7 +315,7 @@ async function main() {
       sin.root.position.set(2.6, 0, -1.2); sin.root.rotation.y = -0.25;
       gdn.root.position.set(-1.4, 0, 3.0); gdn.root.rotation.y = Math.PI * 0.92;
     }
-    lab.layout = mode;
+    lab.layoutMode = mode;
   }
 
   // ------------------------------------------------------------------ Guardian event measurement (no authored timing file in the repository)
@@ -392,7 +455,10 @@ async function main() {
   function fireItem(run, it) {
     const ch = run.ch, b = it.b, rig = ch.id === 'sin' ? 'sin' : (b.side === 'l' ? 'guardian_l' : 'guardian');
     const seed = S.seed * 7919 + run.items.indexOf(it) * 131 + (ch.id === 'sin' ? 1 : 2);
-    const base = { rig, seed, timeLocked: true, intensity: run.opts.intensity || 1, tint: run.opts.tint };
+    // the weapon part used by this attack: the Guardian's round crown or its lower blade (from the socket that leads the strike)
+    const lead = (b.socket && /crown|blade/.test(b.socket)) ? b.socket : (run.ev.contact ? run.ev.contact.socket : run.ev.leading || 'staff_blade');
+    const part = ch.id === 'sin' ? 'edge' : (/crown|tip/.test(lead) ? 'crown' : 'blade');
+    const base = { rig, seed, timeLocked: true, intensity: run.opts.intensity || 1, tint: run.opts.tint, weapon: ch.id === 'sin' ? 'axe' : 'staff', part };
     if (it.kind === 'trail-start') {
       const h = vfx.play(b.effect, Object.assign({}, base, { intensity: (run.opts.trailIntensity || 1) * (b.intensity || 1) }));
       run.trails.set(b, h); run.handles.push(h);
@@ -580,7 +646,7 @@ async function main() {
   const simTimers = [];
   function setTimeoutSim(fn, t) { simTimers.push({ fn, at: S.takeT + t }); }
   function clipTake(ch, clip, o = {}) {
-    return { label: ch.ar + ' · ' + clip, kind: 'clip', ch, clip, start() { if (lab.layout !== (o.layout || 'solo')) layout(o.layout || 'solo'); ch.play(clip, Object.assign({ fade: 0.1 }, o)); } };
+    return { label: ch.ar + ' · ' + clip, kind: 'clip', ch, clip, start() { if (lab.layoutMode !== (o.layout || 'solo')) layout(o.layout || 'solo'); ch.play(clip, Object.assign({ fade: 0.1 }, o)); } };
   }
   function comboTake() {
     const c = bindings.sin.combo;
@@ -739,6 +805,12 @@ async function main() {
       <div class="row"><button class="btn" data-act="duel">⚔ تسلسل قتالي تجريبي</button></div>
       <div class="row"><button class="btn" data-act="combo">كومبو سين (خفيفة ← خفيفة ← ثقيلة)</button></div>
       <div class="row"><button class="btn" data-act="enrage">تفعيل / إيقاف غضب الحارس</button><button class="btn" data-act="markers">نقاط الاتصال</button></div>
+      <h3>طبقة طاقة الأسلحة</h3>
+      <label class="chk"><input type="checkbox" id="wpn-on" ${vfx.weapons.get('axe').enabled ? 'checked' : ''}>تفعيل طبقة الطاقة على الفأس والصولجان</label>
+      <label class="ctl">طاقة دائمة على حافة الفأس<output>${vfx.weapons.get('axe').base.x.toFixed(2)}</output><input type="range" min="0" max="1.5" step="0.05" value="${vfx.weapons.get('axe').base.x}" data-wb="axe:x"></label>
+      <label class="ctl">طاقة دائمة على رأس الصولجان<output>${vfx.weapons.get('staff').base.x.toFixed(2)}</output><input type="range" min="0" max="1.5" step="0.05" value="${vfx.weapons.get('staff').base.x}" data-wb="staff:x"></label>
+      <label class="ctl">طاقة دائمة على النصل السفلي<output>${vfx.weapons.get('staff').base.y.toFixed(2)}</output><input type="range" min="0" max="1.5" step="0.05" value="${vfx.weapons.get('staff').base.y}" data-wb="staff:y"></label>
+      <label class="ctl">نقوش الصولجان<output>${(vfx.weapons.get('staff').sigilBase || 0).toFixed(2)}</output><input type="range" min="0" max="2" step="0.05" value="${vfx.weapons.get('staff').sigilBase || 0}" data-wb="staff:sigil"></label>
       <h3>سين · ${Object.keys(sin.clips).length} حركة <small style="color:var(--dim)">Sin_hero_runtime.glb</small></h3>
       <label class="ctl">سطح إصابة سين<select id="sinsurf">${['armor', 'metal', 'stone', 'wall', 'staff', 'parry', 'spirit'].map(s => `<option ${s === S.sinSurface ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
       <div class="list">`;
@@ -761,7 +833,13 @@ async function main() {
     if (b.dataset.act === 'markers') toggleMarkers();
     if (b.dataset.act === 'export-events') download('guardian-combat-events.json', JSON.stringify({ note: 'Measured from Guardian_of_the_Covenant.glb socket motion by the VFX Laboratory', source: gdnEventsSource, clips: gdnEvents }, null, 1));
   });
-  $('#pane-chars').addEventListener('change', e => { if (e.target.id === 'bind') S.bind = e.target.checked; if (e.target.id === 'sinsurf') S.sinSurface = e.target.value; });
+  $('#pane-chars').addEventListener('change', e => { if (e.target.id === 'bind') S.bind = e.target.checked; if (e.target.id === 'sinsurf') S.sinSurface = e.target.value; if (e.target.id === 'wpn-on') vfx.weapons.forEach(w => { w.enabled = e.target.checked; }); });
+  $('#pane-chars').addEventListener('input', e => {
+    const k = e.target.dataset.wb; if (!k) return;
+    const [wn, c] = k.split(':'), w = vfx.weapons.get(wn), v = parseFloat(e.target.value);
+    if (c === 'sigil') w.sigilBase = v; else w.base[c] = v;
+    e.target.previousElementSibling.textContent = v.toFixed(2);
+  });
 
   const SLIDERS = [
     ['speed', 'سرعة الحركة', 0.05, 2, 0.05], ['size', 'الحجم', 0.3, 2.5, 0.05], ['density', 'كثافة الجسيمات', 0.1, 2, 0.05], ['glow', 'قوة التوهج', 0, 3, 0.05],
@@ -926,6 +1004,7 @@ async function main() {
   Object.assign(lab, {
     THREE, vfx, sin, gdn, scene, camera, renderer, controls, S, sinEvents, get gdnEvents() { return gdnEvents; }, gdnEventsSource, bindings, warmMs, perf, memInfo,
     manual: qs.has('auto'),
+    weaponBase(name, part, v) { const w = vfx.weapons.get(name); if (part === 'sigil') w.sigilBase = v; else w.base[part] = v; },
     playEffect(id, o = {}) { if (o.at) S.focus.fromArray(o.at); if (o.normal) S.focusNormal.fromArray(o.normal); if (o.surface) S.focusSurface = o.surface; startTake(effectTake(id)); },
     demo(id) { startTake(demoFor(id) || effectTake(id)); },
     playClip(chId, clip, o) { startTake(clipTake(chId === 'sin' ? sin : gdn, clip, o || {})); },

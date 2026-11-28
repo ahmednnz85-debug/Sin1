@@ -13,9 +13,10 @@ const effects = sets.flatMap(s => s.effects);
 const byId = new Map(effects.map(e => [e.id, e]));
 const surfaces = sets.find(s => s.surfaces).surfaces;
 const bindings = J('vfx/data/combat-bindings.json');
-const TYPES = ['trail', 'stream', 'burst', 'sprite', 'shockwave', 'decal', 'debris', 'light', 'shake', 'glow'];
+const TYPES = ['trail', 'stream', 'burst', 'sprite', 'shockwave', 'decal', 'debris', 'light', 'shake', 'glow', 'weaponGlow'];
 const RAMPS = atlas.textures.ramps.rows;
-const RAILS = ['axe', 'staff_crown', 'staff_blade', 'staff_shaft', 'claw_index', 'claw_middle', 'claw_ring'];
+const RAILS = ['axe', 'axe_edge', '@part_curve', 'staff_crown', 'staff_blade', 'staff_shaft', 'claw_index', 'claw_middle', 'claw_ring'];
+const WEAPON_PARTS = { axe: ['edge', 'back', 'head', 'handle', 'all'], staff: ['crown', 'blade', 'shaft', 'rim', 'all', '@part'] };
 const SOCKETS = ['chest_seal', 'claw_r', 'claw_l', 'staff_mid', 'root', 'axe_edge', 'staff_crown', 'staff_blade', 'staff_tip'];
 
 test('every effect requested for Sîn and the Guardian exists', () => {
@@ -39,6 +40,10 @@ test('effect ids are unique and layers are well formed', () => {
       if (L.rails) assert.ok(RAILS.includes(L.rails), `${e.id}/${L.name}: rails ${L.rails}`);
       if (L.socket) assert.ok(SOCKETS.includes(L.socket), `${e.id}/${L.name}: socket ${L.socket}`);
       if (L.type === 'trail') assert.ok(L.rails, `${e.id}/${L.name}: a trail follows weapon rails`);
+      if (L.type === 'weaponGlow' || L.at === 'weapon') {
+        assert.ok(WEAPON_PARTS[L.weapon], `${e.id}/${L.name}: weapon ${L.weapon}`);
+        assert.ok(WEAPON_PARTS[L.weapon].includes(String(L.part || 'all').replace(/_edge$/, '')), `${e.id}/${L.name}: part ${L.part}`);
+      }
       if (L.start != null) assert.ok(L.start >= 0 && L.start <= e.duration + 0.001, `${e.id}/${L.name}: start inside the effect`);
     }
     if (e.impactAt != null) assert.ok(e.layers.some(L => Math.abs((L.start || 0) - e.impactAt) < 0.06), e.id + ': a layer fires at impactAt');
@@ -53,6 +58,22 @@ test('multi-phase slams do not show and hide every layer at once', () => {
     const kinds = new Set(e.layers.map(L => L.type));
     for (const k of ['glow', 'stream', 'trail', 'burst', 'debris', 'decal', 'shockwave', 'light', 'shake']) assert.ok(kinds.has(k), `${id} has ${k}`);
   }
+});
+
+test('weapon effects are shaped by the weapons: curve trails, edge glow and surface emission', () => {
+  for (const id of ['SIN_AXE_LIGHT_TRAIL', 'SIN_AXE_HEAVY_TRAIL', 'SIN_AXE_COMBO_TRAIL']) {
+    const e = byId.get(id);
+    assert.ok(e.layers.some(L => L.type === 'trail' && L.rails === 'axe_edge' && L.profile === 'along'), id + ' ribbon along the crescent edge');
+    assert.ok(e.layers.some(L => L.type === 'weaponGlow' && L.weapon === 'axe' && L.part === 'edge'), id + ' edge glow');
+  }
+  for (const id of ['GUARDIAN_STAFF_LIGHT_TRAIL', 'GUARDIAN_STAFF_HEAVY_TRAIL'])
+    assert.ok(byId.get(id).layers.some(L => L.type === 'trail' && L.rails === '@part_curve'), id + ' trail follows the attacking part (crown rim or blade edge)');
+  assert.ok(byId.get('GUARDIAN_STAFF_CROWN_IMPACT').layers.some(L => L.type === 'weaponGlow' && L.part === 'crown'));
+  assert.ok(byId.get('GUARDIAN_STAFF_BLADE_IMPACT').layers.some(L => L.type === 'weaponGlow' && L.part === 'blade'));
+  assert.ok(byId.get('SIN_AXE_CHARGE').layers.every(L => L.type === 'weaponGlow' || L.at === 'weapon'), 'the charge gathers on the blade itself');
+  const engine = fs.readFileSync(path.join(ROOT, 'vfx/sin-vfx.js'), 'utf8');
+  assert.ok(/registerWeapon\(name, wcfg\)/.test(engine) && /chooseEdge/.test(engine));
+  assert.ok(!/\.geometry\.setAttribute\(|o\.material\.(emissive|color)\s*=/.test(engine), 'weapon meshes and materials are only read');
 });
 
 test('surface impact table points at real effects; every surface is described', () => {

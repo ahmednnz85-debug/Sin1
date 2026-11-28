@@ -13,28 +13,46 @@
    "kind": "trail",
    "layers": [
     {
-     "name": "crown",
+     "name": "part-glow",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "intensity": 1.0,
+     "rise": 0.08,
+     "release": 0.35,
+     "flow": 0.8,
+     "edgeOnly": 0.75
+    },
+    {
+     "name": "rim-glow",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "intensity": 0.6,
+     "rise": 0.08,
+     "release": 0.35
+    },
+    {
+     "name": "part",
      "type": "trail",
-     "rails": "staff_crown",
+     "rails": "@part_curve",
      "sprite": "gold_streak",
      "sprite2": "gold_wave",
      "ramp": "gold",
      "length": 0.13,
      "speedRef": 10,
      "minSpeed": 1.8,
-     "widthMin": 0.45,
-     "width": 1.0,
-     "intensity": 1.5,
+     "intensity": 0.9,
      "edge": 1.2,
      "flow": 0.08,
-     "dissolve": 0.7,
+     "dissolve": 0.85,
      "sparks": {
       "blend": "add",
       "sprite": "spark_dot",
       "ramp": "spark",
       "size": [
-       0.018,
-       0.045
+       0.012,
+       0.022
       ],
       "life": [
        0.3,
@@ -54,7 +72,8 @@
       "inherit": 0.2,
       "intensity": 2.0,
       "soft": 0.03
-     }
+     },
+     "profile": "along"
     }
    ],
    "demo": {
@@ -73,28 +92,56 @@
    "kind": "trail",
    "layers": [
     {
-     "name": "crown",
+     "name": "part-glow",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "intensity": 1.4,
+     "rise": 0.08,
+     "release": 0.35,
+     "flow": 0.8,
+     "edgeOnly": 0.75
+    },
+    {
+     "name": "rim-glow",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "intensity": 0.84,
+     "rise": 0.08,
+     "release": 0.35
+    },
+    {
+     "name": "sigils",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "shaft",
+     "intensity": 0.25,
+     "sigil": 1.4,
+     "rise": 0.15,
+     "release": 0.5
+    },
+    {
+     "name": "part",
      "type": "trail",
-     "rails": "staff_crown",
+     "rails": "@part_curve",
      "sprite": "gold_streak",
      "sprite2": "gold_ground_wave",
      "ramp": "gold",
-     "length": 0.22,
+     "length": 0.15,
      "speedRef": 10,
      "minSpeed": 1.8,
-     "widthMin": 0.55,
-     "width": 1.2,
-     "intensity": 2.0,
+     "intensity": 1.2,
      "edge": 1.5,
      "flow": 0.12,
-     "dissolve": 0.55,
+     "dissolve": 0.85,
      "sparks": {
       "blend": "add",
       "sprite": "spark_dot",
       "ramp": "spark",
       "size": [
-       0.0225,
-       0.0525
+       0.012,
+       0.022
       ],
       "life": [
        0.4,
@@ -114,7 +161,8 @@
       "inherit": 0.25,
       "intensity": 2.2,
       "soft": 0.03
-     }
+     },
+     "profile": "along"
     },
     {
      "name": "shaft",
@@ -136,8 +184,7 @@
     {
      "name": "spirits",
      "type": "stream",
-     "at": "rails",
-     "rails": "staff_shaft",
+     "at": "weapon",
      "sprite": "mote",
      "ramp": "ember",
      "rate": 30,
@@ -160,14 +207,15 @@
      "drag": 1.2,
      "intensity": 1.6,
      "fadeOut": 0.6,
-     "soft": 0.05
+     "soft": 0.05,
+     "weapon": "staff",
+     "part": "@part_edge"
     },
     {
      "name": "haze",
      "type": "stream",
      "blend": "distort",
-     "at": "rails",
-     "rails": "staff_crown",
+     "at": "weapon",
      "sprite": "soft_glow",
      "rate": 30,
      "life": [
@@ -186,7 +234,9 @@
      "dir": "up",
      "spread": 60,
      "intensity": 0.8,
-     "minTier": "medium"
+     "minTier": "medium",
+     "weapon": "staff",
+     "part": "@part_edge"
     }
    ],
    "demo": {
@@ -205,6 +255,17 @@
    "kind": "impact",
    "surface": "stone",
    "layers": [
+    {
+     "name": "blade-flare",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "blade",
+     "intensity": 1.6,
+     "rise": 0.02,
+     "end": 0.2,
+     "release": 0.45,
+     "edgeOnly": 0.9
+    },
     {
      "name": "cut",
      "type": "sprite",
@@ -300,8 +361,8 @@
      "drag": 1.05,
      "bounce": 0.3,
      "size": [
-      0.0216,
-      0.0518
+      0.0108,
+      0.0259
      ],
      "stretch": 0.065,
      "aspect": 4,
@@ -373,9 +434,9 @@
      "ramp": "dust",
      "surfaceTint": true,
      "tint": [
-      0.42,
-      0.39,
-      0.36
+      0.3,
+      0.27,
+      0.24
      ],
      "count": 7,
      "life": [
@@ -394,13 +455,13 @@
       0.35,
       0.6
      ],
-     "sizeEnd": 2.2,
+     "sizeEnd": 1.76,
      "sizeCurve": 0.6,
      "spin": [
       -25,
       25
      ],
-     "intensity": 0.75,
+     "intensity": 0.525,
      "fadeIn": 0.08,
      "fadeOut": 0.65,
      "dissolve": 0.5,
@@ -432,6 +493,36 @@
      "type": "shake",
      "amount": 0.28,
      "freq": 26
+    },
+    {
+     "name": "edge-sparks",
+     "type": "burst",
+     "at": "weapon",
+     "weapon": "staff",
+     "part": "blade_edge",
+     "sprite": "spark_dot",
+     "ramp": "spark",
+     "count": 30,
+     "life": [
+      0.2,
+      0.5
+     ],
+     "speed": [
+      2,
+      6
+     ],
+     "dir": "surface",
+     "spread": 30,
+     "gravity": 9.8,
+     "drag": 1.4,
+     "size": [
+      0.008,
+      0.016
+     ],
+     "stretch": 0.06,
+     "aspect": 3,
+     "intensity": 2.6,
+     "soft": 0.02
     }
    ]
   },
@@ -446,6 +537,27 @@
    "kind": "impact",
    "surface": "stone",
    "layers": [
+    {
+     "name": "crown-flare",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "crown",
+     "intensity": 1.6,
+     "rise": 0.02,
+     "end": 0.3,
+     "release": 0.6,
+     "edgeOnly": 0.5
+    },
+    {
+     "name": "crown-rim",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "intensity": 1.4,
+     "rise": 0.02,
+     "end": 0.3,
+     "release": 0.6
+    },
     {
      "name": "flash",
      "type": "sprite",
@@ -520,7 +632,11 @@
      "radius": 3.6,
      "life": 0.6,
      "intensity": 1.2,
-     "start": 0.02
+     "start": 0.02,
+     "surfaces": [
+      "stone",
+      "sand"
+     ]
     },
     {
      "name": "haze",
@@ -530,7 +646,12 @@
      "radius": 4.0,
      "life": 0.5,
      "intensity": 1.3,
-     "start": 0.02
+     "start": 0.02,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
     },
     {
      "name": "sparks",
@@ -553,8 +674,8 @@
      "drag": 0.975,
      "bounce": 0.35,
      "size": [
-      0.0259,
-      0.0648
+      0.0129,
+      0.0324
      ],
      "stretch": 0.065,
      "aspect": 4,
@@ -601,9 +722,9 @@
      "ramp": "dust",
      "surfaceTint": true,
      "tint": [
-      0.42,
-      0.39,
-      0.36
+      0.3,
+      0.27,
+      0.24
      ],
      "count": 18,
      "life": [
@@ -625,13 +746,13 @@
       0.6,
       1.1
      ],
-     "sizeEnd": 2.8,
+     "sizeEnd": 2.24,
      "sizeCurve": 0.6,
      "spin": [
       -20,
       20
      ],
-     "intensity": 0.85,
+     "intensity": 0.595,
      "fadeIn": 0.08,
      "fadeOut": 0.65,
      "dissolve": 0.5,
@@ -697,6 +818,36 @@
      "type": "shake",
      "amount": 0.55,
      "freq": 22
+    },
+    {
+     "name": "crown-embers",
+     "type": "burst",
+     "at": "weapon",
+     "weapon": "staff",
+     "part": "rim",
+     "sprite": "mote",
+     "ramp": "ember",
+     "count": 45,
+     "life": [
+      0.5,
+      1.1
+     ],
+     "speed": [
+      0.6,
+      2.0
+     ],
+     "dir": "surface",
+     "spread": 40,
+     "gravity": -0.4,
+     "drag": 1.8,
+     "size": [
+      0.03,
+      0.06
+     ],
+     "sizeEnd": 0.3,
+     "intensity": 1.8,
+     "fadeOut": 0.7,
+     "soft": 0.04
     }
    ]
   },
@@ -712,6 +863,54 @@
    "kind": "phased",
    "surface": "stone",
    "layers": [
+    {
+     "name": "prep-part",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "start": 0.0,
+     "end": 0.9500000000000001,
+     "intensity": 1.3,
+     "rise": 0.765,
+     "release": 0.9,
+     "pulse": 2.2,
+     "flow": 0.6,
+     "edgeOnly": 0.6
+    },
+    {
+     "name": "prep-rim",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "start": 0.0,
+     "end": 0.9500000000000001,
+     "intensity": 0.9,
+     "rise": 0.765,
+     "release": 0.9
+    },
+    {
+     "name": "prep-shaft",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "shaft",
+     "start": 0.2,
+     "end": 0.9500000000000001,
+     "intensity": 0.35,
+     "sigil": 1.8,
+     "rise": 0.54,
+     "release": 1.1
+    },
+    {
+     "name": "impact-flare",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "start": 0.9,
+     "end": 1.15,
+     "intensity": 2.0,
+     "rise": 0.02,
+     "release": 0.7
+    },
     {
      "name": "prep-sigils",
      "type": "glow",
@@ -736,8 +935,7 @@
     {
      "name": "prep-gather",
      "type": "stream",
-     "at": "rails",
-     "rails": "staff_shaft",
+     "at": "weapon",
      "sprite": "mote",
      "ramp": "ember",
      "start": 0.0,
@@ -749,26 +947,27 @@
       0.7
      ],
      "radius": [
-      0.8,
-      1.6
+      0.4,
+      1.0
      ],
      "shape": "shell",
      "dir": "inward",
      "size": [
-      0.05,
-      0.1
+      0.03,
+      0.06
      ],
      "sizeEnd": 0.4,
      "intensity": 2.2,
      "fadeIn": 0.3,
      "fadeOut": 0.25,
-     "soft": 0.05
+     "soft": 0.05,
+     "weapon": "staff",
+     "part": "@part_edge"
     },
     {
      "name": "prep-spirits",
      "type": "stream",
-     "at": "rails",
-     "rails": "staff_shaft",
+     "at": "weapon",
      "sprite": "wisp",
      "ramp": "gold",
      "orient": "axial",
@@ -780,8 +979,8 @@
       0.7
      ],
      "size": [
-      0.45,
-      0.8
+      0.3,
+      0.55
      ],
      "aspect": 0.45,
      "speed": [
@@ -793,14 +992,15 @@
      "intensity": 1.4,
      "fadeIn": 0.25,
      "fadeOut": 0.6,
-     "soft": 0.1
+     "soft": 0.1,
+     "weapon": "staff",
+     "part": "@part"
     },
     {
      "name": "prep-haze",
      "type": "stream",
      "blend": "distort",
-     "at": "rails",
-     "rails": "staff_shaft",
+     "at": "weapon",
      "sprite": "soft_glow",
      "start": 0.2,
      "end": 0.9,
@@ -821,26 +1021,26 @@
      "dir": "up",
      "spread": 40,
      "intensity": 0.7,
-     "minTier": "medium"
+     "minTier": "medium",
+     "weapon": "staff",
+     "part": "@part"
     },
     {
      "name": "swing",
      "type": "trail",
-     "rails": "staff_crown",
+     "rails": "@part_curve",
      "sprite": "gold_streak",
      "sprite2": "gold_ground_wave",
      "ramp": "gold",
      "start": 0.55,
      "end": 0.93,
-     "length": 0.2,
+     "length": 0.15,
      "speedRef": 10,
      "minSpeed": 1.8,
-     "widthMin": 0.6,
-     "width": 1.25,
-     "intensity": 2.12,
+     "intensity": 1.27,
      "edge": 1.5,
      "flow": 0.12,
-     "dissolve": 0.55,
+     "dissolve": 0.85,
      "sparks": {
       "blend": "add",
       "sprite": "spark_dot",
@@ -867,7 +1067,8 @@
       "inherit": 0.3,
       "intensity": 2.4,
       "soft": 0.03
-     }
+     },
+     "profile": "along"
     },
     {
      "name": "flash",
@@ -948,8 +1149,8 @@
      "drag": 0.975,
      "bounce": 0.35,
      "size": [
-      0.0259,
-      0.0691
+      0.0129,
+      0.0345
      ],
      "stretch": 0.065,
      "aspect": 4,
@@ -1029,9 +1230,9 @@
      "ramp": "dust",
      "surfaceTint": true,
      "tint": [
-      0.42,
-      0.39,
-      0.36
+      0.3,
+      0.27,
+      0.24
      ],
      "count": 30,
      "life": [
@@ -1055,13 +1256,13 @@
       0.7,
       1.2
      ],
-     "sizeEnd": 3.2,
+     "sizeEnd": 2.56,
      "sizeCurve": 0.55,
      "spin": [
       -15,
       15
      ],
-     "intensity": 0.9,
+     "intensity": 0.63,
      "fadeIn": 0.06,
      "fadeOut": 0.6,
      "dissolve": 0.5,
@@ -1086,9 +1287,9 @@
      "ramp": "dust",
      "surfaceTint": true,
      "tint": [
-      0.45,
-      0.41,
-      0.37
+      0.3,
+      0.27,
+      0.24
      ],
      "count": 10,
      "life": [
@@ -1107,13 +1308,13 @@
       0.6,
       1.0
      ],
-     "sizeEnd": 2.6,
+     "sizeEnd": 2.08,
      "sizeCurve": 0.6,
      "spin": [
       -20,
       20
      ],
-     "intensity": 0.7,
+     "intensity": 0.49,
      "fadeIn": 0.1,
      "fadeOut": 0.6,
      "dissolve": 0.5,
@@ -1278,6 +1479,54 @@
    "surface": "stone",
    "layers": [
     {
+     "name": "prep-part",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "start": 0.0,
+     "end": 1.05,
+     "intensity": 1.3,
+     "rise": 0.85,
+     "release": 0.9,
+     "pulse": 2.2,
+     "flow": 0.6,
+     "edgeOnly": 0.6
+    },
+    {
+     "name": "prep-rim",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "start": 0.0,
+     "end": 1.05,
+     "intensity": 0.9,
+     "rise": 0.85,
+     "release": 0.9
+    },
+    {
+     "name": "prep-shaft",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "shaft",
+     "start": 0.2,
+     "end": 1.05,
+     "intensity": 0.35,
+     "sigil": 1.8,
+     "rise": 0.6,
+     "release": 1.1
+    },
+    {
+     "name": "impact-flare",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "@part",
+     "start": 1.0,
+     "end": 1.25,
+     "intensity": 2.0,
+     "rise": 0.02,
+     "release": 0.7
+    },
+    {
      "name": "prep-sigils",
      "type": "glow",
      "material": "Covenant_Staff_Sigil_Emission",
@@ -1301,8 +1550,7 @@
     {
      "name": "prep-gather",
      "type": "stream",
-     "at": "rails",
-     "rails": "staff_shaft",
+     "at": "weapon",
      "sprite": "mote",
      "ramp": "ember",
      "start": 0.0,
@@ -1313,39 +1561,39 @@
       0.6
      ],
      "radius": [
-      0.8,
-      1.6
+      0.4,
+      1.0
      ],
      "shape": "shell",
      "dir": "inward",
      "size": [
-      0.05,
-      0.1
+      0.03,
+      0.06
      ],
      "sizeEnd": 0.4,
      "intensity": 2.2,
      "fadeIn": 0.3,
      "fadeOut": 0.25,
-     "soft": 0.05
+     "soft": 0.05,
+     "weapon": "staff",
+     "part": "@part_edge"
     },
     {
      "name": "air-trail",
      "type": "trail",
-     "rails": "staff_crown",
+     "rails": "@part_curve",
      "sprite": "gold_streak",
      "sprite2": "gold_ground_wave",
      "ramp": "gold",
      "start": 0.35,
      "end": 1.03,
-     "length": 0.26,
+     "length": 0.15,
      "speedRef": 10,
      "minSpeed": 1.8,
-     "widthMin": 0.6,
-     "width": 1.3,
-     "intensity": 2.25,
+     "intensity": 1.35,
      "edge": 1.5,
      "flow": 0.12,
-     "dissolve": 0.5,
+     "dissolve": 0.85,
      "sparks": {
       "blend": "add",
       "sprite": "spark_dot",
@@ -1372,7 +1620,8 @@
       "inherit": 0.3,
       "intensity": 2.4,
       "soft": 0.03
-     }
+     },
+     "profile": "along"
     },
     {
      "name": "flash",
@@ -1458,8 +1707,8 @@
      "drag": 0.975,
      "bounce": 0.35,
      "size": [
-      0.0259,
-      0.0734
+      0.0129,
+      0.0367
      ],
      "stretch": 0.065,
      "aspect": 4,
@@ -1508,9 +1757,9 @@
      "ramp": "dust",
      "surfaceTint": true,
      "tint": [
-      0.42,
-      0.39,
-      0.36
+      0.3,
+      0.27,
+      0.24
      ],
      "count": 40,
      "life": [
@@ -1534,13 +1783,13 @@
       0.8,
       1.3
      ],
-     "sizeEnd": 3.5,
+     "sizeEnd": 2.8,
      "sizeCurve": 0.55,
      "spin": [
       -15,
       15
      ],
-     "intensity": 0.9,
+     "intensity": 0.63,
      "fadeIn": 0.06,
      "fadeOut": 0.6,
      "dissolve": 0.5,
@@ -1565,9 +1814,9 @@
      "ramp": "dust",
      "surfaceTint": true,
      "tint": [
-      0.45,
-      0.41,
-      0.37
+      0.3,
+      0.27,
+      0.24
      ],
      "count": 14,
      "life": [
@@ -1586,13 +1835,13 @@
       0.7,
       1.1
      ],
-     "sizeEnd": 3.0,
+     "sizeEnd": 2.4,
      "sizeCurve": 0.6,
      "spin": [
       -20,
       20
      ],
-     "intensity": 0.7,
+     "intensity": 0.49,
      "fadeIn": 0.1,
      "fadeOut": 0.6,
      "dissolve": 0.5,
@@ -1751,9 +2000,9 @@
      "ramp": "dust",
      "surfaceTint": true,
      "tint": [
-      0.42,
-      0.39,
-      0.36
+      0.3,
+      0.27,
+      0.24
      ],
      "count": 14,
      "life": [
@@ -1777,12 +2026,12 @@
       0.6,
       0.9
      ],
-     "sizeEnd": 2.4,
+     "sizeEnd": 1.92,
      "spin": [
       -20,
       20
      ],
-     "intensity": 0.8,
+     "intensity": 0.56,
      "fadeIn": 0.06,
      "fadeOut": 0.6,
      "dissolve": 0.5,
@@ -2132,12 +2381,12 @@
       0.8,
       1.2
      ],
-     "sizeEnd": 2.6,
+     "sizeEnd": 2.08,
      "spin": [
       -30,
       30
      ],
-     "intensity": 0.55,
+     "intensity": 0.385,
      "fadeIn": 0.1,
      "fadeOut": 0.6,
      "dissolve": 0.6,
@@ -2279,8 +2528,8 @@
      "shape": "shell",
      "dir": "inward",
      "size": [
-      0.032,
-      0.056
+      0.016,
+      0.028
      ],
      "stretch": 0.08,
      "aspect": 4,
@@ -2430,6 +2679,27 @@
    "kind": "aura",
    "layers": [
     {
+     "name": "staff-energy",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "rim",
+     "intensity": 0.7,
+     "rise": 0.8,
+     "release": 0.8,
+     "pulse": 1.1,
+     "sigil": 1.2
+    },
+    {
+     "name": "staff-crown",
+     "type": "weaponGlow",
+     "weapon": "staff",
+     "part": "crown",
+     "intensity": 0.35,
+     "rise": 0.8,
+     "release": 0.8,
+     "pulse": 1.1
+    },
+    {
      "name": "fissures",
      "type": "glow",
      "material": "Covenant_Golden_Fissures_Emission",
@@ -2561,12 +2831,12 @@
       0.5,
       0.8
      ],
-     "sizeEnd": 2.0,
+     "sizeEnd": 1.6,
      "spin": [
       -25,
       25
      ],
-     "intensity": 0.45,
+     "intensity": 0.315,
      "fadeIn": 0.2,
      "fadeOut": 0.6,
      "dissolve": 0.6,
@@ -2628,6 +2898,36 @@
      "intensity": 1.4,
      "fadeOut": 0.7,
      "soft": 0.05
+    },
+    {
+     "name": "staff-embers",
+     "type": "stream",
+     "at": "weapon",
+     "weapon": "staff",
+     "part": "rim_edge",
+     "sprite": "mote",
+     "ramp": "ember",
+     "rate": 18,
+     "life": [
+      0.6,
+      1.2
+     ],
+     "speed": [
+      0.2,
+      0.6
+     ],
+     "dir": "up",
+     "spread": 30,
+     "gravity": -0.6,
+     "drag": 1.2,
+     "size": [
+      0.03,
+      0.05
+     ],
+     "sizeEnd": 0.2,
+     "intensity": 1.6,
+     "fadeOut": 0.7,
+     "soft": 0.04
     }
    ],
    "demo": {
@@ -2773,8 +3073,8 @@
      "gravity": 5,
      "drag": 1.5,
      "size": [
-      0.0216,
-      0.0475
+      0.0108,
+      0.0238
      ],
      "stretch": 0.065,
      "aspect": 4,

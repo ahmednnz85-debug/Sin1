@@ -76,7 +76,7 @@
     const pipeline = tier.pipeline;                 // fixed for the session: materials are compiled for it once
 
     // ---- data
-    const shaderNames = ['common', 'particle.vert', 'particle.frag', 'ribbon.vert', 'ribbon.frag', 'shockwave.vert', 'shockwave.frag', 'decal.vert', 'decal.frag', 'fullscreen.vert', 'blur.frag', 'composite.frag'];
+    const shaderNames = ['common', 'particle.vert', 'particle.frag', 'ribbon.vert', 'ribbon.frag', 'shockwave.vert', 'shockwave.frag', 'decal.vert', 'decal.frag', 'fullscreen.vert', 'blur.frag', 'composite.frag', 'weapon.vert', 'weapon.frag'];
     const effectFiles = cfg.effectFiles || ['sin-axe', 'guardian', 'surface-impacts'];
     const [shaderSrc, atlas, ...effectSets] = await Promise.all([
       Promise.all(shaderNames.map(n => fetchText(base + 'vfx/shaders/' + n + '.glsl'))).then(a => Object.fromEntries(shaderNames.map((n, i) => [n, a[i]]))),
@@ -180,7 +180,7 @@
     };
 
     // ================================================================ trails (ribbons)
-    const MAXS = 128, MAXR = 4;
+    const MAXS = 128, MAXR = 8;
     const ribbonIndex = (() => {
       const idx = [];
       for (let s = 0; s < MAXS - 1; s++) for (let r = 0; r < MAXR - 1; r++) {
@@ -198,7 +198,7 @@
       const uni = Object.assign({}, U, {
         uRegion: { value: new T.Vector4() }, uRegion2: { value: new T.Vector4() }, uTint: { value: new T.Color(1, 1, 1) },
         uRecolor: { value: 0 }, uIntensity: { value: 1 }, uRampRow: { value: rampV('moon') }, uFade: { value: 1 },
-        uFlow: { value: 0.08 }, uDissolve: { value: 0.6 }, uEdge: { value: 1 }, uSoftness: { value: 0.12 }
+        uFlow: { value: 0.08 }, uDissolve: { value: 0.6 }, uEdge: { value: 1 }, uSoftness: { value: 0.12 }, uProfile: { value: 0 }
       });
       const mat = new T.ShaderMaterial(Object.assign({ name: 'SinVFX-trail', uniforms: uni, vertexShader: S['ribbon.vert'], fragmentShader: frag(S['ribbon.frag']), defines: defs(), side: T.DoubleSide, ...depthState }, ADD));
       const mesh = new T.Mesh(g, mat); mesh.frustumCulled = false; mesh.visible = false; mesh.renderOrder = 4; mesh.name = 'SinVFX-trail';
@@ -327,6 +327,7 @@
     const settings = { size: 1, density: 1, glow: 1, opacity: 1, duration: 1, strength: 1, shake: 1, tint: null, tintAmount: 0, bloom: 1, distortion: 1 };
     const muted = new Set();          // 'EFFECT/layer' or 'type:<layerType>'
     const rigs = new Map();
+    const weapons = new Map();
     const instances = [];
     let time = 0, uid = 1;
     const shake = { trauma: 0, freq: 22, offset: new T.Vector3(), rot: 0 };
@@ -357,6 +358,11 @@
       const rig = inst.rig;
       return rig && rig.sockets && rig.sockets[name] || null;
     }
+    // '@part' in a layer means the weapon part used by this attack (opts.part), e.g. crown or blade
+    function resolvePart(inst, v) {
+      if (typeof v !== 'string' || v.indexOf('@part') < 0) return v;
+      return v.replace('@part', inst.opts.part || inst.def.part || 'blade');
+    }
     function railsOf(inst, name) {
       const rig = inst.rig;
       if (Array.isArray(name)) return name;
@@ -383,6 +389,18 @@
           const t = rnd() * (rails.length - 1), i = Math.min(rails.length - 2, Math.floor(t)), f = t - i;
           railPoint(rails[i], out); railPoint(rails[i + 1], tmp.v3); out.lerp(tmp.v3, f);
         } else out.copy(inst.pos);
+      } else if (at === 'weapon') {
+        const w = weapons.get(L.weapon || inst.opts.weapon);
+        if (w) {
+          const part = resolvePart(inst, L.part || 'all');
+          const S = w.samples[part] || w.samples.all, k = Math.floor(rnd() * S.count) * 6, M = w.root.matrixWorld;
+          out.set(S.data[k], S.data[k + 1], S.data[k + 2]).applyMatrix4(M);
+          _surfN.set(S.data[k + 3], S.data[k + 4], S.data[k + 5]).transformDirection(M);
+          if (L.inheritWeapon && w.prevValid) {
+            _wv.set(S.data[k], S.data[k + 1], S.data[k + 2]).applyMatrix4(w.prev);
+            _wv.subVectors(out, _wv).divideScalar(Math.max(1e-4, w.dt)).multiplyScalar(L.inheritWeapon);
+          } else _wv.set(0, 0, 0);
+        } else out.copy(inst.pos);
       } else if (at === 'bones') {
         const bones = inst.rig && inst.rig.bones;
         if (bones && bones.length) bones[Math.floor(rnd() * bones.length)].getWorldPosition(out); else out.copy(inst.pos);
@@ -404,7 +422,7 @@
       }
       return out;
     }
-    const _t1 = new T.Vector3(), _t2 = new T.Vector3(), _ax = new T.Vector3(), _rf = new T.Vector3();
+    const _t1 = new T.Vector3(), _t2 = new T.Vector3(), _ax = new T.Vector3(), _rf = new T.Vector3(), _surfN = new T.Vector3(0, 1, 0), _wv = new T.Vector3();
     function coneDir(axisIn, deg, rnd, out) {
       const axis = _ax.copy(axisIn);
       const a = deg * Math.PI / 180;
@@ -422,6 +440,8 @@
         if (spread) coneDir(out, spread * 0.3, rnd, out);
       } else if (mode === 'outward') {
         if (off.lengthSq() < 1e-8) coneDir(inst.N, 180, rnd, out); else out.copy(off).normalize();
+      } else if (mode === 'surface') {
+        coneDir(_surfN, spread, rnd, out);
       } else if (mode === 'inward') {
         out.copy(off).multiplyScalar(-1).normalize();
       } else {
@@ -478,6 +498,7 @@
         p.x = o.x + off.x; p.y = o.y + off.y; p.z = o.z + off.z; p.birth = time - (L.prewarm ? rnd() * p.life : 0);
         p.vx = d.x * spd; p.vy = d.y * spd; p.vz = d.z * spd;
         if (velOverride) { p.vx += velOverride.x; p.vy += velOverride.y; p.vz += velOverride.z; }
+        if (L.at === 'weapon' && L.inheritWeapon) { p.vx += _wv.x; p.vy += _wv.y; p.vz += _wv.z; }
         if (L.inherit && inst.vel) { p.vx += inst.vel.x * L.inherit; p.vy += inst.vel.y * L.inherit; p.vz += inst.vel.z * L.inherit; }
         p.gravity = rv(L.gravity || 0, rnd); p.drag = rv(L.drag || 0.0001, rnd);
         p.ground = L.ground === false ? -1e3 : (inst.groundY + 0.01); p.bounce = L.bounce == null ? 0 : L.bounce;
@@ -511,35 +532,53 @@
     function startTrail(inst, L) {
       const tr = trailPool.find(t => !t.busy);
       if (!tr) return null;
-      const rails = railsOf(inst, L.rails);
+      let rails = railsOf(inst, resolvePart(inst, L.rails));
+      const choose = rails && rails.choose ? rails : null;
+      if (choose) rails = choose.choose[0];
       if (!rails || rails.length < 2) return null;
       tr.busy = true; tr.emitting = true; tr.samples.length = 0; tr.rails = Math.min(MAXR, rails.length); tr.railsSrc = rails; tr.def = L; tr.inst = inst; tr.release = 0;
+      tr.choose = choose; tr.chosen = !choose; tr.chooseMem = null;
       tr.length = (L.length || 0.16) * settings.duration * (inst.opts.duration || 1);
       const u = tr.uni;
       const a = region(L.sprite || 'moon_streak'), b = region(L.sprite2 || L.sprite || 'moon_wave');
       u.uRegion.value.set(a.uv[0], a.uv[1], a.uv[2], a.uv[3]); u.uRegion2.value.set(b.uv[0], b.uv[1], b.uv[2], b.uv[3]);
       u.uRampRow.value = rampV(L.ramp || 'moon'); u.uFlow.value = L.flow == null ? 0.08 : L.flow; u.uDissolve.value = L.dissolve == null ? 0.6 : L.dissolve;
-      u.uEdge.value = (L.edge == null ? 1 : L.edge); u.uFade.value = 1; u.uSoftness.value = L.soft || 0.12;
+      u.uEdge.value = (L.edge == null ? 1 : L.edge); u.uFade.value = 1; u.uSoftness.value = L.soft || 0.12; u.uProfile.value = L.profile === 'along' ? 1 : 0;
       const tint = inst.opts.tint || settings.tint, amt = inst.opts.tint ? 1 : settings.tintAmount;
       if (tint && amt > 0) { u.uTint.value.setRGB(tint[0], tint[1], tint[2]); u.uRecolor.value = amt; } else u.uRecolor.value = 0;
       tr.mesh.visible = true;
       tr.lastEdge = null; tr.sparkAcc = 0;
       return tr;
     }
-    const railTmp = [0, 1, 2, 3].map(() => new T.Vector3());
+    const railTmp = [0, 1, 2, 3, 4, 5, 6, 7].map(() => new T.Vector3());
+    // A weapon with two cutting edges (double axe): the ribbon follows the edge that leads the swing.
+    function chooseEdge(tr) {
+      const c = tr.choose, mids = c.choose.map(set => railPoint(set[set.length >> 1], new T.Vector3()));
+      const center = railPoint(c.center, new T.Vector3());
+      if (tr.chooseMem) {
+        const dt = Math.max(1e-4, time - tr.chooseMem.t);
+        let best = -1, score = -1e9, speed = 0;
+        mids.forEach((m, i) => { const v = m.clone().sub(tr.chooseMem.mids[i]).divideScalar(dt); speed = Math.max(speed, v.length()); const sc = v.dot(m.clone().sub(center).normalize()); if (sc > score) { score = sc; best = i; } });
+        if (speed > (tr.def.minSpeed || 1.5)) { tr.railsSrc = c.choose[best]; tr.rails = Math.min(MAXR, tr.railsSrc.length); tr.chosen = true; return; }
+      }
+      tr.chooseMem = { t: time, mids };
+    }
     function sampleTrail(tr) {
       const L = tr.def, inst = tr.inst;
+      if (!tr.chosen) { chooseEdge(tr); if (!tr.chosen) return; }
       const pts = railTmp.slice(0, tr.rails).map((v, i) => railPoint(tr.railsSrc[i], v).clone());
-      const edge = pts[pts.length - 1];
+      const along = L.profile === 'along';
+      const edge = along ? pts[pts.length >> 1] : pts[pts.length - 1];
       const prev = tr.samples[0];
       const dtS = prev ? Math.max(1e-4, time - prev.t) : 1 / 60;
-      const speed = prev ? edge.distanceTo(prev.p[prev.p.length - 1]) / dtS : 0;
+      const pe = prev ? prev.p[along ? prev.p.length >> 1 : prev.p.length - 1] : null;
+      const speed = prev ? edge.distanceTo(pe) / dtS : 0;
       const sf = clamp((speed - (L.minSpeed || 1.5)) / Math.max(0.1, (L.speedRef || 9) - (L.minSpeed || 1.5)), 0, 1);
       const width = lerp(L.widthMin == null ? 0.35 : L.widthMin, 1, sf) * (L.width == null ? 1 : L.width);
       // widen / narrow from the edge rail inwards
-      for (let i = 0; i < pts.length - 1; i++) pts[i].lerp(edge, 1 - width);
+      if (!along) for (let i = 0; i < pts.length - 1; i++) pts[i].lerp(edge, 1 - width);
       if (prev && speed > 0.01) {
-        const dist = edge.distanceTo(prev.p[prev.p.length - 1]);
+        const dist = edge.distanceTo(prev.p[along ? prev.p.length >> 1 : prev.p.length - 1]);
         const n = Math.min(tier.subdiv, Math.floor(dist / 0.05));
         const prev2 = tr.samples[1];
         for (let s = 1; s <= n; s++) {                 // Catmull-Rom sub-samples: smooth arcs at any frame rate
@@ -554,12 +593,17 @@
       tr.samples.unshift({ t: time, p: pts, sf: prev ? lerp(prev.sf, sf, 0.55) : sf });
       // velocity-based sparks shed from the edge
       if (L.sparks && prev && sf > 0.15) {
-        tr.sparkAcc += edge.distanceTo(prev.p[prev.p.length - 1]) * (L.sparks.perMeter || 6) * sf * settings.density * tier.density;
-        const vel = edge.clone().sub(prev.p[prev.p.length - 1]).divideScalar(dtS);
-        while (tr.sparkAcc >= 1) { tr.sparkAcc -= 1; emitParticles(inst, L.sparks, 1, edge, vel.clone().multiplyScalar(L.sparks.inherit || 0.25)); }
+        tr.sparkAcc += edge.distanceTo(pe) * (L.sparks.perMeter || 6) * sf * settings.density * tier.density;
+        const vel = edge.clone().sub(pe).divideScalar(dtS);
+        while (tr.sparkAcc >= 1) {
+          tr.sparkAcc -= 1;
+          // a random point of the current edge curve (rails), so sparks leave the whole blade, not one point
+          const f = inst.rnd() * (pts.length - 1), i0 = Math.min(pts.length - 2, Math.floor(f)), o = pts[i0].clone().lerp(pts[i0 + 1], f - i0);
+          emitParticles(inst, L.sparks, 1, o, vel.clone().multiplyScalar(L.sparks.inherit || 0.25));
+        }
       }
       inst.weaponSpeed = speed;
-      inst.weaponVel = prev ? edge.clone().sub(prev.p[prev.p.length - 1]).divideScalar(dtS) : new T.Vector3();
+      inst.weaponVel = prev ? edge.clone().sub(pe).divideScalar(dtS) : new T.Vector3();
     }
     function catmull(p0, p1, p2, p3, t) {
       const t2 = t * t, t3 = t2 * t;
@@ -736,6 +780,117 @@
       return { m, base: m.userData.sinVfxBase, L, t: 0 };
     }
 
+    // ================================================================ weapons (geometry-driven energy)
+    // registerWeapon reads the weapon's own meshes (never modifies them) and builds, in the
+    // space of `root` (the object the weapon moves with):
+    //   • a merged copy of its geometry with per-vertex part masks and edge closeness, drawn
+    //     as an additive energy shell that follows root.matrixWorld every frame;
+    //   • area-weighted surface samples per part (mesh-based emission);
+    //   • rails along the real cutting-edge / rim curves (ribbon trails), registered on the rig.
+    // cfg: { root, rig, parts: ['edge','head',..] (≤4), classify(p, n) → { mask:[4], edge }, curves:
+    //        { name: [Vector3..] | { choose: [[..],[..]], center: Vector3 } }, sigilMaterial, energy, ramp, push, scale }
+    function registerWeapon(name, wcfg) {
+      const root = wcfg.root; root.updateMatrixWorld(true);
+      const inv = root.matrixWorld.clone().invert();
+      const pos = [], nrm = [], uvs = [], mask = [], sig = [], edge = [], idx = [];
+      const v = new T.Vector3(), n = new T.Vector3(), nm = new T.Matrix3();
+      let sigilMap = null;
+      root.traverse(o => {
+        if (!o.isMesh || o.userData.sinVfx) return;
+        const g = o.geometry, P = g.attributes.position, Nn = g.attributes.normal, U2 = g.attributes.uv;
+        const rel = inv.clone().multiply(o.matrixWorld); nm.getNormalMatrix(rel);
+        const isSigil = !!(wcfg.sigilMaterial && o.material && o.material.name === wcfg.sigilMaterial);
+        if (isSigil && o.material.emissiveMap) sigilMap = o.material.emissiveMap;
+        const base = pos.length / 3;
+        for (let i = 0; i < P.count; i++) {
+          v.fromBufferAttribute(P, i).applyMatrix4(rel); pos.push(v.x, v.y, v.z);
+          if (Nn) n.fromBufferAttribute(Nn, i).applyMatrix3(nm).normalize(); else n.set(0, 1, 0);
+          nrm.push(n.x, n.y, n.z);
+          if (U2) uvs.push(U2.getX(i), U2.getY(i)); else uvs.push(0, 0);
+          const c = wcfg.classify(v, n);
+          mask.push(c.mask[0] || 0, c.mask[1] || 0, c.mask[2] || 0, c.mask[3] || 0); edge.push(c.edge || 0); sig.push(isSigil ? 1 : 0);
+        }
+        if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
+        else for (let i = 0; i < P.count; i++) idx.push(base + i);
+      });
+      const geo = new T.BufferGeometry();
+      geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new T.Float32BufferAttribute(nrm, 3));
+      geo.setAttribute('uv', new T.Float32BufferAttribute(uvs, 2));
+      geo.setAttribute('aMask', new T.Float32BufferAttribute(mask, 4));
+      geo.setAttribute('aEdge', new T.Float32BufferAttribute(edge, 1));
+      geo.setAttribute('aSigil', new T.Float32BufferAttribute(sig, 1));
+      geo.setIndex(idx);
+      const parts = (wcfg.parts || []).slice(0, 4);
+      // area-weighted surface samples per part, biased to the edge where asked
+      const samples = {};
+      const triW = (k, eb) => {
+        const w = new Float32Array(idx.length / 3); let tot = 0; const a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3();
+        for (let t = 0; t < w.length; t++) {
+          const i0 = idx[t * 3], i1 = idx[t * 3 + 1], i2 = idx[t * 3 + 2];
+          a.fromArray(pos, i0 * 3); b.fromArray(pos, i1 * 3); c.fromArray(pos, i2 * 3);
+          const area = b.sub(a).cross(c.sub(a)).length() * 0.5;
+          const m = k < 0 ? 1 : (mask[i0 * 4 + k] + mask[i1 * 4 + k] + mask[i2 * 4 + k]) / 3;
+          const e = eb ? Math.pow((edge[i0] + edge[i1] + edge[i2]) / 3, eb) : 1;
+          tot += area * m * e; w[t] = tot;
+        }
+        return { w, tot };
+      };
+      const rnd = mulberry32(911);
+      const sampleSet = (k, eb, count) => {
+        const { w, tot } = triW(k, eb); const data = new Float32Array(count * 6);
+        if (tot <= 0) return null;
+        for (let s2 = 0; s2 < count; s2++) {
+          const r = rnd() * tot; let lo = 0, hi = w.length - 1;
+          while (lo < hi) { const mid = (lo + hi) >> 1; if (w[mid] < r) lo = mid + 1; else hi = mid; }
+          let u1 = rnd(), u2 = rnd(); if (u1 + u2 > 1) { u1 = 1 - u1; u2 = 1 - u2; }
+          const i0 = idx[lo * 3], i1 = idx[lo * 3 + 1], i2 = idx[lo * 3 + 2];
+          for (let c = 0; c < 3; c++) {
+            data[s2 * 6 + c] = pos[i0 * 3 + c] + (pos[i1 * 3 + c] - pos[i0 * 3 + c]) * u1 + (pos[i2 * 3 + c] - pos[i0 * 3 + c]) * u2;
+            data[s2 * 6 + 3 + c] = nrm[i0 * 3 + c] + (nrm[i1 * 3 + c] - nrm[i0 * 3 + c]) * u1 + (nrm[i2 * 3 + c] - nrm[i0 * 3 + c]) * u2;
+          }
+        }
+        return { data, count };
+      };
+      samples.all = sampleSet(-1, 0, 768);
+      parts.forEach((p, k) => { samples[p] = sampleSet(k, 0, 512); const e = sampleSet(k, 3, 512); if (e) samples[p + '_edge'] = e; });
+      // rails along the real curves
+      const rig = wcfg.rig ? rigs.get(wcfg.rig) : null;
+      const mk = (q, i, nm2) => { const o = new T.Object3D(); o.name = 'vfx-' + name + '-' + nm2 + '-' + i; o.userData.sinVfx = true; o.position.copy(q); root.add(o); return o; };
+      for (const cn in (wcfg.curves || {})) {
+        const c = wcfg.curves[cn];
+        const val = Array.isArray(c) ? c.map((q, i) => mk(q, i, cn)) : { choose: c.choose.map((set, j) => set.map((q, i) => mk(q, i, cn + j))), center: mk(c.center, 0, cn + '-c') };
+        if (rig) (rig.rails || (rig.rails = {}))[cn] = val;
+      }
+      // overlay
+      const r = region(wcfg.energy || 'moon_wave');
+      const uni = Object.assign({}, U, {
+        tSigil: { value: sigilMap || tShapes }, uParts: { value: new T.Vector4(0, 0, 0, 0) }, uRegion: { value: new T.Vector4(r.uv[0], r.uv[1], r.uv[2], r.uv[3]) },
+        uSigilAmt: { value: 0 }, uRampRow: { value: rampV(wcfg.ramp || 'moon') }, uFlow: { value: 0.6 }, uEdgeOnly: { value: 0.8 },
+        uScale: { value: wcfg.scale || 6 }, uPush: { value: wcfg.push || 0.003 }, uTint: { value: new T.Color(1, 1, 1) }, uRecolor: { value: 0 }
+      });
+      const mat = new T.ShaderMaterial(Object.assign({ name: 'SinVFX-weapon-' + name, uniforms: uni, vertexShader: S['weapon.vert'], fragmentShader: frag(S['weapon.frag']),
+        defines: defs(), side: T.FrontSide, depthTest: !SOFT, depthWrite: false, transparent: true, polygonOffset: !SOFT, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, ADD));
+      const mesh = new T.Mesh(geo, mat); mesh.name = 'SinVFX-weapon-' + name; mesh.matrixAutoUpdate = false; mesh.frustumCulled = false; mesh.visible = false; mesh.renderOrder = 5;
+      vfxScene.add(mesh);
+      const w = { name, root, parts, mesh, uni, samples, base: new T.Vector4(0, 0, 0, 0), req: new T.Vector4(0, 0, 0, 0), level: new T.Vector4(0, 0, 0, 0), sigilBase: 0, sigilReq: 0,
+        prev: new T.Matrix4(), prevValid: false, dt: 1 / 60, verts: pos.length / 3, tris: idx.length / 3, enabled: true };
+      weapons.set(name, w);
+      return { name, verts: w.verts, tris: w.tris, parts, samples: Object.keys(samples) };
+    }
+    function partIndex(w, part) { return w.parts.indexOf(part); }
+    function syncWeapons() {
+      for (const w of weapons.values()) {
+        const on = w.enabled && !muted.has('type:weaponGlow') && (Math.max(w.level.x, w.level.y, w.level.z, w.level.w) > 0.002 || w.sigilLevel > 0.002);
+        w.mesh.visible = on;
+        if (!on) continue;
+        w.mesh.matrix.copy(w.root.matrixWorld); w.mesh.matrixWorldNeedsUpdate = true;
+        w.uni.uParts.value.copy(w.level); w.uni.uSigilAmt.value = w.sigilLevel || 0;
+        const tint = settings.tint;
+        if (tint && settings.tintAmount > 0) { w.uni.uTint.value.setRGB(tint[0], tint[1], tint[2]); w.uni.uRecolor.value = settings.tintAmount; } else w.uni.uRecolor.value = 0;
+      }
+    }
+
     // ================================================================ instances
     function play(id, opts) {
       opts = opts || {};
@@ -788,8 +943,9 @@
       def.layers.forEach((L, li) => {
         if (!layerActive(inst, L)) return;
         const st = L.start || 0;
-        const end = L.end == null ? (L.type === 'stream' || L.type === 'trail' || L.type === 'glow' ? def.duration : st) : L.end;
-        const span = inst.loop && (L.type === 'stream' || L.type === 'trail' || L.type === 'glow') && !inst.stopped ? Infinity : end;
+        const cont = L.type === 'stream' || L.type === 'trail' || L.type === 'glow' || L.type === 'weaponGlow';
+        const end = L.end == null ? (cont ? def.duration : st) : L.end;
+        const span = inst.loop && cont && L.end == null && !inst.stopped ? Infinity : end;
         if (L.type === 'stream') {
           if (t >= st && t < span) {
             busy = true;
@@ -806,6 +962,22 @@
             if (!tr) { tr = startTrail(inst, L); inst.trails.set(li, tr || false); }
             if (tr) sampleTrail(tr);
           } else if (tr && tr.emitting && t >= span) { tr.emitting = false; }
+          return;
+        }
+        if (L.type === 'weaponGlow') {
+          const w = weapons.get(L.weapon || inst.opts.weapon);
+          if (!w) return;
+          const live = t >= st && t < span, k = partIndex(w, resolvePart(inst, L.part || 'edge'));
+          const g = inst.glows[li] || (inst.glows[li] = { wg: true, lv: 0 });
+          if (live) { busy = true; g.lv = clamp((t - st) / Math.max(0.01, L.rise || 0.15), 0, 1); }
+          else if (t >= span) { g.lv = Math.max(0, 1 - (t - span) / Math.max(0.01, L.release || 0.3)); if (g.lv > 0) busy = true; }
+          const pulse = L.pulse ? 1 + Math.sin(t * Math.PI * 2 * L.pulse) * 0.2 : 1;
+          const lvl = g.lv * (L.intensity == null ? 1 : L.intensity) * pulse * inst.intensity;
+          if (L.sigil) w.sigilReq = Math.max(w.sigilReq, g.lv * L.sigil * pulse);
+          if (k >= 0) { const arr = ['x', 'y', 'z', 'w']; w.req[arr[k]] = Math.max(w.req[arr[k]], lvl); }
+          else if (L.part === 'all') { w.req.set(Math.max(w.req.x, lvl), Math.max(w.req.y, lvl), Math.max(w.req.z, lvl), Math.max(w.req.w, lvl)); }
+          if (L.flow != null) w.uni.uFlow.value = L.flow;
+          if (L.edgeOnly != null) w.uni.uEdgeOnly.value = L.edgeOnly;
           return;
         }
         if (L.type === 'glow') {
@@ -855,7 +1027,7 @@
     function finish(inst, hard) {
       if (inst.done) return;
       inst.done = true;
-      for (const g of inst.glows) if (g) g.m.emissiveIntensity = g.base;
+      for (const g of inst.glows) if (g && g.m) g.m.emissiveIntensity = g.base;
       for (const tr of inst.trails.values()) if (tr && tr.inst === inst) { tr.emitting = false; if (hard) { tr.samples.length = 0; } }
       const i = instances.indexOf(inst); if (i >= 0) instances.splice(i, 1);
     }
@@ -865,7 +1037,12 @@
       dt = Math.max(0, Math.min(dt, 0.1));
       time += dt;
       U.uTime.value = time;
+      for (const w of weapons.values()) { w.req.set(0, 0, 0, 0); w.sigilReq = 0; }
       for (let i = instances.length - 1; i >= 0; i--) { const inst = instances[i]; if (inst) tickInstance(inst, dt); }
+      for (const w of weapons.values()) {
+        w.level.set(Math.max(w.req.x, w.base.x), Math.max(w.req.y, w.base.y), Math.max(w.req.z, w.base.z), Math.max(w.req.w, w.base.w));
+        w.sigilLevel = Math.max(w.sigilReq, w.sigilBase || 0);
+      }
       for (const tr of trailPool) if (tr.busy) {
         if (!tr.emitting) tr.uni.uFade.value = Math.max(0, tr.uni.uFade.value - dt / Math.max(0.05, tr.length));
         buildTrail(tr);
@@ -883,11 +1060,14 @@
       shake.offset.set(Math.sin(f * 1.13) + Math.sin(f * 2.71) * 0.4, Math.sin(f * 1.37 + 1.7) + Math.sin(f * 3.1) * 0.35, Math.sin(f * 0.91 + 4.1)).multiplyScalar(a * 0.06);
       shake.rot = Math.sin(f * 1.7 + 2.3) * a * 0.012;
       U.uGlow.value = settings.glow; U.uOpacity.value = settings.opacity; U.uSizeMul.value = 1;
+      // weapon motion of this frame (point velocities for mesh emission)
+      for (const w of weapons.values()) { w.prev.copy(w.root.matrixWorld); w.prevValid = true; w.dt = dt || w.dt; }
     }
 
     const drawInfo = { calls: 0, triangles: 0 };
     function render(target) {
       const cam = camera;
+      syncWeapons();
       U.uNear.value = cam.near; U.uFar.value = cam.far;
       U.uPxScale.value = 2 / (cam.projectionMatrix.elements[5] * Math.max(1, pipeline === 'composite' ? comp.vfx.height : H));
       const ri = renderer.info;
@@ -1034,9 +1214,10 @@
 
     return {
       VERSION, tier: tierName, pipeline, effects, surfaces, atlas, settings, muted, shake, rigs, vfxScene, distScene,
-      play, impact, update, render, prewarm, registerRig, setCamera, setLighting, setSize, clearAll, frameTime, dispose,
+      play, impact, update, render, prewarm, registerRig, registerWeapon, weapons, setCamera, setLighting, setSize, clearAll, frameTime, dispose,
       stats: getStats, time: () => time, list: () => [...effects.values()],
-      setDensityFloor(v) { adapt.floor = v; }
+      setDensityFloor(v) { adapt.floor = v; },
+      debugInstances: () => instances.map(i => ({ id: i.id, t: +i.t.toFixed(3), part: i.opts.part, weapon: i.opts.weapon, glows: i.glows.map(g => g && (g.wg ? +g.lv.toFixed(2) : 'mat')) }))
     };
   }
 
