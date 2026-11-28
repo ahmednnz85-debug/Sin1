@@ -1,0 +1,1399 @@
+{
+ "set": "sin-axe",
+ "note": "Sîn's lunar axe. Palette: silver-blue lunar energy (assets/vfx: moon_* elements). Units: metres, seconds. Layer types: trail, stream, burst, sprite, shockwave, decal, debris, light, shake, glow. See VFX_ENGINE_GUIDE_AR.md.",
+ "effects": [
+  {
+   "id": "SIN_AXE_LIGHT_TRAIL",
+   "group": "sin",
+   "ar": "أثر ضربة خفيفة",
+   "en": "Light swing trail",
+   "duration": 0.6,
+   "loop": true,
+   "palette": "moon",
+   "kind": "trail",
+   "layers": [
+    {
+     "name": "blade",
+     "type": "trail",
+     "rails": "axe",
+     "sprite": "moon_streak",
+     "sprite2": "moon_wave",
+     "ramp": "moon",
+     "length": 0.15,
+     "speedRef": 10,
+     "minSpeed": 2.0,
+     "widthMin": 0.55,
+     "width": 0.95,
+     "intensity": 1.6,
+     "edge": 1.5,
+     "flow": 0.07,
+     "dissolve": 0.7,
+     "sparks": {
+      "blend": "add",
+      "sprite": "mote",
+      "ramp": "moon",
+      "size": [
+       0.015,
+       0.035
+      ],
+      "life": [
+       0.22,
+       0.45
+      ],
+      "speed": [
+       0.2,
+       0.7
+      ],
+      "dir": "outward",
+      "spread": 180,
+      "drag": 3.5,
+      "gravity": -0.35,
+      "fadeIn": 0.05,
+      "fadeOut": 0.6,
+      "perMeter": 4,
+      "inherit": 0.18,
+      "intensity": 1.4,
+      "soft": 0.05
+     }
+    }
+   ],
+   "demo": {
+    "character": "sin",
+    "clip": "Attack_Right"
+   }
+  },
+  {
+   "id": "SIN_AXE_HEAVY_TRAIL",
+   "group": "sin",
+   "ar": "أثر ضربة ثقيلة",
+   "en": "Heavy swing trail",
+   "duration": 1.0,
+   "loop": true,
+   "palette": "moon",
+   "kind": "trail",
+   "layers": [
+    {
+     "name": "blade",
+     "type": "trail",
+     "rails": "axe",
+     "sprite": "moon_streak",
+     "sprite2": "moon_ground_wave",
+     "ramp": "moon",
+     "length": 0.2,
+     "speedRef": 11,
+     "minSpeed": 1.6,
+     "widthMin": 0.55,
+     "width": 1.15,
+     "intensity": 1.7,
+     "edge": 1.6,
+     "flow": 0.11,
+     "dissolve": 0.55,
+     "sparks": {
+      "blend": "add",
+      "sprite": "mote",
+      "ramp": "moon",
+      "size": [
+       0.02,
+       0.05
+      ],
+      "life": [
+       0.3,
+       0.7
+      ],
+      "speed": [
+       0.3,
+       1.2
+      ],
+      "dir": "outward",
+      "spread": 180,
+      "drag": 3.0,
+      "gravity": -0.5,
+      "fadeIn": 0.05,
+      "fadeOut": 0.6,
+      "perMeter": 9,
+      "inherit": 0.22,
+      "intensity": 1.6,
+      "soft": 0.05
+     }
+    },
+    {
+     "name": "afterglow",
+     "type": "trail",
+     "rails": "axe",
+     "sprite": "moon_wave",
+     "sprite2": "moon_streak",
+     "ramp": "moon",
+     "length": 0.42,
+     "speedRef": 11,
+     "minSpeed": 1.6,
+     "widthMin": 0.7,
+     "width": 1.35,
+     "intensity": 0.32,
+     "edge": 0.0,
+     "flow": 0.18,
+     "dissolve": 0.9
+    },
+    {
+     "name": "haze",
+     "type": "stream",
+     "blend": "distort",
+     "at": "rails",
+     "rails": "axe",
+     "sprite": "soft_glow",
+     "rate": 40,
+     "life": [
+      0.25,
+      0.4
+     ],
+     "size": [
+      0.25,
+      0.4
+     ],
+     "sizeEnd": 1.6,
+     "speed": [
+      0.1,
+      0.3
+     ],
+     "dir": "up",
+     "spread": 60,
+     "intensity": 0.8,
+     "minTier": "medium"
+    }
+   ],
+   "demo": {
+    "character": "sin",
+    "clip": "Finisher_Heavy"
+   }
+  },
+  {
+   "id": "SIN_AXE_COMBO_TRAIL",
+   "group": "sin",
+   "ar": "آثار الكومبو المترابطة",
+   "en": "Combo trails",
+   "duration": 0.8,
+   "loop": true,
+   "palette": "moon",
+   "kind": "trail",
+   "layers": [
+    {
+     "name": "blade",
+     "type": "trail",
+     "rails": "axe",
+     "sprite": "moon_streak",
+     "sprite2": "moon_wave",
+     "ramp": "moon",
+     "length": 0.15,
+     "speedRef": 10,
+     "minSpeed": 1.8,
+     "widthMin": 0.5,
+     "width": 1.05,
+     "intensity": 1.4,
+     "edge": 1.4,
+     "flow": 0.09,
+     "dissolve": 0.6,
+     "sparks": {
+      "blend": "add",
+      "sprite": [
+       "mote",
+       "spark_dot"
+      ],
+      "ramp": "moon",
+      "size": [
+       0.015,
+       0.04
+      ],
+      "life": [
+       0.3,
+       0.6
+      ],
+      "speed": [
+       0.3,
+       1.0
+      ],
+      "dir": "outward",
+      "spread": 180,
+      "drag": 3.0,
+      "gravity": -0.3,
+      "fadeIn": 0.05,
+      "fadeOut": 0.6,
+      "perMeter": 7,
+      "inherit": 0.25,
+      "intensity": 1.5,
+      "soft": 0.05
+     }
+    },
+    {
+     "name": "ghost",
+     "type": "trail",
+     "rails": "axe",
+     "sprite": "moon_wave",
+     "sprite2": "moon_streak",
+     "ramp": "moon",
+     "length": 0.55,
+     "speedRef": 10,
+     "minSpeed": 1.5,
+     "widthMin": 0.8,
+     "width": 1.25,
+     "intensity": 0.28,
+     "edge": 0.0,
+     "flow": 0.2,
+     "dissolve": 0.95
+    },
+    {
+     "name": "motes",
+     "type": "stream",
+     "at": "rails",
+     "rails": "axe",
+     "sprite": "mote",
+     "ramp": "moon",
+     "rate": 26,
+     "life": [
+      0.5,
+      1.0
+     ],
+     "size": [
+      0.02,
+      0.04
+     ],
+     "sizeEnd": 0.3,
+     "speed": [
+      0.05,
+      0.25
+     ],
+     "dir": "up",
+     "spread": 90,
+     "gravity": -0.25,
+     "drag": 1.5,
+     "intensity": 1.2,
+     "fadeOut": 0.7,
+     "soft": 0.05
+    }
+   ]
+  },
+  {
+   "id": "SIN_AXE_FINISHER",
+   "group": "sin",
+   "ar": "الضربة الختامية السينمائية",
+   "en": "Cinematic finisher",
+   "duration": 2.2,
+   "tail": 7,
+   "palette": "moon",
+   "kind": "impact",
+   "surface": "stone",
+   "layers": [
+    {
+     "name": "crescent",
+     "type": "sprite",
+     "orient": "swing",
+     "sprite": "moon_crescent",
+     "size": 2.6,
+     "sizeEnd": 1.25,
+     "life": 0.42,
+     "fadeIn": 0.03,
+     "fadeOut": 0.75,
+     "intensity": 1.2,
+     "offset": [
+      0.9,
+      -0.2,
+      0
+     ],
+     "dissolve": 0.8,
+     "soft": 0.4
+    },
+    {
+     "name": "flash",
+     "type": "sprite",
+     "sprite": "moon_flower",
+     "size": 1.1,
+     "sizeEnd": 2.4,
+     "life": 0.22,
+     "fadeIn": 0.02,
+     "fadeOut": 0.8,
+     "intensity": 1.0,
+     "offset": [
+      0.25,
+      0,
+      0
+     ],
+     "soft": 0.3
+    },
+    {
+     "name": "star",
+     "type": "sprite",
+     "sprite": "moon_star",
+     "size": 0.9,
+     "sizeEnd": 0.4,
+     "life": 0.16,
+     "fadeIn": 0.02,
+     "fadeOut": 0.7,
+     "intensity": 2.1,
+     "offset": [
+      0.3,
+      0,
+      0
+     ],
+     "soft": 0.2
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "color": [
+      0.45,
+      0.6,
+      1.0
+     ],
+     "intensity": 7,
+     "life": 0.45,
+     "range": 9,
+     "lift": 1.2
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "amount": 0.55,
+     "freq": 24
+    },
+    {
+     "name": "ring",
+     "type": "shockwave",
+     "kind": "ring",
+     "ramp": "moon",
+     "radius0": 0.3,
+     "radius": 4.2,
+     "life": 0.7,
+     "intensity": 1.1,
+     "start": 0.02
+    },
+    {
+     "name": "wall",
+     "type": "shockwave",
+     "kind": "wall",
+     "sprite": "moon_ground_wave",
+     "radius0": 0.3,
+     "radius": 3.0,
+     "height": 0.6,
+     "life": 0.6,
+     "intensity": 0.8,
+     "repeat": 5,
+     "start": 0.03
+    },
+    {
+     "name": "haze",
+     "type": "shockwave",
+     "kind": "distort",
+     "radius0": 0.3,
+     "radius": 4.6,
+     "life": 0.55,
+     "intensity": 1.4,
+     "start": 0.02
+    },
+    {
+     "name": "sparks",
+     "type": "burst",
+     "sprite": "spark_dot",
+     "ramp": "moon",
+     "count": 98,
+     "life": [
+      0.345,
+      0.92
+     ],
+     "speed": [
+      4.6,
+      11.5
+     ],
+     "dir": "normal",
+     "spread": 70,
+     "gravity": 9.8,
+     "drag": 1.05,
+     "bounce": 0.3,
+     "size": [
+      0.0259,
+      0.0605
+     ],
+     "stretch": 0.065,
+     "aspect": 4,
+     "intensity": 2.4,
+     "fadeOut": 0.5,
+     "soft": 0.03
+    },
+    {
+     "name": "motes",
+     "type": "burst",
+     "sprite": "mote",
+     "ramp": "moon",
+     "count": 90,
+     "life": [
+      0.8,
+      1.8
+     ],
+     "speed": [
+      1.0,
+      4.0
+     ],
+     "dir": "radial",
+     "lift": [
+      0.3,
+      1.0
+     ],
+     "spread": 30,
+     "gravity": -0.4,
+     "drag": 2.2,
+     "size": [
+      0.02,
+      0.055
+     ],
+     "sizeEnd": 0.2,
+     "intensity": 1.6,
+     "fadeOut": 0.7,
+     "start": 0.02,
+     "soft": 0.05
+    },
+    {
+     "name": "shards",
+     "type": "burst",
+     "sprite": [
+      "moon_shards",
+      "moon_shards_streak"
+     ],
+     "count": 6,
+     "life": [
+      0.25,
+      0.4
+     ],
+     "speed": [
+      0.5,
+      1.5
+     ],
+     "dir": "radial",
+     "lift": 0.6,
+     "size": [
+      0.6,
+      0.9
+     ],
+     "sizeEnd": 1.4,
+     "drag": 3,
+     "intensity": 1.3,
+     "fadeIn": 0.03,
+     "fadeOut": 0.7,
+     "orient": "billboard",
+     "dissolve": 0.7,
+     "soft": 0.3
+    },
+    {
+     "name": "debris",
+     "type": "debris",
+     "count": 12,
+     "speed": [
+      2.5,
+      6.5
+     ],
+     "dir": "normal",
+     "spread": 55,
+     "size": [
+      0.05,
+      0.14
+     ],
+     "life": [
+      2.4,
+      3.6
+     ],
+     "radius": 0.3,
+     "shape": "disc",
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "dust",
+     "type": "burst",
+     "blend": "alpha",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "surfaceTint": true,
+     "tint": [
+      0.42,
+      0.39,
+      0.36
+     ],
+     "count": 16,
+     "life": [
+      1.6,
+      2.8
+     ],
+     "speed": [
+      1.5,
+      3.6
+     ],
+     "dir": "radial",
+     "lift": [
+      0.05,
+      0.3
+     ],
+     "drag": 2.2,
+     "gravity": -0.12,
+     "size": [
+      0.6,
+      1.0
+     ],
+     "sizeEnd": 2.6,
+     "sizeCurve": 0.6,
+     "spin": [
+      -20,
+      20
+     ],
+     "intensity": 0.85,
+     "fadeIn": 0.08,
+     "fadeOut": 0.65,
+     "dissolve": 0.5,
+     "start": 0.03,
+     "soft": 0.5,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "cracks",
+     "type": "decal",
+     "sprite": [
+      "crack_star_plate",
+      "crack_radial_hole"
+     ],
+     "size": 2.4,
+     "life": 7,
+     "glow": 0.9,
+     "glowColor": [
+      0.55,
+      0.7,
+      1.0
+     ],
+     "glowTime": 0.5,
+     "surfaces": [
+      "stone",
+      "sand"
+     ]
+    }
+   ],
+   "demo": {
+    "character": "sin",
+    "clip": "Finisher_Jump"
+   }
+  },
+  {
+   "id": "SIN_AXE_METAL_IMPACT",
+   "group": "sin",
+   "ar": "شرر الفأس على الدروع",
+   "en": "Axe on armour",
+   "duration": 0.9,
+   "palette": "moon",
+   "kind": "impact",
+   "surface": "armor",
+   "layers": [
+    {
+     "name": "flash",
+     "type": "sprite",
+     "sprite": [
+      "spark_star",
+      "spark_burst_b"
+     ],
+     "size": 0.55,
+     "sizeEnd": 0.8,
+     "life": 0.1,
+     "fadeIn": 0.01,
+     "fadeOut": 0.8,
+     "intensity": 1.176,
+     "soft": 0.1
+    },
+    {
+     "name": "spray",
+     "type": "sprite",
+     "orient": "billboard",
+     "sprite": [
+      "spark_burst_a",
+      "spark_burst_d",
+      "spark_burst_f",
+      "spark_burst_c"
+     ],
+     "size": 0.95,
+     "sizeEnd": 1.35,
+     "life": 0.16,
+     "fadeIn": 0.01,
+     "fadeOut": 0.75,
+     "intensity": 1.5,
+     "soft": 0.15
+    },
+    {
+     "name": "glint",
+     "type": "sprite",
+     "sprite": "moon_star",
+     "size": 0.38,
+     "sizeEnd": 0.15,
+     "life": 0.14,
+     "fadeIn": 0.01,
+     "fadeOut": 0.7,
+     "intensity": 1.82,
+     "soft": 0.1
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "color": [
+      1.0,
+      0.8,
+      0.55
+     ],
+     "intensity": 4.48,
+     "life": 0.14,
+     "range": 5,
+     "lift": 0.6
+    },
+    {
+     "name": "sparks",
+     "type": "burst",
+     "sprite": "spark_dot",
+     "ramp": "spark",
+     "count": 64,
+     "surfaceKey": "sparks",
+     "life": [
+      0.253,
+      0.7475
+     ],
+     "speed": [
+      4.025,
+      11.5
+     ],
+     "dir": "reflect",
+     "spread": 52,
+     "gravity": 9.8,
+     "drag": 1.2,
+     "bounce": 0.35,
+     "size": [
+      0.0173,
+      0.0432
+     ],
+     "stretch": 0.0715,
+     "aspect": 4,
+     "intensity": 2.8,
+     "fadeOut": 0.45,
+     "soft": 0.02
+    },
+    {
+     "name": "hot",
+     "type": "burst",
+     "sprite": "spark_dot",
+     "ramp": "spark",
+     "count": 14,
+     "life": [
+      0.575,
+      1.265
+     ],
+     "speed": [
+      1.725,
+      4.6
+     ],
+     "dir": "reflect",
+     "spread": 70,
+     "gravity": 9.8,
+     "drag": 0.6,
+     "bounce": 0.45,
+     "size": [
+      0.0302,
+      0.0562
+     ],
+     "stretch": 0.039,
+     "aspect": 3,
+     "intensity": 2.2,
+     "fadeOut": 0.6,
+     "soft": 0.02
+    },
+    {
+     "name": "lunar",
+     "type": "burst",
+     "sprite": "mote",
+     "ramp": "moon",
+     "count": 14,
+     "life": [
+      0.3,
+      0.6
+     ],
+     "speed": [
+      0.6,
+      1.8
+     ],
+     "dir": "outward",
+     "spread": 180,
+     "drag": 3,
+     "gravity": -0.3,
+     "size": [
+      0.02,
+      0.04
+     ],
+     "intensity": 1.5,
+     "soft": 0.05
+    },
+    {
+     "name": "haze",
+     "type": "burst",
+     "blend": "distort",
+     "sprite": "soft_glow",
+     "count": 2,
+     "life": 0.25,
+     "size": 0.5,
+     "sizeEnd": 1.4,
+     "intensity": 0.8,
+     "minTier": "medium"
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "amount": 0.18,
+     "freq": 30
+    }
+   ]
+  },
+  {
+   "id": "SIN_AXE_GROUND_IMPACT",
+   "group": "sin",
+   "ar": "ارتطام الفأس بالأرض",
+   "en": "Axe into ground",
+   "duration": 1.4,
+   "tail": 5,
+   "palette": "moon",
+   "kind": "impact",
+   "surface": "stone",
+   "layers": [
+    {
+     "name": "glint",
+     "type": "sprite",
+     "sprite": "moon_star",
+     "size": 0.5,
+     "sizeEnd": 0.2,
+     "life": 0.14,
+     "fadeIn": 0.01,
+     "fadeOut": 0.7,
+     "intensity": 1.68,
+     "offset": [
+      0.1,
+      0,
+      0
+     ],
+     "soft": 0.15
+    },
+    {
+     "name": "burst",
+     "type": "sprite",
+     "orient": "axial",
+     "sprite": "moon_ground_burst",
+     "size": 0.8,
+     "sizeEnd": 1.0,
+     "life": 0.22,
+     "fadeIn": 0.02,
+     "fadeOut": 0.7,
+     "intensity": 0.637,
+     "soft": 0.2
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "color": [
+      0.7,
+      0.8,
+      1.0
+     ],
+     "intensity": 3.92,
+     "life": 0.18,
+     "range": 5,
+     "lift": 0.6
+    },
+    {
+     "name": "sparks",
+     "type": "burst",
+     "sprite": "spark_dot",
+     "ramp": "spark",
+     "count": 31,
+     "surfaceKey": "sparks",
+     "life": [
+      0.23,
+      0.6325
+     ],
+     "speed": [
+      3.45,
+      8.625
+     ],
+     "dir": "reflect",
+     "spread": 45,
+     "gravity": 9.8,
+     "drag": 1.2,
+     "bounce": 0.3,
+     "size": [
+      0.0173,
+      0.0389
+     ],
+     "stretch": 0.065,
+     "aspect": 4,
+     "intensity": 2.4,
+     "fadeOut": 0.45,
+     "soft": 0.02
+    },
+    {
+     "name": "debris",
+     "type": "debris",
+     "count": 7,
+     "speed": [
+      1.8,
+      4.5
+     ],
+     "dir": "reflect",
+     "spread": 40,
+     "size": [
+      0.03,
+      0.08
+     ],
+     "life": [
+      1.6,
+      2.6
+     ],
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "dust",
+     "type": "burst",
+     "blend": "alpha",
+     "sprite": [
+      "dust_0",
+      "dust_1",
+      "dust_2",
+      "dust_3"
+     ],
+     "ramp": "dust",
+     "surfaceTint": true,
+     "tint": [
+      0.42,
+      0.39,
+      0.36
+     ],
+     "count": 8,
+     "life": [
+      1.0,
+      1.9
+     ],
+     "speed": [
+      0.7,
+      1.8
+     ],
+     "dir": "radial",
+     "lift": [
+      0.1,
+      0.4
+     ],
+     "bias": 0.4,
+     "drag": 2.4,
+     "gravity": -0.1,
+     "size": [
+      0.25,
+      0.45
+     ],
+     "sizeEnd": 2.4,
+     "sizeCurve": 0.6,
+     "spin": [
+      -25,
+      25
+     ],
+     "intensity": 0.8,
+     "fadeIn": 0.08,
+     "fadeOut": 0.65,
+     "dissolve": 0.5,
+     "soft": 0.35,
+     "surfaces": [
+      "stone",
+      "sand",
+      "wall"
+     ]
+    },
+    {
+     "name": "crack",
+     "type": "decal",
+     "sprite": [
+      "crack_web",
+      "crack_line"
+     ],
+     "size": 1.0,
+     "life": 5,
+     "glow": 0.6,
+     "glowColor": [
+      0.55,
+      0.7,
+      1.0
+     ],
+     "glowTime": 0.4,
+     "surfaces": [
+      "stone",
+      "sand"
+     ]
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "amount": 0.25,
+     "freq": 26
+    }
+   ]
+  },
+  {
+   "id": "SIN_AXE_LUNAR_BURST",
+   "group": "sin",
+   "ar": "انفجار الطاقة القمرية",
+   "en": "Lunar burst",
+   "duration": 1.6,
+   "palette": "moon",
+   "kind": "burst",
+   "layers": [
+    {
+     "name": "seal",
+     "type": "sprite",
+     "sprite": "moon_seal",
+     "size": 0.9,
+     "sizeEnd": 2.8,
+     "sizeCurve": 0.5,
+     "life": 0.7,
+     "fadeIn": 0.05,
+     "fadeOut": 0.6,
+     "intensity": 0.85,
+     "spin": 40,
+     "rotation": 0,
+     "dissolve": 0.85,
+     "offset": [
+      1.0,
+      0,
+      0
+     ],
+     "soft": 0.4
+    },
+    {
+     "name": "vortex",
+     "type": "sprite",
+     "sprite": "moon_vortex",
+     "size": 1.0,
+     "sizeEnd": 2.6,
+     "life": 0.55,
+     "fadeIn": 0.04,
+     "fadeOut": 0.7,
+     "intensity": 0.55,
+     "spin": -160,
+     "rotation": 0,
+     "offset": [
+      1.0,
+      0,
+      0
+     ],
+     "dissolve": 0.6,
+     "soft": 0.4
+    },
+    {
+     "name": "flash",
+     "type": "sprite",
+     "sprite": "moon_flower",
+     "size": 0.55,
+     "sizeEnd": 1.0,
+     "life": 0.14,
+     "fadeIn": 0.02,
+     "fadeOut": 0.8,
+     "intensity": 1.0,
+     "offset": [
+      1.0,
+      0,
+      0
+     ],
+     "soft": 0.3
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "color": [
+      0.6,
+      0.72,
+      1.0
+     ],
+     "intensity": 11.2,
+     "life": 0.5,
+     "range": 8,
+     "lift": 1.0
+    },
+    {
+     "name": "ring",
+     "type": "shockwave",
+     "kind": "ring",
+     "ramp": "moon",
+     "radius0": 0.4,
+     "radius": 3.4,
+     "life": 0.6,
+     "intensity": 1.2
+    },
+    {
+     "name": "haze",
+     "type": "shockwave",
+     "kind": "distort",
+     "radius0": 0.4,
+     "radius": 3.8,
+     "life": 0.5,
+     "intensity": 1.2
+    },
+    {
+     "name": "motes",
+     "type": "burst",
+     "sprite": "mote",
+     "ramp": "moon",
+     "count": 140,
+     "life": [
+      0.7,
+      1.5
+     ],
+     "speed": [
+      2.0,
+      5.5
+     ],
+     "dir": "outward",
+     "radius": 0.3,
+     "shape": "sphere",
+     "offset": [
+      1.0,
+      0,
+      0
+     ],
+     "gravity": -0.3,
+     "drag": 2.6,
+     "size": [
+      0.02,
+      0.05
+     ],
+     "sizeEnd": 0.25,
+     "intensity": 1.7,
+     "fadeOut": 0.7,
+     "soft": 0.05
+    },
+    {
+     "name": "wisps",
+     "type": "burst",
+     "sprite": [
+      "moon_slash_feather",
+      "moon_slash_thin"
+     ],
+     "count": 5,
+     "life": [
+      0.35,
+      0.55
+     ],
+     "speed": [
+      0.4,
+      1.0
+     ],
+     "dir": "outward",
+     "offset": [
+      1.0,
+      0,
+      0
+     ],
+     "size": [
+      0.7,
+      1.0
+     ],
+     "sizeEnd": 1.5,
+     "drag": 2,
+     "intensity": 0.9,
+     "fadeIn": 0.05,
+     "fadeOut": 0.7,
+     "dissolve": 0.8,
+     "soft": 0.3
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "amount": 0.3
+    }
+   ]
+  },
+  {
+   "id": "SIN_AXE_PARRY",
+   "group": "sin",
+   "ar": "التصدي المثالي",
+   "en": "Perfect parry",
+   "duration": 1.0,
+   "palette": "moon",
+   "kind": "impact",
+   "surface": "staff",
+   "layers": [
+    {
+     "name": "star",
+     "type": "sprite",
+     "sprite": "moon_star",
+     "size": 0.8,
+     "sizeEnd": 0.35,
+     "life": 0.22,
+     "fadeIn": 0.01,
+     "fadeOut": 0.75,
+     "intensity": 2.4,
+     "soft": 0.2
+    },
+    {
+     "name": "flash",
+     "type": "sprite",
+     "sprite": [
+      "spark_star",
+      "spark_burst_a"
+     ],
+     "size": 0.7,
+     "sizeEnd": 1.3,
+     "life": 0.12,
+     "fadeIn": 0.01,
+     "fadeOut": 0.8,
+     "intensity": 1.274,
+     "soft": 0.2
+    },
+    {
+     "name": "lens",
+     "type": "sprite",
+     "sprite": "moon_lens",
+     "orient": "billboard",
+     "rotation": 0,
+     "size": 0.35,
+     "sizeEnd": 0.55,
+     "aspect": 6,
+     "life": 0.18,
+     "fadeIn": 0.01,
+     "fadeOut": 0.8,
+     "intensity": 2.0,
+     "soft": 0.2
+    },
+    {
+     "name": "light",
+     "type": "light",
+     "color": [
+      0.55,
+      0.68,
+      1.0
+     ],
+     "intensity": 12.6,
+     "life": 0.25,
+     "range": 6,
+     "lift": 0.6
+    },
+    {
+     "name": "ring",
+     "type": "shockwave",
+     "kind": "ring",
+     "ramp": "moon",
+     "radius0": 0.1,
+     "radius": 1.3,
+     "life": 0.3,
+     "intensity": 1.8
+    },
+    {
+     "name": "haze",
+     "type": "shockwave",
+     "kind": "distort",
+     "radius0": 0.1,
+     "radius": 1.6,
+     "life": 0.3,
+     "intensity": 1.6
+    },
+    {
+     "name": "sparks",
+     "type": "burst",
+     "sprite": "spark_dot",
+     "ramp": "spark",
+     "count": 84,
+     "life": [
+      0.2875,
+      0.805
+     ],
+     "speed": [
+      4.6,
+      12.65
+     ],
+     "dir": "normal",
+     "spread": 85,
+     "gravity": 9.8,
+     "drag": 1.125,
+     "bounce": 0.35,
+     "size": [
+      0.0173,
+      0.0432
+     ],
+     "stretch": 0.065,
+     "aspect": 4,
+     "intensity": 2.8,
+     "fadeOut": 0.45,
+     "soft": 0.02
+    },
+    {
+     "name": "lunar",
+     "type": "burst",
+     "sprite": "spark_dot",
+     "ramp": "moon",
+     "count": 42,
+     "life": [
+      0.23,
+      0.575
+     ],
+     "speed": [
+      3.45,
+      9.2
+     ],
+     "dir": "normal",
+     "spread": 80,
+     "gravity": 4,
+     "drag": 1.5,
+     "size": [
+      0.0216,
+      0.0432
+     ],
+     "stretch": 0.065,
+     "aspect": 4,
+     "intensity": 2.4,
+     "fadeOut": 0.5,
+     "soft": 0.02
+    },
+    {
+     "name": "shake",
+     "type": "shake",
+     "amount": 0.35,
+     "freq": 32
+    }
+   ]
+  },
+  {
+   "id": "SIN_AXE_CHARGE",
+   "group": "sin",
+   "ar": "تجمّع الطاقة على النصل",
+   "en": "Blade charge",
+   "duration": 1.8,
+   "loop": true,
+   "palette": "moon",
+   "kind": "charge",
+   "layers": [
+    {
+     "name": "converge",
+     "type": "stream",
+     "at": "rails",
+     "rails": "axe",
+     "sprite": "mote",
+     "ramp": "moon",
+     "rate": 70,
+     "life": [
+      0.35,
+      0.6
+     ],
+     "radius": [
+      0.35,
+      0.7
+     ],
+     "shape": "shell",
+     "dir": "inward",
+     "drag": 0.0001,
+     "size": [
+      0.02,
+      0.045
+     ],
+     "sizeEnd": 0.4,
+     "intensity": 1.6,
+     "fadeIn": 0.3,
+     "fadeOut": 0.2,
+     "soft": 0.04,
+     "ramp_up": 0.5
+    },
+    {
+     "name": "edge",
+     "type": "stream",
+     "at": "rails",
+     "rails": "axe",
+     "sprite": "soft_glow",
+     "ramp": "moon",
+     "rate": 90,
+     "life": [
+      0.12,
+      0.22
+     ],
+     "size": [
+      0.07,
+      0.12
+     ],
+     "sizeEnd": 0.5,
+     "speed": 0,
+     "intensity": 1.4,
+     "fadeIn": 0.2,
+     "fadeOut": 0.6,
+     "soft": 0.02,
+     "ramp_up": 0.8
+    },
+    {
+     "name": "wisps",
+     "type": "stream",
+     "at": "rails",
+     "rails": "axe",
+     "sprite": "wisp",
+     "ramp": "moon",
+     "orient": "axial",
+     "rate": 14,
+     "life": [
+      0.3,
+      0.55
+     ],
+     "size": [
+      0.12,
+      0.22
+     ],
+     "aspect": 0.5,
+     "speed": [
+      0.2,
+      0.5
+     ],
+     "dir": "up",
+     "spread": 20,
+     "intensity": 1.2,
+     "fadeIn": 0.2,
+     "fadeOut": 0.6,
+     "soft": 0.05,
+     "ramp_up": 0.6
+    },
+    {
+     "name": "haze",
+     "type": "stream",
+     "blend": "distort",
+     "at": "rails",
+     "rails": "axe",
+     "sprite": "soft_glow",
+     "rate": 16,
+     "life": [
+      0.3,
+      0.5
+     ],
+     "size": [
+      0.2,
+      0.3
+     ],
+     "sizeEnd": 1.5,
+     "speed": [
+      0.1,
+      0.4
+     ],
+     "dir": "up",
+     "spread": 30,
+     "intensity": 0.6,
+     "minTier": "medium"
+    }
+   ]
+  }
+ ]
+}

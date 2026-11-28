@@ -1,0 +1,441 @@
+{
+ "note": "Temporary binding of VFX to the real combat clips, used only by the VFX Laboratory (not by the game). Times are clip seconds or symbols resolved from the clip's event data: impact, active.start, active.end, windup.end, contact, takeoff, landing, frac:<0..1>, end, with an optional +/- offset in seconds. Sîn's events come from SinHero.CONFIG.ATTACKS (sin-hero.js, the game's own hit windows). The Guardian's come from vfx/data/guardian-combat-events.json (measured from the GLB's socket motion) unless assets/Guardian_Combat_Animations.json exists, which then takes precedence. 'trail' events run from 'from' to 'to'; 'impact' events fire once; 'phased' events start at (at - effect.impactAt) so the effect's own impact lands on the animation's impact frame. 'effect' events with surface 'armor' show the strike in the air (no floor layers); unlessContact skips them when the clip's strike reaches the floor (the contact event plays instead). Guardian staff trails span the whole clip: a ribbon only shows while its staff end moves faster than the effect's minSpeed, so the trail follows the real strike, not a guessed window.",
+ "sin": {
+  "rig": "sin",
+  "clips": {
+   "Attack_Right": [
+    {
+     "type": "trail",
+     "effect": "SIN_AXE_LIGHT_TRAIL",
+     "from": "windup.end-0.05",
+     "to": "active.end+0.07"
+    },
+    {
+     "type": "impact",
+     "weapon": "axe",
+     "at": "impact",
+     "socket": "axe_edge",
+     "strength": 0.9
+    }
+   ],
+   "Attack_Left": [
+    {
+     "type": "trail",
+     "effect": "SIN_AXE_LIGHT_TRAIL",
+     "from": "windup.end-0.05",
+     "to": "active.end+0.07"
+    },
+    {
+     "type": "impact",
+     "weapon": "axe",
+     "at": "impact",
+     "socket": "axe_edge",
+     "strength": 0.9
+    }
+   ],
+   "Finisher_Heavy": [
+    {
+     "type": "trail",
+     "effect": "SIN_AXE_HEAVY_TRAIL",
+     "from": "windup.end-0.1",
+     "to": "active.end+0.1"
+    },
+    {
+     "type": "impact",
+     "weapon": "axe",
+     "at": "impact",
+     "socket": "axe_edge",
+     "strength": 1.4
+    }
+   ],
+   "Finisher_Jump": [
+    {
+     "type": "trail",
+     "effect": "SIN_AXE_HEAVY_TRAIL",
+     "from": "windup.end-0.2",
+     "to": "active.end+0.08"
+    },
+    {
+     "type": "effect",
+     "effect": "SIN_AXE_FINISHER",
+     "at": "impact",
+     "socket": "axe_edge",
+     "ground": true,
+     "strength": 1.2
+    }
+   ],
+   "Axe_CombatIdle": [],
+   "Axe_Equip": [
+    {
+     "type": "effect",
+     "effect": "SIN_AXE_LUNAR_BURST",
+     "at": "frac:0.55",
+     "socket": "axe_edge",
+     "scale": 0.45,
+     "strength": 0.5
+    }
+   ]
+  },
+  "combo": {
+   "clips": [
+    "Attack_Right",
+    "Attack_Left",
+    "Finisher_Heavy"
+   ],
+   "trail": [
+    "SIN_AXE_COMBO_TRAIL",
+    "SIN_AXE_COMBO_TRAIL",
+    "SIN_AXE_HEAVY_TRAIL"
+   ],
+   "intensity": [
+    1.0,
+    1.15,
+    1.35
+   ]
+  }
+ },
+ "guardian": {
+  "rig": "guardian",
+  "defaults": {
+   "staffLight": "GUARDIAN_STAFF_LIGHT_TRAIL",
+   "staffHeavy": "GUARDIAN_STAFF_HEAVY_TRAIL"
+  },
+  "clips": {
+   "Attack_Staff_Swing_Left": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_LIGHT_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact"
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_STAFF_BLADE_IMPACT",
+     "at": "impact",
+     "socket": "staff_blade",
+     "surface": "armor",
+     "unlessContact": true
+    }
+   ],
+   "Attack_Staff_Swing_Right": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_LIGHT_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact"
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_STAFF_BLADE_IMPACT",
+     "at": "impact",
+     "socket": "staff_blade",
+     "surface": "armor",
+     "unlessContact": true
+    }
+   ],
+   "Attack_Staff_Thrust": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_LIGHT_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact"
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_STAFF_BLADE_IMPACT",
+     "at": "impact",
+     "socket": "staff_blade",
+     "surface": "armor",
+     "unlessContact": true
+    }
+   ],
+   "Attack_Staff_Uppercut": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_HEAVY_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact"
+    }
+   ],
+   "Attack_Staff_Sweep": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_HEAVY_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact"
+    }
+   ],
+   "Attack_Staff_Spin_360": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_HEAVY_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact"
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_STAFF_BLADE_IMPACT",
+     "at": "impact",
+     "socket": "staff_blade",
+     "surface": "armor",
+     "unlessContact": true
+    }
+   ],
+   "Attack_Staff_Overhead": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_HEAVY_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_STAFF_CROWN_IMPACT",
+     "at": "impact",
+     "socket": "staff_crown",
+     "surface": "armor",
+     "unlessContact": true
+    }
+   ],
+   "Attack_Claw_Left": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_CLAW_SLASH",
+     "from": "active.start-0.1",
+     "to": "active.end+0.06",
+     "side": "l"
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_CLAW_HIT",
+     "at": "impact",
+     "socket": "claw_l"
+    }
+   ],
+   "Attack_Claw_Combo": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_CLAW_SLASH",
+     "from": "active.start-0.1",
+     "to": "active.end+0.06"
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_CLAW_HIT",
+     "at": "impact",
+     "socket": "claw_r"
+    }
+   ],
+   "Attack_Kick": [
+    {
+     "type": "contact"
+    }
+   ],
+   "Attack_Combo_01": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_HEAVY_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact"
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_STAFF_CROWN_IMPACT",
+     "at": "impact",
+     "socket": "staff_crown",
+     "surface": "armor",
+     "unlessContact": true
+    }
+   ],
+   "Attack_Combo_02": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_HEAVY_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact"
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_STAFF_BLADE_IMPACT",
+     "at": "impact",
+     "socket": "staff_blade",
+     "surface": "armor",
+     "unlessContact": true
+    }
+   ],
+   "Counter_Attack": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_LIGHT_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact"
+    }
+   ],
+   "Special_Ground_Slam": [
+    {
+     "type": "phased",
+     "effect": "GUARDIAN_STAFF_GROUND_SLAM",
+     "at": "contact|impact",
+     "ground": true
+    }
+   ],
+   "Special_Leap_Slam": [
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_LEAP_TAKEOFF",
+     "at": "takeoff",
+     "socket": "root",
+     "ground": true
+    },
+    {
+     "type": "phased",
+     "effect": "GUARDIAN_STAFF_LEAP_SLAM",
+     "at": "contact|landing|impact",
+     "ground": true
+    }
+   ],
+   "Special_Charge": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_HEAVY_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact"
+    }
+   ],
+   "Special_Seal_Activation": [
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_CHEST_SEAL_CHARGE",
+     "at": "frac:0.02",
+     "socket": "chest_seal",
+     "fit": true
+    }
+   ],
+   "Special_Energy_Release": [
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_CHEST_SEAL_CHARGE",
+     "at": "frac:0.0",
+     "socket": "chest_seal",
+     "duration": 0.45
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_SPIRITUAL_BURST",
+     "at": "frac:0.42",
+     "socket": "root",
+     "ground": true
+    }
+   ],
+   "Special_Enraged_Combo": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_HEAVY_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact",
+     "heavy": true
+    }
+   ],
+   "Special_Roar": [
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_GOLDEN_SHOCKWAVE",
+     "at": "frac:0.38",
+     "socket": "root",
+     "ground": true
+    }
+   ],
+   "Special_Execution": [
+    {
+     "type": "trail",
+     "effect": "GUARDIAN_STAFF_HEAVY_TRAIL",
+     "from": "frac:0.04",
+     "to": "frac:0.9"
+    },
+    {
+     "type": "contact",
+     "heavy": true
+    },
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_STAFF_CROWN_IMPACT",
+     "at": "impact",
+     "socket": "staff_crown",
+     "surface": "armor",
+     "unlessContact": true
+    }
+   ],
+   "Phase_Transition": [
+    {
+     "type": "effect",
+     "effect": "GUARDIAN_CHEST_SEAL_CHARGE",
+     "at": "frac:0.0",
+     "socket": "chest_seal",
+     "fit": true
+    },
+    {
+     "type": "aura",
+     "effect": "GUARDIAN_ENRAGED_AURA",
+     "at": "frac:0.7"
+    }
+   ],
+   "Enraged_Idle": [
+    {
+     "type": "aura",
+     "effect": "GUARDIAN_ENRAGED_AURA",
+     "at": "frac:0.0"
+    }
+   ],
+   "Block_Impact": [
+    {
+     "type": "effect",
+     "effect": "IMPACT_WEAPON_CLASH",
+     "at": "frac:0.1",
+     "socket": "staff_mid"
+    }
+   ],
+   "Parry": [
+    {
+     "type": "effect",
+     "effect": "SIN_AXE_PARRY",
+     "at": "impact",
+     "socket": "staff_mid",
+     "scale": 1.3
+    }
+   ]
+  }
+ }
+}

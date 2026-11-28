@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sîn VFX Laboratory</title>
+<!-- Sîn Advanced VFX Engine — independent laboratory (developer tool).
+     Loads only the hero, the Guardian of the Covenant, a test floor and the VFX engine.
+     Not part of the game boot; reachable from the Developer Hub. -->
+<style>
+:root{--bg:#0a0908;--panel:rgba(16,13,10,.92);--line:rgba(225,183,111,.28);--gold:#e1b76f;--txt:#efe3cc;--dim:#9c8b70;--on:#5a4122;--moon:#9fb8ff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font:13px/1.4 system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#ui{position:fixed;top:0;right:0;bottom:56px;width:min(360px,92vw);background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;z-index:5;transition:transform .2s}
+#ui.hidden{transform:translateX(100%)}
+#tabs{display:flex;border-bottom:1px solid var(--line)}
+#tabs button{flex:1;min-height:40px;background:none;border:0;color:var(--dim);font:inherit;cursor:pointer;border-bottom:2px solid transparent}
+#tabs button.on{color:var(--gold);border-bottom-color:var(--gold)}
+.pane{display:none;overflow:auto;padding:10px 12px;flex:1}
+.pane.on{display:block}
+h3{margin:12px 0 6px;font-size:12px;letter-spacing:.06em;color:var(--gold);font-weight:600}
+h3:first-child{margin-top:2px}
+.list button,.btn{display:block;width:100%;text-align:right;min-height:34px;margin:3px 0;padding:5px 9px;border:1px solid var(--line);background:rgba(28,21,13,.8);color:var(--txt);border-radius:4px;font:inherit;cursor:pointer}
+.list button small,.btn small{display:block;color:var(--dim);font-size:11px;direction:ltr;text-align:right}
+.list button.sel{border-color:var(--gold);background:var(--on)}
+.row{display:flex;gap:6px;align-items:center;margin:4px 0}
+.row .btn{margin:0;text-align:center}
+label.ctl{display:grid;grid-template-columns:1fr 46px;gap:2px 8px;align-items:center;margin:6px 0;font-size:12px}
+label.ctl input[type=range]{grid-column:1/3;width:100%;direction:ltr}
+label.ctl output{color:var(--gold);direction:ltr;text-align:left}
+select,input[type=color]{background:#1c1610;color:var(--txt);border:1px solid var(--line);border-radius:4px;min-height:30px;font:inherit}
+select{width:100%}
+.chk{display:flex;gap:6px;align-items:center;margin:3px 0;font-size:12px;cursor:pointer}
+.layers{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}
+#bar{position:fixed;left:0;right:0;bottom:0;height:56px;background:var(--panel);border-top:1px solid var(--line);display:flex;align-items:center;gap:6px;padding:0 10px;z-index:6;direction:ltr}
+#bar button{min-width:40px;min-height:38px;border:1px solid var(--line);background:rgba(28,21,13,.85);color:var(--txt);border-radius:4px;font:inherit;cursor:pointer}
+#bar button.on{border-color:var(--gold);background:var(--on);color:#fff}
+#bar .spd{display:flex;gap:3px}
+#bar .t{font:12px ui-monospace,monospace;color:var(--gold);min-width:150px}
+#timeline{flex:1;position:relative;height:22px;background:#17120d;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+#timeline .mk{position:absolute;top:0;bottom:0;width:2px;background:var(--gold)}
+#timeline .win{position:absolute;top:3px;bottom:3px;background:rgba(159,184,255,.35);border-radius:2px}
+#timeline .win.g{background:rgba(225,183,111,.35)}
+#timeline .ev{position:absolute;top:0;bottom:0;width:2px;background:#ff8a4c}
+#timeline .lbl{position:absolute;left:6px;top:3px;font-size:11px;color:var(--dim);white-space:nowrap}
+#stats{position:fixed;top:8px;left:8px;z-index:5;font:11px/1.45 ui-monospace,monospace;background:rgba(0,0,0,.55);padding:6px 9px;border-radius:5px;white-space:pre;direction:ltr;pointer-events:none;color:#dfe7d0}
+#toggle{position:fixed;top:8px;right:min(368px,94vw);z-index:6;min-height:34px;border:1px solid var(--line);background:var(--panel);color:var(--gold);border-radius:4px;cursor:pointer;font:inherit;padding:0 10px}
+#ui.hidden+#toggle{right:8px}
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:#0a0908;z-index:20;color:var(--gold);font-size:15px}
+#loading small{color:var(--dim);direction:ltr}
+.note{color:var(--dim);font-size:11px;margin:4px 0 8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font:11px ui-monospace,monospace;direction:ltr}
+body.clean #ui,body.clean #bar,body.clean #stats,body.clean #toggle{display:none}
+@media (max-width:700px){#ui{width:100vw;bottom:56px;top:45vh}#toggle{right:8px}#bar .t{min-width:90px}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="loading">مختبر المؤثرات · Sîn VFX Laboratory<small id="loadmsg">loading…</small></div>
+<div id="stats"></div>
+<div id="ui">
+  <div id="tabs">
+    <button data-tab="fx" class="on">المؤثرات</button>
+    <button data-tab="chars">الشخصيات</button>
+    <button data-tab="tune">الضبط</button>
+    <button data-tab="perf">الأداء</button>
+  </div>
+  <div class="pane on" id="pane-fx"></div>
+  <div class="pane" id="pane-chars"></div>
+  <div class="pane" id="pane-tune"></div>
+  <div class="pane" id="pane-perf"></div>
+</div>
+<button id="toggle">⇆</button>
+<div id="bar">
+  <button id="b-replay" title="إعادة التشغيل (R)">⟲</button>
+  <button id="b-back" title="إطار للخلف (,)">◀|</button>
+  <button id="b-play" title="إيقاف / استكمال (Space)">❚❚</button>
+  <button id="b-step" title="إطار للأمام (.)">|▶</button>
+  <button id="b-loop" title="تكرار (L)">↻</button>
+  <div class="spd"><button data-s="1" class="on">1×</button><button data-s="0.5">½</button><button data-s="0.25">¼</button><button data-s="0.1">⅒</button></div>
+  <div id="timeline"><span class="lbl"></span></div>
+  <span class="t" id="tlabel"></span>
+</div>
+<script type="module" src="vfx/vfx-lab.js?v=1"></script>
+</body>
+</html>
