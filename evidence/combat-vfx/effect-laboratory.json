@@ -1,0 +1,727 @@
+{
+  "prewarm": {
+    "meshes": 168,
+    "textures": 117,
+    "slices": 64,
+    "maxSliceMs": 49.2
+  },
+  "scan": [
+    {
+      "part": "crown",
+      "surface": [
+        [
+          38.82740306267639,
+          -441.88571322238965,
+          148.09604831183285
+        ],
+        [
+          38.670060703367156,
+          -441.75337179134885,
+          148.1660327295254
+        ],
+        [
+          38.577547325995766,
+          -441.610346586094,
+          148.2126254877037
+        ],
+        [
+          38.5173977746395,
+          -441.4543508635703,
+          148.08737894762365
+        ]
+      ]
+    },
+    {
+      "part": "blade",
+      "surface": [
+        [
+          40.66049143901172,
+          -443.7539098864855,
+          147.17824354293612
+        ],
+        [
+          40.464233807022225,
+          -443.5355881663527,
+          147.19105820330228
+        ],
+        [
+          40.26251464657023,
+          -443.2823235064562,
+          147.22265913081486
+        ],
+        [
+          40.069494074051356,
+          -443.08032596307885,
+          147.28617474831722
+        ]
+      ]
+    },
+    {
+      "part": "axe",
+      "surface": [
+        [
+          20.074408542945083,
+          -442.8835323689022,
+          148.71471837770827
+        ],
+        [
+          20.081818723035145,
+          -442.8102972192044,
+          148.7984536175431
+        ],
+        [
+          20.07203748911843,
+          -442.72530947908444,
+          148.8254788333701
+        ],
+        [
+          20.035623517906146,
+          -442.5969406956848,
+          148.78371181989976
+        ]
+      ]
+    }
+  ],
+  "moves": {
+    "Special_Ground_Slam": {
+      "first": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 0,
+        "stone": 0,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 0,
+        "spirit": 0,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 0,
+        "activeDust": 0,
+        "rocks": 0,
+        "cracks": 0,
+        "wave": false
+      },
+      "last": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 2,
+        "stone": 1,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 0,
+        "spirit": 1,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 0,
+        "activeDust": 1,
+        "rocks": 3,
+        "cracks": 1,
+        "wave": false
+      },
+      "events": [
+        {
+          "type": "awakening",
+          "at": 0.717,
+          "attack": "Cinematic_Awakening",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "start",
+          "at": 0.858,
+          "attack": "Combat_Idle",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "telegraph",
+          "at": 1.375,
+          "attack": "Special_Ground_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "ground-impact",
+          "at": 3,
+          "attack": "Special_Ground_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "sin-hit",
+          "at": 3.067,
+          "attack": "Special_Ground_Slam",
+          "damage": 19,
+          "result": "spirit",
+          "region": null,
+          "hp": 81,
+          "bossHP": 1500
+        }
+      ]
+    },
+    "Special_Leap_Slam": {
+      "first": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 2,
+        "stone": 1,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 0,
+        "spirit": 1,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 0,
+        "activeDust": 1,
+        "rocks": 3,
+        "cracks": 1,
+        "wave": false
+      },
+      "last": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 4,
+        "stone": 2,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 0,
+        "spirit": 2,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 0,
+        "activeDust": 2,
+        "rocks": 8,
+        "cracks": 1,
+        "wave": false
+      },
+      "events": [
+        {
+          "type": "telegraph",
+          "at": 1.375,
+          "attack": "Special_Ground_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "ground-impact",
+          "at": 3,
+          "attack": "Special_Ground_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "sin-hit",
+          "at": 3.067,
+          "attack": "Special_Ground_Slam",
+          "damage": 19,
+          "result": "spirit",
+          "region": null,
+          "hp": 81,
+          "bossHP": 1500
+        },
+        {
+          "type": "telegraph",
+          "at": 4.125,
+          "attack": "Special_Leap_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "ground-impact",
+          "at": 5.975,
+          "attack": "Special_Leap_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "leap_land",
+          "at": 5.975,
+          "attack": "Special_Leap_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "sin-hit",
+          "at": 5.983,
+          "attack": "Special_Leap_Slam",
+          "damage": 24,
+          "result": "spirit",
+          "region": null,
+          "hp": 76,
+          "bossHP": 1500
+        }
+      ]
+    },
+    "Special_Energy_Release": {
+      "first": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 4,
+        "stone": 2,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 0,
+        "spirit": 2,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 0,
+        "activeDust": 2,
+        "rocks": 8,
+        "cracks": 1,
+        "wave": false
+      },
+      "last": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 6,
+        "stone": 2,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 0,
+        "spirit": 4,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 0,
+        "activeDust": 6,
+        "rocks": 0,
+        "cracks": 1,
+        "wave": false
+      },
+      "events": [
+        {
+          "type": "telegraph",
+          "at": 4.125,
+          "attack": "Special_Leap_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "ground-impact",
+          "at": 5.975,
+          "attack": "Special_Leap_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "leap_land",
+          "at": 5.975,
+          "attack": "Special_Leap_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "sin-hit",
+          "at": 5.983,
+          "attack": "Special_Leap_Slam",
+          "damage": 24,
+          "result": "spirit",
+          "region": null,
+          "hp": 76,
+          "bossHP": 1500
+        },
+        {
+          "type": "telegraph",
+          "at": 6.95,
+          "attack": "Special_Energy_Release",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "seal-release",
+          "at": 8.025,
+          "attack": "Special_Energy_Release",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "sin-hit",
+          "at": 8.292,
+          "attack": "Special_Energy_Release",
+          "damage": 22,
+          "result": "spirit",
+          "region": null,
+          "hp": 78,
+          "bossHP": 1500
+        }
+      ]
+    },
+    "Attack_Staff_Swing_Right": {
+      "first": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 6,
+        "stone": 2,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 0,
+        "spirit": 4,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 0,
+        "activeDust": 6,
+        "rocks": 0,
+        "cracks": 1,
+        "wave": false
+      },
+      "last": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 6,
+        "stone": 2,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 0,
+        "spirit": 4,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 0,
+        "activeDust": 0,
+        "rocks": 0,
+        "cracks": 0,
+        "wave": false
+      },
+      "events": [
+        {
+          "type": "ground-impact",
+          "at": 5.975,
+          "attack": "Special_Leap_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "leap_land",
+          "at": 5.975,
+          "attack": "Special_Leap_Slam",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "sin-hit",
+          "at": 5.983,
+          "attack": "Special_Leap_Slam",
+          "damage": 24,
+          "result": "spirit",
+          "region": null,
+          "hp": 76,
+          "bossHP": 1500
+        },
+        {
+          "type": "telegraph",
+          "at": 6.95,
+          "attack": "Special_Energy_Release",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "seal-release",
+          "at": 8.025,
+          "attack": "Special_Energy_Release",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "sin-hit",
+          "at": 8.292,
+          "attack": "Special_Energy_Release",
+          "damage": 22,
+          "result": "spirit",
+          "region": null,
+          "hp": 78,
+          "bossHP": 1500
+        },
+        {
+          "type": "telegraph",
+          "at": 9.058,
+          "attack": "Attack_Staff_Swing_Right",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        }
+      ]
+    },
+    "Attack_Staff_Overhead": {
+      "first": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 6,
+        "stone": 2,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 0,
+        "spirit": 4,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 0,
+        "activeDust": 0,
+        "rocks": 0,
+        "cracks": 0,
+        "wave": false
+      },
+      "last": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 7,
+        "stone": 2,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 1,
+        "spirit": 4,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 2,
+        "activeDust": 2,
+        "rocks": 0,
+        "cracks": 0,
+        "wave": false
+      },
+      "events": [
+        {
+          "type": "sin-hit",
+          "at": 5.983,
+          "attack": "Special_Leap_Slam",
+          "damage": 24,
+          "result": "spirit",
+          "region": null,
+          "hp": 76,
+          "bossHP": 1500
+        },
+        {
+          "type": "telegraph",
+          "at": 6.95,
+          "attack": "Special_Energy_Release",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "seal-release",
+          "at": 8.025,
+          "attack": "Special_Energy_Release",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "sin-hit",
+          "at": 8.292,
+          "attack": "Special_Energy_Release",
+          "damage": 22,
+          "result": "spirit",
+          "region": null,
+          "hp": 78,
+          "bossHP": 1500
+        },
+        {
+          "type": "telegraph",
+          "at": 9.058,
+          "attack": "Attack_Staff_Swing_Right",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "telegraph",
+          "at": 10.683,
+          "attack": "Attack_Staff_Overhead",
+          "damage": 0,
+          "result": null,
+          "region": null,
+          "hp": 100,
+          "bossHP": 1500
+        },
+        {
+          "type": "sin-hit",
+          "at": 11.9,
+          "attack": "Attack_Staff_Overhead",
+          "damage": 23,
+          "result": "heavy",
+          "region": null,
+          "hp": 77,
+          "bossHP": 1500
+        }
+      ]
+    }
+  },
+  "qualityDoesNotAffectDamage": {
+    "on": {
+      "hp": 77,
+      "vfx": {
+        "enabled": true,
+        "tier": 1,
+        "impacts": 8,
+        "stone": 2,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 2,
+        "spirit": 4,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 3,
+        "activeDust": 2,
+        "rocks": 0,
+        "cracks": 0,
+        "wave": false
+      }
+    },
+    "off": {
+      "hp": 77,
+      "vfx": {
+        "enabled": false,
+        "tier": 1,
+        "impacts": 8,
+        "stone": 2,
+        "metal": 0,
+        "armor": 0,
+        "flesh": 2,
+        "spirit": 4,
+        "parry": 0,
+        "samples": 103,
+        "activeSparks": 0,
+        "activeDust": 0,
+        "rocks": 0,
+        "cracks": 0,
+        "wave": false
+      }
+    }
+  },
+  "stress": {
+    "maxima": {
+      "spark": 42,
+      "dust": 16,
+      "rocks": 17,
+      "cracks": 2
+    },
+    "memoryBefore": {
+      "geometries": 112,
+      "textures": 126
+    },
+    "statsAfter": {
+      "frame": 189,
+      "calls": 79,
+      "triangles": 652848,
+      "points": 0,
+      "lines": 0,
+      "geometries": 112,
+      "textures": 126,
+      "estimated": {
+        "t": 1795859939067,
+        "phase": "vfx-probe",
+        "room": "\u2014",
+        "cityReleased": false,
+        "geometries": 112,
+        "textures": 126,
+        "programs": 49,
+        "calls": 79,
+        "triangles": 652848,
+        "cpuImgMB": 35.3,
+        "cpuGeoMB": 42.7,
+        "cpuGltfMB": 0,
+        "cpuMB": 78,
+        "gpuTexMB": 138.1,
+        "gpuGeoMB": 42.7,
+        "gpuRTMB": 1.8,
+        "gpuMB": 182.5,
+        "programsMB": 29.4,
+        "heap": {
+          "usedMB": 57.5,
+          "totalMB": 68.9,
+          "limitMB": 3586
+        },
+        "texMB": 138.1,
+        "geoMB": 42.7,
+        "processMB": 354,
+        "webkitMB": 64,
+        "texSources": 123
+      }
+    },
+    "after": {
+      "enabled": true,
+      "tier": 1,
+      "impacts": 32,
+      "stone": 14,
+      "metal": 0,
+      "armor": 0,
+      "flesh": 2,
+      "spirit": 16,
+      "parry": 0,
+      "samples": 103,
+      "activeSparks": 0,
+      "activeDust": 0,
+      "rocks": 0,
+      "cracks": 0,
+      "wave": false
+    },
+    "simulationMs": 71.10000000149012,
+    "steps": 2652,
+    "limits": {
+      "sparks": 64,
+      "dust": 16,
+      "fragments": 28,
+      "decals": 3,
+      "samples": 18
+    }
+  },
+  "messages": []
+}

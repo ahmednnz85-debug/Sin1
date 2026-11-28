@@ -873,16 +873,22 @@
       const floor = sample(uAt(x), vAt(z));
       return floor && Math.abs(floor.y - y) < 1.8 ? floor : null;
     }
+    const architecture = (x, z, previous, radius) =>
+      !under.gateBlocks(x, z, radius) &&
+      !blocksPassage(x + MAW_ENTRY, z + MAW_LANE, sample(previous.x + MAW_ENTRY, previous.z + MAW_LANE),
+        sample(x + MAW_ENTRY, z + MAW_LANE), radius, sample);
     return {
       root, nearFloor, underworld: under,
+      encounter: under.encounter,
+      dispose() { under.encounter?.()?.dispose(); },
       tickGate: under.tickGate,
       gateActive: under.gateActive,
       gateApproach: under.gateApproach,
       gateCamera: under.gateCamera,
       restoreGatePose: under.restoreGatePose,
       spawn: [passage.position[0] - MAW_ENTRY - dock.center[0], MAW_LEVEL + dock.deck + dock.drop, passage.position[2] + MAW_LANE + dock.center[1]],
-      async ready(renderer) {
-        await under.ready(renderer);
+      async ready(renderer, hero) {
+        await under.ready(renderer, architecture, hero);
         if (under.status.phase !== 'ready') throw new Error(under.status.error || 'Underworld load failed');
         await Maw.loadArrival(THREE, deep, under.finish);
       },
@@ -890,6 +896,9 @@
       preview({ show }) { show(under.group, true); },
       blocks(x, z, y, px, pz, radius) {
         const u = uAt(x), v = vAt(z);
+        const encounter = under.encounter?.();
+        if (encounter && encounter.blocks(u - MAW_ENTRY, v - MAW_LANE,
+          { x: uAt(px) - MAW_ENTRY, y: y - MAW_LEVEL, z: vAt(pz) - MAW_LANE }, radius)) return true;
         return under.gateBlocks(u - MAW_ENTRY, v - MAW_LANE, radius) ||
           blocksPassage(u, v, nearFloor(px, pz, y), sample(u, v), radius, sample);
       },
@@ -898,6 +907,8 @@
         if (!nearFloor(x, z, y)) return null;
         const fixed = index(x, z);
         const gateBoxes = under.gateCameraBoxes(uAt(x) - MAW_ENTRY, vAt(z) - MAW_LANE);
+        const bossBox = under.encounter?.()?.cameraBox(x + origin.x, z + origin.z);
+        if (bossBox) return (fixed || []).concat(gateBoxes || [], bossBox);
         return gateBoxes ? (fixed || []).concat(gateBoxes) : fixed;
       }
     };

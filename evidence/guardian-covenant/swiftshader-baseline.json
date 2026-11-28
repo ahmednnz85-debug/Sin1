@@ -1,0 +1,115 @@
+{
+  "runtime": "Chromium SwiftShader, software WebGL",
+  "view": [
+    640,
+    360
+  ],
+  "runs": {
+    "baseline": {
+      "readyMs": 33497,
+      "errors": [],
+      "scenes": {
+        "arrival": {
+          "phase": "base",
+          "frames": 18,
+          "meanMs": 456.46666666666675,
+          "p95Ms": 1616.6000000000058,
+          "worstMs": 1616.6000000000058,
+          "FPS": 2.190740470278954,
+          "memory": {
+            "geometries": 81,
+            "textures": 73
+          },
+          "render": {
+            "frame": 77,
+            "calls": 63,
+            "triangles": 557440,
+            "points": 0,
+            "lines": 0
+          },
+          "estimated": {
+            "t": 1795851031713,
+            "phase": "benchmark",
+            "room": "—",
+            "cityReleased": false,
+            "geometries": 81,
+            "textures": 73,
+            "programs": 36,
+            "calls": 63,
+            "triangles": 557440,
+            "cpuImgMB": 11.4,
+            "cpuGeoMB": 38.1,
+            "cpuGltfMB": 0,
+            "cpuMB": 49.5,
+            "gpuTexMB": 114.1,
+            "gpuGeoMB": 38.1,
+            "gpuRTMB": 1.3,
+            "gpuMB": 153.5,
+            "programsMB": 21.6,
+            "heap": {
+              "usedMB": 45.2,
+              "totalMB": 54.2,
+              "limitMB": 3586
+            },
+            "texMB": 114.1,
+            "geoMB": 38.1,
+            "processMB": 288.6,
+            "webkitMB": 64,
+            "texSources": 71
+          },
+          "renderer": "WebKit WebGL"
+        },
+        "sameArena": {
+          "phase": "base",
+          "frames": 18,
+          "meanMs": 515.7222222222222,
+          "p95Ms": 1433.199999999997,
+          "worstMs": 1433.199999999997,
+          "FPS": 1.9390283313583971,
+          "memory": {
+            "geometries": 81,
+            "textures": 73
+          },
+          "render": {
+            "frame": 96,
+            "calls": 63,
+            "triangles": 557440,
+            "points": 0,
+            "lines": 0
+          },
+          "estimated": {
+            "t": 1795851041348,
+            "phase": "benchmark",
+            "room": "—",
+            "cityReleased": false,
+            "geometries": 81,
+            "textures": 73,
+            "programs": 36,
+            "calls": 63,
+            "triangles": 557440,
+            "cpuImgMB": 11.4,
+            "cpuGeoMB": 38.1,
+            "cpuGltfMB": 0,
+            "cpuMB": 49.5,
+            "gpuTexMB": 114.1,
+            "gpuGeoMB": 38.1,
+            "gpuRTMB": 1.3,
+            "gpuMB": 153.5,
+            "programsMB": 21.6,
+            "heap": {
+              "usedMB": 45.2,
+              "totalMB": 54.2,
+              "limitMB": 3586
+            },
+            "texMB": 114.1,
+            "geoMB": 38.1,
+            "processMB": 288.6,
+            "webkitMB": 64,
+            "texSources": 71
+          },
+          "renderer": "WebKit WebGL"
+        }
+      }
+    }
+  }
+}

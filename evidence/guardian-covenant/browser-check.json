@@ -1,0 +1,767 @@
+{
+  "errors": [],
+  "before": {
+    "frame": 67,
+    "calls": 86,
+    "triangles": 700748,
+    "points": 0,
+    "lines": 0,
+    "geometries": 107,
+    "textures": 126,
+    "heap": 47400000,
+    "est": {
+      "t": 1795850710726,
+      "phase": "qa",
+      "room": "—",
+      "cityReleased": false,
+      "geometries": 107,
+      "textures": 126,
+      "programs": 43,
+      "calls": 86,
+      "triangles": 700748,
+      "cpuImgMB": 35.3,
+      "cpuGeoMB": 42.7,
+      "cpuGltfMB": 0,
+      "cpuMB": 78,
+      "gpuTexMB": 138.1,
+      "gpuGeoMB": 42.7,
+      "gpuRTMB": 2.1,
+      "gpuMB": 182.9,
+      "programsMB": 25.8,
+      "heap": {
+        "usedMB": 45.2,
+        "totalMB": 54.2,
+        "limitMB": 3586
+      },
+      "texMB": 138.1,
+      "geoMB": 42.7,
+      "processMB": 350.7,
+      "webkitMB": 64,
+      "texSources": 123
+    }
+  },
+  "rooms": {
+    "chapter": "u1",
+    "u1": {
+      "before": {
+        "geometries": 4,
+        "textures": 12,
+        "programs": 0,
+        "calls": 7,
+        "triangles": 233576,
+        "cityReleased": false,
+        "cpuMB": 6,
+        "gpuMB": 48,
+        "heapMB": 45.20416259765625,
+        "roots": [
+          "SkyPhoto",
+          "skyline_distant_city",
+          "HemisphereLight",
+          "DirectionalLight",
+          "Object3D",
+          "DirectionalLight",
+          "SinHeroRoot"
+        ]
+      },
+      "disposed": {
+        "geometries": 2,
+        "materials": 2,
+        "textures": 5
+      },
+      "released": {
+        "geometries": 3,
+        "textures": 8,
+        "programs": 0,
+        "calls": 3,
+        "triangles": 115684,
+        "cityReleased": false,
+        "cpuMB": 5.9,
+        "gpuMB": 40,
+        "heapMB": 45.20416259765625,
+        "roots": [
+          "SinHeroRoot"
+        ]
+      },
+      "prewarm": {
+        "meshes": 146,
+        "textures": 117,
+        "slices": 61,
+        "maxSliceMs": 22.9
+      },
+      "loaded": {
+        "geometries": 107,
+        "textures": 126,
+        "programs": 0,
+        "calls": 79,
+        "triangles": 738867,
+        "cityReleased": false,
+        "cpuMB": 78,
+        "gpuMB": 182.3,
+        "heapMB": 45.20416259765625,
+        "roots": [
+          "SinHeroRoot",
+          "U1Stage"
+        ]
+      }
+    },
+    "previousExterior": false,
+    "guardianSockets": [
+      [
+        "Guardian_Staff",
+        [
+          39.287326717012995,
+          -442.25292989327323,
+          147.64053806884337
+        ]
+      ],
+      [
+        "weapon_r",
+        [
+          39.287326717012995,
+          -442.25292989327323,
+          147.64053806884337
+        ]
+      ],
+      [
+        "staff_blade",
+        [
+          40.7448740479798,
+          -443.8661096529447,
+          147.21259932452202
+        ]
+      ],
+      [
+        "staff_crown",
+        [
+          38.651009979118896,
+          -441.5541656299664,
+          147.81610738869028
+        ]
+      ],
+      [
+        "staff_tip",
+        [
+          38.49726501506817,
+          -441.3790200153316,
+          147.87380860395686
+        ]
+      ],
+      [
+        "staff_base",
+        [
+          40.74211120669005,
+          -443.8578590187022,
+          147.20016079115337
+        ]
+      ],
+      [
+        "chest_seal",
+        [
+          39.520571578528376,
+          -442.2068452032186,
+          148.51983565706777
+        ]
+      ],
+      [
+        "body_hit",
+        [
+          39.69146572425076,
+          -442.16122093894256,
+          148.49414208406426
+        ]
+      ],
+      [
+        "head_hit",
+        [
+          39.22634596741338,
+          -441.7961063178568,
+          148.65732918320285
+        ]
+      ],
+      [
+        "Pelvis",
+        [
+          39.78670671463012,
+          -442.4707430945056,
+          148.46902166189625
+        ]
+      ],
+      [
+        "ground_impact",
+        [
+          39.17422671380043,
+          -444.14952994209705,
+          148.4583380615711
+        ]
+      ],
+      [
+        "Foot_L",
+        [
+          39.75799671920795,
+          -443.7548978911251,
+          149.00800405685848
+        ]
+      ],
+      [
+        "Foot_R",
+        [
+          39.72232667613939,
+          -443.7577166879618,
+          147.92558488123927
+        ]
+      ],
+      [
+        "foot_l",
+        [
+          39.577036716428715,
+          -444.017046290402,
+          149.0756552522263
+        ]
+      ],
+      [
+        "claw_l",
+        [
+          39.53461342065644,
+          -443.4157760433663,
+          149.02873625680604
+        ]
+      ],
+      [
+        "Hand_L",
+        [
+          39.55032304055234,
+          -442.75589066085524,
+          149.20627140187145
+        ]
+      ],
+      [
+        "claw_r",
+        [
+          39.28629865144437,
+          -442.29907699966384,
+          147.60507940471956
+        ]
+      ],
+      [
+        "foot_r",
+        [
+          39.574426667113464,
+          -444.0142274833569,
+          147.84665848318693
+        ]
+      ]
+    ]
+  },
+  "door": [
+    true,
+    true,
+    true
+  ],
+  "cut": {
+    "frame": 68,
+    "calls": 82,
+    "triangles": 667842,
+    "points": 0,
+    "lines": 0,
+    "geometries": 107,
+    "textures": 126,
+    "heap": 47400000,
+    "est": {
+      "t": 1795850725409,
+      "phase": "qa",
+      "room": "—",
+      "cityReleased": false,
+      "geometries": 107,
+      "textures": 126,
+      "programs": 43,
+      "calls": 82,
+      "triangles": 667842,
+      "cpuImgMB": 35.3,
+      "cpuGeoMB": 42.7,
+      "cpuGltfMB": 0,
+      "cpuMB": 78,
+      "gpuTexMB": 138.1,
+      "gpuGeoMB": 42.7,
+      "gpuRTMB": 2.1,
+      "gpuMB": 182.9,
+      "programsMB": 25.8,
+      "heap": {
+        "usedMB": 45.2,
+        "totalMB": 54.2,
+        "limitMB": 3586
+      },
+      "texMB": 138.1,
+      "geoMB": 42.7,
+      "processMB": 350.7,
+      "webkitMB": 64,
+      "texSources": 123
+    }
+  },
+  "active": {
+    "frame": 69,
+    "calls": 86,
+    "triangles": 700748,
+    "points": 0,
+    "lines": 0,
+    "geometries": 107,
+    "textures": 126,
+    "heap": 47400000,
+    "est": {
+      "t": 1795850729165,
+      "phase": "qa",
+      "room": "—",
+      "cityReleased": false,
+      "geometries": 107,
+      "textures": 126,
+      "programs": 43,
+      "calls": 86,
+      "triangles": 700748,
+      "cpuImgMB": 35.3,
+      "cpuGeoMB": 42.7,
+      "cpuGltfMB": 0,
+      "cpuMB": 78,
+      "gpuTexMB": 138.1,
+      "gpuGeoMB": 42.7,
+      "gpuRTMB": 2.1,
+      "gpuMB": 182.9,
+      "programsMB": 25.8,
+      "heap": {
+        "usedMB": 45.2,
+        "totalMB": 54.2,
+        "limitMB": 3586
+      },
+      "texMB": 138.1,
+      "geoMB": 42.7,
+      "processMB": 350.7,
+      "webkitMB": 64,
+      "texSources": 123
+    }
+  },
+  "whiff": {
+    "before": 100,
+    "after": 100,
+    "phase": "active",
+    "hits": [],
+    "time": 1.6166666666666634
+  },
+  "sweep": {
+    "before": 100,
+    "after": 77,
+    "phase": "active",
+    "hits": [
+      {
+        "type": "sin-hit",
+        "at": 16.625,
+        "attack": "Attack_Staff_Overhead",
+        "damage": 23,
+        "result": "heavy",
+        "region": null,
+        "hp": 77,
+        "bossHP": 1500
+      }
+    ],
+    "time": 1.466666666666664
+  },
+  "contact": {
+    "frame": 70,
+    "calls": 88,
+    "triangles": 700788,
+    "points": 0,
+    "lines": 0,
+    "geometries": 107,
+    "textures": 126,
+    "heap": 47400000,
+    "est": {
+      "t": 1795850731335,
+      "phase": "qa",
+      "room": "—",
+      "cityReleased": false,
+      "geometries": 107,
+      "textures": 126,
+      "programs": 43,
+      "calls": 88,
+      "triangles": 700788,
+      "cpuImgMB": 35.3,
+      "cpuGeoMB": 42.7,
+      "cpuGltfMB": 0,
+      "cpuMB": 78,
+      "gpuTexMB": 138.1,
+      "gpuGeoMB": 42.7,
+      "gpuRTMB": 2.1,
+      "gpuMB": 182.9,
+      "programsMB": 25.8,
+      "heap": {
+        "usedMB": 45.2,
+        "totalMB": 54.2,
+        "limitMB": 3586
+      },
+      "texMB": 138.1,
+      "geoMB": 42.7,
+      "processMB": 350.7,
+      "webkitMB": 64,
+      "texSources": 123
+    }
+  },
+  "combo": [
+    {
+      "type": "guardian-hit",
+      "at": 16.925,
+      "attack": "atkR",
+      "damage": 48,
+      "result": "normal",
+      "region": "torso",
+      "hp": 77,
+      "bossHP": 1452
+    },
+    {
+      "type": "guardian-hit",
+      "at": 16.925,
+      "attack": "finJ",
+      "damage": 122,
+      "result": "heavy",
+      "region": "leftLeg",
+      "hp": 77,
+      "bossHP": 1330
+    }
+  ],
+  "block": {
+    "before": 100,
+    "after": 96.94,
+    "phase": "active",
+    "hits": [
+      {
+        "type": "sin-hit",
+        "at": 17.275,
+        "attack": "Attack_Staff_Thrust",
+        "damage": 3.0600000000000023,
+        "result": "block",
+        "region": null,
+        "hp": 96.94,
+        "bossHP": 1330
+      }
+    ],
+    "time": 0.6333333333333335
+  },
+  "parry": [
+    {
+      "type": "guardian-hit",
+      "at": 16.925,
+      "attack": "finJ",
+      "damage": 122,
+      "result": "heavy",
+      "region": "leftLeg",
+      "hp": 77,
+      "bossHP": 1330
+    },
+    {
+      "type": "telegraph",
+      "at": 16.925,
+      "attack": "Attack_Staff_Thrust",
+      "damage": 0,
+      "result": null,
+      "region": null,
+      "hp": 100,
+      "bossHP": 1330
+    },
+    {
+      "type": "sin-hit",
+      "at": 17.275,
+      "attack": "Attack_Staff_Thrust",
+      "damage": 3.0600000000000023,
+      "result": "block",
+      "region": null,
+      "hp": 96.94,
+      "bossHP": 1330
+    },
+    {
+      "type": "telegraph",
+      "at": 17.642,
+      "attack": "Attack_Staff_Thrust",
+      "damage": 0,
+      "result": null,
+      "region": null,
+      "hp": 100,
+      "bossHP": 1330
+    },
+    {
+      "type": "sin-hit",
+      "at": 17.933,
+      "attack": "Attack_Staff_Thrust",
+      "damage": 0,
+      "result": "parry",
+      "region": null,
+      "hp": 100,
+      "bossHP": 1330
+    },
+    {
+      "type": "stagger",
+      "at": 17.933,
+      "attack": "Stagger",
+      "damage": 0,
+      "result": null,
+      "region": null,
+      "hp": 100,
+      "bossHP": 1330
+    }
+  ],
+  "dodge": {
+    "iframe": true,
+    "hp": 100,
+    "hits": [
+      {
+        "type": "stagger",
+        "at": 17.933,
+        "attack": "Stagger",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 1330
+      },
+      {
+        "type": "telegraph",
+        "at": 18.275,
+        "attack": "Special_Ground_Slam",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 1330
+      },
+      {
+        "type": "ground-impact",
+        "at": 19.958,
+        "attack": "Special_Ground_Slam",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 1330
+      },
+      {
+        "type": "evaded",
+        "at": 20.042,
+        "attack": "Special_Ground_Slam",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 1330
+      }
+    ]
+  },
+  "retry": {
+    "gate": "closed",
+    "chapter": "u1",
+    "hero": [
+      20.222326713800427,
+      -444.15,
+      148.4583380615711
+    ]
+  },
+  "after": {
+    "frame": 78,
+    "calls": 78,
+    "triangles": 669328,
+    "points": 0,
+    "lines": 0,
+    "geometries": 107,
+    "textures": 126,
+    "heap": 47400000,
+    "est": {
+      "t": 1795850777367,
+      "phase": "qa",
+      "room": "—",
+      "cityReleased": false,
+      "geometries": 107,
+      "textures": 126,
+      "programs": 43,
+      "calls": 78,
+      "triangles": 669328,
+      "cpuImgMB": 35.3,
+      "cpuGeoMB": 42.7,
+      "cpuGltfMB": 0,
+      "cpuMB": 78,
+      "gpuTexMB": 138.1,
+      "gpuGeoMB": 42.7,
+      "gpuRTMB": 2.1,
+      "gpuMB": 182.9,
+      "programsMB": 25.8,
+      "heap": {
+        "usedMB": 45.2,
+        "totalMB": 54.2,
+        "limitMB": 3586
+      },
+      "texMB": 138.1,
+      "geoMB": 42.7,
+      "processMB": 350.7,
+      "webkitMB": 64,
+      "texSources": 123
+    }
+  },
+  "victory": {
+    "phase": "won",
+    "ai": "recover",
+    "phaseNumber": 2,
+    "clip": "Death_Idle",
+    "time": 0.008333333333314652,
+    "attackTime": 1.7833333333333294,
+    "guardian": {
+      "health": 0,
+      "posture": 0,
+      "quiet": 0,
+      "broken": false
+    },
+    "hero": {
+      "health": 100,
+      "posture": 0,
+      "quiet": 0,
+      "broken": false
+    },
+    "sinClip": {
+      "clip": "cidle",
+      "dodge": null
+    },
+    "parryAge": null,
+    "invulnerable": false,
+    "blocking": false,
+    "saved": true,
+    "staffDetached": true,
+    "heroPosition": [
+      38.35232671380043,
+      -444.15,
+      148.3083380615711
+    ],
+    "guardianPosition": [
+      39.72232671380043,
+      -444.15,
+      148.4583380615711
+    ],
+    "hits": [
+      {
+        "type": "start",
+        "at": 0.008,
+        "attack": "Combat_Idle",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 1500
+      },
+      {
+        "type": "phase",
+        "at": 0.142,
+        "attack": "Phase_Transition",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 749
+      },
+      {
+        "type": "guardian-hit",
+        "at": 4.725,
+        "attack": "atkR",
+        "damage": 1,
+        "result": "normal",
+        "region": "leftLeg",
+        "hp": 100,
+        "bossHP": 0
+      },
+      {
+        "type": "defeat",
+        "at": 4.725,
+        "attack": "Death_Kneel",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 0
+      },
+      {
+        "type": "weapon_release",
+        "at": 9.533,
+        "attack": "Death_Final",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 0
+      },
+      {
+        "type": "gate-open",
+        "at": 18.067,
+        "attack": "Death_Idle",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 0
+      }
+    ],
+    "clips": [
+      "Idle",
+      "Combat_Idle",
+      "Enraged_Idle",
+      "Walk_Forward",
+      "Run_Forward",
+      "Walk_Backward",
+      "Strafe_Left",
+      "Strafe_Right",
+      "Block_Idle",
+      "Death_Idle",
+      "Cinematic_Awakening",
+      "Cinematic_Intro",
+      "Phase_Transition",
+      "Stagger",
+      "Block_Impact",
+      "Hit_Light_Front",
+      "Hit_Light_Back",
+      "Hit_Light_Left",
+      "Hit_Light_Right",
+      "Hit_Heavy",
+      "Death_Kneel",
+      "Death_Final",
+      "Attack_Staff_Swing_Left",
+      "Attack_Staff_Swing_Right",
+      "Attack_Staff_Overhead",
+      "Attack_Staff_Thrust",
+      "Attack_Staff_Sweep",
+      "Attack_Staff_Spin_360",
+      "Attack_Claw_Left",
+      "Attack_Kick",
+      "Attack_Combo_01",
+      "Special_Ground_Slam",
+      "Counter_Attack",
+      "Special_Charge",
+      "Special_Leap_Slam",
+      "Special_Enraged_Combo",
+      "Special_Seal_Activation",
+      "Special_Energy_Release"
+    ],
+    "attacks": [
+      "Attack_Staff_Swing_Left",
+      "Attack_Staff_Swing_Right",
+      "Attack_Staff_Overhead",
+      "Attack_Staff_Thrust",
+      "Attack_Staff_Sweep",
+      "Attack_Staff_Spin_360",
+      "Attack_Claw_Left",
+      "Attack_Kick",
+      "Attack_Combo_01",
+      "Special_Ground_Slam",
+      "Counter_Attack",
+      "Special_Charge",
+      "Special_Leap_Slam",
+      "Special_Enraged_Combo",
+      "Special_Seal_Activation",
+      "Special_Energy_Release"
+    ]
+  },
+  "passage": true,
+  "restore": {
+    "phase": "won",
+    "gate": "open",
+    "hp": 100
+  }
+}
