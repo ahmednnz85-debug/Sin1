@@ -14,29 +14,29 @@
   function attack(name, range, hits, options = {}) {
     return { name, range, hits, ...options };
   }
-  const shock = (from, socket, damage, wave) => strike(from, from + .01, socket, damage, 0, {
+  const shock = (from, socket, damage, wave) => strike(from, from + (socket === 'ground_impact' ? .22 : .01), socket, damage, 0, {
     wave, type: 'spirit', blockable: false
   });
   const ATTACKS = [
     attack('Attack_Staff_Swing_Left', [1.5, 3.05], [strike(.48, 1.06, 'blade', 13, 24)], { cooldown: 4 }),
-    attack('Attack_Staff_Swing_Right', [1.5, 2.45], [strike(.56, 1.2, 'crown', 14, 27)], { cooldown: 5, yawOffset: .35 }),
+    attack('Attack_Staff_Swing_Right', [1.5, 2.45], [strike(.56, 1.2, 'crown', 14, 27)], { cooldown: 5, yawOffset: -.38 }),
     attack('Attack_Staff_Overhead', [1.85, 3.15], [strike(1.1, 1.44, 'blade', 23, 52, { type: 'heavy', parryable: false })],
       { cooldown: 6, armor: true }),
     attack('Attack_Staff_Thrust', [2, 3.25], [strike(.29, .59, 'blade', 17, 31)], { cooldown: 5 }),
     attack('Attack_Staff_Sweep', [1.45, 2.8], [strike(.65, 1.32, 'blade', 17, 31)], { cooldown: 6 }),
-    attack('Attack_Staff_Spin_360', [1.6, 3.25], [strike(.82, 1.62, 'blade', 21, 39, { type: 'heavy' })],
+    attack('Attack_Staff_Spin_360', [2.75, 3.62], [strike(.82, 1.62, 'blade', 21, 39, { type: 'heavy' })],
       { cooldown: 8, angle: 2.8 }),
-    attack('Attack_Claw_Left', [1.12, 1.95], [strike(.64, .96, 'claw_l', 11, 20)], { cooldown: 4, yawOffset: -.49 }),
-    attack('Attack_Kick', [1.1, 1.82], [strike(.55, .82, 'foot_l', 13, 35)], { cooldown: 6, yawOffset: -.46 }),
+    attack('Attack_Claw_Left', [1.12, 1.95], [strike(.64, .96, 'claw_l', 11, 20)], { cooldown: 4, yawOffset: .48 }),
+    attack('Attack_Kick', [1.1, 1.82], [strike(.55, .82, 'foot_l', 13, 35)], { cooldown: 6, yawOffset: .43 }),
     attack('Attack_Combo_01', [1.55, 2.95],
       [strike(.49, .9, 'blade', 10, 20), strike(1.89, 2.27, 'blade', 15, 27)], { cooldown: 9 }),
-    attack('Special_Ground_Slam', [1.5, 3.6], [shock(1.68, 'ground_impact', 19, 3.15)], { cooldown: 9, armor: true }),
+    attack('Special_Ground_Slam', [1.5, 3.6], [shock(1.62, 'ground_impact', 19, 3.15)], { cooldown: 9, armor: true }),
     attack('Counter_Attack', [1.25, 2.45], [strike(.5, .87, 'crown', 15, 27)],
-      { cooldown: 6, counter: true, yawOffset: .35 }),
+      { cooldown: 6, counter: true, yawOffset: -.34 }),
     attack('Special_Charge', [3.4, 7.4], [strike(.56, 2.29, 'blade', 20, 38, { type: 'heavy' })],
       { cooldown: 8, phase: 2, armor: true, advance: [.62, 1.55, 3.7] }),
-    attack('Special_Leap_Slam', [2.7, 5.5], [shock(1.93, 'ground_impact', 24, 4.25)],
-      { cooldown: 10, phase: 2, armor: true }),
+    attack('Special_Leap_Slam', [2.7, 5.5], [shock(1.84, 'ground_impact', 24, 4.25)],
+      { cooldown: 10, phase: 2, armor: true, advance: [.77, 1.85, 1.65] }),
     attack('Special_Enraged_Combo', [1.45, 3.15],
       [strike(.63, 1.13, 'blade', 13, 24), strike(1.69, 2.01, 'crown', 13, 25),
         strike(3.03, 3.47, 'blade', 22, 43, { type: 'heavy' })], { cooldown: 11, phase: 2, armor: true }),
@@ -116,83 +116,7 @@
     };
   }
 
-  function effects(T, space) {
-    const sparkGeometry = new T.IcosahedronGeometry(1, 0);
-    const colors = { parry: 0xffe49a, block: 0xffb65a, heavy: 0xffae5e, normal: 0xe9925e, spirit: 0x75eaea, break: 0xffd78e };
-    const sparks = Array.from({ length: 18 }, () => {
-      const mesh = new T.Mesh(sparkGeometry, new T.MeshBasicMaterial({ color: 0xffbb68, transparent: true, depthWrite: false }));
-      mesh.visible = false;
-      space.add(mesh);
-      return { mesh, velocity: new T.Vector3(), age: 0, life: 1 };
-    });
-    const circle = new T.RingGeometry(.94, 1, 56);
-    circle.rotateX(-Math.PI / 2);
-    const ring = new T.Mesh(circle, new T.MeshBasicMaterial({
-      color: 0x7aece9, transparent: true, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending
-    }));
-    const beam = new T.Mesh(new T.CylinderGeometry(.045, .13, 1, 8, 1, true),
-      new T.MeshBasicMaterial({ color: 0xaefcf1, transparent: true, opacity: .55, depthWrite: false, blending: T.AdditiveBlending }));
-    const trail = new T.Line(new T.BufferGeometry(), new T.LineBasicMaterial({
-      color: 0xffddb3, transparent: true, opacity: .38, depthWrite: false, blending: T.AdditiveBlending
-    }));
-    trail.geometry.setAttribute('position', new T.BufferAttribute(new Float32Array(6), 3));
-    trail.frustumCulled = false;
-    space.add(ring, beam, trail);
-    ring.visible = beam.visible = trail.visible = false;
-    const vertical = new T.Vector3(0, 1, 0), direction = new T.Vector3();
-    return {
-      ring,
-      prepare: [sparks[0].mesh, ring, beam, trail],
-      trail(a, b) {
-        trail.visible = !!a;
-        if (!a) return;
-        const p = trail.geometry.attributes.position;
-        p.setXYZ(0, a.x, a.y, a.z);
-        p.setXYZ(1, b.x, b.y, b.z);
-        p.needsUpdate = true;
-      },
-      beam(a, b) {
-        beam.visible = !!a;
-        if (!a) return;
-        direction.subVectors(b, a);
-        beam.position.copy(a).lerp(b, .5);
-        beam.scale.y = direction.length();
-        beam.quaternion.setFromUnitVectors(vertical, direction.normalize());
-      },
-      contact(point, kind, intensity = 1) {
-        const low = root.SinGfx?.tier() === 'low';
-        const count = kind === 'parry' || kind === 'spirit' ? low ? 7 : 12 : low ? 4 : 7;
-        for (let i = 0, shown = 0; i < sparks.length && shown < count; i++) {
-          const p = sparks[i];
-          if (p.mesh.visible) continue;
-          p.mesh.visible = true;
-          p.mesh.position.copy(point);
-          p.mesh.material.color.setHex(colors[kind] || colors.normal);
-          p.velocity.set(Math.cos(i * 2.4) * 2.1, .75 + (i % 6) * .36, Math.sin(i * 2.4) * 2.1).multiplyScalar(intensity);
-          p.age = 0;
-          p.life = .19 + (i % 5) * .046;
-          shown++;
-        }
-      },
-      update(dt) {
-        for (const p of sparks) {
-          if (!p.mesh.visible) continue;
-          p.age += dt;
-          p.mesh.visible = p.age < p.life;
-          p.velocity.y -= 7 * dt;
-          p.mesh.position.addScaledVector(p.velocity, dt);
-          p.mesh.material.opacity = Math.max(0, 1 - p.age / p.life);
-          p.mesh.scale.setScalar(.035 + .025 * p.mesh.material.opacity);
-        }
-      },
-      clear() {
-        ring.visible = beam.visible = trail.visible = false;
-        for (const p of sparks) p.mesh.visible = false;
-      }
-    };
-  }
-
-  function mount({ T, model, animations, world, arena, checkpoint, gate, architecture }) {
+  function mount({ T, model, animations, world, arena, checkpoint, hero, gate, architecture }) {
     const C = root.SinCombat, vitals = C.createVitals(VITALS);
     const actor = new T.Group();
     actor.name = 'U1_Guardian_of_the_Covenant';
@@ -216,7 +140,7 @@
 
     const nodes = new Map();
     model.traverse(o => { if (o.name) nodes.set(o.name, o); });
-    const required = ['Guardian_Staff', 'weapon_r', 'staff_blade', 'staff_crown', 'staff_tip', 'staff_base',
+    const required = ['Guardian_Staff', 'weapon_r', 'weapon_l', 'staff_blade', 'staff_crown', 'staff_tip', 'staff_base',
       'chest_seal', 'body_hit', 'head_hit', 'Pelvis', 'ground_impact', 'Foot_L', 'Foot_R', 'foot_l', 'claw_l', 'Hand_L'];
     if (required.some(name => !nodes.has(name))) throw new Error('Guardian sockets missing: ' + required.filter(name => !nodes.has(name)).join(', '));
     const staff = nodes.get('Guardian_Staff'), grip = nodes.get('weapon_r');
@@ -241,13 +165,20 @@
     let motionTotal = 0, guardUntil = 0, pendingCounter = false, retryPolicy = false;
     const nextReady = new Map(), log = [], seenStrikes = new Set(), vector = () => new T.Vector3();
     const [heroLocal, playerWorld, bossWorld, contact, contactLocal, desired, direction, chest, gateGlow] = Array.from({ length: 9 }, vector);
+    const velocity = vector(), localVelocity = vector(), normal = vector(), axeLast = vector(), axePoint = vector();
+    const trauma = vector(), floorTip = vector(), pointOffset = vector(), localInversion = new T.Matrix4();
+    let bladeEvent = null, axeHeight = Infinity, hasAxeSample = false;
+    let groundVelocity = vector(), groundPrev = vector(), groundCurr = vector();
     const previousA = vector(), previousB = vector(), currentA = vector(), currentB = vector(), shaft = vector();
     const sweepStartA = vector(), sweepStartB = vector(), sweepEndA = vector(), sweepEndB = vector();
     const pathStart = vector(), pathStop = vector(), staffPrev = vector(), staffVelocity = vector();
     const staffRest = new T.Quaternion().setFromAxisAngle(new T.Vector3(.4, 0, 1).normalize(), Math.PI / 2);
     const restTip = vector(), restBlade = vector();
-    const wave = { position: vector(), age: 0, maximum: 0, old: 0, radius: 0, strike: null, hit: false };
-    const fx = effects(T, space);
+    const wave = { position: vector(), variant: 'spirit', age: 0, maximum: 0, old: 0, radius: 0, strike: null, hit: false };
+    const fx = root.SinCombatVFX.create(T, space, () => root.SinGfx?.tier() || 'high');
+    fx.bindWeapon(staff, ['blade', 'crown']);
+    const axe = root.SinHero?.resolveRig(hero).axe;
+    if (axe) fx.bindWeapon(axe, ['axe']);
     const cameraFrom = vector(), cameraTo = vector(), aimFrom = vector(), aimTo = vector(), cameraDirection = vector();
     const cameraPosition = vector(), cameraAim = vector(), cameraPivot = vector();
     let deathYawFrom = 0, deathYawTo = 0;
@@ -265,6 +196,16 @@
       volume('armR', 'hand_r', 'upperarm_r', .17)];
     const heroNodes = new Map();
     const radius = TUNING.radius;
+    const poseJoint = {
+      spine: nodes.get('Spine_02'), staff: nodes.get('UpperArm_R'),
+      claw_l: nodes.get('UpperArm_L'), foot_l: nodes.get('Thigh_L')
+    };
+    const strikeOrigin = vector(), strikeReach = vector(), strikeAxis = vector();
+    const strikeLocalAxis = vector(), offHand = vector(), shaftStart = vector(), shaftEnd = vector();
+    const authoredRotation = new T.Quaternion(), parentRotation = new T.Quaternion(), strikeRotation = new T.Quaternion();
+    let correctedJoint = null, strikeHeight = 0;
+    const posedAim = vector();
+    const physicalContacts = { heroHits: 0, guardianHits: 0, heightAdjusted: 0, lastWeaponHeight: null };
     const at = (node, out) => nodes.get(node).getWorldPosition(out);
     const local = (node, out) => space.worldToLocal(at(node, out));
     function refresh(volumes, rig) {
@@ -274,7 +215,14 @@
       }
       return volumes;
     }
+    function restorePose() {
+      if (correctedJoint) {
+        correctedJoint.quaternion.copy(authoredRotation);
+        correctedJoint = null;
+      }
+    }
     function sampleAttack(name, blend = .18, offset = 0) {
+      restorePose();
       if (clipName === name && LOOPS.has(name)) return;
       const next = actions.get(name);
       if (action === next) action.stop();
@@ -354,9 +302,14 @@
       actor.rotation.y = Math.PI / 2;
       defeated = objective = false;
       selected = wave.strike = null;
+      bladeEvent = null;
+      axeHeight = Infinity;
+      hasAxeSample = false;
       wave.radius = wave.old = 0;
       phaseNumber = 1;
       now = cooldown = staggerUntil = hitStop = impulse = flash = guardUntil = 0;
+      physicalContacts.heroHits = physicalContacts.guardianHits = physicalContacts.heightAdjusted = 0;
+      physicalContacts.lastWeaponHeight = null;
       revealed = cameraBlend = 0;
       cinematic = retryPolicy = pendingCounter = false;
       lockOn = false;
@@ -486,6 +439,15 @@
       return Math.hypot(contactLocal.x - heroLocal.x, contactLocal.z - heroLocal.z) < 2.7 &&
         lineClear(heroLocal, contactLocal);
     }
+    function localDirection(out, from) {
+      return out.copy(from).transformDirection(localInversion.copy(space.matrixWorld).invert());
+    }
+    function contactImpulse(point, amount) {
+      // Lateral recoil on the actual blow vector, with no camera vibration in idle.
+      trauma.set(point.x - fighter.root.position.x,0,point.z - fighter.root.position.z);
+      if (trauma.lengthSq() > .002) trauma.normalize();
+      impulse = amount;
+    }
     function playerHit(info) {
       if (phase !== 'active') return null;
       const [damage, pressure] = HERO_DAMAGE[info.attack] || [info.damage, info.heavy ? 22 : 9];
@@ -499,8 +461,15 @@
       }, info.point);
       if (!result) return null;
       result.region = info.region;
-      fx.contact(space.worldToLocal(contactLocal.copy(info.point)), result.kind, info.heavy ? 1.25 : 1);
-      impulse = info.heavy ? .13 : .055;
+      physicalContacts.heroHits++;
+      const surface = result.kind === 'block' ? 'metal' : info.region === 'seal' ? 'spirit' :
+        /torso|head|Arm/.test(info.region) ? 'armor' : 'flesh';
+      localDirection(localVelocity, info.weaponVelocity || info.dir);
+      fx.impact(space.worldToLocal(contactLocal.copy(info.point)), {
+        surface, velocity: localVelocity, normal: localDirection(normal, info.dir),
+        strength: info.attack === 'finJ' ? 1.52 : info.heavy ? 1.28 : .85, moon: true, floor: stand.y
+      });
+      contactImpulse(info.point, info.heavy ? .135 : .055);
       hitStop = info.heavy ? .062 : .031;
       flash = .22;
       emit('guardian-hit', result, info.attack);
@@ -516,7 +485,6 @@
           !vitals.state.broken && now >= staggerUntil && now > guardUntil) {
         if (selected) {
           selected = null;
-          fx.trail(null);
           cooldown = .8;
         }
         const loc = wrap(Math.atan2(dx, dz) - actor.rotation.y);
@@ -530,7 +498,7 @@
     }
     function stagger() {
       selected = wave.strike = null;
-      fx.trail(null);
+
       strikeBody = 'stagger';
       sampleAttack('Stagger', .1);
       impulse = .17;
@@ -539,7 +507,7 @@
       cooldown = .58;
       emit('stagger');
     }
-    function enemyHit(hit, point) {
+    function enemyHit(hit, point, along) {
       const p = fighter.root.position;
       const origin = world.localToWorld(bossWorld.copy(actor.position));
       direction.subVectors(p, origin);
@@ -553,8 +521,15 @@
         guardAge: fighter.combat.guardAge()
       }, point);
       if (!result) { emit('evaded'); return; }
-      fx.contact(space.worldToLocal(contactLocal.copy(point)), result.kind, result.kind === 'spirit' ? 1.4 : 1);
-      impulse = result.kind === 'parry' ? .10 : hit.type === 'heavy' || hit.type === 'spirit' ? .17 : .085;
+      if (!hit.wave) physicalContacts.guardianHits++;
+      const impactType = result.kind === 'parry' ? 'parry' : result.kind === 'block' ? 'metal' :
+        hit.type === 'spirit' ? 'spirit' : hit.socket === 'crown' ? 'armor' : 'flesh';
+      const focusPoint = result.kind === 'parry' || result.kind === 'block' ? parryPoint(point) : point;
+      fx.impact(space.worldToLocal(contactLocal.copy(focusPoint)), {
+        surface: impactType, velocity: localDirection(localVelocity, along || direction),
+        normal: localDirection(normal,direction), strength: hit.socket === 'crown' || hit.wave ? 1.32 : .9, floor: stand.y
+      });
+      contactImpulse(focusPoint, result.kind === 'parry' ? .11 : hit.type === 'heavy' || hit.type === 'spirit' ? .17 : .085);
       emit('sin-hit', result);
       if (result.kind === 'parry') {
         if (now >= staggerUntil) {
@@ -577,38 +552,58 @@
         hitStop = hit.type === 'heavy' ? .055 : .027;
       }
     }
+    function parryPoint(point) {
+      const [base, tip] = fighter.combat.axeContact();
+      axePoint.subVectors(tip,base);
+      const t = axePoint.dot(pointOffset.subVectors(point,base)) / Math.max(.0001,axePoint.lengthSq());
+      axePoint.multiplyScalar(Math.max(0,Math.min(1,t))).add(base);
+      return point.distanceToSquared(axePoint) < .31 ? axePoint.lerp(point,.38) : point;
+    }
     function waveStart(hit) {
-      local(hit.socket, wave.position);
+      const earth = hit.socket === 'ground_impact';
+      local(earth ? 'staff_blade' : hit.socket,wave.position);
+      contactLocal.copy(wave.position);
       wave.position.y = stand.y + .045;
       wave.age = wave.old = wave.radius = 0;
       wave.maximum = hit.wave;
       wave.strike = hit;
       wave.hit = false;
-      fx.ring.position.copy(wave.position);
-      local(hit.socket, contactLocal);
-      fx.contact(contactLocal, hit.type, 1.45);
-      emit('ground-impact');
+      wave.variant = earth ? 'ground' : 'spirit';
+      if (earth) {
+        fx.impact(wave.position,{surface:'stone',velocity:groundVelocity,strength:hit.wave>4?1.52:1.27,fracture:true});
+        world.localToWorld(contact.copy(wave.position));
+        contactImpulse(contact,hit.wave>4?.21:.17);
+        hitStop = hit.wave>4?.055:.04;
+        emit('ground-impact');
+        if (selected?.name === 'Special_Leap_Slam') emit('leap_land');
+      } else {
+        fx.impact(contactLocal,{surface:'spirit',strength:1.36});
+        emit('seal-release');
+      }
     }
-    function advanceWave(dt, p) {
-      if (!wave.strike) { fx.ring.visible = false; return; }
+    function advanceWave(dt,p) {
+      if (!wave.strike) { fx.shockwave(null); return; }
       wave.old = wave.radius;
       wave.age += dt;
-      wave.radius = Math.min(wave.maximum, wave.age * 12);
-      fx.ring.visible = true;
-      fx.ring.scale.setScalar(Math.max(.025, wave.radius));
-      fx.ring.material.opacity = .8 * (1 - .6 * wave.radius / wave.maximum);
-      const d = Math.hypot(p.x - wave.position.x, p.z - wave.position.z);
-      if (!wave.hit && d + .33 >= wave.old && d - .33 <= wave.radius && p.y - wave.position.y < .95 &&
-          lineClear(wave.position, p)) {
+      wave.radius = Math.min(wave.maximum,wave.age*12);
+      fx.shockwave(wave.position,wave.radius,wave.maximum,wave.variant);
+      const d = Math.hypot(p.x-wave.position.x,p.z-wave.position.z);
+      if (!wave.hit && d+.33>=wave.old && d-.33<=wave.radius && p.y-wave.position.y<.95 &&
+          lineClear(wave.position,p)) {
         wave.hit = true;
         world.localToWorld(contact.copy(p));
-        enemyHit(wave.strike, contact);
+        enemyHit(wave.strike,contact);
       }
-      if (wave.radius >= wave.maximum) wave.strike = null;
+      if (wave.radius>=wave.maximum) wave.strike=null;
     }
     function startMove(move) {
       selected = move;
       strikeBody = 'attack';
+      // Capture the upper torso at commitment. Future dodges never move
+      // this aim point or widen the live contact volumes.
+      const torso = heroNodes.get('spine_03') || fighter.root;
+      torso.getWorldPosition(posedAim);
+      strikeHeight = Math.max(fighter.root.position.y + 1.08, posedAim.y - .08);
       attackTime = motionTotal = 0;
       seenStrikes.clear();
       nextReady.set(move, now + move.cooldown);
@@ -640,12 +635,54 @@
       at(b, outB);
       if (socket === 'blade') outA.addScaledVector(at('staff_crown', shaft).sub(outB).normalize(), .32);
     }
+    function adaptStrikeHeight(hit) {
+      if (!hit || hit.wave) return;
+      const staffStrike = hit.socket === 'blade' || hit.socket === 'crown';
+      const socket = SOCKETS[hit.socket][1];
+      let joint = staffStrike ? poseJoint.staff : poseJoint[hit.socket];
+      at(socket, strikeReach);
+      const target = hit.socket === 'foot_l' ? strikeHeight - .56 : strikeHeight;
+      const above = strikeReach.y - target - .09;
+      if (above <= 0 || !joint) return;
+
+      // Use the torso when both hands are on the staff. Their authored
+      // relative pose survives the correction, including the grip and wrist.
+      if (staffStrike && poseJoint.spine) {
+        at('staff_blade', shaftStart);
+        at('staff_crown', shaftEnd).sub(shaftStart);
+        at('weapon_l', offHand).sub(shaftStart);
+        const fraction = Math.max(0, Math.min(1, offHand.dot(shaftEnd) / Math.max(.001, shaftEnd.lengthSq())));
+        if (offHand.addScaledVector(shaftEnd, -fraction).lengthSq() < .29 * .29) joint = poseJoint.spine;
+      }
+      joint.getWorldPosition(strikeOrigin);
+      strikeReach.sub(strikeOrigin);
+      const horizontal = Math.hypot(strikeReach.x, strikeReach.z);
+      if (horizontal < .47) return;
+      const envelope = smooth((attackTime - hit.from + .19) / .19) *
+        (1 - smooth((attackTime - hit.to) / .2));
+      const angle = Math.min(hit.socket === 'foot_l' ? .26 : .49, Math.atan2(above, horizontal) * .94) * envelope;
+      if (angle < .003) return;
+      // Rotate the anchor bone about the transverse axis of its actual
+      // reach. The weapon, hand and contact sockets are descendants.
+      strikeAxis.set(strikeReach.z, 0, -strikeReach.x).normalize();
+      joint.parent.getWorldQuaternion(parentRotation).invert();
+      strikeLocalAxis.copy(strikeAxis).applyQuaternion(parentRotation);
+      authoredRotation.copy(joint.quaternion);
+      joint.quaternion.premultiply(strikeRotation.setFromAxisAngle(strikeLocalAxis, angle));
+      correctedJoint = joint;
+      joint.updateWorldMatrix(false, true);
+      physicalContacts.heightAdjusted++;
+      physicalContacts.lastWeaponHeight = at(socket, strikeOrigin).y - fighter.root.position.y;
+    }
     function attacksStep(dt, p, yaw) {
       const move = selected, previous = attackTime;
       attackTime += dt;
-      if (attackTime < Math.min(.24, move.hits[0].from - .08)) turn(yaw + (move.yawOffset || 0), dt, 2.7);
+      if (previous < Math.min(.27, move.hits[0].from - .065)) {
+        turn(yaw + (move.yawOffset || 0), dt, 3.3);
+      }
       const oldSocket = move.hits.find(h => h.to >= previous && !h.wave)?.socket;
       if (oldSocket) sampleSocket(oldSocket, previousA, previousB);
+      local('staff_blade', groundPrev);
       if (move.advance) {
         const [begin, end, meters] = move.advance;
         const walk = smooth((attackTime - begin) / (end - begin)) * meters;
@@ -653,13 +690,20 @@
         motionTotal = walk;
         if (step > 0) shift(Math.sin(actor.rotation.y) * step, Math.cos(actor.rotation.y) * step, p);
       }
+      restorePose();
       mixer.update(dt);
       model.updateWorldMatrix(true, true);
       animationTime = action.time;
-      fx.trail(null);
+      const heightWindow = move.hits.find(hit => attackTime >= hit.from - .19 && attackTime <= hit.to + .2);
+      adaptStrikeHeight(heightWindow);
+      local('staff_blade', groundCurr);
+      groundVelocity.subVectors(groundCurr,groundPrev).multiplyScalar(1/dt);
       for (const hit of move.hits) {
         if (seenStrikes.has(hit) || attackTime < hit.from || previous >= hit.to) continue;
         if (hit.wave) {
+          // A marker narrows the search. Ground effects wait for the blade to
+          // reach the visible surface within that authored contact window.
+          if (hit.socket === 'ground_impact' && groundCurr.y > stand.y + .28) continue;
           seenStrikes.add(hit);
           waveStart(hit);
           continue;
@@ -673,20 +717,18 @@
         sweepStartB.lerpVectors(continuous ? previousB : currentB, currentB, begin);
         sweepEndA.lerpVectors(continuous ? previousA : currentA, currentA, end);
         sweepEndB.lerpVectors(continuous ? previousB : currentB, currentB, end);
-        fx.trail(space.worldToLocal(pathStart.copy(sweepStartA)), space.worldToLocal(pathStop.copy(sweepEndA)));
         if (C.sweep(sweepStartA, sweepStartB, sweepEndA, sweepEndB,
           r, refresh(heroVolumes, heroNodes), contact)) {
           world.worldToLocal(contactLocal.copy(contact));
           if (lineClear(actor.position, contactLocal)) {
             seenStrikes.add(hit);
-            enemyHit(hit, contact);
+            enemyHit(hit, contact, velocity.subVectors(currentB,previousB));
             if (selected !== move) return;
           }
         }
       }
       if (attackTime >= action.getClip().duration - .012) {
         selected = null;
-        fx.trail(null);
         cooldown = phaseNumber === 1 ? TUNING.pause : TUNING.enragedPause;
         strikeBody = 'recover';
         sampleAttack(phaseNumber === 1 ? 'Combat_Idle' : 'Enraged_Idle');
@@ -725,7 +767,7 @@
         }
       }
       turn(yaw, dt);
-      if (distance > 2.37 && cooldown <= .05 && Math.abs(angle) < 1.1) {
+      if (distance > 2.07 && cooldown <= .05 && Math.abs(angle) < 1.1) {
         const running = distance > 6;
         const speed = running ? 2.9 : 1.26;
         if (shift(dx / distance * speed * dt, dz / distance * speed * dt, p)) {
@@ -778,6 +820,47 @@
       transition('deathKneel', 'Death_Kneel', .23);
       emit('defeat');
     }
+    function weaponFrame(dt) {
+      const heroAttack = fighter.combat.timeline();
+      const time = heroAttack.time ?? 0, window = heroAttack.window;
+      const drawn = window && fighter.weapon.seat() === 'hand' && phase === 'active';
+      const heavy = /Finisher/.test(heroAttack.clip);
+      const active = drawn && time >= window[0] - .09 && time <= window[1] + .12;
+      fx.weapon('axe', active ? heavy ? 1.32 : .82 : 0, dt);
+      const tip = drawn && fx.lowest('axe',floorTip);
+      if (tip) {
+        space.worldToLocal(axePoint.copy(tip));
+        const h = axePoint.y - stand.y;
+        const realFloor = architecture(axePoint.x, axePoint.z, actor.position,.06);
+        if (hasAxeSample && heavy && active && h <= .12 && axeHeight > .12 && realFloor && bladeEvent !== heroAttack.started) {
+          bladeEvent = heroAttack.started;
+          const delta = localVelocity.subVectors(axePoint,axeLast);
+          axePoint.y = stand.y + .02;
+          fx.impact(axePoint,{surface:'stone',velocity:delta,strength:1.15,moon:true,fracture:true});
+          contactImpulse(tip,.105);
+          emit('axe-ground-contact',null,heroAttack.clip);
+        }
+        axeHeight = h;
+        axeLast.copy(axePoint);
+      } else axeHeight = Infinity;
+      hasAxeSample = !!tip;
+
+      let blade = 0, crown = 0;
+      for (const hit of selected?.hits || []) {
+        const isSlam = hit.socket === 'ground_impact';
+        const name = isSlam ? 'blade' : hit.socket;
+        if (name !== 'blade' && name !== 'crown') continue;
+        const lead = isSlam ? .68 : .21;
+        const activeUntil = isSlam ? hit.from + .09 : hit.to + .07;
+        const glow = smooth((attackTime - hit.from + lead) / lead) *
+          (1 - smooth((attackTime - activeUntil) / .21)) * (isSlam ? 1.3 : .91);
+        if (name === 'blade') blade = Math.max(glow,blade);
+        else crown = Math.max(glow,crown);
+      }
+      const heat = phaseNumber === 2 ? 1.22 : 1;
+      fx.weapon('blade',blade*heat,dt);
+      fx.weapon('crown',crown*heat,dt);
+    }
     function step(dt) {
       if (!fighter) return;
       now += dt;
@@ -792,6 +875,7 @@
       const active = phase === 'active';
       const movingClip = active && selected;
       if (!movingClip && hitStop <= 0) {
+        restorePose();
         if (clipName === 'Death_Final' && dropTime < 0) local('Guardian_Staff', staffPrev);
         mixer.update(dt);
         animationTime = action.time;
@@ -818,7 +902,8 @@
         if (hitStop <= 0) ai(dt, p);
         if (phase === 'active') advanceWave(dt, p);
       } else if (phase === 'phase') {
-        if (timer > 1.47 && timer - dt <= 1.47) fx.contact(local('chest_seal', chest), 'spirit', 2);
+        if (timer > 1.47 && timer - dt <= 1.47) fx.impact(local('chest_seal', chest),{surface:'spirit',strength:1.64});
+        if (timer > 2.64 && timer - dt <= 2.64) fx.impact(local('chest_seal', chest),{surface:'spirit',strength:.76});
         if (actionComplete) {
           cooldown = 1.05;
           transition('active', 'Enraged_Idle');
@@ -856,7 +941,8 @@
       const brightness = phase === 'deathKneel' || phase === 'deathFinal' || phase === 'opening' || defeated ? revealed :
         revealed * (1 + .75 * (anger || 0) + flash);
       for (const [mat, intensity] of emission) mat.emissiveIntensity = intensity * brightness;
-      fx.update(dt);
+      weaponFrame(dt);
+      fx.update(dt,0);
     }
 
     const time = C.clock(step);
@@ -935,7 +1021,10 @@
       actor.getWorldPosition(bossWorld);
       if (combat && Math.hypot(camera.position.x - bossWorld.x, camera.position.z - bossWorld.z) < 1.44 &&
           camera.position.y < bossWorld.y + 3.65) camera.position.y = bossWorld.y + 3.7;
-      camera.position.y += Math.sin(now * 86) * impulse;
+      const shake = Math.sin(now * 86) * impulse;
+      camera.position.y += shake*.66;
+      camera.position.x -= trauma.z*shake*.42;
+      camera.position.z += trauma.x*shake*.42;
       if (cameraBlend > .003 || combat) clipCamera(camera, hero);
       camera.lookAt(aimTo);
       return true;
@@ -948,6 +1037,7 @@
         bind(ctx.fighter);
         if (!fighter) return;
         heroPosition();
+        fx.frame(dt);
         const distance = actor.position.distanceTo(heroLocal);
         if (phase === 'dormant' && distance > 24) return;
         if (!paused) time.advance(dt);
@@ -976,11 +1066,15 @@
           invulnerable: fighter?.combat.invulnerable(), blocking: fighter?.combat.blocking(), saved: defeated,
           staffDetached: staff.parent !== grip, heroPosition: fighter?.root.position.toArray(),
           guardianPosition: actor.getWorldPosition(bossWorld).toArray(),
-          hits: log.slice(), clips: [...actions.keys()], attacks: ATTACKS.map(a => a.name) };
+          vfx: fx.stats(), physicalContacts: { ...physicalContacts }, hits: log.slice(), clips: [...actions.keys()], attacks: ATTACKS.map(a => a.name) };
       },
       toggleLock,
-      dispose() { exitTarget?.(); fighter?.combat.fight(null); hud?.remove(); mixer.stopAllAction(); },
+      dispose() { exitTarget?.(); fighter?.combat.fight(null); hud?.remove(); mixer.stopAllAction(); fx.dispose(); },
       lab: {
+        weapons: (part) => fx.surface(part),
+        preview(part) { fx.preview(part); weaponFrame(.2); fx.update(.016,0); },
+        effects(on) { fx.enable(on); },
+        vfxQuality(tier) { fx.setTier(tier); },
         pause(on) { paused = Boolean(on); },
         single() { if (paused) time.single(); },
         attack(name) {

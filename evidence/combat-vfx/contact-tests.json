@@ -1,0 +1,305 @@
+{
+  "messages": [],
+  "prep": {
+    "phase": "dormant",
+    "vfx": {
+      "enabled": true,
+      "tier": 0.72,
+      "impacts": 0,
+      "stone": 0,
+      "metal": 0,
+      "armor": 0,
+      "flesh": 0,
+      "spirit": 0,
+      "parry": 0,
+      "samples": 103,
+      "activeSparks": 0,
+      "activeDust": 0,
+      "rocks": 0,
+      "cracks": 0,
+      "wave": false
+    },
+    "prewarm": {
+      "meshes": 163,
+      "textures": 117,
+      "slices": 65,
+      "maxSliceMs": 48.6
+    }
+  },
+  "front": [
+    {
+      "name": "Attack_Staff_Swing_Right",
+      "dist": 1.92,
+      "hp": 86,
+      "delta": 121,
+      "hits": [
+        {
+          "type": "sin-hit",
+          "at": 0.983,
+          "attack": "Attack_Staff_Swing_Right",
+          "damage": 14,
+          "result": "normal",
+          "region": null,
+          "hp": 86,
+          "bossHP": 1500
+        }
+      ]
+    },
+    {
+      "name": "Attack_Staff_Swing_Left",
+      "dist": 2.03,
+      "hp": 87,
+      "delta": 101,
+      "hits": [
+        {
+          "type": "sin-hit",
+          "at": 2.875,
+          "attack": "Attack_Staff_Swing_Left",
+          "damage": 13,
+          "result": "normal",
+          "region": null,
+          "hp": 87,
+          "bossHP": 1500
+        }
+      ]
+    },
+    {
+      "name": "Attack_Staff_Overhead",
+      "dist": 2.48,
+      "hp": 77,
+      "delta": 38,
+      "hits": [
+        {
+          "type": "sin-hit",
+          "at": 5.483,
+          "attack": "Attack_Staff_Overhead",
+          "damage": 23,
+          "result": "heavy",
+          "region": null,
+          "hp": 77,
+          "bossHP": 1500
+        }
+      ]
+    },
+    {
+      "name": "Attack_Staff_Thrust",
+      "dist": 2.48,
+      "hp": 83,
+      "delta": 55,
+      "hits": [
+        {
+          "type": "sin-hit",
+          "at": 6.717,
+          "attack": "Attack_Staff_Thrust",
+          "damage": 17,
+          "result": "normal",
+          "region": null,
+          "hp": 83,
+          "bossHP": 1500
+        }
+      ]
+    },
+    {
+      "name": "Attack_Staff_Sweep",
+      "dist": 2.15,
+      "hp": 83,
+      "delta": 0,
+      "hits": [
+        {
+          "type": "sin-hit",
+          "at": 9.425,
+          "attack": "Attack_Staff_Sweep",
+          "damage": 17,
+          "result": "normal",
+          "region": null,
+          "hp": 83,
+          "bossHP": 1500
+        }
+      ]
+    },
+    {
+      "name": "Attack_Staff_Spin_360",
+      "dist": 2.3,
+      "hp": 100,
+      "delta": 140,
+      "hits": []
+    },
+    {
+      "name": "Attack_Claw_Left",
+      "dist": 1.45,
+      "hp": 89,
+      "delta": 72,
+      "hits": [
+        {
+          "type": "sin-hit",
+          "at": 13.425,
+          "attack": "Attack_Claw_Left",
+          "damage": 11,
+          "result": "normal",
+          "region": null,
+          "hp": 89,
+          "bossHP": 1500
+        }
+      ]
+    },
+    {
+      "name": "Attack_Kick",
+      "dist": 1.42,
+      "hp": 87,
+      "delta": 45,
+      "hits": [
+        {
+          "type": "sin-hit",
+          "at": 15.3,
+          "attack": "Attack_Kick",
+          "damage": 13,
+          "result": "normal",
+          "region": null,
+          "hp": 87,
+          "bossHP": 1500
+        }
+      ]
+    },
+    {
+      "name": "Counter_Attack",
+      "dist": 1.83,
+      "hp": 85,
+      "delta": 89,
+      "hits": [
+        {
+          "type": "sin-hit",
+          "at": 17.35,
+          "attack": "Counter_Attack",
+          "damage": 15,
+          "result": "normal",
+          "region": null,
+          "hp": 85,
+          "bossHP": 1500
+        }
+      ]
+    }
+  ],
+  "misses": [
+    {
+      "distance": 6,
+      "z": 0,
+      "hp": 100,
+      "impacts": 0
+    },
+    {
+      "distance": 2.65,
+      "z": 3.9,
+      "hp": 100,
+      "impacts": 0
+    },
+    {
+      "distance": 2.48,
+      "z": -3.9,
+      "hp": 100,
+      "impacts": 0
+    }
+  ],
+  "parry": {
+    "guardAge": 0.01670000000000016,
+    "after": 100,
+    "events": [
+      {
+        "type": "telegraph",
+        "at": 22.125,
+        "attack": "Attack_Staff_Overhead",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 1500
+      },
+      {
+        "type": "telegraph",
+        "at": 23.75,
+        "attack": "Attack_Staff_Thrust",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 1500
+      },
+      {
+        "type": "sin-hit",
+        "at": 24.042,
+        "attack": "Attack_Staff_Thrust",
+        "damage": 0,
+        "result": "parry",
+        "region": null,
+        "hp": 100,
+        "bossHP": 1500
+      },
+      {
+        "type": "stagger",
+        "at": 24.042,
+        "attack": "Stagger",
+        "damage": 0,
+        "result": null,
+        "region": null,
+        "hp": 100,
+        "bossHP": 1500
+      }
+    ],
+    "vfx": {
+      "enabled": true,
+      "tier": 0.72,
+      "impacts": 9,
+      "stone": 0,
+      "metal": 0,
+      "armor": 2,
+      "flesh": 6,
+      "spirit": 0,
+      "parry": 1,
+      "samples": 103,
+      "activeSparks": 9,
+      "activeDust": 0,
+      "rocks": 0,
+      "cracks": 0,
+      "wave": false
+    }
+  },
+  "axe": {
+    "contact": {
+      "heroHits": 3,
+      "guardianHits": 9,
+      "heightAdjusted": 775,
+      "lastWeaponHeight": 1.1705951641679349
+    },
+    "events": [
+      {
+        "type": "guardian-hit",
+        "at": 24.325,
+        "attack": "atkR",
+        "damage": 48,
+        "result": "normal",
+        "region": "leftLeg",
+        "hp": 100,
+        "bossHP": 1452
+      },
+      {
+        "type": "guardian-hit",
+        "at": 24.325,
+        "attack": "atkL",
+        "damage": 52,
+        "result": "normal",
+        "region": "leftLeg",
+        "hp": 100,
+        "bossHP": 1400
+      },
+      {
+        "type": "guardian-hit",
+        "at": 24.325,
+        "attack": "finJ",
+        "damage": 122,
+        "result": "heavy",
+        "region": "leftLeg",
+        "hp": 100,
+        "bossHP": 1278
+      }
+    ]
+  }
+}

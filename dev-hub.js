@@ -471,11 +471,21 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
       <label>الحارس <input data-health="boss" type="number" min="1" max="1500" value="1500"></label></div>
       <button data-lab="phase2">المرحلة الثانية</button>
       <select aria-label="حركة الحارس"></select><button data-lab="attack">نفّذ</button>
+      <fieldset style="margin-top:.45em"><legend>مختبر المؤثرات</legend>
+      <label><input type="checkbox" data-lab="effects" checked> المؤثرات القتالية</label>
+      <select data-lab="weapon" aria-label="معاينة حافة السلاح">
+        <option value="">معاينة أثناء القتال</option><option value="axe">نصل فأس سين</option>
+        <option value="blade">النصل السفلي للصولجان</option><option value="crown">رأس الصولجان</option>
+      </select>
+      <select data-lab="fx-quality" aria-label="جودة المؤثرات">
+        <option value="auto">جودة تلقائية</option><option value="high">عالية</option>
+        <option value="medium">متوسطة</option><option value="low">منخفضة</option>
+      </select></fieldset>
       <pre></pre><ol></ol>`;
     statusBox.style.cssText = 'position:fixed;z-index:12100;right:8px;top:4.3rem;max-width:min(28rem,95vw);' +
       'max-height:71vh;overflow:auto;padding:.65rem;background:#101616ed;border:1px solid #b99667;color:#f5e4c9;pointer-events:auto';
     for (const control of statusBox.querySelectorAll('input[type=number]')) control.style.width = '5em';
-    const attack = statusBox.querySelector('select'), info = statusBox.querySelector('pre'), list = statusBox.querySelector('ol');
+    const attack = statusBox.querySelector('select[aria-label="حركة الحارس"]'), info = statusBox.querySelector('pre'), list = statusBox.querySelector('ol');
     for (const name of encounter.debug().attacks) attack.add(new Option(name, name));
     const sphere = new T.SphereGeometry(1, 10, 8);
     const heroMat = new T.MeshBasicMaterial({ color: 0x56e8e2, wireframe: true, depthTest: false });
@@ -517,6 +527,7 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
         'Parry ' + (Number.isFinite(s.parryAge) ? s.parryAge.toFixed(2) : '—') + ' Dodge ' + Boolean(s.invulnerable),
         (1000 / Math.max(1, frameDelta)).toFixed(1) + ' FPS / ' + frame + ' ms',
         g.render.calls + ' calls / ' + g.memory.geometries + ' meshes / ' + g.memory.textures + ' textures',
+        s.vfx ? 'VFX ' + s.vfx.activeSparks + ' spark · ' + s.vfx.activeDust + ' dust · ' + s.vfx.rocks + ' debris' : '',
         performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MiB JS heap' : 'ذاكرة JS غير متاحة'
       ].join('\n');
       list.replaceChildren(...s.hits.slice(-5).map(event => el('li', {}, event.type + ' ' + event.attack +
@@ -526,6 +537,9 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
       const input = ev.target;
       if (input.dataset.lab === 'volumes') diagnostic.visible = input.checked;
       if (input.dataset.lab === 'pause') encounter.lab.pause(input.checked);
+      if (input.dataset.lab === 'effects') encounter.lab.effects(input.checked);
+      if (input.dataset.lab === 'weapon') encounter.lab.preview(input.value);
+      if (input.dataset.lab === 'fx-quality') encounter.lab.vfxQuality(input.value);
       if (input.dataset.health) encounter.lab.health(input.dataset.health, input.value);
     });
     statusBox.addEventListener('click', ev => {
@@ -545,6 +559,11 @@ html.sin-dev-clean #sin-dev-tool>button{opacity:.25}
     combatLab = {
       close() {
         encounter.lab.pause(false);
+        if (encounter.debug().vfx) {
+          encounter.lab.preview('');
+          encounter.lab.effects(true);
+          encounter.lab.vfxQuality('auto');
+        }
         cancelAnimationFrame(rAF);
         clearInterval(timer);
         diagnostic.removeFromParent();

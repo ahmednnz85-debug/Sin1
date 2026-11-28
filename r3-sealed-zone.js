@@ -887,8 +887,8 @@
       gateCamera: under.gateCamera,
       restoreGatePose: under.restoreGatePose,
       spawn: [passage.position[0] - MAW_ENTRY - dock.center[0], MAW_LEVEL + dock.deck + dock.drop, passage.position[2] + MAW_LANE + dock.center[1]],
-      async ready(renderer) {
-        await under.ready(renderer, architecture);
+      async ready(renderer, hero) {
+        await under.ready(renderer, architecture, hero);
         if (under.status.phase !== 'ready') throw new Error(under.status.error || 'Underworld load failed');
         await Maw.loadArrival(THREE, deep, under.finish);
       },

@@ -999,7 +999,7 @@
       world.add(canyon);
     }
 
-    async function loadHarbor(renderer, architecture) {
+    async function loadHarbor(renderer, architecture, hero) {
       const textureLoader = new T.TextureLoader();
       const files = 'assets/r3/harbor/';
       const maps = new Map();
@@ -1054,7 +1054,7 @@
       if (guardian) {
         const [, x, z, , y] = DISCS.find(disc => disc[0] === 'U1-03');
         encounter = root.SinGuardianEncounter.mount({
-          T, model: guardian.scene, animations: guardian.animations, world,
+          T, model: guardian.scene, animations: guardian.animations, world, hero,
           arena: new T.Vector3().fromArray(L(x, y, z)),
           checkpoint: new T.Vector3().fromArray(L(...SPAWNS['U1-03'])),
           gate: () => gate, architecture
@@ -1378,8 +1378,8 @@
       restoreGatePose: () => gate?.restore(),
       gateActive: () => encounter ? encounter.locked() : !!gate && gate.state.phase !== 'closed' && gate.state.phase !== 'open',
       gateApproach: () => gate?.state.phase === 'approach',
-      ready(renderer, architecture) {
-        if (!pending) pending = loadHarbor(renderer, architecture).catch(error => {
+      ready(renderer, architecture, hero) {
+        if (!pending) pending = loadHarbor(renderer, architecture, hero).catch(error => {
           status.phase = 'failed';
           status.error = error.message;
           console.error('[U1] Anchorage assets', error);
